@@ -277,9 +277,17 @@ function getManRows(uf){
 // ══════════════════════════════════════════
 function render(){
   var app=document.getElementById('app');
-  app.innerHTML='';
-  if(!STATE.auth){app.appendChild(renderLogin()); return;}
-  app.appendChild(renderApp());
+  if(!app) return;
+  try {
+    var novo = document.createElement('div');
+    if(!STATE.auth){ novo.appendChild(renderLogin()); }
+    else { novo.appendChild(renderApp()); }
+    app.innerHTML='';
+    app.appendChild(novo);
+  } catch(e) {
+    console.error('Render error:', e);
+    app.innerHTML='<div style="padding:40px;text-align:center;color:#ef4444;font-family:sans-serif"><h2>⚠️ Erro ao renderizar</h2><p style="margin-top:8px;color:#888">'+e.message+'</p><button onclick="STATE.tab='cotacao';render()" style="margin-top:16px;padding:8px 20px;background:#d97706;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px">↩ Tentar novamente</button></div>';
+  }
 }
 
 function renderLogin(){
@@ -410,7 +418,13 @@ function renderNav(){
     var btn=document.createElement('button');
     btn.className='tab'+(STATE.tab===t.id?' active':'');
     btn.textContent=t.icon+' '+t.l;
-    btn.onclick=function(){STATE.tab=t.id;render();};
+    btn.onclick=function(){
+      // Preserva form values antes de trocar aba
+      var inputs=document.querySelectorAll('.inp[data-form]');
+      inputs.forEach(function(el){ STATE.form[el.dataset.form]=el.value; });
+      STATE.tab=t.id;
+      render();
+    };
     nav.appendChild(btn);
   });
   return nav;
@@ -776,7 +790,7 @@ function renderCotRight(){
 }
 
 function buildManTable(){
-  if(!STATE.manRows.length) 
+  if(!STATE.manRows || !Array.isArray(STATE.manRows)) STATE.manRows=[];
   var tbl=document.createElement('table');
   tbl.innerHTML='<thead><tr><th>Nº</th><th>Transportadora</th><th>Telefone</th><th>Cotação</th><th>Prazo</th><th>Valor</th><th>Outros</th><th>Crédito%</th><th>Lucro%</th><th style="color:#059669">Valor Cobrar</th></tr></thead>';
   var tbody=document.createElement('tbody');
@@ -862,8 +876,13 @@ function renderSalvas(){
       btnCarregar.onclick=function(e){
         e.stopPropagation();
         STATE.form=Object.assign({},INIT,{cnpjDest:c.cnpjDest,cepDest:c.cepDest,cidadeDest:c.destCity,ufDest:c.destUF,endDest:c.endDest,valorNF:String(c.valorNF),pesoTotal:String(c.peso),nfEmitida:c.nfEmitida,solicitante:c.solicitante,numeroCotacao:c.id,frete:c.frete||'CIF'});
-        STATE.prods=c.produtos.map(function(p){return{nome:p.nome,vol:p.vol,dim:p.dim,cabe:p.cabe};});
-        STATE.manRows=c.transportadoras.map(function(t,i){return Object.assign({},t,{nr:i+1,uf:c.destUF});});
+        STATE.prods=(c.produtos||[]).map(function(p){return{nome:p.nome||'',vol:p.vol||1,dim:p.dim||'',cabe:p.cabe||''};});
+        if(!STATE.prods.length) STATE.prods=[{nome:'',vol:1,dim:'',cabe:''}];
+        STATE.manRows=(c.transportadoras||[]).map(function(t,i){
+          return {nr:i+1,uf:c.destUF,nome:t.nome||'',tel:t.tel||'',tipo:t.tipo||'',
+            cotacao:t.cotacao||'',prazo:t.prazo||'',valor:t.valor||'',
+            outros:t.outros||'',credito:t.credito||'',lucro:t.lucro||'',triangulacao:t.triangulacao||'Não'};
+        });
         STATE.tab='cotacao'; render();
       };
       hdr.appendChild(arrow); hdr.appendChild(badge); hdr.appendChild(title); hdr.appendChild(sub); hdr.appendChild(btnCarregar);
