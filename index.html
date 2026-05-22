@@ -46,7 +46,8 @@ nav{background:#fff;border-bottom:1px solid #e8e8e6;display:flex;padding:0 18px}
 /* MAIN */
 main{padding:18px 20px;max-width:100%;overflow-x:hidden}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;min-width:0}
-.card{background:#fff;border-radius:11px;border:1.5px solid #c8c8c4;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);min-width:0;overflow:hidden}
+.card{background:#fff;border-radius:11px;border:1.5px solid #c8c8c4;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);min-width:0;overflow:hidden;transition:border-color .2s,box-shadow .2s}
+.card:focus-within{border-color:#d97706;box-shadow:0 0 0 3px rgba(217,119,6,.12),0 1px 4px rgba(0,0,0,.07)}
 .sec-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#1a1a1a;border-bottom:2px solid #c8c8c4;padding-bottom:7px;margin-bottom:10px;display:flex;align-items:center;gap:5px}
 .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#666;display:block;margin-bottom:3px}
 .inp{background:#fff;border:1.5px solid #c8c8c4;color:#1a1a1a;padding:6px 9px;border-radius:7px;font-size:12px;font-family:'Courier New',monospace;width:100%;box-sizing:border-box;outline:none}
@@ -208,7 +209,7 @@ const SAVED=[
 ];
 
 const UFS=["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
-const INIT={cnpjRem:"35.017.646/0001-66",cepOrig:"74595-286",ufOrig:"GO",endRem:"Rua FL-42, Q:12 LT:03 Sl:02,03 - Goiania - GO - 74.595-286",cnpjDest:"",cepDest:"",cidadeDest:"",ufDest:"",endDest:"",valorNF:"",pesoTotal:"",nfEmitida:"NÃO",frete:"CIF",numeroCotacao:"",solicitante:"RAUL",embalagem:"CX",horario:"8:00 x 17:00 - SEG x SEXT",fechaAlmoco:"Não"};
+const INIT={cnpjRem:"35.017.646/0001-66",cepOrig:"74595-286",cidadeOrig:"Goiânia",ufOrig:"GO",endRem:"Rua FL-42, Q:12 LT:03 Sl:02,03 - Goiania - GO - 74.595-286",cnpjDest:"",cepDest:"",cidadeDest:"",ufDest:"",endDest:"",valorNF:"",pesoTotal:"",nfEmitida:"NÃO",frete:"CIF",numeroCotacao:"",solicitante:"RAUL",embalagem:"CX",horario:"8:00 x 17:00 - SEG x SEXT",fechaAlmoco:"Não"};
 
 function fmtBRL(v){return"R$ "+(parseFloat(v)||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,".")}
 function h(tag,cls,inner,attrs){
@@ -483,13 +484,16 @@ function renderSecRemetente(){
   lbl.style.cssText='font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#92400e;margin-bottom:10px;display:flex;align-items:center;gap:5px';
   lbl.innerHTML='📤 Remetente';
   sec.appendChild(lbl);
+  // Linha 1: CNPJ | CEP + Cidade + UF
   var r1=document.createElement('div'); r1.className='g2 mb7';
-  var cepUf=document.createElement('div'); cepUf.className='g2';
-  cepUf.appendChild(mkFieldG('CEP Origem',f.cepOrig,true));
-  cepUf.appendChild(mkFieldG('UF',f.ufOrig,true));
   r1.appendChild(mkFieldG('CNPJ Remetente / Pagador',f.cnpjRem,true));
-  r1.appendChild(cepUf);
+  var cepCidUf=document.createElement('div'); cepCidUf.style.cssText='display:grid;grid-template-columns:1fr 1fr 60px;gap:6px';
+  cepCidUf.appendChild(mkFieldG('CEP Origem',f.cepOrig,true));
+  cepCidUf.appendChild(mkFieldG('Cidade',f.cidadeOrig||'Goiânia',true));
+  cepCidUf.appendChild(mkFieldG('UF',f.ufOrig,true));
+  r1.appendChild(cepCidUf);
   sec.appendChild(r1);
+  // Linha 2: Endereço
   var endW=document.createElement('div');
   endW.appendChild(mkFieldG('Endereço Remetente',f.endRem,true));
   sec.appendChild(endW);
@@ -672,7 +676,7 @@ function renderCotManual(){
   var card=document.createElement('div'); card.className='card';
   card.style.borderTop='3px solid #d97706';
   var ufLabel=document.createElement('div'); ufLabel.className='sec-title';
-  ufLabel.innerHTML='<span class="tag-acc">✍️</span> Cotação Manual — <span class="tag-acc uf-manual-lbl" style="font-family:monospace">'+(STATE.form.ufDest||'(informe o CEP destino)')+'</span>';
+  ufLabel.innerHTML='<span style="color:#d97706">🚛</span> Transportadoras — <span class="tag-acc uf-manual-lbl" style="font-family:monospace">'+(STATE.form.ufDest||'(informe o CEP destino)')+'</span>';
   card.appendChild(ufLabel);
   var mWrap=document.createElement('div'); mWrap.id='manTableWrap'; mWrap.style.cssText='overflow-x:auto;max-height:460px;overflow-y:auto;width:100%';
   mWrap.appendChild(buildManTable());
@@ -1009,9 +1013,9 @@ function renderTrans(){
   var nTel=document.createElement('input'); nTel.className='inp'; nTel.placeholder='Telefone';
   var nTipo=document.createElement('select'); nTipo.className='inp';
   ['TRANSP','VIAÇÃO','FRETE','AEREO'].forEach(function(o){var op=document.createElement('option');op.value=o;op.textContent=o;nTipo.appendChild(op);});
-  var nTriWrap=document.createElement('div'); nTriWrap.style.cssText='display:flex;flex-direction:column;justify-content:flex-end';
-  var nTriLbl=document.createElement('span'); nTriLbl.className='lbl'; nTriLbl.textContent='Triangulação';
-  var nTri=document.createElement('input'); nTri.type='checkbox'; nTri.style.cssText='width:20px;height:20px;cursor:pointer;margin-top:6px;accent-color:#059669';
+  var nTriWrap=document.createElement('div'); nTriWrap.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:flex-end';
+  var nTriLbl=document.createElement('span'); nTriLbl.className='lbl'; nTriLbl.style.cssText='text-align:center;display:block'; nTriLbl.textContent='Triangulação';
+  var nTri=document.createElement('input'); nTri.type='checkbox'; nTri.style.cssText='width:20px;height:20px;cursor:pointer;margin-top:8px;accent-color:#059669;display:block';
   nTriWrap.appendChild(nTriLbl); nTriWrap.appendChild(nTri);
   var nBtn=document.createElement('button'); nBtn.className='btn-main'; nBtn.textContent='+ Adicionar';
   nBtn.onclick=function(){
