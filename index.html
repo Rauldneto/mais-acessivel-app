@@ -533,11 +533,22 @@ function renderCotLeft(){
                 var rowTipo=r.tipo||'';
                 var rowTipC=rowTipo==='AEREO'?'#d97706':rowTipo==='FRETE'?'#059669':rowTipo.includes('VIA')?'#2563eb':'#888';
                 var rowTri=r.triangulacao===true||r.triangulacao==='true'||r.triangulacao==='Sim';
+                // Build phone cell HTML inline
+                var rowDigits=(r.tel||'').replace(/\D/g,'');
+                if(rowDigits.length===10||rowDigits.length===11) rowDigits='55'+rowDigits;
+                var rowPhoneHtml;
+                if(!r.tel||r.tel===''||r.tel.toUpperCase()==='SITE'){
+                  var rowUrl=CARRIER_URLS[(r.nome||'').toUpperCase()]||CARRIER_URLS[(r.nome||'').split(' ')[0].toUpperCase()]||('https://www.google.com/search?q=cotacao+frete+'+encodeURIComponent(r.nome||''));
+                  rowPhoneHtml='<a href="'+rowUrl+'" target="_blank" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;padding:3px 10px;border-radius:5px;text-decoration:none;font-size:11px;font-weight:600;white-space:nowrap">🌐 Cotar Online</a>';
+                } else {
+                  var rowWa='https://wa.me/'+rowDigits+'?text=Ol%C3%A1%2C+gostaria+de+solicitar+uma+cota%C3%A7%C3%A3o+de+frete.';
+                  rowPhoneHtml='<a href="'+rowWa+'" target="_blank" style="background:#dcfce7;border:1px solid #86efac;color:#166534;padding:3px 10px;border-radius:5px;text-decoration:none;font-size:11px;font-weight:600;white-space:nowrap">📲 WhatsApp</a>';
+                }
                 html+='<tr style="background:'+bg+'"><td style="padding:6px 9px;font-size:11px;border-bottom:1px solid #e8e8e6;color:#888">'+r.nr+'</td>'+
                   '<td style="padding:6px 9px;font-size:11px;border-bottom:1px solid #e8e8e6;font-weight:600;white-space:nowrap">'+r.nome+'</td>'+
                   '<td style="padding:6px 9px;font-size:11px;border-bottom:1px solid #e8e8e6;font-weight:600;color:'+rowTipC+';white-space:nowrap">'+rowTipo+'</td>'+
                   '<td style="padding:6px 9px;font-size:11px;border-bottom:1px solid #e8e8e6;text-align:center">'+(rowTri?'<span style="color:#059669;font-weight:700">✓</span>':'')+'</td>'+
-                  '<td style="padding:6px 9px;font-size:11px;border-bottom:1px solid #e8e8e6;color:#2563eb;font-family:monospace;white-space:nowrap">'+r.tel+'</td>'+
+                  '<td style="padding:6px 9px;border-bottom:1px solid #e8e8e6">'+rowPhoneHtml+'</td>'+
                   '<td style="padding:6px 9px;border-bottom:1px solid #e8e8e6"><input class="inp" data-idx="'+i+'" data-field="cotacao" style="width:82px;font-size:11px" placeholder="—"></td>'+
                   '<td style="padding:6px 9px;border-bottom:1px solid #e8e8e6"><input class="inp" data-idx="'+i+'" data-field="prazo" style="width:44px;font-size:11px" placeholder="—"></td>'+
                   '<td style="padding:6px 9px;border-bottom:1px solid #e8e8e6"><input class="inp" data-idx="'+i+'" data-field="valor" type="number" style="width:78px;font-size:11px" placeholder="0.00"></td>'+
@@ -792,6 +803,43 @@ function renderCotRight(){
   return wrap;
 }
 
+
+var CARRIER_URLS = {
+  'BRASPRESS': 'https://www.braspress.com/cotacao-de-frete/',
+  'VITLOG': 'https://vitlog.com.br/cotacao/',
+  'LEITE EXPRESS': 'https://www.leiteexpress.com.br/cotacao',
+  'TSV': 'https://www.tsv.com.br/cotacao',
+  'MIRA TRANSPORTES': 'https://www.miratransportes.com.br',
+  'ESSIBE': 'https://www.essibe.com.br',
+  'ACCERT': 'https://www.accert.com.br/cotacao',
+  'MANDALA': 'https://www.mandala.com.br',
+  'JEOLOG': 'https://jeolog.com.br/cotacao'
+};
+
+function buildPhoneCell(tel, nome){
+  var td=document.createElement('td');
+  td.style.cssText='padding:6px 9px;border-bottom:1px solid #ddd;white-space:nowrap';
+  if(!tel || tel==='' || tel.toUpperCase()==='SITE'){
+    // Show "Cotar" link to carrier website
+    var url=CARRIER_URLS[nome.toUpperCase()]||CARRIER_URLS[nome.split(' ')[0].toUpperCase()]||('https://www.google.com/search?q=cotacao+frete+'+encodeURIComponent(nome));
+    var a=document.createElement('a');
+    a.href=url; a.target='_blank';
+    a.style.cssText='background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;padding:3px 10px;border-radius:5px;text-decoration:none;font-size:11px;font-weight:600;white-space:nowrap';
+    a.textContent='🌐 Cotar Online';
+    td.appendChild(a);
+  } else {
+    // Build WhatsApp link from phone number
+    var digits=tel.replace(/\D/g,'');
+    if(digits.length===10||digits.length===11){ digits='55'+digits; }
+    var waUrl='https://wa.me/'+digits+'?text=Ol%C3%A1%2C+gostaria+de+solicitar+uma+cota%C3%A7%C3%A3o+de+frete.';
+    var a=document.createElement('a');
+    a.href=waUrl; a.target='_blank';
+    a.style.cssText='background:#dcfce7;border:1px solid #86efac;color:#166534;padding:3px 10px;border-radius:5px;text-decoration:none;font-size:11px;font-weight:600;white-space:nowrap';
+    a.textContent='📲 WhatsApp';
+    td.appendChild(a);
+  }
+  return td;
+}
 function buildManTable(){
   if(!STATE.manRows || !Array.isArray(STATE.manRows)) STATE.manRows=[];
   var tbl=document.createElement('table');
@@ -813,8 +861,8 @@ function buildManTable(){
     tr.innerHTML='<td class="tag-muted">'+r.nr+'</td>'+
       '<td style="font-weight:'+(has?700:400)+';color:'+(has?'#059669':'#1a1a1a')+';font-size:11px;white-space:nowrap">'+r.nome+'</td>'+
       '<td style="font-size:11px;font-weight:600;white-space:nowrap;color:'+rTipColor+'">'+rTipo+'</td>'+
-      '<td style="text-align:center">'+(rIsTri?'<span style="color:#059669;font-weight:700;font-size:14px">✓</span>':'')+'</td>'+
-      '<td style="font-size:11px;color:#2563eb;font-family:monospace;white-space:nowrap;padding:6px 9px;border-bottom:1px solid #ddd">'+r.tel+'</td>';
+      '<td style="text-align:center">'+(rIsTri?'<span style="color:#059669;font-weight:700;font-size:14px">✓</span>':'')+'</td>';
+    tr.appendChild(buildPhoneCell(r.tel, r.nome));
     function mkTdInp(val,w,type,field){
       var td=document.createElement('td');
       var el=document.createElement('input'); el.className='inp'; el.value=val||''; el.style.width=w+'px'; el.style.fontSize='11px';
