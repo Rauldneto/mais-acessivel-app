@@ -278,55 +278,44 @@ function getManRows(uf){
 function render(){
   var app=document.getElementById('app');
   if(!app) return;
-  try {
-    var novo = document.createElement('div');
-    if(!STATE.auth){ novo.appendChild(renderLogin()); }
-    else { novo.appendChild(renderApp()); }
-    app.innerHTML='';
-    app.appendChild(novo);
-  } catch(e) {
-    console.error('Render error:', e);
-    var errDiv=document.createElement('div');
-    errDiv.style.cssText='padding:40px;text-align:center;color:#ef4444;font-family:sans-serif';
-    errDiv.innerHTML='<h2>⚠️ Erro ao renderizar</h2><p style="margin-top:8px;color:#888">'+e.message+'</p>';
-    var btnRetry=document.createElement('button');
-    btnRetry.style.cssText='margin-top:16px;padding:8px 20px;background:#d97706;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px';
-    btnRetry.textContent='↩ Tentar novamente';
-    btnRetry.onclick=function(){STATE.tab='cotacao';render();};
-    errDiv.appendChild(btnRetry);
-    app.innerHTML='';
-    app.appendChild(errDiv);
-  }
+  app.innerHTML='';
+  if(!STATE.auth){ app.appendChild(renderLogin()); return; }
+  app.appendChild(renderApp());
 }
 
 function renderLogin(){
   var wrap=document.createElement('div');
   wrap.className='login-wrap';
-  wrap.innerHTML=`
-    <div class="login-card">
-      <div class="login-bar"></div>
-      <div class="login-body">
-        <div class="login-icon">🔐</div>
-        <div class="login-title">MAIS ACESSÍVEL APP</div>
-        <div class="login-sub">Área restrita — acesso por convite</div>
-        <label class="login-label">Código de Acesso</label>
-        <input id="loginInp" class="login-input" type="password" placeholder="Digite o código recebido..." autocomplete="off"/>
-        <div id="loginErr" style="display:none" class="login-err">✕ Código incorreto. Verifique e tente novamente.</div>
-        <button class="login-btn" id="loginBtn">Entrar →</button>
-        <div class="login-hint">Não tem acesso? Solicite um convite ao administrador.</div>
-      </div>
-    </div>`;
+
+  var card=document.createElement('div'); card.className='login-card';
+  var bar=document.createElement('div'); bar.className='login-bar';
+  card.appendChild(bar);
+
+  var body=document.createElement('div'); body.className='login-body';
+  var icon=document.createElement('div'); icon.className='login-icon'; icon.textContent='🔐';
+  var title=document.createElement('div'); title.className='login-title'; title.textContent='MAIS ACESSÍVEL APP';
+  var sub=document.createElement('div'); sub.className='login-sub'; sub.textContent='Área restrita — acesso por convite';
+  var lbl=document.createElement('label'); lbl.className='login-label'; lbl.textContent='Código de Acesso';
+  var inpEl=document.createElement('input'); inpEl.className='login-input'; inpEl.type='password'; inpEl.placeholder='Digite o código recebido...'; inpEl.autocomplete='off';
+  var errEl=document.createElement('div'); errEl.className='login-err'; errEl.style.display='none'; errEl.textContent='✕ Código incorreto. Verifique e tente novamente.';
+  var btnEl=document.createElement('button'); btnEl.className='login-btn'; btnEl.textContent='Entrar →';
+  var hint=document.createElement('div'); hint.className='login-hint'; hint.textContent='Não tem acesso? Solicite um convite ao administrador.';
+
   function tryLogin(){
-    var v=wrap.querySelector('#loginInp').value;
-    if(v===ACCESS_CODE){STATE.auth=true;render();}
+    if(inpEl.value===ACCESS_CODE){STATE.auth=true;render();}
     else{
-      var inp=wrap.querySelector('#loginInp'),err=wrap.querySelector('#loginErr');
-      inp.classList.add('error'); err.style.display='block';
-      inp.classList.add('shake'); setTimeout(function(){inp.classList.remove('shake')},500);
+      inpEl.classList.add('error'); errEl.style.display='block';
+      inpEl.classList.add('shake'); setTimeout(function(){inpEl.classList.remove('shake');},500);
     }
   }
-  wrap.querySelector('#loginBtn').onclick=tryLogin;
-  wrap.querySelector('#loginInp').onkeydown=function(e){if(e.key==='Enter')tryLogin();};
+  btnEl.onclick=tryLogin;
+  inpEl.onkeydown=function(e){if(e.key==='Enter')tryLogin();};
+
+  body.appendChild(icon); body.appendChild(title); body.appendChild(sub);
+  body.appendChild(lbl); body.appendChild(inpEl); body.appendChild(errEl);
+  body.appendChild(btnEl); body.appendChild(hint);
+  card.appendChild(body);
+  wrap.appendChild(card);
   return wrap;
 }
 
