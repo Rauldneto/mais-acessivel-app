@@ -265,7 +265,7 @@ var STATE={
 
 function getManRows(uf){
   return TRANS.filter(function(t){return t.uf===uf}).map(function(t,i){
-    return Object.assign({},t,{nr:i+1,cotacao:'',prazo:'',valor:'',lucro:''});
+    return Object.assign({},t,{nr:i+1,cotacao:'',prazo:'',valor:'',outros:'',credito:'',lucro:''});
   });
 }
 
@@ -462,7 +462,7 @@ function renderCotLeft(){
             if(wrap){
               var rows=STATE.manRows;
               if(!rows.length){wrap.innerHTML='<p style="padding:16px;color:#888;font-size:12px">Nenhuma transportadora encontrada para '+d.uf+'</p>'; return;}
-              var html='<table style="width:100%;border-collapse:collapse"><thead><tr><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;letter-spacing:.4px;padding:7px 9px;text-align:left;border-bottom:1px solid #e8e8e6;font-weight:700;white-space:nowrap">Nº</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;letter-spacing:.4px;padding:7px 9px;text-align:left;border-bottom:1px solid #e8e8e6;font-weight:700">Transportadora</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Telefone</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Cotação</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Prazo</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Valor</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Lucro%</th><th style="background:#f3f3f1;color:#059669;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Valor Cobrar</th></tr></thead><tbody>';
+              var html='<table style="width:100%;border-collapse:collapse"><thead><tr><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;letter-spacing:.4px;padding:7px 9px;text-align:left;border-bottom:1px solid #e8e8e6;font-weight:700;white-space:nowrap">Nº</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;letter-spacing:.4px;padding:7px 9px;text-align:left;border-bottom:1px solid #e8e8e6;font-weight:700">Transportadora</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Telefone</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Cotação</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Prazo</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Valor</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Outros</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Crédito%</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Lucro%</th><th style="background:#f3f3f1;color:#059669;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Valor Cobrar</th></tr></thead><tbody>';
               rows.forEach(function(r,i){
                 var bg=i%2===0?'#fff':'#f9f9f7';
                 html+='<tr style="background:'+bg+'"><td style="padding:6px 9px;font-size:11px;border-bottom:1px solid #e8e8e6;color:#888">'+r.nr+'</td>'+
@@ -471,6 +471,8 @@ function renderCotLeft(){
                   '<td style="padding:6px 9px;border-bottom:1px solid #e8e8e6"><input class="inp" data-idx="'+i+'" data-field="cotacao" style="width:82px;font-size:11px" placeholder="—"></td>'+
                   '<td style="padding:6px 9px;border-bottom:1px solid #e8e8e6"><input class="inp" data-idx="'+i+'" data-field="prazo" style="width:44px;font-size:11px" placeholder="—"></td>'+
                   '<td style="padding:6px 9px;border-bottom:1px solid #e8e8e6"><input class="inp" data-idx="'+i+'" data-field="valor" type="number" style="width:78px;font-size:11px" placeholder="0.00"></td>'+
+                  '<td style="padding:6px 9px;border-bottom:1px solid #e8e8e6"><input class="inp" data-idx="'+i+'" data-field="outros" type="number" style="width:68px;font-size:11px" placeholder="0.00"></td>'+
+                  '<td style="padding:6px 9px;border-bottom:1px solid #e8e8e6"><input class="inp" data-idx="'+i+'" data-field="credito" type="number" style="width:58px;font-size:11px" placeholder="ex: 3"></td>'+
                   '<td style="padding:6px 9px;border-bottom:1px solid #e8e8e6"><input class="inp" data-idx="'+i+'" data-field="lucro" type="number" step="0.01" style="width:52px;font-size:11px" placeholder="ex: 20"></td>'+
                   '<td style="padding:6px 9px;font-size:11px;border-bottom:1px solid #e8e8e6;font-weight:700;color:#888" id="vc-'+i+'">—</td></tr>';
               });
@@ -481,9 +483,12 @@ function renderCotLeft(){
                 inp.oninput=function(){
                   var idx=parseInt(this.dataset.idx), field=this.dataset.field;
                   STATE.manRows[idx][field]=this.value;
-                  if(field==='valor'||field==='lucro'){
-                    var v=parseFloat(STATE.manRows[idx].valor)||0, l=parseFloat(STATE.manRows[idx].lucro)||0;
-                    var vc=v>0?v*(1+l/100):0;
+                  if(field==='valor'||field==='outros'||field==='credito'||field==='lucro'){
+                    var v=parseFloat(STATE.manRows[idx].valor)||0;
+                    var o=parseFloat(STATE.manRows[idx].outros)||0;
+                    var cr=parseFloat(STATE.manRows[idx].credito)||0;
+                    var l=parseFloat(STATE.manRows[idx].lucro)||0;
+                    var vc=v>0?(v+o)*(1+cr/100)*(1+l/100):0;
                     var vcEl=document.getElementById('vc-'+idx);
                     if(vcEl){vcEl.textContent=v>0?fmtBRL(vc):'—'; vcEl.style.color=v>0?'#059669':'#888';}
                   }
@@ -531,12 +536,42 @@ function renderCotLeft(){
   lblPed.innerHTML='📦 Informações do Pedido';
   secPed.appendChild(lblPed);
 
-  // Campo Nº Cotação
+  // Campo Nº Cotação + botão Salvar
   var rowCot=document.createElement('div'); rowCot.className='mb7';
+  rowCot.style.cssText='display:flex;gap:8px;align-items:flex-end';
+  var cotWrap=document.createElement('div'); cotWrap.style.flex='1';
   var cotEl=document.createElement('input'); cotEl.className='inp'; cotEl.type='text'; cotEl.placeholder='Ex: 5733'; cotEl.value=f.numeroCotacao||'';
   cotEl.style.cssText='font-size:14px;font-weight:700;color:#d97706;letter-spacing:1px';
   cotEl.oninput=function(){STATE.form.numeroCotacao=this.value; updateResumo();};
-  rowCot.appendChild(field('Nº da Cotação',cotEl));
+  var cotLbl=document.createElement('span'); cotLbl.className='lbl'; cotLbl.textContent='Nº da Cotação';
+  cotWrap.appendChild(cotLbl); cotWrap.appendChild(cotEl);
+  var btnSalvar=document.createElement('button');
+  btnSalvar.style.cssText='background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;padding:8px 16px;border-radius:7px;cursor:pointer;font-weight:700;font-size:12px;font-family:inherit;white-space:nowrap;box-shadow:0 2px 5px rgba(5,150,105,.2)';
+  btnSalvar.textContent='💾 Salvar Cotação';
+  btnSalvar.onclick=function(){
+    var num=STATE.form.numeroCotacao||'';
+    if(!num){alert('Informe o Nº da Cotação antes de salvar!'); return;}
+    var nova={
+      id:num,
+      destCity:STATE.form.cidadeDest||'—',
+      destUF:STATE.form.ufDest||'—',
+      cnpjDest:STATE.form.cnpjDest||'—',
+      cepDest:STATE.form.cepDest||'—',
+      endDest:STATE.form.endDest||'—',
+      valorNF:parseFloat(STATE.form.valorNF)||0,
+      volumes:calcTotalVol(),
+      peso:parseFloat(STATE.form.pesoTotal)||0,
+      nfEmitida:STATE.form.nfEmitida,
+      solicitante:STATE.form.solicitante,
+      produtos:STATE.prods.filter(function(p){return p.nome;}),
+      transportadoras:STATE.manRows.filter(function(r){return parseFloat(r.valor)>0;})
+    };
+    // Verifica se já existe e substitui, ou adiciona
+    var idx=SAVED.findIndex(function(s){return s.id===num;});
+    if(idx>=0){SAVED[idx]=nova;} else {SAVED.unshift(nova);}
+    alert('Cotação Nº '+num+' salva com sucesso! Veja em "Cotações Salvas".');
+  };
+  rowCot.appendChild(cotWrap); rowCot.appendChild(btnSalvar);
   secPed.appendChild(rowCot);
 
   // Row: valorNF, vol, peso, nf, frete
@@ -716,10 +751,16 @@ function renderCotRight(){
 function buildManTable(){
   if(!STATE.manRows.length) 
   var tbl=document.createElement('table');
-  tbl.innerHTML='<thead><tr><th>Nº</th><th>Transportadora</th><th>Telefone</th><th>Cotação</th><th>Prazo</th><th>Valor</th><th>Lucro%</th><th style="color:#059669">Valor Cobrar</th></tr></thead>';
+  tbl.innerHTML='<thead><tr><th>Nº</th><th>Transportadora</th><th>Telefone</th><th>Cotação</th><th>Prazo</th><th>Valor</th><th>Outros</th><th>Crédito%</th><th>Lucro%</th><th style="color:#059669">Valor Cobrar</th></tr></thead>';
   var tbody=document.createElement('tbody');
   STATE.manRows.forEach(function(r,i){
-    var val=parseFloat(r.valor)||0,luc=parseFloat(r.lucro)||0,vc=val>0?val*(1+luc/100):0,has=val>0;
+    var val=parseFloat(r.valor)||0;
+    var out=parseFloat(r.outros)||0;
+    var cred=parseFloat(r.credito)||0;
+    var luc=parseFloat(r.lucro)||0;
+    // Fórmula: ((Valor + Outros) * (1 + Credito/100)) * (1 + Lucro/100)
+    var vc=val>0 ? (val+out)*(1+cred/100)*(1+luc/100) : 0;
+    var has=val>0;
     var tr=document.createElement('tr');
     if(has) tr.className='hit';
     tr.innerHTML='<td class="tag-muted">'+r.nr+'</td>'+
@@ -736,6 +777,8 @@ function buildManTable(){
     tr.appendChild(mkTdInp(r.cotacao,82,'text','cotacao'));
     tr.appendChild(mkTdInp(r.prazo,44,'text','prazo'));
     tr.appendChild(mkTdInp(r.valor,78,'number','valor'));
+    tr.appendChild(mkTdInp(r.outros||'',68,'number','outros'));
+    tr.appendChild(mkTdInp(r.credito||'',58,'number','credito'));
     tr.appendChild(mkTdInp(r.lucro,46,'number','lucro'));
     var tdVc=document.createElement('td'); tdVc.style.cssText='font-weight:700;color:'+(has?'#059669':'#888'); tdVc.textContent=has?fmtBRL(vc):'—';
     tr.appendChild(tdVc);
