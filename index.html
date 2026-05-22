@@ -44,9 +44,9 @@ nav{background:#fff;border-bottom:1px solid #e8e8e6;display:flex;padding:0 18px}
 .tab.active{color:#d97706;border-bottom-color:#d97706;font-weight:700}
 
 /* MAIN */
-main{padding:18px 20px;max-width:1600px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.card{background:#fff;border-radius:11px;border:1.5px solid #c8c8c4;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+main{padding:18px 20px;max-width:100%;overflow-x:hidden}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;min-width:0}
+.card{background:#fff;border-radius:11px;border:1.5px solid #c8c8c4;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);min-width:0;overflow:hidden}
 .sec-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#1a1a1a;border-bottom:2px solid #c8c8c4;padding-bottom:7px;margin-bottom:10px;display:flex;align-items:center;gap:5px}
 .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#666;display:block;margin-bottom:3px}
 .inp{background:#fff;border:1.5px solid #c8c8c4;color:#1a1a1a;padding:6px 9px;border-radius:7px;font-size:12px;font-family:'Courier New',monospace;width:100%;box-sizing:border-box;outline:none}
@@ -431,22 +431,29 @@ function renderNav(){
 // ── COTAÇÃO ──────────────────────────────
 function renderCotacao(){
   var wrap=document.createElement('div');
+  wrap.style.cssText='width:100%;min-width:0';
   // Linha 1: Remetente | Destinatário
   var row1=document.createElement('div');
-  row1.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px';
+  row1.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;min-width:0;width:100%';
   row1.appendChild(renderSecRemetente());
   row1.appendChild(renderSecDestinatario());
   wrap.appendChild(row1);
   // Linha 2: Info do Pedido | Produtos
   var row2=document.createElement('div');
-  row2.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px';
+  row2.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;min-width:0;width:100%';
   row2.appendChild(renderSecPedido());
   row2.appendChild(renderSecProdutos());
   wrap.appendChild(row2);
-  // Linha 3: Cotação Manual (largura total)
-  wrap.appendChild(renderCotManual());
+  // Linha 3: Cotação Manual (largura total, isolada)
+  var manWrap=document.createElement('div');
+  manWrap.style.cssText='width:100%;min-width:0;overflow:hidden;margin-bottom:14px';
+  manWrap.appendChild(renderCotManual());
+  wrap.appendChild(manWrap);
   // Linha 4: Resumo (largura total)
-  wrap.appendChild(renderSecResumo());
+  var resWrap=document.createElement('div');
+  resWrap.style.cssText='width:100%;min-width:0;overflow:hidden';
+  resWrap.appendChild(renderSecResumo());
+  wrap.appendChild(resWrap);
   return wrap;
 }
 
@@ -667,7 +674,7 @@ function renderCotManual(){
   var ufLabel=document.createElement('div'); ufLabel.className='sec-title';
   ufLabel.innerHTML='<span class="tag-acc">✍️</span> Cotação Manual — <span class="tag-acc uf-manual-lbl" style="font-family:monospace">'+(STATE.form.ufDest||'(informe o CEP destino)')+'</span>';
   card.appendChild(ufLabel);
-  var mWrap=document.createElement('div'); mWrap.id='manTableWrap'; mWrap.style.cssText='overflow-x:auto;max-height:420px;overflow-y:auto';
+  var mWrap=document.createElement('div'); mWrap.id='manTableWrap'; mWrap.style.cssText='overflow-x:auto;max-height:460px;overflow-y:auto;width:100%';
   mWrap.appendChild(buildManTable());
   card.appendChild(mWrap);
   return card;
@@ -833,7 +840,8 @@ function buildPhoneCell(tel, nome){
 function buildManTable(){
   if(!STATE.manRows || !Array.isArray(STATE.manRows)) STATE.manRows=[];
   var tbl=document.createElement('table');
-  tbl.innerHTML='<thead><tr><th>Nº</th><th>Transportadora</th><th>Tipo</th><th style="text-align:center">Tri.</th><th>Telefone</th><th>Cotação</th><th>Prazo</th><th>Valor</th><th>Outros</th><th>Crédito%</th><th>Lucro%</th><th style="color:#059669">Valor Cobrar</th></tr></thead>';
+  tbl.style.cssText='width:100%;border-collapse:collapse;min-width:900px';
+  tbl.innerHTML='<thead><tr><th>Nº</th><th>Transportadora</th><th>Tipo</th><th style="text-align:center">Tri.</th><th>Contato</th><th>Cotação</th><th>Prazo</th><th>Valor</th><th>Outros</th><th>Crédito%</th><th>Lucro%</th><th style="color:#059669">Valor Cobrar</th></tr></thead>';
   var tbody=document.createElement('tbody');
   STATE.manRows.forEach(function(r,i){
     var val=parseFloat(r.valor)||0;
