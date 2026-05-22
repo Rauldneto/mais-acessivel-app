@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Mais Acessível App</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#f7f7f5;color:#1a1a1a;font-size:13px}
+input,select{outline:none;font-family:inherit}
+input:focus,select:focus{border-color:#d97706!important}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:#d97706;border-radius:3px}
+@keyframes shake{0%,100%{transform:translateX(0)}25%,75%{transform:translateX(-5px)}50%{transform:translateX(5px)}}
+.shake{animation:shake .4s ease}
+
+/* LOGIN */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f7f7f5}
+.login-card{width:400px;background:#fff;border-radius:14px;box-shadow:0 4px 32px rgba(0,0,0,.10);overflow:hidden}
+.login-bar{height:4px;background:linear-gradient(90deg,#d97706,#f59e0b,#fbbf24)}
+.login-body{padding:36px 36px 32px}
+.login-icon{width:56px;height:56px;background:#fff8eb;border:2px solid #fde68a;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 14px}
+.login-title{text-align:center;font-size:20px;font-weight:800;color:#1a1a1a;letter-spacing:-.3px}
+.login-sub{text-align:center;font-size:12px;color:#888;margin:4px 0 24px}
+.login-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#666;display:block;margin-bottom:4px}
+.login-input{width:100%;padding:11px 13px;border:2px solid #e8e8e6;border-radius:8px;font-size:14px;font-family:inherit;background:#fafafa;transition:border .2s}
+.login-input.error{border-color:#ef4444;background:#fff5f5}
+.login-err{color:#ef4444;font-size:12px;margin-top:5px}
+.login-btn{width:100%;margin-top:18px;padding:12px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.login-hint{text-align:center;margin-top:16px;font-size:12px;color:#bbb}
+
+/* HEADER */
+header{background:#fff;border-bottom:1px solid #e8e8e6;height:54px;display:flex;align-items:center;padding:0 20px;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.logo-box{width:32px;height:32px;background:linear-gradient(135deg,#d97706,#fbbf24);border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:14px;flex-shrink:0}
+.app-name{font-size:14px;font-weight:800;color:#1a1a1a;letter-spacing:-.2px}
+.app-sub{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.8px}
+.header-right{margin-left:auto;display:flex;gap:12px;align-items:center;font-size:11px}
+.badge{background:#fff8eb;border:1px solid #fde68a;border-radius:5px;padding:2px 9px;color:#92400e;font-weight:600}
+.btn-out{background:#fff;border:1.5px solid #fca5a5;color:#ef4444;padding:3px 9px;border-radius:5px;cursor:pointer;font-size:10px;font-family:inherit}
+
+/* TABS */
+nav{background:#fff;border-bottom:1px solid #e8e8e6;display:flex;padding:0 18px}
+.tab{background:transparent;border:none;border-bottom:2px solid transparent;padding:11px 15px;cursor:pointer;font-size:12px;font-family:inherit;color:#888;margin-bottom:-1px;transition:color .15s}
+.tab.active{color:#d97706;border-bottom-color:#d97706;font-weight:700}
+
+/* MAIN */
+main{padding:18px 20px;max-width:1600px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.card{background:#fff;border-radius:11px;border:1.5px solid #c8c8c4;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+.sec-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#1a1a1a;border-bottom:2px solid #c8c8c4;padding-bottom:7px;margin-bottom:10px;display:flex;align-items:center;gap:5px}
+.lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#666;display:block;margin-bottom:3px}
+.inp{background:#fff;border:1.5px solid #c8c8c4;color:#1a1a1a;padding:6px 9px;border-radius:7px;font-size:12px;font-family:'Courier New',monospace;width:100%;box-sizing:border-box;outline:none}
+.inp-ro{background:#f3f3f1;color:#888;cursor:default}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:7px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px}
+.g3{display:grid;grid-template-columns:1fr 1fr 60px;gap:6px}
+.mb7{margin-bottom:7px}
+.btn-main{background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;padding:7px 15px;border-radius:7px;cursor:pointer;font-weight:700;font-size:11px;font-family:inherit;box-shadow:0 2px 5px rgba(217,119,6,.2)}
+.btn-sm{background:#fff;border:1.5px solid #e8e8e6;color:#888;padding:3px 8px;border-radius:5px;cursor:pointer;font-size:10px;font-family:inherit}
+.btn-del{background:#fff;border:1.5px solid #fca5a5;color:#ef4444;padding:3px 8px;border-radius:5px;cursor:pointer;font-size:10px}
+.btn-ok{background:#ecfdf5;border:1.5px solid #6ee7b7;color:#059669;padding:4px 11px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit}
+table{width:100%;border-collapse:collapse}
+th{background:#f3f3f1;color:#555;font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:7px 9px;text-align:left;border-bottom:1.5px solid #c8c8c4;font-weight:700;white-space:nowrap}
+td{padding:6px 9px;font-size:12px;font-family:'Courier New',monospace;border-bottom:1px solid #ddd;color:#1a1a1a}
+tr:nth-child(odd){background:#fff}
+tr:nth-child(even){background:#f9f9f7}
+tr.hit{background:#ecfdf5!important}
+.uf-badge{background:#fff8eb;color:#92400e;border:1px solid #fde68a;border-radius:3px;padding:1px 6px;font-size:10px;font-weight:700}
+.best-box{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;padding:9px 12px;margin-top:8px}
+pre{background:#f3f3f1;border:1px solid #e8e8e6;border-radius:7px;padding:12px;font-family:'Courier New',monospace;font-size:11px;line-height:1.7;white-space:pre-wrap;color:#1a1a1a}
+.scroll-y{max-height:360px;overflow-y:auto}
+.tag-acc{color:#d97706}
+.tag-blue{color:#2563eb}
+.tag-green{color:#059669}
+.tag-muted{color:#888}
+.fw700{font-weight:700}
+.f14{font-size:14px}
+.f15{font-size:15px}
+.f12{font-size:12px}
+.nf-badge{background:#fff8eb;color:#92400e;border:1px solid #fde68a;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700}
+.tbl-wrap{overflow-x:auto}
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+// ══════════════════════════════════════════
+//  DADOS
+// ══════════════════════════════════════════
+const ACCESS_CODE = "maisacessivel2025";
+
+const EMBALAGENS = [
+  {n:"ACABAMENTO P/ VALVULA DE DESCARGA BENEFIT",d:"35 x 25 x 7",c:1},
+  {n:"ADESIVO SIA CADEIRANTE 15X15",d:"26 x 26 x 16",c:2000},
+  {n:"ALARME PCD",d:"52 x 26 x 12",c:"3 a 10"},
+  {n:"ASSENTO ASTRA LUNA SPE.ALMOFAD.",d:"54 x 40 x 12",c:2},
+  {n:"ASSENTO OVAL ELEVADO 13,5 - ASTRA",d:"45 x 40 x 17",c:1},
+  {n:"BACIA LUNA MEDIC/ SPECIALE - CONV.",d:"55 x 40 x 44",c:1},
+  {n:"BACIA P/ CX ACOPLADA (PALLET)",d:"100 x 100 x 90",c:8},
+  {n:"BACIA P/ CX ACOPLADA LUNA SPEC.",d:"70 x 44 x 43",c:1},
+  {n:"BANCO ARTICULADO 45X45 INOX",d:"32 x 50 x 75",c:5},
+  {n:"BANCO ARTICULADO 45X70 INOX",d:"32 x 50 x 75",c:5},
+  {n:"BARRA DE APOIO ARTIC. INOX",d:"96 x 45 x 20",c:3},
+  {n:"BARRA DE APOIO L PAREDE 60X60",d:"62 x 62 x 10",c:1},
+  {n:"BARRA DE APOIO L PAREDE 70X70",d:"72 x 72 x 10",c:1},
+  {n:"BARRA DE APOIO L PAREDE 80X80",d:"82 x 82 x 10",c:1},
+  {n:"BARRA DE APOIO FIXA INOX",d:"96 x 45 x 20",c:3},
+  {n:"BARRA APOIO LAT. PISO/PAR.60X75",d:"62 x 77 x 10",c:1},
+  {n:"BARRA APOIO LAT. PISO/PAR.80x75",d:"82 x 77 x 15",c:1},
+  {n:"BARRA APOIO RETA INOX",d:"96 x 45 x 20",c:16},
+  {n:"BARRA DE APOIO RETA 1000MM INOX",d:"102 x 45 x 20",c:16},
+  {n:"BARRA SUPORTE LAT. LAVAT. INOX",d:"96 x 45 x 20",c:20},
+  {n:"BARRA APOIO RETA ALUMINIO",d:"96 x 45 x 20",c:16},
+  {n:"BOTAO ELEV. P/ CX ACOPLADA",d:"22 x 12 x 10",c:1},
+  {n:"CAIXA P/ BACIA ACOP. C/ LUNA",d:"40 x 20 x 43",c:1},
+  {n:"CAPA PARA ASSENTO PREF.",d:"26 x 26 x 16",c:15},
+  {n:"COLA CONTATO 14KG",d:"24 x 24 x 35",c:1},
+  {n:"COLA CONTATO 2,8KG",d:"18 x 18 x 20",c:1},
+  {n:"COLUNA SUSP. ETNA/SABATINI",d:"20 x 25 x 34",c:1},
+  {n:"DISPENSER PAPEL TOALHA / HIG. VELOX",d:"44 x 54 x 30",c:6},
+  {n:"DISPENSER SABONET. INVOQ 800ML",d:"39 x 26 x 27",c:6},
+  {n:"DISPENSER SABONET. VELOX 800ML",d:"26 x 43 x 27",c:12},
+  {n:"ELEMENTO TATIL ALERTA PARAFUSO",d:"26 x 26 x 16",c:1000},
+  {n:"ELEMENTO TATIL ALERTA PVC",d:"26 x 26 x 16",c:2000},
+  {n:"ELEMENTO TATIL DIREC. INOX",d:"26 x 26 x 16",c:300},
+  {n:"ELEMENTO TATIL DIREC. PVC",d:"26 x 26 x 16",c:250},
+  {n:"FITA ANTIDERRAPANTE 48MM X 30MTS",d:"26 x 32 x 42",c:12},
+  {n:"FITA ANTIDERRAPANTE 48MM X 20MT",d:"33 x 33 x 33",c:24},
+  {n:"DISPENSER PAPEL TOALHA / HIG INVOQ",d:"51 x 44 x 26",c:6},
+  {n:"DISPENSER TOALHA DISTRIBUIDOR INVOQ",d:"40 x 54 x 27",c:6},
+  {n:"LAVATORIO (PALLET)",d:"100 x 100 x 90",c:8},
+  {n:"LAVATORIO SABATINI 53X44",d:"53 x 44 x 22",c:1},
+  {n:"MICTORIO BRANCA (PALLET)",d:"100 x 100 x 90",c:12},
+  {n:"MOLA BTS 75V - RECONDICIONADA",d:"35 x 35 x 15",c:6},
+  {n:"PEDESTAL MAPA TATIL SLIM / LUX",d:"106 x 33 x 43",c:1},
+  {n:"PISO TATIL ARGAMASSADO ALERTA",d:"52 x 26 x 12",c:26},
+  {n:"PISO TATIL ARGAMASSADO DIRECIONAL",d:"52 x 26 x 12",c:26},
+  {n:"PISO TATIL CONCRETO ALERTA/DIRECIONAL",d:"25 x 25 x 3",c:1},
+  {n:"PISO TATIL PVC TEXTURIZADO",d:"52 x 26 x 12",c:48},
+  {n:"PISO TATIL PVC TEXTURIZADO CX",d:"52 x 26 x 24",c:48},
+  {n:"PISO TATIL TEXTURIZADO PPM",d:"32 x 26 x 26",c:50},
+  {n:"PLACA ESTACIONAMENTO EXCLUSIVO CADEIRANTE",d:"70 x 50 x 10",c:5},
+  {n:"PLACA DE IMPACTO INOX",d:"42 x 92 x 6",c:5},
+  {n:"PLACA CORRIMAO EM BRAILLE DE ALUMINIO",d:"26 x 26 x 8",c:500},
+  {n:"PORTA SHAMPOO",d:"50 x 19 x 10",c:1},
+  {n:"REMOVEDOR PASTOSO 1KG",d:"25 x 25 x 12",c:4},
+  {n:"SINALIZADOR DE DEGRAU EM P.S. FOTOLUMI",d:"52 x 26 x 12",c:2000},
+  {n:"SOB MEDIDA",d:"137 x 15 x 15",c:1},
+  {n:"TANQUE (PALLET)",d:"100 x 100 x 90",c:6},
+  {n:"TAPETE ADESIVO CADEIR. 1,20 x 0,80",d:"23 x 23 x 80",c:4},
+  {n:"THINNER 05L",d:"26 x 23 x 42",c:4},
+  {n:"THINNER 900ML",d:"25 x 20 x 20",c:6},
+  {n:"TORNEIRA CLINICA MESA BICA ALTA FAUZI",d:"52 x 26 x 12",c:20},
+  {n:"TORNEIRA CLINICA MESA BICA BAIXA FAUZI",d:"52 x 26 x 12",c:20},
+  {n:"TORNEIRA MESA LAV. PRESSMATIC BENEFIT",d:"21 x 16 x 10",c:1},
+  {n:"TORNEIRA MESA LAV. PRESSMATIC DOCOL",d:"28 x 22 x 8",c:1},
+  {n:"TORNEIRA FAUZI",d:"52 x 26 x 12",c:20},
+  {n:"VEDADOR DE BORDAS",d:"21 x 16 x 14",c:10},
+  {n:"DISPENSER PAPEL TOALHA UP+",d:"57 x 51 x 38",c:12},
+  {n:"DISPENSER PAPEL ROLAO UP+",d:"60 x 60 x 30",c:12},
+  {n:"DISPENSER SABONETEIRA UP+",d:"52 x 50 x 39",c:24},
+  {n:"PISO TATIL CONCRETO ALERTA /DIR",d:"25 x 25 x 8",c:5},
+  {n:"BACIA CONVENC. PALLET 6UNIDS",d:"100 x 100 x 90",c:8},
+  {n:"TROCADOR ADULTO",d:"90 x 45 x 1,50cm",c:1},
+  {n:"TROCADOR INFANTIL",d:"80 x 53 x 11",c:1},
+  {n:"DISPENSER COPO DESCARTAVEL",d:"35 x 28 x 42",c:12},
+  {n:"DISPENSER PAPEL TOALHA / HIG INOX",d:"30 x 66 x 68",c:14},
+  {n:"BACIA CONV. LUNA SPEC.",d:"70 x 44 x 43",c:1}
+];
+
+const TRANS = [
+  {uf:"AC",nome:"CARVALIMA",tel:"(62) 3597 3169",tipo:"TRANSP"},{uf:"AC",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},
+  {uf:"AL",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},{uf:"AL",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"AL",nome:"SÃO LUIS",tel:"(62) 9 9287 6748",tipo:"VIA\u00c7\u00c3O"},{uf:"AL",nome:"JEOLOG",tel:"(62) 3412 8480",tipo:"TRANSP"},
+  {uf:"AM",nome:"AZUL CARGO",tel:"(62) 9 9200 6237",tipo:"AEREO"},{uf:"AM",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"AM",nome:"EUCATUR",tel:"(62) 3901 2082",tipo:"VIA\u00c7\u00c3O"},{uf:"AM",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},
+  {uf:"AP",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},
+  {uf:"BA",nome:"ACCERT",tel:"(62) 9 8300 6662",tipo:"TRANSP"},{uf:"BA",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},{uf:"BA",nome:"OLIVEIRA FRETISTA",tel:"(62) 9 9145 3232",tipo:"FRETE"},{uf:"BA",nome:"PEDRO FRETISTA",tel:"(62) 9 9313 3738",tipo:"FRETE"},{uf:"BA",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"BA",nome:"GONTIJO",tel:"(62) 3225 0070",tipo:"VIA\u00c7\u00c3O"},{uf:"BA",nome:"SÃO LUIS",tel:"(62) 9 9287 6748",tipo:"VIA\u00c7\u00c3O"},{uf:"BA",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},{uf:"BA",nome:"JEOLOG",tel:"(62) 3412 8480",tipo:"TRANSP"},
+  {uf:"CE",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},{uf:"CE",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"CE",nome:"SATELITE NORTE",tel:"(62) 3565 1717",tipo:"VIA\u00c7\u00c3O"},{uf:"CE",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},
+  {uf:"DF",nome:"ACCERT",tel:"(62) 4003 8068",tipo:"TRANSP"},{uf:"DF",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},{uf:"DF",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"DF",nome:"ESSIBÊ",tel:"(11) 9 7826 2075",tipo:"TRANSP"},{uf:"DF",nome:"MANDALA",tel:"(62) 9 8162 0288",tipo:"TRANSP"},{uf:"DF",nome:"MIRA TRANSPORTES",tel:"(62) 2765 9900",tipo:"TRANSP"},{uf:"DF",nome:"SÃO LUIS",tel:"(62) 9 9287 6748",tipo:"VIA\u00c7\u00c3O"},{uf:"DF",nome:"TSV",tel:"(11) 9 7035 4546",tipo:"TRANSP"},{uf:"DF",nome:"OLIVEIRA FRETISTA",tel:"(62) 9 9145 3232",tipo:"FRETE"},{uf:"DF",nome:"PEDRO FRETISTA",tel:"(62) 9 9313 3738",tipo:"FRETE"},{uf:"DF",nome:"LOCAEX (Brasilia/Anapolis)",tel:"(61) 9 8428 9636",tipo:"FRETE"},
+  {uf:"ES",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"ES",nome:"MIRA TRANSPORTES",tel:"(62) 2765 9900",tipo:"TRANSP"},{uf:"ES",nome:"TSV",tel:"(11) 9 7035 4546",tipo:"TRANSP"},{uf:"ES",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},{uf:"ES",nome:"JEOLOG",tel:"(62) 3412 8480",tipo:"TRANSP"},
+  {uf:"GO",nome:"ALIANÇA CARGAS",tel:"(11) 9 4030 1839",tipo:"TRANSP"},{uf:"GO",nome:"ALL CARGO",tel:"(62) 3995 9967",tipo:"TRANSP"},{uf:"GO",nome:"DELPS",tel:"(62) 9 9987 5685",tipo:"TRANSP"},{uf:"GO",nome:"ELTON",tel:"(62) 9 9458 1808",tipo:"TRANSP"},{uf:"GO",nome:"FENIX TRANP.",tel:"(62) 3087 1331",tipo:"TRANSP"},{uf:"GO",nome:"G5 TRANSPORTADORA",tel:"(62) 9 9958 7031",tipo:"TRANSP"},{uf:"GO",nome:"LUCAS TRANSPORTADORA",tel:"(64) 9 9302 4907",tipo:"TRANSP"},{uf:"GO",nome:"SÃO LUIS",tel:"(62) 9 9287 6748",tipo:"VIA\u00c7\u00c3O"},{uf:"GO",nome:"SATELITE NORTE",tel:"(62) 3565 1717",tipo:"VIA\u00c7\u00c3O"},{uf:"GO",nome:"SIM GOIAS TRANSPORTES",tel:"(62) 4009 8100",tipo:"TRANSP"},{uf:"GO",nome:"OLIVEIRA FRETISTA",tel:"(62) 9 9145 3232",tipo:"FRETE"},{uf:"GO",nome:"PEDRO FRETISTA",tel:"(62) 9 9313 3738",tipo:"FRETE"},{uf:"GO",nome:"ELTON FRENT. RIO VERDE",tel:"(62) 9 9458 1808",tipo:"FRETE"},{uf:"GO",nome:"UP TRANSP. GYN X UBER",tel:"(62) 9 9849 9237",tipo:"FRETE"},{uf:"GO",nome:"CW3",tel:"(62) 3586-6528",tipo:"FRETE"},{uf:"GO",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},
+  {uf:"MA",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"MA",nome:"FENIX TRANP.",tel:"(62) 3087 1331",tipo:"TRANSP"},{uf:"MA",nome:"SATELITE NORTE",tel:"(62) 3565 1717",tipo:"VIA\u00c7\u00c3O"},{uf:"MA",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},{uf:"MA",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},{uf:"MA",nome:"OLIVEIRA FRETISTA",tel:"(62) 9 9145 3232",tipo:"FRETE"},{uf:"MA",nome:"PEDRO FRETISTA",tel:"(62) 9 9313 3738",tipo:"FRETE"},{uf:"MA",nome:"RIO NOVO",tel:"(66) 9 9238 7642",tipo:"TRANSP"},
+  {uf:"MG",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},{uf:"MG",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"MG",nome:"MANDALA",tel:"(62) 9 8162 0288",tipo:"TRANSP"},{uf:"MG",nome:"MIRA TRANSPORTES",tel:"(62) 2765 9900",tipo:"TRANSP"},{uf:"MG",nome:"SÃO LUIS",tel:"(62) 9 9287 6748",tipo:"VIA\u00c7\u00c3O"},{uf:"MG",nome:"SATELITE NORTE",tel:"(62) 3565 1717",tipo:"VIA\u00c7\u00c3O"},{uf:"MG",nome:"TG TRANSPORTES",tel:"(62) 9 9934 9163",tipo:"TRANSP"},{uf:"MG",nome:"TSV",tel:"(11) 9 7035 4546",tipo:"TRANSP"},{uf:"MG",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},{uf:"MG",nome:"OLIVEIRA FRETISTA",tel:"(62) 9 9145 3232",tipo:"FRETE"},{uf:"MG",nome:"PEDRO FRETISTA",tel:"(62) 9 9313 3738",tipo:"FRETE"},{uf:"MG",nome:"UP TRANSP. UBERLANDIA",tel:"(62) 9 9849 9237",tipo:"FRETE"},{uf:"MG",nome:"JEOLOG",tel:"(62) 3412 8480",tipo:"TRANSP"},
+  {uf:"MS",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"MS",nome:"CARVALIMA",tel:"(62) 3597 3169",tipo:"TRANSP"},{uf:"MS",nome:"EXSUL",tel:"(67) 3668 1460",tipo:"TRANSP"},{uf:"MS",nome:"HELIOS",tel:"(62) 9 8238 0030",tipo:"VIA\u00c7\u00c3O"},{uf:"MS",nome:"MANDALA",tel:"(62) 9 8162 0288",tipo:"TRANSP"},{uf:"MS",nome:"MIRA TRANSPORTES",tel:"(62) 2765 9900",tipo:"TRANSP"},{uf:"MS",nome:"TSV",tel:"(11) 9 7035 4546",tipo:"TRANSP"},{uf:"MS",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},{uf:"MS",nome:"OLIVEIRA FRETISTA",tel:"(62) 9 9145 3232",tipo:"FRETE"},{uf:"MS",nome:"PEDRO FRETISTA",tel:"(62) 9 9313 3738",tipo:"FRETE"},
+  {uf:"MT",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"MT",nome:"CARVALIMA",tel:"(62) 3597 3169",tipo:"TRANSP"},{uf:"MT",nome:"FRANCAR",tel:"(62) 9 9168 5050",tipo:"TRANSP"},{uf:"MT",nome:"HELIOS",tel:"(62) 9 8238 0030",tipo:"VIA\u00c7\u00c3O"},{uf:"MT",nome:"MANDALA",tel:"(62) 9 8162 0288",tipo:"TRANSP"},{uf:"MT",nome:"MIRA TRANSPORTES",tel:"(62) 2765 9900",tipo:"TRANSP"},{uf:"MT",nome:"SÃO LUIS",tel:"(62) 9 9287 6748",tipo:"VIA\u00c7\u00c3O"},{uf:"MT",nome:"SATELITE NORTE",tel:"(62) 3565 1717",tipo:"VIA\u00c7\u00c3O"},{uf:"MT",nome:"SOLIDEZ TRANSPORTES",tel:"(62) 3247 2722",tipo:"TRANSP"},{uf:"MT",nome:"TSV",tel:"(11) 9 7035 4546",tipo:"TRANSP"},{uf:"MT",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},{uf:"MT",nome:"OLIVEIRA FRETISTA",tel:"(62) 9 9145 3232",tipo:"FRETE"},{uf:"MT",nome:"PEDRO FRETISTA",tel:"(62) 9 9313 3738",tipo:"FRETE"},{uf:"MT",nome:"CONNECT",tel:"(65) 9 9238 4041",tipo:"VIA\u00c7\u00c3O"},{uf:"MT",nome:"RIO NOVO",tel:"(66) 9 9238 7642",tipo:"TRANSP"},
+  {uf:"PA",nome:"BBT TRANSPORTES",tel:"(62) 9 9682 0773",tipo:"TRANSP"},{uf:"PA",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"PA",nome:"HELIOS",tel:"(62) 9 8238 0030",tipo:"VIA\u00c7\u00c3O"},{uf:"PA",nome:"MIRA TRANSPORTES",tel:"(62) 2765 9900",tipo:"TRANSP"},{uf:"PA",nome:"SATELITE NORTE",tel:"(62) 3565 1717",tipo:"VIA\u00c7\u00c3O"},{uf:"PA",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},{uf:"PA",nome:"OLIVEIRA FRETISTA",tel:"(62) 9 9145 3232",tipo:"FRETE"},{uf:"PA",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},{uf:"PA",nome:"PEDRO FRETISTA",tel:"(62) 9 9313 3738",tipo:"FRETE"},{uf:"PA",nome:"RIO NOVO",tel:"(66) 9 9238 7642",tipo:"TRANSP"},
+  {uf:"PB",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},{uf:"PB",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"PB",nome:"JEOLOG",tel:"(62) 3412 8480",tipo:"TRANSP"},
+  {uf:"PE",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},{uf:"PE",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"PE",nome:"SÃO LUIS",tel:"(62) 9 9287 6748",tipo:"VIA\u00c7\u00c3O"},{uf:"PE",nome:"RAPIDAO GOIAS",tel:"(62) 9 8166 3352",tipo:"TRANSP"},{uf:"PE",nome:"JEOLOG",tel:"(62) 3412 8480",tipo:"TRANSP"},
+  {uf:"PI",nome:"ACCERT",tel:"(62) 9 8300 6662",tipo:"TRANSP"},{uf:"PI",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},{uf:"PI",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"PI",nome:"FENIX TRANP.",tel:"(62) 3087 1331",tipo:"TRANSP"},{uf:"PI",nome:"SATELITE NORTE",tel:"(62) 3565 1717",tipo:"VIA\u00c7\u00c3O"},{uf:"PI",nome:"RIO NOVO",tel:"(66) 9 9238 7642",tipo:"TRANSP"},{uf:"PI",nome:"JEOLOG",tel:"(62) 3412 8480",tipo:"TRANSP"},
+  {uf:"PR",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"PR",nome:"HELIOS",tel:"(62) 9 8238 0030",tipo:"VIA\u00c7\u00c3O"},{uf:"PR",nome:"MIRA TRANSPORTES",tel:"(62) 2765 9900",tipo:"TRANSP"},{uf:"PR",nome:"SATELITE NORTE",tel:"(62) 3565 1717",tipo:"VIA\u00c7\u00c3O"},{uf:"PR",nome:"TSV",tel:"(11) 9 7035 4546",tipo:"TRANSP"},{uf:"PR",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},
+  {uf:"RJ",nome:"ATUAL CARGAS",tel:"(11) 3908 0600",tipo:"TRANSP"},{uf:"RJ",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"RJ",nome:"MIRA TRANSPORTES",tel:"(62) 2765 9900",tipo:"TRANSP"},{uf:"RJ",nome:"TSV",tel:"(11) 9 7035 4546",tipo:"TRANSP"},
+  {uf:"RN",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},{uf:"RN",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"RN",nome:"JEOLOG",tel:"(62) 3412 8480",tipo:"TRANSP"},
+  {uf:"RO",nome:"CARVALIMA",tel:"(62) 3597 3169",tipo:"TRANSP"},{uf:"RO",nome:"FAVORITA",tel:"(62) 9 9259 8935",tipo:"TRANSP"},{uf:"RO",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},
+  {uf:"RR",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},
+  {uf:"RS",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"RS",nome:"HELIOS",tel:"(62) 9 8238 0030",tipo:"VIA\u00c7\u00c3O"},{uf:"RS",nome:"TSV",tel:"(11) 9 7035 4546",tipo:"TRANSP"},{uf:"RS",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},
+  {uf:"SC",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"SC",nome:"HELIOS",tel:"(62) 9 8238 0030",tipo:"VIA\u00c7\u00c3O"},{uf:"SC",nome:"MIRA TRANSPORTES",tel:"(62) 2765 9900",tipo:"TRANSP"},{uf:"SC",nome:"SATELITE NORTE",tel:"(62) 3565 1717",tipo:"VIA\u00c7\u00c3O"},{uf:"SC",nome:"TSV",tel:"(11) 9 7035 4546",tipo:"TRANSP"},{uf:"SC",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},{uf:"SC",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},
+  {uf:"SE",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},{uf:"SE",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"SE",nome:"SÃO LUIS",tel:"(62) 9 9287 6748",tipo:"VIA\u00c7\u00c3O"},{uf:"SE",nome:"JEOLOG",tel:"(62) 3412 8480",tipo:"TRANSP"},
+  {uf:"SP",nome:"ACCERT",tel:"(62) 9 8300 6662",tipo:"TRANSP"},{uf:"SP",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},{uf:"SP",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"SP",nome:"FENIX TRANP.",tel:"(62) 3087 1331",tipo:"TRANSP"},{uf:"SP",nome:"FOCO",tel:"(62) 9 9415 0489",tipo:"TRANSP"},{uf:"SP",nome:"FRANCAR",tel:"(62) 9 9168 5050",tipo:"TRANSP"},{uf:"SP",nome:"HELIOS",tel:"(62) 9 8238 0030",tipo:"VIA\u00c7\u00c3O"},{uf:"SP",nome:"MANDALA",tel:"(62) 9 8162 0288",tipo:"TRANSP"},{uf:"SP",nome:"MIRA TRANSPORTES",tel:"(62) 2765 9900",tipo:"TRANSP"},{uf:"SP",nome:"MULLER / SERRANA TRANSP.",tel:"(62) 3086 1775",tipo:"VIA\u00c7\u00c3O"},{uf:"SP",nome:"SÃO LUIS",tel:"(62) 9 9287 6748",tipo:"VIA\u00c7\u00c3O"},{uf:"SP",nome:"SATELITE NORTE",tel:"(62) 3565 1717",tipo:"VIA\u00c7\u00c3O"},{uf:"SP",nome:"TSV",tel:"(11) 9 7035 4546",tipo:"TRANSP"},{uf:"SP",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},
+  {uf:"TO",nome:"ALL CARGO",tel:"(62) 9 9954 3751",tipo:"TRANSP"},{uf:"TO",nome:"BRAEX",tel:"(62) 9 9949 0616",tipo:"VIA\u00c7\u00c3O"},{uf:"TO",nome:"BRASPRESS",tel:"SITE",tipo:"TRANSP"},{uf:"TO",nome:"FENIX TRANP.",tel:"(62) 3087 1331",tipo:"TRANSP"},{uf:"TO",nome:"HELIOS",tel:"(62) 9 8238 0030",tipo:"VIA\u00c7\u00c3O"},{uf:"TO",nome:"MANDALA",tel:"(62) 9 8162 0288",tipo:"TRANSP"},{uf:"TO",nome:"SATELITE NORTE",tel:"(62) 3565 1717",tipo:"VIA\u00c7\u00c3O"},{uf:"TO",nome:"TSV",tel:"(11) 9 7035 4546",tipo:"TRANSP"},{uf:"TO",nome:"VITLOG",tel:"(51) 3349 6900",tipo:"TRANSP"},{uf:"TO",nome:"TRANSUL",tel:"(62) 3928 0503",tipo:"TRANSP"},{uf:"TO",nome:"OLIVEIRA FRETISTA",tel:"(62) 9 9145 3232",tipo:"FRETE"},{uf:"TO",nome:"PEDRO FRETISTA",tel:"(62) 9 9313 3738",tipo:"FRETE"},{uf:"TO",nome:"FABBITUR",tel:"(62) 9 8127 3990",tipo:"VIA\u00c7\u00c3O"},{uf:"TO",nome:"RIO NOVO",tel:"(66) 9 9238 7642",tipo:"TRANSP"}
+];
+
+const SAVED=[
+  {id:"5581",destCity:"Belo Horizonte",destUF:"MG",cnpjDest:"48.434.217/0001-36",cepDest:"30535-532",endDest:"AV DOS ESPORTES, 720, CORACAO EUCARISTICO, BH - MG",valorNF:59309.79,volumes:58,peso:390,nfEmitida:"NÃO",solicitante:"RAUL",produtos:[{nome:"DISPENSER PAPEL TOALHA / HIG. VELOX",vol:21,dim:"44 x 54 x 30",cabe:6},{nome:"DISPENSER COPO DESCARTAVEL",vol:5,dim:"35 x 28 x 42",cabe:12},{nome:"DISPENSER PAPEL TOALHA / HIG INOX",vol:21,dim:"30 x 66 x 68",cabe:14},{nome:"DISPENSER SABONET. VELOX 800ML",vol:11,dim:"26 x 43 x 27",cabe:12}],transportadoras:[{nome:"BRASPRESS",tel:"SITE",cotacao:"",prazo:"",valor:0,lucro:0},{nome:"MANDALA",tel:"(62) 9 8162 0288",cotacao:"",prazo:"",valor:0,lucro:0},{nome:"TG TRANSPORTES",tel:"(62) 9 9934 9163",cotacao:"1049795",prazo:"3",valor:1046.84,lucro:0.2},{nome:"TSV",tel:"(11) 9 7035 4546",cotacao:"",prazo:"",valor:0,lucro:0}]},
+  {id:"5597",destCity:"Brasília",destUF:"DF",cnpjDest:"02.270.669/0001-29",cepDest:"70830-100",endDest:"ST DE GRANDES AREAS NORTE 603, MODULO J - Asa Norte",valorNF:2802.11,volumes:5,peso:60,nfEmitida:"NÃO",solicitante:"RAUL",produtos:[{nome:"BARRA APOIO RETA INOX",vol:1,dim:"96 x 45 x 20",cabe:16},{nome:"LAVATORIO SABATINI 53X44",vol:1,dim:"53 x 44 x 22",cabe:1},{nome:"COLUNA SUSP. ETNA/SABATINI",vol:1,dim:"20 x 25 x 34",cabe:1},{nome:"BACIA CONV. LUNA SPEC.",vol:1,dim:"70 x 44 x 43",cabe:1},{nome:"DISPENSER PAPEL TOALHA / HIG. VELOX",vol:1,dim:"44 x 54 x 30",cabe:6}],transportadoras:[{nome:"BRAEX",tel:"(62) 9 9949 0616",cotacao:"",prazo:"",valor:0,lucro:0},{nome:"BRASPRESS",tel:"SITE",cotacao:"",prazo:"",valor:0,lucro:0},{nome:"SÃO LUIS",tel:"(62) 9 9287 6748",cotacao:"1049795",prazo:"3",valor:1046.84,lucro:0.2}]},
+  {id:"5724",destCity:"Uberlândia",destUF:"MG",cnpjDest:"24.555.094/0004-76",cepDest:"38400-780",endDest:"Osvaldo Carneiro 75, Nossa Senhora Aparecida",valorNF:367.16,volumes:1,peso:60,nfEmitida:"NÃO",solicitante:"RAUL",produtos:[{nome:"ELEMENTO TATIL ALERTA PVC",vol:1,dim:"26 x 26 x 16",cabe:2000}],transportadoras:[{nome:"BRASPRESS",tel:"SITE",cotacao:"",prazo:"",valor:0,lucro:0},{nome:"TG TRANSPORTES",tel:"(62) 9 9934 9163",cotacao:"1056631",prazo:"1",valor:82.76,lucro:0.2}]},
+  {id:"5732",destCity:"Teresina",destUF:"PI",cnpjDest:"97.529.389/0003-60",cepDest:"64049-482",endDest:"Rua Cinegrafista Marques 311, Bairro Fátima",valorNF:4788,volumes:1,peso:20,nfEmitida:"NÃO",solicitante:"RAUL",produtos:[{nome:"MOLA BTS 75V - RECONDICIONADA",vol:1,dim:"35 x 35 x 15",cabe:6}],transportadoras:[{nome:"ACCERT",tel:"(62) 4003 8068",cotacao:"",prazo:"",valor:0,lucro:0},{nome:"BRASPRESS",tel:"SITE",cotacao:"354674988",prazo:"11",valor:276.56,lucro:0.2},{nome:"FENIX TRANP.",tel:"(62) 3087 1331",cotacao:"",prazo:"",valor:0,lucro:0}]}
+];
+
+const UFS=["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
+const INIT={cnpjRem:"35.017.646/0001-66",cepOrig:"74595-286",ufOrig:"GO",endRem:"Rua FL-42, Q:12 LT:03 Sl:02,03 - Goiania - GO - 74.595-286",cnpjDest:"",cepDest:"",cidadeDest:"",ufDest:"",endDest:"",valorNF:"",pesoTotal:"",nfEmitida:"NÃO",solicitante:"RAUL",embalagem:"CX",horario:"8:00 x 17:00 - SEG x SEXT",fechaAlmoco:"Não"};
+
+function fmtBRL(v){return"R$ "+(parseFloat(v)||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,".")}
+function h(tag,cls,inner,attrs){
+  var el=document.createElement(tag);
+  if(cls) el.className=cls;
+  if(inner!==undefined){if(typeof inner==='string') el.innerHTML=inner; else if(inner instanceof Node) el.appendChild(inner);}
+  if(attrs) Object.assign(el,attrs);
+  return el;
+}
+function inp(val,cls,ro,type,ph){
+  var el=document.createElement('input');
+  el.className='inp '+(cls||'');
+  el.value=val||'';
+  if(ro) el.readOnly=true;
+  if(type) el.type=type;
+  if(ph) el.placeholder=ph;
+  return el;
+}
+function sel(val,opts,cls){
+  var el=document.createElement('select');
+  el.className='inp '+(cls||'');
+  opts.forEach(function(o){
+    var opt=document.createElement('option');
+    opt.value=o; opt.textContent=o;
+    if(o===val) opt.selected=true;
+    el.appendChild(opt);
+  });
+  return el;
+}
+function row(children,cls){
+  var el=document.createElement('div');
+  el.className=cls||'';
+  children.forEach(function(c){el.appendChild(c)});
+  return el;
+}
+function field(lbl_txt,el_node){
+  var wrap=document.createElement('div');
+  var lbl=document.createElement('span');
+  lbl.className='lbl'; lbl.textContent=lbl_txt;
+  wrap.appendChild(lbl); wrap.appendChild(el_node);
+  return wrap;
+}
+
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+var STATE={
+  auth:false, tab:'cotacao',
+  form:Object.assign({},INIT),
+  prods:[{nome:'',vol:1,dim:'',cabe:''}],
+  manRows:[],
+  embSrch:'', trSrch:'', trUF:''
+};
+
+function getManRows(uf){
+  return TRANS.filter(function(t){return t.uf===uf}).map(function(t,i){
+    return Object.assign({},t,{nr:i+1,cotacao:'',prazo:'',valor:'',lucro:''});
+  });
+}
+
+// ══════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════
+function render(){
+  var app=document.getElementById('app');
+  app.innerHTML='';
+  if(!STATE.auth){app.appendChild(renderLogin()); return;}
+  app.appendChild(renderApp());
+}
+
+function renderLogin(){
+  var wrap=document.createElement('div');
+  wrap.className='login-wrap';
+  wrap.innerHTML=`
+    <div class="login-card">
+      <div class="login-bar"></div>
+      <div class="login-body">
+        <div class="login-icon">🔐</div>
+        <div class="login-title">MAIS ACESSÍVEL APP</div>
+        <div class="login-sub">Área restrita — acesso por convite</div>
+        <label class="login-label">Código de Acesso</label>
+        <input id="loginInp" class="login-input" type="password" placeholder="Digite o código recebido..." autocomplete="off"/>
+        <div id="loginErr" style="display:none" class="login-err">✕ Código incorreto. Verifique e tente novamente.</div>
+        <button class="login-btn" id="loginBtn">Entrar →</button>
+        <div class="login-hint">Não tem acesso? Solicite um convite ao administrador.</div>
+      </div>
+    </div>`;
+  function tryLogin(){
+    var v=wrap.querySelector('#loginInp').value;
+    if(v===ACCESS_CODE){STATE.auth=true;render();}
+    else{
+      var inp=wrap.querySelector('#loginInp'),err=wrap.querySelector('#loginErr');
+      inp.classList.add('error'); err.style.display='block';
+      inp.classList.add('shake'); setTimeout(function(){inp.classList.remove('shake')},500);
+    }
+  }
+  wrap.querySelector('#loginBtn').onclick=tryLogin;
+  wrap.querySelector('#loginInp').onkeydown=function(e){if(e.key==='Enter')tryLogin();};
+  return wrap;
+}
+
+function renderApp(){
+  var wrap=document.createElement('div');
+  // header
+  wrap.appendChild(renderHeader());
+  // nav
+  wrap.appendChild(renderNav());
+  // main
+  var main=document.createElement('main');
+  if(STATE.tab==='cotacao') main.appendChild(renderCotacao());
+  else if(STATE.tab==='salvas') main.appendChild(renderSalvas());
+  else if(STATE.tab==='transportadoras') main.appendChild(renderTrans());
+  else if(STATE.tab==='embalagens') main.appendChild(renderEmb());
+  wrap.appendChild(main);
+  return wrap;
+}
+
+function renderHeader(){
+  var el=document.createElement('header');
+  el.innerHTML=`
+    <div class="logo-box">✦</div>
+    <div><div class="app-name">MAIS ACESSÍVEL APP</div><div class="app-sub">Sistema de Cotação de Frete</div></div>
+    <div class="header-right">
+      <span class="badge">📍 Goiânia — GO</span>
+      <span style="font-family:monospace;font-size:11px;color:#888">35.017.646/0001-66</span>
+      <button class="btn-out" id="btnSair">🔒 Sair</button>
+    </div>`;
+  el.querySelector('#btnSair').onclick=function(){STATE.auth=false;render();};
+  return el;
+}
+
+function renderNav(){
+  var tabs=[{id:'cotacao',icon:'📋',l:'Cotação Frete'},{id:'salvas',icon:'🗂️',l:'Cotações Salvas'},{id:'transportadoras',icon:'🚛',l:'Transportadoras'},{id:'embalagens',icon:'📦',l:'Embalagens'}];
+  var nav=document.createElement('nav');
+  tabs.forEach(function(t){
+    var btn=document.createElement('button');
+    btn.className='tab'+(STATE.tab===t.id?' active':'');
+    btn.textContent=t.icon+' '+t.l;
+    btn.onclick=function(){STATE.tab=t.id;render();};
+    nav.appendChild(btn);
+  });
+  return nav;
+}
+
+// ── COTAÇÃO ──────────────────────────────
+function renderCotacao(){
+  var g=document.createElement('div'); g.className='grid2';
+  g.appendChild(renderCotLeft());
+  g.appendChild(renderCotRight());
+  return g;
+}
+
+function renderCotLeft(){
+  var wrap=document.createElement('div');
+  // Card automático
+  var c=document.createElement('div'); c.className='card';
+  c.innerHTML='<div class="sec-title"><span class="tag-acc">⚡</span> Cotação Frete Automático</div>';
+  var f=STATE.form;
+
+  function mkField(lbl,val,ro,type,ph,onChange){
+    var el=inp(val,'',ro,type,ph);
+    if(ro) el.classList.add('inp-ro');
+    if(onChange) el.oninput=function(){STATE.form[onChange]=this.value; updateResumo();};
+    return field(lbl,el);
+  }
+  function mkSel(lbl,val,opts,onChange){
+    var el=sel(val,opts);
+    el.onchange=function(){
+      STATE.form[onChange]=this.value;
+      if(onChange==='ufDest'){STATE.manRows=getManRows(this.value);updateManTable();}
+      updateResumo();
+    };
+    return field(lbl,el);
+  }
+
+  // ── BLOCO REMETENTE ──
+  var secRem=document.createElement('div');
+  secRem.style.cssText='background:#fff8eb;border:1.5px solid #fde68a;border-radius:8px;padding:10px 12px;margin-bottom:10px';
+  var lblRem=document.createElement('div');
+  lblRem.style.cssText='font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#92400e;margin-bottom:8px;display:flex;align-items:center;gap:5px';
+  lblRem.innerHTML='📤 Remetente';
+  secRem.appendChild(lblRem);
+  var r1=document.createElement('div'); r1.className='g2 mb7';
+  var r1a=mkField('CNPJ Remetente / Pagador',f.cnpjRem,true);
+  var cepUf=document.createElement('div'); cepUf.className='g2';
+  cepUf.appendChild(mkField('CEP Origem',f.cepOrig,true));
+  cepUf.appendChild(mkField('UF',f.ufOrig,true));
+  r1.appendChild(r1a); r1.appendChild(cepUf); secRem.appendChild(r1);
+  var endRemWrap=document.createElement('div');
+  endRemWrap.appendChild(mkField('Endereço Remetente',f.endRem,true));
+  secRem.appendChild(endRemWrap);
+  c.appendChild(secRem);
+
+  // ── BLOCO DESTINATÁRIO ──
+  var secDest=document.createElement('div');
+  secDest.style.cssText='background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:10px';
+  var lblDest=document.createElement('div');
+  lblDest.style.cssText='font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#1d4ed8;margin-bottom:8px;display:flex;align-items:center;gap:5px';
+  lblDest.innerHTML='📥 Destinatário';
+  secDest.appendChild(lblDest);
+
+  // Row 2: CNPJ dest + CEP dest
+  var r2=document.createElement('div'); r2.className='g2 mb7';
+  r2.appendChild(mkField('CNPJ Destinatário',f.cnpjDest,false,'text','00.000.000/0000-00','cnpjDest'));
+  var g3=document.createElement('div'); g3.className='g3';
+
+  // CEP com busca automática
+  var cepWrap=document.createElement('div');
+  var cepLbl=document.createElement('span'); cepLbl.className='lbl'; cepLbl.textContent='CEP Destino';
+  var cepEl=document.createElement('input'); cepEl.className='inp'; cepEl.type='text'; cepEl.id='cepDestEl'; cepEl.placeholder='00000-000'; cepEl.value=f.cepDest||'';
+  var cepStatus=document.createElement('div'); cepStatus.id='cepStatus'; cepStatus.style.cssText='font-size:10px;margin-top:2px;height:14px';
+
+  cepEl.oninput=function(){
+    STATE.form.cepDest=this.value;
+    var raw=this.value.replace(/\D/g,'');
+    if(raw.length===8){
+      cepStatus.textContent='🔍 Buscando...'; cepStatus.style.color='#888';
+      fetch('https://viacep.com.br/ws/'+raw+'/json/')
+        .then(function(r){return r.json();})
+        .then(function(d){
+          if(d.erro){
+            cepStatus.textContent='❌ CEP não encontrado'; cepStatus.style.color='#ef4444';
+          } else {
+            // Atualiza estado
+            STATE.form.cidadeDest = d.localidade||'';
+            STATE.form.ufDest     = d.uf||'';
+            STATE.manRows         = getManRows(d.uf||'');
+            // Atualiza campos visuais diretamente
+            var cidEl=document.getElementById('cidadeDestEl');
+            var ufEl2=document.getElementById('ufDestEl');
+            if(cidEl) cidEl.value=d.localidade||'';
+            if(ufEl2) ufEl2.value=d.uf||'';
+            // Mensagem de sucesso
+            cepStatus.textContent='✓ CEP encontrado: '+d.localidade+' — '+d.uf;
+            cepStatus.style.color='#059669';
+            // Atualiza label UF no título da cotação manual
+            var ufLbl=document.querySelector('.uf-manual-lbl');
+            if(ufLbl) ufLbl.textContent=d.uf||'';
+            // Reconstrói tabela de transportadoras via innerHTML (simples e confiável)
+            var wrap=document.getElementById('manTableWrap');
+            if(wrap){
+              var rows=STATE.manRows;
+              if(!rows.length){wrap.innerHTML='<p style="padding:16px;color:#888;font-size:12px">Nenhuma transportadora encontrada para '+d.uf+'</p>'; return;}
+              var html='<table style="width:100%;border-collapse:collapse"><thead><tr><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;letter-spacing:.4px;padding:7px 9px;text-align:left;border-bottom:1px solid #e8e8e6;font-weight:700;white-space:nowrap">Nº</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;letter-spacing:.4px;padding:7px 9px;text-align:left;border-bottom:1px solid #e8e8e6;font-weight:700">Transportadora</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Telefone</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Cotação</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Prazo</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Valor</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Lucro%</th><th style="background:#f3f3f1;color:#059669;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Valor Cobrar</th></tr></thead><tbody>';
+              rows.forEach(function(r,i){
+                var bg=i%2===0?'#fff':'#f9f9f7';
+                html+='<tr style="background:'+bg+'"><td style="padding:6px 9px;font-size:11px;border-bottom:1px solid #e8e8e6;color:#888">'+r.nr+'</td>'+
+                  '<td style="padding:6px 9px;font-size:11px;border-bottom:1px solid #e8e8e6;font-weight:600">'+r.nome+'</td>'+
+                  '<td style="padding:6px 9px;font-size:11px;border-bottom:1px solid #e8e8e6;color:#2563eb;font-family:monospace;white-space:nowrap">'+r.tel+'</td>'+
+                  '<td style="padding:6px 9px;border-bottom:1px solid #e8e8e6"><input class="inp" data-idx="'+i+'" data-field="cotacao" style="width:82px;font-size:11px" placeholder="—"></td>'+
+                  '<td style="padding:6px 9px;border-bottom:1px solid #e8e8e6"><input class="inp" data-idx="'+i+'" data-field="prazo" style="width:44px;font-size:11px" placeholder="—"></td>'+
+                  '<td style="padding:6px 9px;border-bottom:1px solid #e8e8e6"><input class="inp" data-idx="'+i+'" data-field="valor" type="number" style="width:78px;font-size:11px" placeholder="0.00"></td>'+
+                  '<td style="padding:6px 9px;border-bottom:1px solid #e8e8e6"><input class="inp" data-idx="'+i+'" data-field="lucro" type="number" step="0.01" style="width:52px;font-size:11px" placeholder="0.20"></td>'+
+                  '<td style="padding:6px 9px;font-size:11px;border-bottom:1px solid #e8e8e6;font-weight:700;color:#888" id="vc-'+i+'">—</td></tr>';
+              });
+              html+='</tbody></table>';
+              wrap.innerHTML=html;
+              // Adiciona eventos aos inputs
+              wrap.querySelectorAll('input[data-field]').forEach(function(inp){
+                inp.oninput=function(){
+                  var idx=parseInt(this.dataset.idx), field=this.dataset.field;
+                  STATE.manRows[idx][field]=this.value;
+                  if(field==='valor'||field==='lucro'){
+                    var v=parseFloat(STATE.manRows[idx].valor)||0, l=parseFloat(STATE.manRows[idx].lucro)||0;
+                    var vc=v>0?v*(1+l):0;
+                    var vcEl=document.getElementById('vc-'+idx);
+                    if(vcEl){vcEl.textContent=v>0?fmtBRL(vc):'—'; vcEl.style.color=v>0?'#059669':'#888';}
+                  }
+                };
+              });
+            }
+          }
+        })
+        .catch(function(){
+          cepStatus.textContent='❌ Erro ao buscar CEP'; cepStatus.style.color='#ef4444';
+        });
+    } else if(raw.length>0){
+      cepStatus.textContent=''; 
+    }
+    updateResumo();
+  };
+  cepWrap.appendChild(cepLbl); cepWrap.appendChild(cepEl); cepWrap.appendChild(cepStatus);
+
+  // Cidade — somente leitura, preenchida pelo CEP
+  var cidWrap=document.createElement('div');
+  var cidLbl=document.createElement('span'); cidLbl.className='lbl'; cidLbl.textContent='Cidade';
+  var cidEl=document.createElement('input'); cidEl.className='inp inp-ro'; cidEl.id='cidadeDestEl'; cidEl.readOnly=true; cidEl.placeholder='Auto CEP'; cidEl.value=f.cidadeDest||'';
+  cidWrap.appendChild(cidLbl); cidWrap.appendChild(cidEl);
+
+  // UF — somente leitura, preenchida pelo CEP
+  var ufWrap=document.createElement('div');
+  var ufLbl=document.createElement('span'); ufLbl.className='lbl'; ufLbl.textContent='UF';
+  var ufEl2=document.createElement('input'); ufEl2.className='inp inp-ro'; ufEl2.id='ufDestEl'; ufEl2.readOnly=true; ufEl2.placeholder='Auto'; ufEl2.value=f.ufDest||'';
+  ufWrap.appendChild(ufLbl); ufWrap.appendChild(ufEl2);
+
+  g3.appendChild(cepWrap); g3.appendChild(cidWrap); g3.appendChild(ufWrap);
+  r2.appendChild(g3); secDest.appendChild(r2);
+
+  // endDest
+  var endDestWrap=document.createElement('div');
+  endDestWrap.appendChild(mkField('Endereço Destinatário',f.endDest,false,'text','Endereço completo','endDest'));
+  secDest.appendChild(endDestWrap);
+  c.appendChild(secDest);
+
+  // ── BLOCO INFO DO PEDIDO ──
+  var secPed=document.createElement('div');
+  secPed.style.cssText='background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:10px 12px;margin-bottom:10px';
+  var lblPed=document.createElement('div');
+  lblPed.style.cssText='font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#166534;margin-bottom:8px;display:flex;align-items:center;gap:5px';
+  lblPed.innerHTML='📦 Informações do Pedido';
+  secPed.appendChild(lblPed);
+
+  // Row: valorNF, vol, peso, nf
+  var r3=document.createElement('div'); r3.className='g4 mb7';
+  r3.appendChild(mkField('Valor NF (R$)',f.valorNF,false,'number','0.00','valorNF'));
+  var volEl2=inp(String(calcTotalVol()),'inp-ro'); volEl2.style.color='#d97706'; volEl2.style.fontWeight='700'; volEl2.id='totalVolEl'; volEl2.readOnly=true;
+  r3.appendChild(field('Vol. Total',volEl2));
+  r3.appendChild(mkField('Peso Total (kg)',f.pesoTotal,false,'number','0','pesoTotal'));
+  r3.appendChild(mkSel('NF Emitida',f.nfEmitida,['NÃO','SIM'],'nfEmitida'));
+  secPed.appendChild(r3);
+
+  // Row: sol, emb, horario, almoco
+  var r4=document.createElement('div'); r4.className='g4';
+  r4.appendChild(mkField('Solicitante',f.solicitante,false,'text','','solicitante'));
+  r4.appendChild(mkField('Embalagem',f.embalagem,false,'text','','embalagem'));
+  r4.appendChild(mkField('Horário Coleta',f.horario,false,'text','','horario'));
+  r4.appendChild(mkSel('Fecha Almoço',f.fechaAlmoco,['Não','Sim'],'fechaAlmoco'));
+  secPed.appendChild(r4);
+  c.appendChild(secPed);
+  wrap.appendChild(c);
+
+  // Card produtos
+  var cp=document.createElement('div'); cp.className='card';
+  var cpHdr=document.createElement('div'); cpHdr.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px';
+  var cpTitle=document.createElement('div'); cpTitle.className='sec-title'; cpTitle.style.margin='0;border:0;padding:0'; cpTitle.textContent='📦 Produtos';
+  var cpBtn=document.createElement('button'); cpBtn.className='btn-main'; cpBtn.textContent='+ Produto';
+  cpBtn.onclick=function(){
+    STATE.prods.push({nome:'',vol:1,dim:'',cabe:''});
+    var tbl=document.getElementById('prodsTable');
+    if(tbl){tbl.innerHTML=''; var nt=renderProdsTable(); while(nt.firstChild) tbl.appendChild(nt.firstChild);}
+    updateVolTotal(); updateResumo();
+  };
+  cpHdr.appendChild(cpTitle); cpHdr.appendChild(cpBtn); cp.appendChild(cpHdr);
+  cp.appendChild(renderProdsTable());
+  wrap.appendChild(cp);
+  return wrap;
+}
+
+function calcTotalVol(){return STATE.prods.reduce(function(s,p){return s+(parseInt(p.vol)||0);},0);}
+function calcCubagem(){
+  var g={};
+  STATE.prods.filter(function(p){return p.dim&&p.vol>0;}).forEach(function(p){g[p.dim]=(g[p.dim]||0)+(parseInt(p.vol)||0);});
+  return Object.entries(g).map(function(e){return e[1]+' VOL ('+e[0]+')';}).join(', ')||'—';
+}
+function calcResumo(){
+  var f=STATE.form;
+  return [
+    '* CNPJ do pagador do frete: '+f.cnpjRem,
+    '* CNPJ do destinatário: '+(f.cnpjDest||'—'),
+    '* CNPJ do remetente: '+f.cnpjRem,
+    '* CEP de origem: '+f.cepOrig.replace(/-/g,''),
+    '* CEP de destino: '+(f.cepDest.replace(/-/g,'')||'—'),
+    '* Tipo de material: '+(STATE.prods.filter(function(p){return p.nome;}).map(function(p){return p.nome;}).join(', ')||'—'),
+    '* Valor da nota fiscal: '+fmtBRL(f.valorNF),
+    '* Quantidade de volumes: '+calcTotalVol(),
+    '* Peso total: '+(f.pesoTotal||0)+' kg',
+    '* Cubagem: '+calcCubagem()
+  ].join('\n');
+}
+
+function renderProdsTable(){
+  var tblWrap=document.createElement('div'); tblWrap.className='tbl-wrap'; tblWrap.id='prodsTable';
+  var tbl=document.createElement('table');
+  tbl.innerHTML='<thead><tr><th style="width:45%">Produto</th><th>Vol.</th><th>Dimensão</th><th>Un/Vol</th><th></th></tr></thead>';
+  var tbody=document.createElement('tbody');
+  STATE.prods.forEach(function(p,i){
+    var tr=document.createElement('tr');
+    // produto select
+    var tdP=document.createElement('td');
+    var selEl=document.createElement('select'); selEl.className='inp'; selEl.style.fontSize='11px';
+    var optBlank=document.createElement('option'); optBlank.value=''; optBlank.textContent='-- Selecione --';
+    selEl.appendChild(optBlank);
+    EMBALAGENS.forEach(function(e){
+      var o=document.createElement('option'); o.value=e.n; o.textContent=e.n;
+      if(e.n===p.nome) o.selected=true;
+      selEl.appendChild(o);
+    });
+    selEl.onchange=function(){
+      STATE.prods[i].nome=this.value;
+      var val=this.value;
+      var emb=EMBALAGENS.find(function(e){return e.n===val;});
+      if(emb){STATE.prods[i].dim=emb.d; STATE.prods[i].cabe=emb.c;}
+      // Atualiza só a tabela de produtos e o resumo, sem render() completo
+      var tbl=document.getElementById('prodsTable');
+      if(tbl){tbl.innerHTML=''; var nt=renderProdsTable(); while(nt.firstChild) tbl.appendChild(nt.firstChild);}
+      updateVolTotal(); updateResumo();
+    };
+    tdP.appendChild(selEl); tr.appendChild(tdP);
+    // vol
+    var tdV=document.createElement('td');
+    var inpV=document.createElement('input'); inpV.className='inp'; inpV.type='number'; inpV.min='1'; inpV.value=p.vol; inpV.style.width='55px';
+    inpV.oninput=function(){STATE.prods[i].vol=parseInt(this.value)||1; updateVolTotal(); updateResumo();};
+    tdV.appendChild(inpV); tr.appendChild(tdV);
+    // dim
+    var tdD=document.createElement('td'); tdD.className='tag-blue'; tdD.style.fontSize='11px'; tdD.textContent=p.dim||'—'; tr.appendChild(tdD);
+    // cabe
+    var tdC=document.createElement('td'); tdC.className='tag-muted'; tdC.style.fontSize='11px'; tdC.textContent=p.cabe||'—'; tr.appendChild(tdC);
+    // del
+    var tdX=document.createElement('td');
+    var btnX=document.createElement('button'); btnX.className='btn-del'; btnX.textContent='✕';
+    btnX.onclick=function(){
+      STATE.prods.splice(i,1);
+      var tbl=document.getElementById('prodsTable');
+      if(tbl){tbl.innerHTML=''; var nt=renderProdsTable(); while(nt.firstChild) tbl.appendChild(nt.firstChild);}
+      updateVolTotal(); updateResumo();
+    };
+    tdX.appendChild(btnX); tr.appendChild(tdX);
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody); tblWrap.appendChild(tbl);
+  return tblWrap;
+}
+
+function updateVolTotal(){
+  var el=document.getElementById('totalVolEl');
+  if(el) el.value=calcTotalVol();
+}
+function updateResumo(){
+  var el=document.getElementById('resumoPre');
+  if(el) el.textContent=calcResumo();
+}
+function updateManTable(){
+  // Atualiza label UF no título da seção
+  var ufLbl=document.querySelector('.uf-manual-lbl');
+  if(ufLbl) ufLbl.textContent=STATE.form.ufDest||'(informe o CEP destino)';
+  // Atualiza tabela de transportadoras
+  var el=document.getElementById('manTableWrap');
+  if(el){el.innerHTML=''; el.appendChild(buildManTable());}
+}
+
+function renderCotRight(){
+  var wrap=document.createElement('div');
+  // manual
+  var cm=document.createElement('div'); cm.className='card';
+  var ufLabel=document.createElement('div'); ufLabel.className='sec-title';
+  ufLabel.innerHTML='<span class="tag-acc">✍️</span> Cotação Manual — <span class="tag-acc uf-manual-lbl" style="font-family:monospace">'+(STATE.form.ufDest||'(informe o CEP destino)')+'</span>';
+  cm.appendChild(ufLabel);
+  var mWrap=document.createElement('div'); mWrap.id='manTableWrap'; mWrap.className='scroll-y';
+  mWrap.appendChild(buildManTable());
+  cm.appendChild(mWrap);
+  wrap.appendChild(cm);
+  // resumo
+  var cr=document.createElement('div'); cr.className='card';
+  var crHdr=document.createElement('div'); crHdr.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px';
+  var crTitle=document.createElement('div'); crTitle.className='sec-title'; crTitle.style.cssText='margin:0;border:0;padding:0'; crTitle.textContent='📄 Resumo (Ctrl+Shift+V)';
+  var crBtn=document.createElement('button'); crBtn.className='btn-main'; crBtn.id='copyBtn'; crBtn.textContent='📋 Copiar';
+  crBtn.onclick=function(){
+    navigator.clipboard.writeText(calcResumo()).catch(function(){});
+    crBtn.textContent='✓ Copiado!'; crBtn.style.background='#059669';
+    setTimeout(function(){crBtn.textContent='📋 Copiar'; crBtn.style.background='';},2000);
+  };
+  crHdr.appendChild(crTitle); crHdr.appendChild(crBtn); cr.appendChild(crHdr);
+  var pre=document.createElement('pre'); pre.id='resumoPre'; pre.textContent=calcResumo();
+  cr.appendChild(pre);
+  wrap.appendChild(cr);
+  return wrap;
+}
+
+function buildManTable(){
+  if(!STATE.manRows.length) 
+  var tbl=document.createElement('table');
+  tbl.innerHTML='<thead><tr><th>Nº</th><th>Transportadora</th><th>Telefone</th><th>Cotação</th><th>Prazo</th><th>Valor</th><th>Lucro%</th><th style="color:#059669">Valor Cobrar</th></tr></thead>';
+  var tbody=document.createElement('tbody');
+  STATE.manRows.forEach(function(r,i){
+    var val=parseFloat(r.valor)||0,luc=parseFloat(r.lucro)||0,vc=val>0?val*(1+luc):0,has=val>0;
+    var tr=document.createElement('tr');
+    if(has) tr.className='hit';
+    tr.innerHTML='<td class="tag-muted">'+r.nr+'</td>'+
+      '<td style="font-weight:'+(has?700:400)+';color:'+(has?'#059669':'#1a1a1a')+';font-size:11px">'+r.nome+'</td>'+
+      '<td style="font-size:11px;color:#2563eb;font-family:monospace;white-space:nowrap;padding:6px 9px;border-bottom:1px solid #ddd">'+r.tel+'</td>';
+    function mkTdInp(val,w,type,field){
+      var td=document.createElement('td');
+      var el=document.createElement('input'); el.className='inp'; el.value=val||''; el.style.width=w+'px'; el.style.fontSize='11px';
+      if(type) el.type=type;
+      el.oninput=function(){STATE.manRows[i][field]=this.value;};
+      el.onblur=function(){STATE.manRows[i][field]=this.value; rebuildManRow(i);};
+      td.appendChild(el); return td;
+    }
+    tr.appendChild(mkTdInp(r.cotacao,82,'text','cotacao'));
+    tr.appendChild(mkTdInp(r.prazo,44,'text','prazo'));
+    tr.appendChild(mkTdInp(r.valor,78,'number','valor'));
+    tr.appendChild(mkTdInp(r.lucro,46,'number','lucro'));
+    var tdVc=document.createElement('td'); tdVc.style.cssText='font-weight:700;color:'+(has?'#059669':'#888'); tdVc.textContent=has?fmtBRL(vc):'—';
+    tr.appendChild(tdVc);
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+  return tbl;
+}
+function rebuildManRow(i){
+  var wrap=document.getElementById('manTableWrap');
+  if(wrap){wrap.innerHTML=''; wrap.appendChild(buildManTable());}
+}
+
+// ── SALVAS ──────────────────────────────
+function renderSalvas(){
+  var wrap=document.createElement('div');
+  var intro=document.createElement('p'); intro.style.cssText='color:#888;font-size:13px;margin-bottom:14px';
+  intro.innerHTML='4 cotações importadas da planilha. Clique em <strong>Carregar</strong> para editar.';
+  wrap.appendChild(intro);
+  var grid=document.createElement('div'); grid.className='grid2';
+  SAVED.forEach(function(c){
+    var best=c.transportadoras.filter(function(t){return t.valor>0;}).sort(function(a,b){return a.valor-b.valor;})[0];
+    var card=document.createElement('div'); card.className='card'; card.style.borderLeft='3px solid #d97706';
+    // header
+    var hdr=document.createElement('div'); hdr.style.cssText='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px';
+    var info=document.createElement('div');
+    info.innerHTML='<span class="nf-badge">NF #'+c.id+'</span><div class="fw700 f15" style="margin-top:5px">'+c.destCity+' — '+c.destUF+'</div><div style="color:#888;font-size:11px;font-family:monospace">'+c.cnpjDest+'</div>';
+    var btn=document.createElement('button'); btn.className='btn-ok'; btn.textContent='↩ Carregar';
+    btn.onclick=function(){
+      STATE.form=Object.assign({},INIT,{cnpjDest:c.cnpjDest,cepDest:c.cepDest,cidadeDest:c.destCity,ufDest:c.destUF,endDest:c.endDest,valorNF:String(c.valorNF),pesoTotal:String(c.peso),nfEmitida:c.nfEmitida,solicitante:c.solicitante});
+      STATE.prods=c.produtos.map(function(p){return{nome:p.nome,vol:p.vol,dim:p.dim,cabe:p.cabe};});
+      STATE.manRows=c.transportadoras.map(function(t,i){return Object.assign({},t,{nr:i+1,uf:c.destUF});});
+      STATE.tab='cotacao'; render();
+    };
+    hdr.appendChild(info); hdr.appendChild(btn); card.appendChild(hdr);
+    // stats
+    var stats=document.createElement('div'); stats.className='g4'; stats.style.marginBottom='10px';
+    [['Valor NF',fmtBRL(c.valorNF)],['Volumes',c.volumes+' vol'],['Peso',c.peso+' kg'],['NF Emitida',c.nfEmitida]].forEach(function(kv){
+      var d=document.createElement('div'); d.style.cssText='background:#f3f3f1;border-radius:5px;padding:5px 9px';
+      d.innerHTML='<span class="lbl" style="margin:0">'+kv[0]+'</span><div style="font-size:12px;font-family:monospace;font-weight:600;margin-top:2px">'+kv[1]+'</div>';
+      stats.appendChild(d);
+    });
+    card.appendChild(stats);
+    // prods
+    c.produtos.forEach(function(p){
+      var d=document.createElement('div'); d.style.cssText='display:flex;gap:8px;font-size:11px;font-family:monospace;padding:3px 0;border-bottom:1px solid #e8e8e6';
+      d.innerHTML='<span class="tag-acc fw700" style="min-width:38px">'+p.vol+' vol</span><span>'+p.nome+'</span><span class="tag-muted" style="margin-left:auto">'+p.dim+'</span>';
+      card.appendChild(d);
+    });
+    // best
+    if(best){
+      var bb=document.createElement('div'); bb.className='best-box';
+      bb.innerHTML='<div style="font-size:10px;color:#059669;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">✓ Melhor Cotação</div>'+
+        '<div class="tag-green fw700 f14" style="font-family:monospace">'+best.nome+' — '+fmtBRL(best.valor*((parseFloat(best.lucro)||0)+1))+'</div>'+
+        '<div class="tag-muted" style="font-size:11px;margin-top:2px">Cotação #'+best.cotacao+' · Prazo: '+best.prazo+' dias úteis</div>';
+      card.appendChild(bb);
+    }
+    grid.appendChild(card);
+  });
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+// ── TRANSPORTADORAS ──────────────────────
+function renderTrans(){
+  var wrap=document.createElement('div');
+  // filtros
+  var fRow=document.createElement('div'); fRow.style.cssText='display:flex;gap:12px;margin-bottom:12px;align-items:flex-end';
+  var srchEl=document.createElement('input'); srchEl.className='inp'; srchEl.style.flex='1'; srchEl.placeholder='Buscar transportadora...'; srchEl.value=STATE.trSrch;
+  srchEl.oninput=function(){STATE.trSrch=this.value; rebuildTransTable();};
+  var ufEl=sel(STATE.trUF,[''].concat(UFS));
+  ufEl.onchange=function(){STATE.trUF=this.value; rebuildTransTable();};
+  ufEl.style.width='110px';
+  var cnt=document.createElement('div'); cnt.style.cssText='color:#888;font-size:12px;padding-bottom:5px'; cnt.id='trCount';
+  fRow.appendChild(field('Buscar',srchEl)); fRow.appendChild(field('Estado',ufEl)); fRow.appendChild(cnt);
+  wrap.appendChild(fRow);
+  var tw=document.createElement('div'); tw.id='transTableWrap'; tw.style.cssText='background:#fff;border-radius:10px;border:1px solid #e8e8e6;overflow:hidden';
+  wrap.appendChild(tw);
+  buildTransTable(tw,cnt);
+  return wrap;
+}
+function buildTransTable(wrap,cnt){
+  var filtered=TRANS.filter(function(t){
+    return(!STATE.trUF||t.uf===STATE.trUF)&&(!STATE.trSrch||t.nome.toLowerCase().includes(STATE.trSrch.toLowerCase()));
+  });
+  if(cnt) cnt.textContent=filtered.length+' registros';
+  if(!wrap) wrap=document.getElementById('transTableWrap');
+  if(!wrap) return;
+  wrap.innerHTML='';
+  var tbl=document.createElement('table');
+  tbl.innerHTML='<thead><tr><th>UF</th><th>Transportadora</th><th>Telefone</th><th>Tipo</th></tr></thead>';
+  var tbody=document.createElement('tbody');
+  filtered.forEach(function(t,i){
+    var tr=document.createElement('tr');
+    var tipColor=t.tipo==='AEREO'?'#d97706':t.tipo==='FRETE'?'#059669':t.tipo==='VIAÇAO'||t.tipo.includes('VIA')?'#2563eb':'#888';
+    tr.innerHTML='<td><span class="uf-badge">'+t.uf+'</span></td><td class="fw700">'+t.nome+'</td><td style="color:#2563eb;font-family:monospace;font-size:11px">'+t.tel+'</td><td><span style="color:'+tipColor+';font-size:11px;font-weight:600">'+t.tipo+'</span></td>';
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody); wrap.appendChild(tbl);
+}
+function rebuildTransTable(){
+  buildTransTable(document.getElementById('transTableWrap'),document.getElementById('trCount'));
+}
+
+// ── EMBALAGENS ──────────────────────────
+function renderEmb(){
+  var wrap=document.createElement('div');
+  var fRow=document.createElement('div'); fRow.style.cssText='display:flex;gap:12px;margin-bottom:12px;align-items:flex-end';
+  var srchEl=document.createElement('input'); srchEl.className='inp'; srchEl.style.flex='1'; srchEl.placeholder='Buscar produto / embalagem...'; srchEl.value=STATE.embSrch;
+  srchEl.oninput=function(){STATE.embSrch=this.value; rebuildEmbTable();};
+  var cnt=document.createElement('div'); cnt.style.cssText='color:#888;font-size:12px;padding-bottom:5px'; cnt.id='embCount';
+  fRow.appendChild(field('Buscar',srchEl)); fRow.appendChild(cnt);
+  wrap.appendChild(fRow);
+  var tw=document.createElement('div'); tw.id='embTableWrap'; tw.style.cssText='background:#fff;border-radius:10px;border:1px solid #e8e8e6;overflow:hidden';
+  wrap.appendChild(tw);
+  buildEmbTable(tw,cnt);
+  return wrap;
+}
+function buildEmbTable(wrap,cnt){
+  var filtered=EMBALAGENS.filter(function(e){return!STATE.embSrch||e.n.toLowerCase().includes(STATE.embSrch.toLowerCase());});
+  if(cnt) cnt.textContent=filtered.length+' de '+EMBALAGENS.length+' itens';
+  if(!wrap) wrap=document.getElementById('embTableWrap');
+  if(!wrap) return;
+  wrap.innerHTML='';
+  var tbl=document.createElement('table');
+  tbl.innerHTML='<thead><tr><th style="width:62%">Descrição do Produto</th><th>Dimensão (cm)</th><th style="text-align:center">Qtd/Vol</th></tr></thead>';
+  var tbody=document.createElement('tbody');
+  filtered.forEach(function(e,i){
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td>'+e.n+'</td><td style="color:#2563eb;font-family:monospace;font-size:11px">'+e.d+'</td><td style="color:#888;text-align:center">'+e.c+'</td>';
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody); wrap.appendChild(tbl);
+}
+function rebuildEmbTable(){
+  buildEmbTable(document.getElementById('embTableWrap'),document.getElementById('embCount'));
+}
+
+// ── BOOT ──
+
+render();
+</script>
+</body>
+</html>
