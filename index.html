@@ -479,7 +479,7 @@ function mkSelG(lbl,val,opts,onChange){
 function renderSecRemetente(){
   var f=STATE.form;
   var sec=document.createElement('div'); sec.className='card';
-  sec.style.borderTop='3px solid #f59e0b';
+  sec.style.cssText='border-top:3px solid #f59e0b;display:flex;flex-direction:column;height:100%';
   var lbl=document.createElement('div');
   lbl.style.cssText='font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#92400e;margin-bottom:10px;display:flex;align-items:center;gap:5px';
   lbl.innerHTML='📤 Remetente';
@@ -488,12 +488,18 @@ function renderSecRemetente(){
   var r1=document.createElement('div'); r1.className='g2 mb7';
   r1.appendChild(mkFieldG('CNPJ Remetente / Pagador',f.cnpjRem,true));
   var cepCidUf=document.createElement('div'); cepCidUf.className='g3';
-  cepCidUf.appendChild(mkFieldG('CEP Origem',f.cepOrig,true));
+  // CEP com espaçador idêntico ao cepStatus do destinatário
+  var cepRemWrap=document.createElement('div');
+  var cepRemLbl=document.createElement('span'); cepRemLbl.className='lbl'; cepRemLbl.textContent='CEP Origem';
+  var cepRemEl=document.createElement('input'); cepRemEl.className='inp inp-ro'; cepRemEl.readOnly=true; cepRemEl.value=f.cepOrig||'';
+  var cepRemSpacer=document.createElement('div'); cepRemSpacer.style.cssText='font-size:10px;margin-top:2px;height:14px';
+  cepRemWrap.appendChild(cepRemLbl); cepRemWrap.appendChild(cepRemEl); cepRemWrap.appendChild(cepRemSpacer);
+  cepCidUf.appendChild(cepRemWrap);
   cepCidUf.appendChild(mkFieldG('Cidade',f.cidadeOrig||'Goiânia',true));
   cepCidUf.appendChild(mkFieldG('UF',f.ufOrig,true));
   r1.appendChild(cepCidUf);
   sec.appendChild(r1);
-  // Linha 2: Endereço (idêntico ao destinatário)
+  // Linha 2: Endereço
   var endW=document.createElement('div'); endW.className='mb7';
   endW.appendChild(mkFieldG('Endereço Remetente',f.endRem,true));
   sec.appendChild(endW);
@@ -504,7 +510,7 @@ function renderSecRemetente(){
 function renderSecDestinatario(){
   var f=STATE.form;
   var sec=document.createElement('div'); sec.className='card';
-  sec.style.borderTop='3px solid #3b82f6';
+  sec.style.cssText='border-top:3px solid #3b82f6;display:flex;flex-direction:column;height:100%';
   var lbl=document.createElement('div');
   lbl.style.cssText='font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#1d4ed8;margin-bottom:10px;display:flex;align-items:center;gap:5px';
   lbl.innerHTML='📥 Destinatário';
