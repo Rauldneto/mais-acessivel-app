@@ -286,7 +286,16 @@ function render(){
     app.appendChild(novo);
   } catch(e) {
     console.error('Render error:', e);
-    app.innerHTML='<div style="padding:40px;text-align:center;color:#ef4444;font-family:sans-serif"><h2>⚠️ Erro ao renderizar</h2><p style="margin-top:8px;color:#888">'+e.message+'</p><button onclick="STATE.tab='cotacao';render()" style="margin-top:16px;padding:8px 20px;background:#d97706;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px">↩ Tentar novamente</button></div>';
+    var errDiv=document.createElement('div');
+    errDiv.style.cssText='padding:40px;text-align:center;color:#ef4444;font-family:sans-serif';
+    errDiv.innerHTML='<h2>⚠️ Erro ao renderizar</h2><p style="margin-top:8px;color:#888">'+e.message+'</p>';
+    var btnRetry=document.createElement('button');
+    btnRetry.style.cssText='margin-top:16px;padding:8px 20px;background:#d97706;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px';
+    btnRetry.textContent='↩ Tentar novamente';
+    btnRetry.onclick=function(){STATE.tab='cotacao';render();};
+    errDiv.appendChild(btnRetry);
+    app.innerHTML='';
+    app.appendChild(errDiv);
   }
 }
 
