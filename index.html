@@ -6,7 +6,7 @@
 <title>Mais Acessível App</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',sans-serif;background:#f7f7f5;color:#1a1a1a;font-size:13.5px}
+body{font-family:'Segoe UI',sans-serif;background:#f7f7f5;color:#1a1a1a;font-size:15px}
 input,select{outline:none;font-family:inherit}
 input:focus,select:focus{border-color:#d97706!important}
 ::-webkit-scrollbar{width:5px;height:5px}
@@ -255,6 +255,9 @@ function field(lbl_txt,el_node){
 // ══════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════
+// Cópia editável das transportadoras
+var TRANS_DATA = TRANS.map(function(t){return Object.assign({},t,{triangulacao:'Não'});});
+
 var STATE={
   auth:false, tab:'cotacao',
   form:Object.assign({},INIT),
@@ -264,7 +267,7 @@ var STATE={
 };
 
 function getManRows(uf){
-  return TRANS.filter(function(t){return t.uf===uf}).map(function(t,i){
+  return TRANS_DATA.filter(function(t){return t.uf===uf}).map(function(t,i){
     return Object.assign({},t,{nr:i+1,cotacao:'',prazo:'',valor:'',outros:'',credito:'',lucro:''});
   });
 }
@@ -923,7 +926,32 @@ function renderSalvas(){
 // ── TRANSPORTADORAS ──────────────────────
 function renderTrans(){
   var wrap=document.createElement('div');
-  // filtros
+
+  // ── Linha para adicionar nova transportadora ──
+  var addCard=document.createElement('div'); addCard.className='card'; addCard.style.marginBottom='12px';
+  addCard.innerHTML='<div class="sec-title">➕ Nova Transportadora</div>';
+  var addRow=document.createElement('div'); addRow.style.cssText='display:grid;grid-template-columns:70px 1fr 1fr 120px 120px auto;gap:8px;align-items:flex-end';
+  var nUF=document.createElement('input'); nUF.className='inp'; nUF.placeholder='UF'; nUF.maxLength=2; nUF.style.textTransform='uppercase';
+  var nNome=document.createElement('input'); nNome.className='inp'; nNome.placeholder='Nome da Transportadora';
+  var nTel=document.createElement('input'); nTel.className='inp'; nTel.placeholder='Telefone';
+  var nTipo=document.createElement('select'); nTipo.className='inp';
+  ['TRANSP','VIAÇÃO','FRETE','AEREO'].forEach(function(o){var op=document.createElement('option');op.value=o;op.textContent=o;nTipo.appendChild(op);});
+  var nTri=document.createElement('select'); nTri.className='inp';
+  ['Não','Sim'].forEach(function(o){var op=document.createElement('option');op.value=o;op.textContent=o;nTri.appendChild(op);});
+  var nBtn=document.createElement('button'); nBtn.className='btn-main'; nBtn.textContent='+ Adicionar';
+  nBtn.onclick=function(){
+    var uf=(nUF.value||'').toUpperCase().trim();
+    var nome=(nNome.value||'').trim();
+    if(!uf||!nome){alert('Informe pelo menos UF e Nome!'); return;}
+    TRANS_DATA.unshift({uf:uf,nome:nome,tel:nTel.value.trim(),tipo:nTipo.value,triangulacao:nTri.value});
+    nUF.value=''; nNome.value=''; nTel.value='';
+    rebuildTransTable();
+  };
+  [nUF,nNome,nTel,nTipo,nTri,nBtn].forEach(function(el){addRow.appendChild(el);});
+  addCard.appendChild(addRow);
+  wrap.appendChild(addCard);
+
+  // ── Filtros ──
   var fRow=document.createElement('div'); fRow.style.cssText='display:flex;gap:12px;margin-bottom:12px;align-items:flex-end';
   var srchEl=document.createElement('input'); srchEl.className='inp'; srchEl.style.flex='1'; srchEl.placeholder='Buscar transportadora...'; srchEl.value=STATE.trSrch;
   srchEl.oninput=function(){STATE.trSrch=this.value; rebuildTransTable();};
@@ -933,13 +961,15 @@ function renderTrans(){
   var cnt=document.createElement('div'); cnt.style.cssText='color:#888;font-size:12px;padding-bottom:5px'; cnt.id='trCount';
   fRow.appendChild(field('Buscar',srchEl)); fRow.appendChild(field('Estado',ufEl)); fRow.appendChild(cnt);
   wrap.appendChild(fRow);
-  var tw=document.createElement('div'); tw.id='transTableWrap'; tw.style.cssText='background:#fff;border-radius:10px;border:1px solid #e8e8e6;overflow:hidden';
+
+  var tw=document.createElement('div'); tw.id='transTableWrap'; tw.style.cssText='background:#fff;border-radius:10px;border:1.5px solid #c8c8c4;overflow:hidden';
   wrap.appendChild(tw);
   buildTransTable(tw,cnt);
   return wrap;
 }
+
 function buildTransTable(wrap,cnt){
-  var filtered=TRANS.filter(function(t){
+  var filtered=TRANS_DATA.filter(function(t){
     return(!STATE.trUF||t.uf===STATE.trUF)&&(!STATE.trSrch||t.nome.toLowerCase().includes(STATE.trSrch.toLowerCase()));
   });
   if(cnt) cnt.textContent=filtered.length+' registros';
@@ -947,12 +977,65 @@ function buildTransTable(wrap,cnt){
   if(!wrap) return;
   wrap.innerHTML='';
   var tbl=document.createElement('table');
-  tbl.innerHTML='<thead><tr><th>UF</th><th>Transportadora</th><th>Telefone</th><th>Tipo</th></tr></thead>';
+  tbl.innerHTML='<thead><tr><th>UF</th><th>Transportadora</th><th>Telefone</th><th>Tipo</th><th>Triangulação</th><th style="text-align:center">Ações</th></tr></thead>';
   var tbody=document.createElement('tbody');
-  filtered.forEach(function(t,i){
-    var tr=document.createElement('tr');
-    var tipColor=t.tipo==='AEREO'?'#d97706':t.tipo==='FRETE'?'#059669':t.tipo==='VIAÇAO'||t.tipo.includes('VIA')?'#2563eb':'#888';
-    tr.innerHTML='<td><span class="uf-badge">'+t.uf+'</span></td><td class="fw700">'+t.nome+'</td><td style="color:#2563eb;font-family:monospace;font-size:11px">'+t.tel+'</td><td><span style="color:'+tipColor+';font-size:11px;font-weight:600">'+t.tipo+'</span></td>';
+  filtered.forEach(function(t){
+    // Achar índice real no TRANS_DATA
+    var realIdx=TRANS_DATA.indexOf(t);
+    var tr=document.createElement('tr'); tr.id='tr-row-'+realIdx;
+    var tipColor=t.tipo==='AEREO'?'#d97706':t.tipo==='FRETE'?'#059669':t.tipo.includes('VIA')?'#2563eb':'#888';
+    var triColor=t.triangulacao==='Sim'?'#059669':'#888';
+    tr.innerHTML=
+      '<td><span class="uf-badge">'+t.uf+'</span></td>'+
+      '<td class="fw700">'+t.nome+'</td>'+
+      '<td style="color:#2563eb;font-family:monospace;white-space:nowrap">'+t.tel+'</td>'+
+      '<td><span style="color:'+tipColor+';font-weight:600">'+t.tipo+'</span></td>'+
+      '<td><span style="color:'+triColor+';font-weight:600">'+(t.triangulacao||'Não')+'</span></td>'+
+      '<td style="text-align:center;white-space:nowrap"></td>';
+    // Botão Editar
+    var tdAcoes=tr.querySelector('td:last-child');
+    var btnEdit=document.createElement('button');
+    btnEdit.style.cssText='background:#fff8eb;border:1px solid #fde68a;color:#92400e;padding:3px 9px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;margin-right:4px';
+    btnEdit.textContent='✏️ Editar';
+    btnEdit.onclick=function(){
+      tr.innerHTML=
+        '<td><input class="inp" id="eUF_'+realIdx+'" value="'+t.uf+'" style="width:50px;text-transform:uppercase"></td>'+
+        '<td><input class="inp" id="eNome_'+realIdx+'" value="'+t.nome+'" style="min-width:160px"></td>'+
+        '<td><input class="inp" id="eTel_'+realIdx+'" value="'+t.tel+'" style="width:130px"></td>'+
+        '<td><select class="inp" id="eTipo_'+realIdx+'"><option>TRANSP</option><option>VIAÇÃO</option><option>FRETE</option><option>AEREO</option></select></td>'+
+        '<td><select class="inp" id="eTri_'+realIdx+'"><option>Não</option><option>Sim</option></select></td>'+
+        '<td style="white-space:nowrap"></td>';
+      document.getElementById('eTipo_'+realIdx).value=t.tipo;
+      document.getElementById('eTri_'+realIdx).value=t.triangulacao||'Não';
+      var tdA=tr.querySelector('td:last-child');
+      var btnSave=document.createElement('button');
+      btnSave.style.cssText='background:#059669;color:#fff;border:none;padding:3px 9px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;margin-right:4px';
+      btnSave.textContent='✓ Salvar';
+      btnSave.onclick=function(){
+        TRANS_DATA[realIdx].uf=document.getElementById('eUF_'+realIdx).value.toUpperCase().trim();
+        TRANS_DATA[realIdx].nome=document.getElementById('eNome_'+realIdx).value.trim();
+        TRANS_DATA[realIdx].tel=document.getElementById('eTel_'+realIdx).value.trim();
+        TRANS_DATA[realIdx].tipo=document.getElementById('eTipo_'+realIdx).value;
+        TRANS_DATA[realIdx].triangulacao=document.getElementById('eTri_'+realIdx).value;
+        rebuildTransTable();
+      };
+      var btnCancel=document.createElement('button');
+      btnCancel.style.cssText='background:#fff;border:1.5px solid #c8c8c4;color:#888;padding:3px 9px;border-radius:5px;cursor:pointer;font-size:11px';
+      btnCancel.textContent='✕';
+      btnCancel.onclick=function(){rebuildTransTable();};
+      tdA.appendChild(btnSave); tdA.appendChild(btnCancel);
+    };
+    // Botão Excluir
+    var btnDel=document.createElement('button');
+    btnDel.style.cssText='background:#fff5f5;border:1px solid #fca5a5;color:#ef4444;padding:3px 9px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600';
+    btnDel.textContent='🗑 Excluir';
+    btnDel.onclick=function(){
+      if(confirm('Excluir "'+t.nome+'"?')){
+        TRANS_DATA.splice(realIdx,1);
+        rebuildTransTable();
+      }
+    };
+    tdAcoes.appendChild(btnEdit); tdAcoes.appendChild(btnDel);
     tbody.appendChild(tr);
   });
   tbl.appendChild(tbody); wrap.appendChild(tbl);
