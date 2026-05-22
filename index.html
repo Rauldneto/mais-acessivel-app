@@ -430,72 +430,82 @@ function renderNav(){
 
 // ── COTAÇÃO ──────────────────────────────
 function renderCotacao(){
-  var g=document.createElement('div'); g.className='grid2';
-  g.appendChild(renderCotLeft());
-  g.appendChild(renderCotRight());
-  return g;
+  var wrap=document.createElement('div');
+  // Linha 1: Remetente | Destinatário
+  var row1=document.createElement('div');
+  row1.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px';
+  row1.appendChild(renderSecRemetente());
+  row1.appendChild(renderSecDestinatario());
+  wrap.appendChild(row1);
+  // Linha 2: Info do Pedido | Produtos
+  var row2=document.createElement('div');
+  row2.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px';
+  row2.appendChild(renderSecPedido());
+  row2.appendChild(renderSecProdutos());
+  wrap.appendChild(row2);
+  // Linha 3: Cotação Manual (largura total)
+  wrap.appendChild(renderCotManual());
+  // Linha 4: Resumo (largura total)
+  wrap.appendChild(renderSecResumo());
+  return wrap;
 }
 
-function renderCotLeft(){
-  var wrap=document.createElement('div');
-  // Card automático
-  var c=document.createElement('div'); c.className='card';
-  c.innerHTML='<div class="sec-title"><span class="tag-acc">⚡</span> Cotação Frete Automático</div>';
+// Shared helper - defined once
+function mkFieldG(lbl,val,ro,type,ph,onChange){
+  var el=inp(val,'',ro,type,ph);
+  if(ro) el.classList.add('inp-ro');
+  if(onChange) el.oninput=function(){STATE.form[onChange]=this.value; updateResumo();};
+  return field(lbl,el);
+}
+function mkSelG(lbl,val,opts,onChange){
+  var el=sel(val,opts);
+  el.onchange=function(){
+    STATE.form[onChange]=this.value;
+    if(onChange==='ufDest'){STATE.manRows=getManRows(this.value);updateManTable();}
+    updateResumo();
+  };
+  return field(lbl,el);
+}
+
+// ── SEC REMETENTE ──
+function renderSecRemetente(){
   var f=STATE.form;
-
-  function mkField(lbl,val,ro,type,ph,onChange){
-    var el=inp(val,'',ro,type,ph);
-    if(ro) el.classList.add('inp-ro');
-    if(onChange) el.oninput=function(){STATE.form[onChange]=this.value; updateResumo();};
-    return field(lbl,el);
-  }
-  function mkSel(lbl,val,opts,onChange){
-    var el=sel(val,opts);
-    el.onchange=function(){
-      STATE.form[onChange]=this.value;
-      if(onChange==='ufDest'){STATE.manRows=getManRows(this.value);updateManTable();}
-      updateResumo();
-    };
-    return field(lbl,el);
-  }
-
-  // ── BLOCO REMETENTE ──
-  var secRem=document.createElement('div');
-  secRem.style.cssText='background:#fff8eb;border:1.5px solid #fde68a;border-radius:8px;padding:10px 12px;margin-bottom:10px';
-  var lblRem=document.createElement('div');
-  lblRem.style.cssText='font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#92400e;margin-bottom:8px;display:flex;align-items:center;gap:5px';
-  lblRem.innerHTML='📤 Remetente';
-  secRem.appendChild(lblRem);
+  var sec=document.createElement('div'); sec.className='card';
+  sec.style.borderTop='3px solid #f59e0b';
+  var lbl=document.createElement('div');
+  lbl.style.cssText='font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#92400e;margin-bottom:10px;display:flex;align-items:center;gap:5px';
+  lbl.innerHTML='📤 Remetente';
+  sec.appendChild(lbl);
   var r1=document.createElement('div'); r1.className='g2 mb7';
-  var r1a=mkField('CNPJ Remetente / Pagador',f.cnpjRem,true);
   var cepUf=document.createElement('div'); cepUf.className='g2';
-  cepUf.appendChild(mkField('CEP Origem',f.cepOrig,true));
-  cepUf.appendChild(mkField('UF',f.ufOrig,true));
-  r1.appendChild(r1a); r1.appendChild(cepUf); secRem.appendChild(r1);
-  var endRemWrap=document.createElement('div');
-  endRemWrap.appendChild(mkField('Endereço Remetente',f.endRem,true));
-  secRem.appendChild(endRemWrap);
-  c.appendChild(secRem);
+  cepUf.appendChild(mkFieldG('CEP Origem',f.cepOrig,true));
+  cepUf.appendChild(mkFieldG('UF',f.ufOrig,true));
+  r1.appendChild(mkFieldG('CNPJ Remetente / Pagador',f.cnpjRem,true));
+  r1.appendChild(cepUf);
+  sec.appendChild(r1);
+  var endW=document.createElement('div');
+  endW.appendChild(mkFieldG('Endereço Remetente',f.endRem,true));
+  sec.appendChild(endW);
+  return sec;
+}
 
-  // ── BLOCO DESTINATÁRIO ──
-  var secDest=document.createElement('div');
-  secDest.style.cssText='background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:10px';
-  var lblDest=document.createElement('div');
-  lblDest.style.cssText='font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#1d4ed8;margin-bottom:8px;display:flex;align-items:center;gap:5px';
-  lblDest.innerHTML='📥 Destinatário';
-  secDest.appendChild(lblDest);
-
-  // Row 2: CNPJ dest + CEP dest
+// ── SEC DESTINATÁRIO ──
+function renderSecDestinatario(){
+  var f=STATE.form;
+  var sec=document.createElement('div'); sec.className='card';
+  sec.style.borderTop='3px solid #3b82f6';
+  var lbl=document.createElement('div');
+  lbl.style.cssText='font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#1d4ed8;margin-bottom:10px;display:flex;align-items:center;gap:5px';
+  lbl.innerHTML='📥 Destinatário';
+  sec.appendChild(lbl);
   var r2=document.createElement('div'); r2.className='g2 mb7';
-  r2.appendChild(mkField('CNPJ / CPF do Destinatário',f.cnpjDest,false,'text','00.000.000/0000-00','cnpjDest'));
+  r2.appendChild(mkFieldG('CNPJ / CPF do Destinatário',f.cnpjDest,false,'text','00.000.000/0000-00','cnpjDest'));
+  // CEP + Cidade + UF
   var g3=document.createElement('div'); g3.className='g3';
-
-  // CEP com busca automática
   var cepWrap=document.createElement('div');
   var cepLbl=document.createElement('span'); cepLbl.className='lbl'; cepLbl.textContent='CEP Destino';
   var cepEl=document.createElement('input'); cepEl.className='inp'; cepEl.type='text'; cepEl.id='cepDestEl'; cepEl.placeholder='00000-000'; cepEl.value=f.cepDest||'';
   var cepStatus=document.createElement('div'); cepStatus.id='cepStatus'; cepStatus.style.cssText='font-size:10px;margin-top:2px;height:14px';
-
   cepEl.oninput=function(){
     STATE.form.cepDest=this.value;
     var raw=this.value.replace(/\D/g,'');
@@ -507,33 +517,27 @@ function renderCotLeft(){
           if(d.erro){
             cepStatus.textContent='❌ CEP não encontrado'; cepStatus.style.color='#ef4444';
           } else {
-            // Atualiza estado
-            STATE.form.cidadeDest = d.localidade||'';
-            STATE.form.ufDest     = d.uf||'';
-            STATE.manRows         = getManRows(d.uf||'');
-            // Atualiza campos visuais diretamente
+            STATE.form.cidadeDest=d.localidade||'';
+            STATE.form.ufDest=d.uf||'';
+            STATE.manRows=getManRows(d.uf||'');
             var cidEl=document.getElementById('cidadeDestEl');
             var ufEl2=document.getElementById('ufDestEl');
             if(cidEl) cidEl.value=d.localidade||'';
             if(ufEl2) ufEl2.value=d.uf||'';
-            // Mensagem de sucesso
             cepStatus.textContent='✓ CEP encontrado: '+d.localidade+' — '+d.uf;
             cepStatus.style.color='#059669';
-            // Atualiza label UF no título da cotação manual
             var ufLbl=document.querySelector('.uf-manual-lbl');
             if(ufLbl) ufLbl.textContent=d.uf||'';
-            // Reconstrói tabela de transportadoras via innerHTML (simples e confiável)
             var wrap=document.getElementById('manTableWrap');
             if(wrap){
               var rows=STATE.manRows;
-              if(!rows.length){wrap.innerHTML='<p style="padding:16px;color:#888;font-size:12px">Nenhuma transportadora encontrada para '+d.uf+'</p>'; return;}
-              var html='<table style="width:100%;border-collapse:collapse"><thead><tr><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;letter-spacing:.4px;padding:7px 9px;text-align:left;border-bottom:1px solid #e8e8e6;font-weight:700;white-space:nowrap">Nº</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;letter-spacing:.4px;padding:7px 9px;text-align:left;border-bottom:1px solid #e8e8e6;font-weight:700">Transportadora</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Telefone</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Cotação</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Prazo</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Valor</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Outros</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Crédito%</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Lucro%</th><th style="background:#f3f3f1;color:#059669;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Valor Cobrar</th></tr></thead><tbody>';
+              if(!rows.length){wrap.innerHTML='<p style="padding:16px;color:#888;font-size:12px">Nenhuma transportadora para '+d.uf+'</p>'; return;}
+              var html='<table style="width:100%;border-collapse:collapse"><thead><tr><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;letter-spacing:.4px;padding:7px 9px;text-align:left;border-bottom:1px solid #e8e8e6;font-weight:700;white-space:nowrap">Nº</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;letter-spacing:.4px;padding:7px 9px;text-align:left;border-bottom:1px solid #e8e8e6;font-weight:700">Transportadora</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Tipo</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700;text-align:center">Tri.</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Contato</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Cotação</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Prazo</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Valor</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Outros</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Crédito%</th><th style="background:#f3f3f1;color:#888;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Lucro%</th><th style="background:#f3f3f1;color:#059669;font-size:10px;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #e8e8e6;font-weight:700">Valor Cobrar</th></tr></thead><tbody>';
               rows.forEach(function(r,i){
                 var bg=i%2===0?'#fff':'#f9f9f7';
                 var rowTipo=r.tipo||'';
                 var rowTipC=rowTipo==='AEREO'?'#d97706':rowTipo==='FRETE'?'#059669':rowTipo.includes('VIA')?'#2563eb':'#888';
                 var rowTri=r.triangulacao===true||r.triangulacao==='true'||r.triangulacao==='Sim';
-                // Build phone cell HTML inline
                 var rowDigits=(r.tel||'').replace(/\D/g,'');
                 if(rowDigits.length===10||rowDigits.length===11) rowDigits='55'+rowDigits;
                 var rowPhoneHtml;
@@ -559,7 +563,6 @@ function renderCotLeft(){
               });
               html+='</tbody></table>';
               wrap.innerHTML=html;
-              // Adiciona eventos aos inputs
               wrap.querySelectorAll('input[data-field]').forEach(function(inp){
                 inp.oninput=function(){
                   var idx=parseInt(this.dataset.idx), field=this.dataset.field;
@@ -581,84 +584,70 @@ function renderCotLeft(){
         .catch(function(){
           cepStatus.textContent='❌ Erro ao buscar CEP'; cepStatus.style.color='#ef4444';
         });
-    } else if(raw.length>0){
-      cepStatus.textContent=''; 
-    }
+    } else if(raw.length>0){ cepStatus.textContent=''; }
     updateResumo();
   };
   cepWrap.appendChild(cepLbl); cepWrap.appendChild(cepEl); cepWrap.appendChild(cepStatus);
-
-  // Cidade — somente leitura, preenchida pelo CEP
   var cidWrap=document.createElement('div');
-  var cidLbl=document.createElement('span'); cidLbl.className='lbl'; cidLbl.textContent='Cidade';
+  var cidLbl2=document.createElement('span'); cidLbl2.className='lbl'; cidLbl2.textContent='Cidade';
   var cidEl=document.createElement('input'); cidEl.className='inp inp-ro'; cidEl.id='cidadeDestEl'; cidEl.readOnly=true; cidEl.placeholder='Auto CEP'; cidEl.value=f.cidadeDest||'';
-  cidWrap.appendChild(cidLbl); cidWrap.appendChild(cidEl);
-
-  // UF — somente leitura, preenchida pelo CEP
+  cidWrap.appendChild(cidLbl2); cidWrap.appendChild(cidEl);
   var ufWrap=document.createElement('div');
-  var ufLbl=document.createElement('span'); ufLbl.className='lbl'; ufLbl.textContent='UF';
+  var ufLblEl=document.createElement('span'); ufLblEl.className='lbl'; ufLblEl.textContent='UF';
   var ufEl2=document.createElement('input'); ufEl2.className='inp inp-ro'; ufEl2.id='ufDestEl'; ufEl2.readOnly=true; ufEl2.placeholder='Auto'; ufEl2.value=f.ufDest||'';
-  ufWrap.appendChild(ufLbl); ufWrap.appendChild(ufEl2);
-
+  ufWrap.appendChild(ufLblEl); ufWrap.appendChild(ufEl2);
   g3.appendChild(cepWrap); g3.appendChild(cidWrap); g3.appendChild(ufWrap);
-  r2.appendChild(g3); secDest.appendChild(r2);
-
-  // endDest
+  r2.appendChild(g3); sec.appendChild(r2);
   var endDestWrap=document.createElement('div');
-  endDestWrap.appendChild(mkField('Endereço Destinatário',f.endDest,false,'text','Endereço completo','endDest'));
-  secDest.appendChild(endDestWrap);
-  c.appendChild(secDest);
+  endDestWrap.appendChild(mkFieldG('Endereço Destinatário',f.endDest,false,'text','Endereço completo','endDest'));
+  sec.appendChild(endDestWrap);
+  return sec;
+}
 
-  // ── BLOCO INFO DO PEDIDO ──
-  var secPed=document.createElement('div');
-  secPed.style.cssText='background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:10px 12px;margin-bottom:10px';
-  var lblPed=document.createElement('div');
-  lblPed.style.cssText='font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#166534;margin-bottom:8px;display:flex;align-items:center;gap:5px';
-  lblPed.innerHTML='📦 Informações do Pedido';
-  secPed.appendChild(lblPed);
-
-  // Campo Nº Cotação + botão Salvar
-  var rowCot=document.createElement('div'); rowCot.className='mb7';
-  rowCot.style.cssText='display:flex;gap:8px;align-items:flex-end';
-  var cotWrap=document.createElement('div'); cotWrap.style.flex='1';
+// ── SEC PEDIDO ──
+function renderSecPedido(){
+  var f=STATE.form;
+  var sec=document.createElement('div'); sec.className='card';
+  sec.style.borderTop='3px solid #10b981';
+  var lbl=document.createElement('div');
+  lbl.style.cssText='font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#166534;margin-bottom:10px;display:flex;align-items:center;gap:5px';
+  lbl.innerHTML='📋 Informações do Pedido';
+  sec.appendChild(lbl);
+  // Nº Cotação
+  var cotWrap=document.createElement('div'); cotWrap.className='mb7';
   var cotEl=document.createElement('input'); cotEl.className='inp'; cotEl.type='text'; cotEl.placeholder='Ex: 5733'; cotEl.value=f.numeroCotacao||'';
-  cotEl.style.cssText='font-size:14px;font-weight:700;color:#d97706;letter-spacing:1px';
+  cotEl.style.cssText='font-size:15px;font-weight:700;color:#d97706;letter-spacing:1px';
   cotEl.oninput=function(){STATE.form.numeroCotacao=this.value; updateResumo();};
   var cotLbl=document.createElement('span'); cotLbl.className='lbl'; cotLbl.textContent='Nº da Cotação';
   cotWrap.appendChild(cotLbl); cotWrap.appendChild(cotEl);
-  rowCot.appendChild(cotWrap);
-  secPed.appendChild(rowCot);
-
-  // Row: valorNF, vol, peso, nf, frete
+  sec.appendChild(cotWrap);
+  // Grid 5 cols
   var r3=document.createElement('div'); r3.style.cssText='display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-bottom:7px';
-  r3.appendChild(mkField('Valor NF (R$)',f.valorNF,false,'number','0.00','valorNF'));
+  r3.appendChild(mkFieldG('Valor NF (R$)',f.valorNF,false,'number','0.00','valorNF'));
   var volEl2=inp(String(calcTotalVol()),'inp-ro'); volEl2.style.color='#d97706'; volEl2.style.fontWeight='700'; volEl2.id='totalVolEl'; volEl2.readOnly=true;
   r3.appendChild(field('Vol. Total',volEl2));
-  r3.appendChild(mkField('Peso Total (kg)',f.pesoTotal,false,'number','0','pesoTotal'));
-  r3.appendChild(mkSel('NF Emitida',f.nfEmitida,['NÃO','SIM'],'nfEmitida'));
-  // Frete CIF/FOB
+  r3.appendChild(mkFieldG('Peso Total (kg)',f.pesoTotal,false,'number','0','pesoTotal'));
+  r3.appendChild(mkSelG('NF Emitida',f.nfEmitida,['NÃO','SIM'],'nfEmitida'));
   var freteEl=sel(f.frete||'CIF',['CIF','FOB']);
-  freteEl.onchange=function(){
-    STATE.form.frete=this.value;
-    updateResumo();
-  };
+  freteEl.onchange=function(){STATE.form.frete=this.value; updateResumo();};
   r3.appendChild(field('Frete',freteEl));
-  secPed.appendChild(r3);
-
-  // Row: sol, emb, horario, almoco
+  sec.appendChild(r3);
+  // Grid 4 cols
   var r4=document.createElement('div'); r4.className='g4';
-  r4.appendChild(mkField('Solicitante',f.solicitante,false,'text','','solicitante'));
-  r4.appendChild(mkField('Embalagem',f.embalagem,false,'text','','embalagem'));
-  r4.appendChild(mkField('Horário Coleta',f.horario,false,'text','','horario'));
-  r4.appendChild(mkSel('Fecha Almoço',f.fechaAlmoco,['Não','Sim'],'fechaAlmoco'));
-  secPed.appendChild(r4);
-  c.appendChild(secPed);
-  wrap.appendChild(c);
+  r4.appendChild(mkFieldG('Solicitante',f.solicitante,false,'text','','solicitante'));
+  r4.appendChild(mkFieldG('Embalagem',f.embalagem,false,'text','','embalagem'));
+  r4.appendChild(mkFieldG('Horário Coleta',f.horario,false,'text','','horario'));
+  r4.appendChild(mkSelG('Fecha Almoço',f.fechaAlmoco,['Não','Sim'],'fechaAlmoco'));
+  sec.appendChild(r4);
+  return sec;
+}
 
-  // Card produtos
+// ── SEC PRODUTOS ──
+function renderSecProdutos(){
   var cp=document.createElement('div'); cp.className='card';
+  cp.style.borderTop='3px solid #8b5cf6';
   var cpHdr=document.createElement('div'); cpHdr.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px';
-  var cpTitle=document.createElement('div'); cpTitle.className='sec-title'; cpTitle.style.margin='0;border:0;padding:0'; cpTitle.textContent='📦 Produtos';
+  var cpTitle=document.createElement('div'); cpTitle.className='sec-title'; cpTitle.style.cssText='margin:0;border:0;padding:0;color:#5b21b6'; cpTitle.textContent='📦 Produtos';
   var cpBtn=document.createElement('button'); cpBtn.className='btn-main'; cpBtn.textContent='+ Produto';
   cpBtn.onclick=function(){
     STATE.prods.push({nome:'',vol:1,dim:'',cabe:''});
@@ -668,9 +657,41 @@ function renderCotLeft(){
   };
   cpHdr.appendChild(cpTitle); cpHdr.appendChild(cpBtn); cp.appendChild(cpHdr);
   cp.appendChild(renderProdsTable());
-  wrap.appendChild(cp);
-  return wrap;
+  return cp;
 }
+
+// ── COTAÇÃO MANUAL (largura total) ──
+function renderCotManual(){
+  var card=document.createElement('div'); card.className='card';
+  card.style.borderTop='3px solid #d97706';
+  var ufLabel=document.createElement('div'); ufLabel.className='sec-title';
+  ufLabel.innerHTML='<span class="tag-acc">✍️</span> Cotação Manual — <span class="tag-acc uf-manual-lbl" style="font-family:monospace">'+(STATE.form.ufDest||'(informe o CEP destino)')+'</span>';
+  card.appendChild(ufLabel);
+  var mWrap=document.createElement('div'); mWrap.id='manTableWrap'; mWrap.style.cssText='overflow-x:auto;max-height:420px;overflow-y:auto';
+  mWrap.appendChild(buildManTable());
+  card.appendChild(mWrap);
+  return card;
+}
+
+// ── RESUMO ──
+function renderSecResumo(){
+  var cr=document.createElement('div'); cr.className='card';
+  cr.style.borderTop='3px solid #64748b';
+  var crHdr=document.createElement('div'); crHdr.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px';
+  var crTitle=document.createElement('div'); crTitle.className='sec-title'; crTitle.style.cssText='margin:0;border:0;padding:0'; crTitle.textContent='📄 Resumo (Ctrl+Shift+V)';
+  var crBtn=document.createElement('button'); crBtn.className='btn-main'; crBtn.id='copyBtn'; crBtn.textContent='📋 Copiar';
+  crBtn.onclick=function(){
+    navigator.clipboard.writeText(calcResumo()).catch(function(){});
+    crBtn.textContent='✓ Copiado!'; crBtn.style.background='#059669';
+    setTimeout(function(){crBtn.textContent='📋 Copiar'; crBtn.style.background='';},2000);
+  };
+  crHdr.appendChild(crTitle); crHdr.appendChild(crBtn); cr.appendChild(crHdr);
+  var pre=document.createElement('pre'); pre.id='resumoPre'; pre.textContent=calcResumo();
+  cr.appendChild(pre);
+  return cr;
+}
+
+// (renderCotLeft and renderCotRight removed - replaced by individual section functions above)
 
 function calcTotalVol(){return STATE.prods.reduce(function(s,p){return s+(parseInt(p.vol)||0);},0);}
 function calcCubagem(){
@@ -775,34 +796,6 @@ function updateManTable(){
   if(el){el.innerHTML=''; el.appendChild(buildManTable());}
 }
 
-function renderCotRight(){
-  var wrap=document.createElement('div');
-  // manual
-  var cm=document.createElement('div'); cm.className='card';
-  var ufLabel=document.createElement('div'); ufLabel.className='sec-title';
-  ufLabel.innerHTML='<span class="tag-acc">✍️</span> Cotação Manual — <span class="tag-acc uf-manual-lbl" style="font-family:monospace">'+(STATE.form.ufDest||'(informe o CEP destino)')+'</span>';
-  cm.appendChild(ufLabel);
-  var mWrap=document.createElement('div'); mWrap.id='manTableWrap'; mWrap.className='scroll-y';
-  mWrap.appendChild(buildManTable());
-  cm.appendChild(mWrap);
-  wrap.appendChild(cm);
-  // resumo
-  var cr=document.createElement('div'); cr.className='card';
-  var crHdr=document.createElement('div'); crHdr.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px';
-  var crTitle=document.createElement('div'); crTitle.className='sec-title'; crTitle.style.cssText='margin:0;border:0;padding:0'; crTitle.textContent='📄 Resumo (Ctrl+Shift+V)';
-  var crBtn=document.createElement('button'); crBtn.className='btn-main'; crBtn.id='copyBtn'; crBtn.textContent='📋 Copiar';
-  crBtn.onclick=function(){
-    navigator.clipboard.writeText(calcResumo()).catch(function(){});
-    crBtn.textContent='✓ Copiado!'; crBtn.style.background='#059669';
-    setTimeout(function(){crBtn.textContent='📋 Copiar'; crBtn.style.background='';},2000);
-  };
-  crHdr.appendChild(crTitle); crHdr.appendChild(crBtn); cr.appendChild(crHdr);
-  var pre=document.createElement('pre'); pre.id='resumoPre'; pre.textContent=calcResumo();
-  cr.appendChild(pre);
-  wrap.appendChild(cr);
-  return wrap;
-}
-
 
 var CARRIER_URLS = {
   'BRASPRESS': 'https://www.braspress.com/cotacao-de-frete/',
@@ -810,8 +803,6 @@ var CARRIER_URLS = {
   'LEITE EXPRESS': 'https://www.leiteexpress.com.br/cotacao',
   'TSV': 'https://www.tsv.com.br/cotacao',
   'MIRA TRANSPORTES': 'https://www.miratransportes.com.br',
-  'ESSIBE': 'https://www.essibe.com.br',
-  'ACCERT': 'https://www.accert.com.br/cotacao',
   'MANDALA': 'https://www.mandala.com.br',
   'JEOLOG': 'https://jeolog.com.br/cotacao'
 };
@@ -820,15 +811,13 @@ function buildPhoneCell(tel, nome){
   var td=document.createElement('td');
   td.style.cssText='padding:6px 9px;border-bottom:1px solid #ddd;white-space:nowrap';
   if(!tel || tel==='' || tel.toUpperCase()==='SITE'){
-    // Show "Cotar" link to carrier website
-    var url=CARRIER_URLS[nome.toUpperCase()]||CARRIER_URLS[nome.split(' ')[0].toUpperCase()]||('https://www.google.com/search?q=cotacao+frete+'+encodeURIComponent(nome));
+    var url=CARRIER_URLS[(nome||'').toUpperCase()]||CARRIER_URLS[(nome||'').split(' ')[0].toUpperCase()]||('https://www.google.com/search?q=cotacao+frete+'+encodeURIComponent(nome||''));
     var a=document.createElement('a');
     a.href=url; a.target='_blank';
     a.style.cssText='background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;padding:3px 10px;border-radius:5px;text-decoration:none;font-size:11px;font-weight:600;white-space:nowrap';
     a.textContent='🌐 Cotar Online';
     td.appendChild(a);
   } else {
-    // Build WhatsApp link from phone number
     var digits=tel.replace(/\D/g,'');
     if(digits.length===10||digits.length===11){ digits='55'+digits; }
     var waUrl='https://wa.me/'+digits+'?text=Ol%C3%A1%2C+gostaria+de+solicitar+uma+cota%C3%A7%C3%A3o+de+frete.';
@@ -840,6 +829,7 @@ function buildPhoneCell(tel, nome){
   }
   return td;
 }
+
 function buildManTable(){
   if(!STATE.manRows || !Array.isArray(STATE.manRows)) STATE.manRows=[];
   var tbl=document.createElement('table');
