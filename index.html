@@ -484,17 +484,17 @@ function renderSecRemetente(){
   lbl.style.cssText='font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#92400e;margin-bottom:10px;display:flex;align-items:center;gap:5px';
   lbl.innerHTML='📤 Remetente';
   sec.appendChild(lbl);
-  // Linha 1: CNPJ | CEP + Cidade + UF
+  // Linha 1: CNPJ | CEP + Cidade + UF  (idêntico ao destinatário)
   var r1=document.createElement('div'); r1.className='g2 mb7';
   r1.appendChild(mkFieldG('CNPJ Remetente / Pagador',f.cnpjRem,true));
-  var cepCidUf=document.createElement('div'); cepCidUf.style.cssText='display:grid;grid-template-columns:1fr 1fr 60px;gap:6px';
+  var cepCidUf=document.createElement('div'); cepCidUf.className='g3';
   cepCidUf.appendChild(mkFieldG('CEP Origem',f.cepOrig,true));
   cepCidUf.appendChild(mkFieldG('Cidade',f.cidadeOrig||'Goiânia',true));
   cepCidUf.appendChild(mkFieldG('UF',f.ufOrig,true));
   r1.appendChild(cepCidUf);
   sec.appendChild(r1);
-  // Linha 2: Endereço
-  var endW=document.createElement('div');
+  // Linha 2: Endereço (idêntico ao destinatário)
+  var endW=document.createElement('div'); endW.className='mb7';
   endW.appendChild(mkFieldG('Endereço Remetente',f.endRem,true));
   sec.appendChild(endW);
   return sec;
@@ -609,7 +609,7 @@ function renderSecDestinatario(){
   ufWrap.appendChild(ufLblEl); ufWrap.appendChild(ufEl2);
   g3.appendChild(cepWrap); g3.appendChild(cidWrap); g3.appendChild(ufWrap);
   r2.appendChild(g3); sec.appendChild(r2);
-  var endDestWrap=document.createElement('div');
+  var endDestWrap=document.createElement('div'); endDestWrap.className='mb7';
   endDestWrap.appendChild(mkFieldG('Endereço Destinatário',f.endDest,false,'text','Endereço completo','endDest'));
   sec.appendChild(endDestWrap);
   return sec;
@@ -740,7 +740,7 @@ function calcResumo(){
 function renderProdsTable(){
   var tblWrap=document.createElement('div'); tblWrap.className='tbl-wrap'; tblWrap.id='prodsTable';
   var tbl=document.createElement('table');
-  tbl.innerHTML='<thead><tr><th style="width:45%">Produto</th><th>Vol.</th><th>Dimensão</th><th>Un/Vol</th><th></th></tr></thead>';
+  tbl.innerHTML='<thead><tr><th style="width:40%">Produto</th><th>Vol.</th><th>Dimensão (Comp x Larg x Alt)</th><th>Un/Vol</th><th></th></tr></thead>';
   var tbody=document.createElement('tbody');
   STATE.prods.forEach(function(p,i){
     var tr=document.createElement('tr');
@@ -1132,9 +1132,9 @@ function renderEmb(){
   // ── Nova embalagem ──
   var addCard=document.createElement('div'); addCard.className='card'; addCard.style.marginBottom='12px';
   addCard.innerHTML='<div class="sec-title">➕ Nova Embalagem</div>';
-  var addRow=document.createElement('div'); addRow.style.cssText='display:grid;grid-template-columns:1fr 160px 100px auto;gap:8px;align-items:flex-end';
+  var addRow=document.createElement('div'); addRow.style.cssText='display:grid;grid-template-columns:1fr 200px 100px auto;gap:8px;align-items:flex-end';
   var eNome=document.createElement('input'); eNome.className='inp'; eNome.placeholder='Descrição do produto';
-  var eDim=document.createElement('input'); eDim.className='inp'; eDim.placeholder='Dimensão (ex: 30 x 20 x 10)';
+  var eDim=document.createElement('input'); eDim.className='inp'; eDim.placeholder='Comp x Larg x Alt (cm)'; eDim.title='Dimensão: Comprimento x Largura x Altura';
   var eCabe=document.createElement('input'); eCabe.className='inp'; eCabe.placeholder='Qtd/Vol';
   var eBtn=document.createElement('button'); eBtn.className='btn-main'; eBtn.textContent='+ Adicionar';
   eBtn.onclick=function(){
@@ -1144,7 +1144,9 @@ function renderEmb(){
     eNome.value=''; eDim.value=''; eCabe.value='';
     rebuildEmbTable();
   };
-  [eNome,eDim,eCabe,eBtn].forEach(function(el){addRow.appendChild(el);});
+  var eDimField=field('Dimensão (Comp x Larg x Alt)',eDim);
+  var eCabeField=field('Qtd/Vol',eCabe);
+  [field('Descrição',eNome),eDimField,eCabeField,eBtn].forEach(function(el){addRow.appendChild(el);});
   addCard.appendChild(addRow);
   wrap.appendChild(addCard);
 
@@ -1167,7 +1169,7 @@ function buildEmbTable(wrap,cnt){
   if(!wrap) return;
   wrap.innerHTML='';
   var tbl=document.createElement('table');
-  tbl.innerHTML='<thead><tr><th style="width:55%">Descrição do Produto</th><th>Dimensão (cm)</th><th style="text-align:center">Qtd/Vol</th><th style="text-align:center">Ações</th></tr></thead>';
+  tbl.innerHTML='<thead><tr><th style="width:50%">Descrição do Produto</th><th>Dimensão (Comp x Larg x Alt)</th><th style="text-align:center">Qtd/Vol</th><th style="text-align:center">Ações</th></tr></thead>';
   var tbody=document.createElement('tbody');
   filtered.forEach(function(e){
     var realIdx=EMBALAGENS.indexOf(e);
