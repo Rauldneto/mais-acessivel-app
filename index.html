@@ -566,9 +566,11 @@ function renderCotLeft(){
 
 function calcTotalVol(){return STATE.prods.reduce(function(s,p){return s+(parseInt(p.vol)||0);},0);}
 function calcCubagem(){
-  var g={};
-  STATE.prods.filter(function(p){return p.dim&&p.vol>0;}).forEach(function(p){g[p.dim]=(g[p.dim]||0)+(parseInt(p.vol)||0);});
-  return Object.entries(g).map(function(e){return e[1]+' VOL ('+e[0]+')';}).join(', ')||'—';
+  // Lista cada produto com sua quantidade de volumes e dimensão
+  var linhas = STATE.prods.filter(function(p){return p.nome&&p.vol>0;}).map(function(p){
+    return (parseInt(p.vol)||1)+' VOL ('+( p.dim||'—')+')';
+  });
+  return linhas.length ? linhas.join(', ') : '—';
 }
 function calcResumo(){
   var f=STATE.form;
