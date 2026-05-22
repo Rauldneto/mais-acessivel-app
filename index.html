@@ -6,7 +6,7 @@
 <title>Mais Acessível App</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',sans-serif;background:#f7f7f5;color:#1a1a1a;font-size:13px}
+body{font-family:'Segoe UI',sans-serif;background:#f7f7f5;color:#1a1a1a;font-size:13.5px}
 input,select{outline:none;font-family:inherit}
 input:focus,select:focus{border-color:#d97706!important}
 ::-webkit-scrollbar{width:5px;height:5px}
@@ -326,6 +326,54 @@ function renderApp(){
   return wrap;
 }
 
+function salvarCotacao(){
+  var num=STATE.form.numeroCotacao||'';
+  if(!num){alert('Informe o Nº da Cotação antes de salvar!'); return;}
+  var nova={
+    id:num,
+    destCity:STATE.form.cidadeDest||'—',
+    destUF:STATE.form.ufDest||'—',
+    cnpjDest:STATE.form.cnpjDest||'—',
+    cepDest:STATE.form.cepDest||'—',
+    endDest:STATE.form.endDest||'—',
+    valorNF:parseFloat(STATE.form.valorNF)||0,
+    volumes:calcTotalVol(),
+    peso:parseFloat(STATE.form.pesoTotal)||0,
+    nfEmitida:STATE.form.nfEmitida,
+    frete:STATE.form.frete||'CIF',
+    solicitante:STATE.form.solicitante,
+    dataHora:new Date().toLocaleString('pt-BR'),
+    produtos:STATE.prods.filter(function(p){return p.nome;}),
+    transportadoras:STATE.manRows.filter(function(r){return parseFloat(r.valor)>0;})
+  };
+  var idx=SAVED.findIndex(function(s){return s.id===num;});
+  if(idx>=0){SAVED[idx]=nova;} else {SAVED.unshift(nova);}
+  // Mantém máximo 30 cotações
+  if(SAVED.length>30) SAVED.splice(30);
+  alert('Cotação Nº '+num+' salva!\nDeseja imprimir em PDF?');
+  if(confirm('Imprimir / salvar como PDF?')){
+    // Gera HTML para impressão
+    var resumoTxt=calcResumo();
+    var transLines=STATE.manRows.filter(function(r){return parseFloat(r.valor)>0;}).map(function(r){
+      var v=parseFloat(r.valor)||0,o=parseFloat(r.outros)||0,cr=parseFloat(r.credito)||0,l=parseFloat(r.lucro)||0;
+      var vc=(v+o)*(1+cr/100)*(1+l/100);
+      return '<tr><td>'+r.nome+'</td><td>'+r.tel+'</td><td>'+r.cotacao+'</td><td>'+r.prazo+' d.u.</td><td>'+fmtBRL(v)+'</td><td>'+fmtBRL(vc)+'</td></tr>';
+    }).join('');
+    var prodLines=STATE.prods.filter(function(p){return p.nome;}).map(function(p){
+      return '<tr><td>'+p.nome+'</td><td style="text-align:center">'+p.vol+'</td><td>'+p.dim+'</td></tr>';
+    }).join('');
+    var win=window.open('','_blank');
+    win.document.write('<html><head><title>Cotação Nº '+num+'</title><style>body{font-family:Arial,sans-serif;font-size:12px;padding:20px;color:#1a1a1a}h1{color:#d97706;font-size:18px;margin-bottom:4px}h2{font-size:13px;color:#444;border-bottom:1px solid #ddd;padding-bottom:4px;margin-top:16px}table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#f3f3f1;padding:6px 8px;text-align:left;font-size:11px;border-bottom:2px solid #ddd}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:11px}pre{background:#f9f9f7;padding:12px;border-radius:6px;font-size:11px;line-height:1.8;white-space:pre-wrap}.badge{background:#fff8eb;border:1px solid #fde68a;padding:2px 8px;border-radius:4px;font-size:11px;color:#92400e;font-weight:700}@media print{body{padding:10px}}</style></head><body>');
+    win.document.write('<h1>✦ MAIS ACESSÍVEL APP</h1><span class="badge">Cotação Nº '+num+'</span> &nbsp; <span style="color:#888;font-size:11px">'+nova.dataHora+'</span>');
+    win.document.write('<h2>📤 Resumo</h2><pre>'+resumoTxt+'</pre>');
+    win.document.write('<h2>📦 Produtos</h2><table><thead><tr><th>Produto</th><th>Vol.</th><th>Dimensão</th></tr></thead><tbody>'+prodLines+'</tbody></table>');
+    if(transLines) win.document.write('<h2>🚛 Transportadoras Cotadas</h2><table><thead><tr><th>Transportadora</th><th>Telefone</th><th>Cotação</th><th>Prazo</th><th>Valor</th><th>Valor Cobrar</th></tr></thead><tbody>'+transLines+'</tbody></table>');
+    win.document.write('</body></html>');
+    win.document.close();
+    setTimeout(function(){win.print();},500);
+  }
+}
+
 function renderHeader(){
   var el=document.createElement('header');
   el.innerHTML=`
@@ -334,7 +382,8 @@ function renderHeader(){
     <div class="header-right">
       <span class="badge">📍 Goiânia — GO</span>
       <span style="font-family:monospace;font-size:11px;color:#888">35.017.646/0001-66</span>
-      <button id="btnNovaCot" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;padding:4px 12px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">✦ Nova Cotação</button>
+      <button id="btnNovaCot" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;padding:5px 13px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">✦ Nova Cotação</button>
+      <button id="btnSalvarHdr" style="background:linear-gradient(135deg,#059669,#34d399);color:#fff;border:none;padding:5px 13px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">💾 Salvar Cotação</button>
       <button class="btn-out" id="btnSair">🔒 Sair</button>
     </div>`;
   el.querySelector('#btnSair').onclick=function(){STATE.auth=false;render();};
@@ -347,6 +396,7 @@ function renderHeader(){
       render();
     }
   };
+  el.querySelector('#btnSalvarHdr').onclick=function(){ salvarCotacao(); };
   return el;
 }
 
@@ -545,33 +595,7 @@ function renderCotLeft(){
   cotEl.oninput=function(){STATE.form.numeroCotacao=this.value; updateResumo();};
   var cotLbl=document.createElement('span'); cotLbl.className='lbl'; cotLbl.textContent='Nº da Cotação';
   cotWrap.appendChild(cotLbl); cotWrap.appendChild(cotEl);
-  var btnSalvar=document.createElement('button');
-  btnSalvar.style.cssText='background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;padding:8px 16px;border-radius:7px;cursor:pointer;font-weight:700;font-size:12px;font-family:inherit;white-space:nowrap;box-shadow:0 2px 5px rgba(5,150,105,.2)';
-  btnSalvar.textContent='💾 Salvar Cotação';
-  btnSalvar.onclick=function(){
-    var num=STATE.form.numeroCotacao||'';
-    if(!num){alert('Informe o Nº da Cotação antes de salvar!'); return;}
-    var nova={
-      id:num,
-      destCity:STATE.form.cidadeDest||'—',
-      destUF:STATE.form.ufDest||'—',
-      cnpjDest:STATE.form.cnpjDest||'—',
-      cepDest:STATE.form.cepDest||'—',
-      endDest:STATE.form.endDest||'—',
-      valorNF:parseFloat(STATE.form.valorNF)||0,
-      volumes:calcTotalVol(),
-      peso:parseFloat(STATE.form.pesoTotal)||0,
-      nfEmitida:STATE.form.nfEmitida,
-      solicitante:STATE.form.solicitante,
-      produtos:STATE.prods.filter(function(p){return p.nome;}),
-      transportadoras:STATE.manRows.filter(function(r){return parseFloat(r.valor)>0;})
-    };
-    // Verifica se já existe e substitui, ou adiciona
-    var idx=SAVED.findIndex(function(s){return s.id===num;});
-    if(idx>=0){SAVED[idx]=nova;} else {SAVED.unshift(nova);}
-    alert('Cotação Nº '+num+' salva com sucesso! Veja em "Cotações Salvas".');
-  };
-  rowCot.appendChild(cotWrap); rowCot.appendChild(btnSalvar);
+  rowCot.appendChild(cotWrap);
   secPed.appendChild(rowCot);
 
   // Row: valorNF, vol, peso, nf, frete
@@ -795,50 +819,104 @@ function rebuildManRow(i){
 // ── SALVAS ──────────────────────────────
 function renderSalvas(){
   var wrap=document.createElement('div');
-  var intro=document.createElement('p'); intro.style.cssText='color:#888;font-size:13px;margin-bottom:14px';
-  intro.innerHTML='4 cotações importadas da planilha. Clique em <strong>Carregar</strong> para editar.';
-  wrap.appendChild(intro);
-  var grid=document.createElement('div'); grid.className='grid2';
-  SAVED.forEach(function(c){
-    var best=c.transportadoras.filter(function(t){return t.valor>0;}).sort(function(a,b){return a.valor-b.valor;})[0];
-    var card=document.createElement('div'); card.className='card'; card.style.borderLeft='3px solid #d97706';
-    // header
-    var hdr=document.createElement('div'); hdr.style.cssText='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px';
-    var info=document.createElement('div');
-    info.innerHTML='<span class="nf-badge">NF #'+c.id+'</span><div class="fw700 f15" style="margin-top:5px">'+c.destCity+' — '+c.destUF+'</div><div style="color:#888;font-size:11px;font-family:monospace">'+c.cnpjDest+'</div>';
-    var btn=document.createElement('button'); btn.className='btn-ok'; btn.textContent='↩ Carregar';
-    btn.onclick=function(){
-      STATE.form=Object.assign({},INIT,{cnpjDest:c.cnpjDest,cepDest:c.cepDest,cidadeDest:c.destCity,ufDest:c.destUF,endDest:c.endDest,valorNF:String(c.valorNF),pesoTotal:String(c.peso),nfEmitida:c.nfEmitida,solicitante:c.solicitante});
-      STATE.prods=c.produtos.map(function(p){return{nome:p.nome,vol:p.vol,dim:p.dim,cabe:p.cabe};});
-      STATE.manRows=c.transportadoras.map(function(t,i){return Object.assign({},t,{nr:i+1,uf:c.destUF});});
-      STATE.tab='cotacao'; render();
-    };
-    hdr.appendChild(info); hdr.appendChild(btn); card.appendChild(hdr);
-    // stats
-    var stats=document.createElement('div'); stats.className='g4'; stats.style.marginBottom='10px';
-    [['Valor NF',fmtBRL(c.valorNF)],['Volumes',c.volumes+' vol'],['Peso',c.peso+' kg'],['NF Emitida',c.nfEmitida]].forEach(function(kv){
-      var d=document.createElement('div'); d.style.cssText='background:#f3f3f1;border-radius:5px;padding:5px 9px';
-      d.innerHTML='<span class="lbl" style="margin:0">'+kv[0]+'</span><div style="font-size:12px;font-family:monospace;font-weight:600;margin-top:2px">'+kv[1]+'</div>';
-      stats.appendChild(d);
-    });
-    card.appendChild(stats);
-    // prods
-    c.produtos.forEach(function(p){
-      var d=document.createElement('div'); d.style.cssText='display:flex;gap:8px;font-size:11px;font-family:monospace;padding:3px 0;border-bottom:1px solid #e8e8e6';
-      d.innerHTML='<span class="tag-acc fw700" style="min-width:38px">'+p.vol+' vol</span><span>'+p.nome+'</span><span class="tag-muted" style="margin-left:auto">'+p.dim+'</span>';
-      card.appendChild(d);
-    });
-    // best
-    if(best){
-      var bb=document.createElement('div'); bb.className='best-box';
-      bb.innerHTML='<div style="font-size:10px;color:#059669;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">✓ Melhor Cotação</div>'+
-        '<div class="tag-green fw700 f14" style="font-family:monospace">'+best.nome+' — '+fmtBRL(best.valor*(1+(parseFloat(best.lucro)||0)/100))+'</div>'+
-        '<div class="tag-muted" style="font-size:11px;margin-top:2px">Cotação #'+best.cotacao+' · Prazo: '+best.prazo+' dias úteis</div>';
-      card.appendChild(bb);
+  // Barra de busca
+  var searchBar=document.createElement('div'); searchBar.style.cssText='display:flex;gap:10px;margin-bottom:14px;align-items:center';
+  var srch=document.createElement('input'); srch.className='inp'; srch.style.cssText='max-width:260px;font-size:13px';
+  srch.placeholder='🔍 Buscar pelo Nº da Cotação...';
+  var srchBtn=document.createElement('button'); srchBtn.className='btn-main'; srchBtn.textContent='Buscar';
+  var cnt=document.createElement('span'); cnt.style.cssText='color:#888;font-size:12px';
+  cnt.textContent=SAVED.length+' cotação(ões) salva(s) — máx. 30';
+  searchBar.appendChild(srch); searchBar.appendChild(srchBtn); searchBar.appendChild(cnt);
+  wrap.appendChild(searchBar);
+
+  var listEl=document.createElement('div'); listEl.id='salvasList';
+  wrap.appendChild(listEl);
+
+  function buildList(filter){
+    listEl.innerHTML='';
+    var dados=filter ? SAVED.filter(function(s){return s.id.toString().includes(filter);}) : SAVED;
+    if(!dados.length){
+      listEl.innerHTML='<div style="padding:20px;text-align:center;color:#888;font-size:13px">Nenhuma cotação encontrada.</div>';
+      return;
     }
-    grid.appendChild(card);
-  });
-  wrap.appendChild(grid);
+    dados.forEach(function(c,ci){
+      var best=c.transportadoras&&c.transportadoras.filter(function(t){return t.valor>0;}).sort(function(a,b){return a.valor-b.valor;})[0];
+      var item=document.createElement('div');
+      item.style.cssText='background:#fff;border:1.5px solid #c8c8c4;border-radius:10px;margin-bottom:8px;overflow:hidden';
+
+      // Header (sempre visível)
+      var hdr=document.createElement('div');
+      hdr.style.cssText='display:flex;align-items:center;padding:11px 14px;cursor:pointer;gap:10px;user-select:none';
+      hdr.style.background='#fafaf8';
+      var arrow=document.createElement('span'); arrow.textContent='▶'; arrow.style.cssText='color:#d97706;font-size:11px;transition:transform .2s;flex-shrink:0';
+      var badge=document.createElement('span'); badge.style.cssText='background:#fff8eb;color:#92400e;border:1px solid #fde68a;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;flex-shrink:0';
+      badge.textContent='Nº '+c.id;
+      var title=document.createElement('span'); title.style.cssText='font-weight:700;font-size:13px;flex:1';
+      title.textContent=(c.destCity||'—')+' — '+(c.destUF||'—');
+      var sub=document.createElement('span'); sub.style.cssText='font-size:11px;color:#888;white-space:nowrap';
+      sub.textContent=(c.dataHora||'')+' | '+fmtBRL(c.valorNF);
+      var btnCarregar=document.createElement('button'); btnCarregar.className='btn-ok'; btnCarregar.textContent='↩ Carregar';
+      btnCarregar.onclick=function(e){
+        e.stopPropagation();
+        STATE.form=Object.assign({},INIT,{cnpjDest:c.cnpjDest,cepDest:c.cepDest,cidadeDest:c.destCity,ufDest:c.destUF,endDest:c.endDest,valorNF:String(c.valorNF),pesoTotal:String(c.peso),nfEmitida:c.nfEmitida,solicitante:c.solicitante,numeroCotacao:c.id,frete:c.frete||'CIF'});
+        STATE.prods=c.produtos.map(function(p){return{nome:p.nome,vol:p.vol,dim:p.dim,cabe:p.cabe};});
+        STATE.manRows=c.transportadoras.map(function(t,i){return Object.assign({},t,{nr:i+1,uf:c.destUF});});
+        STATE.tab='cotacao'; render();
+      };
+      hdr.appendChild(arrow); hdr.appendChild(badge); hdr.appendChild(title); hdr.appendChild(sub); hdr.appendChild(btnCarregar);
+      item.appendChild(hdr);
+
+      // Body (colapsado por padrão)
+      var body=document.createElement('div');
+      body.style.cssText='display:none;padding:12px 14px;border-top:1px solid #e8e8e6';
+
+      // Stats
+      var stats=document.createElement('div'); stats.style.cssText='display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px';
+      [['Valor NF',fmtBRL(c.valorNF)],['Volumes',(c.volumes||0)+' vol'],['Peso',(c.peso||0)+' kg'],['NF Emitida',c.nfEmitida||'—']].forEach(function(kv){
+        var d=document.createElement('div'); d.style.cssText='background:#f3f3f1;border-radius:5px;padding:5px 9px';
+        d.innerHTML='<span class="lbl" style="margin:0">'+kv[0]+'</span><div style="font-size:12px;font-family:monospace;font-weight:600;margin-top:2px">'+kv[1]+'</div>';
+        stats.appendChild(d);
+      });
+      body.appendChild(stats);
+
+      // Produtos
+      if(c.produtos&&c.produtos.length){
+        var pTitle=document.createElement('div'); pTitle.style.cssText='font-size:11px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:4px'; pTitle.textContent='Produtos';
+        body.appendChild(pTitle);
+        c.produtos.forEach(function(p){
+          var d=document.createElement('div'); d.style.cssText='display:flex;gap:8px;font-size:11px;font-family:monospace;padding:3px 0;border-bottom:1px solid #e8e8e6';
+          d.innerHTML='<span class="tag-acc fw700" style="min-width:38px">'+p.vol+' vol</span><span>'+p.nome+'</span><span class="tag-muted" style="margin-left:auto">'+p.dim+'</span>';
+          body.appendChild(d);
+        });
+      }
+
+      // Melhor cotação
+      if(best){
+        var bb=document.createElement('div'); bb.className='best-box'; bb.style.marginTop='8px';
+        var v=parseFloat(best.valor)||0,o=parseFloat(best.outros)||0,cr=parseFloat(best.credito)||0,l=parseFloat(best.lucro)||0;
+        var vc=v>0?(v+o)*(1+cr/100)*(1+l/100):0;
+        bb.innerHTML='<div style="font-size:10px;color:#059669;font-weight:700;text-transform:uppercase;margin-bottom:3px">✓ Melhor Cotação</div>'+
+          '<div class="tag-green fw700 f14" style="font-family:monospace">'+best.nome+' — '+fmtBRL(vc)+'</div>'+
+          '<div class="tag-muted" style="font-size:11px;margin-top:2px">Cotação #'+best.cotacao+' · Prazo: '+best.prazo+' d.u.</div>';
+        body.appendChild(bb);
+      }
+      item.appendChild(body);
+
+      // Toggle accordion
+      hdr.onclick=function(){
+        var open=body.style.display==='block';
+        body.style.display=open?'none':'block';
+        arrow.textContent=open?'▶':'▼';
+        arrow.style.transform=open?'rotate(0)':'rotate(0)';
+      };
+      listEl.appendChild(item);
+    });
+  }
+
+  buildList('');
+  srchBtn.onclick=function(){buildList(srch.value.trim());};
+  srch.onkeydown=function(e){if(e.key==='Enter')buildList(srch.value.trim());};
+  srch.oninput=function(){if(!this.value)buildList('');};
   return wrap;
 }
 
