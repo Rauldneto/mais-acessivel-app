@@ -208,7 +208,7 @@ const SAVED=[
 ];
 
 const UFS=["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
-const INIT={cnpjRem:"35.017.646/0001-66",cepOrig:"74595-286",ufOrig:"GO",endRem:"Rua FL-42, Q:12 LT:03 Sl:02,03 - Goiania - GO - 74.595-286",cnpjDest:"",cepDest:"",cidadeDest:"",ufDest:"",endDest:"",valorNF:"",pesoTotal:"",nfEmitida:"NÃO",solicitante:"RAUL",embalagem:"CX",horario:"8:00 x 17:00 - SEG x SEXT",fechaAlmoco:"Não"};
+const INIT={cnpjRem:"35.017.646/0001-66",cepOrig:"74595-286",ufOrig:"GO",endRem:"Rua FL-42, Q:12 LT:03 Sl:02,03 - Goiania - GO - 74.595-286",cnpjDest:"",cepDest:"",cidadeDest:"",ufDest:"",endDest:"",valorNF:"",pesoTotal:"",nfEmitida:"NÃO",frete:"CIF",solicitante:"RAUL",embalagem:"CX",horario:"8:00 x 17:00 - SEG x SEXT",fechaAlmoco:"Não"};
 
 function fmtBRL(v){return"R$ "+(parseFloat(v)||0).toFixed(2).replace(".",",").replace(/\B(?=(\d{3})+(?!\d))/g,".")}
 function h(tag,cls,inner,attrs){
@@ -412,7 +412,7 @@ function renderCotLeft(){
 
   // Row 2: CNPJ dest + CEP dest
   var r2=document.createElement('div'); r2.className='g2 mb7';
-  r2.appendChild(mkField('CNPJ Destinatário',f.cnpjDest,false,'text','00.000.000/0000-00','cnpjDest'));
+  r2.appendChild(mkField('CNPJ / CPF do Destinatário',f.cnpjDest,false,'text','00.000.000/0000-00','cnpjDest'));
   var g3=document.createElement('div'); g3.className='g3';
 
   // CEP com busca automática
@@ -521,13 +521,20 @@ function renderCotLeft(){
   lblPed.innerHTML='📦 Informações do Pedido';
   secPed.appendChild(lblPed);
 
-  // Row: valorNF, vol, peso, nf
-  var r3=document.createElement('div'); r3.className='g4 mb7';
+  // Row: valorNF, vol, peso, nf, frete
+  var r3=document.createElement('div'); r3.style.cssText='display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-bottom:7px';
   r3.appendChild(mkField('Valor NF (R$)',f.valorNF,false,'number','0.00','valorNF'));
   var volEl2=inp(String(calcTotalVol()),'inp-ro'); volEl2.style.color='#d97706'; volEl2.style.fontWeight='700'; volEl2.id='totalVolEl'; volEl2.readOnly=true;
   r3.appendChild(field('Vol. Total',volEl2));
   r3.appendChild(mkField('Peso Total (kg)',f.pesoTotal,false,'number','0','pesoTotal'));
   r3.appendChild(mkSel('NF Emitida',f.nfEmitida,['NÃO','SIM'],'nfEmitida'));
+  // Frete CIF/FOB
+  var freteEl=sel(f.frete||'CIF',['CIF','FOB']);
+  freteEl.onchange=function(){
+    STATE.form.frete=this.value;
+    updateResumo();
+  };
+  r3.appendChild(field('Frete',freteEl));
   secPed.appendChild(r3);
 
   // Row: sol, emb, horario, almoco
@@ -565,13 +572,21 @@ function calcCubagem(){
 }
 function calcResumo(){
   var f=STATE.form;
+  // Pagador: CIF = remetente, FOB = destinatario
+  var pagador = (f.frete==='FOB') ? (f.cnpjDest||'—') : f.cnpjRem;
+  // Todos os produtos com volume e cubagem individuais
+  var prodLines = STATE.prods.filter(function(p){return p.nome;}).map(function(p){
+    return p.vol+' VOL - '+p.nome+(p.dim?' ('+p.dim+')':'');
+  });
+  var tipoMat = prodLines.length ? prodLines.join(', ') : '—';
   return [
-    '* CNPJ do pagador do frete: '+f.cnpjRem,
+    '* CNPJ do pagador do frete: '+pagador,
     '* CNPJ do destinatário: '+(f.cnpjDest||'—'),
     '* CNPJ do remetente: '+f.cnpjRem,
     '* CEP de origem: '+f.cepOrig.replace(/-/g,''),
     '* CEP de destino: '+(f.cepDest.replace(/-/g,'')||'—'),
-    '* Tipo de material: '+(STATE.prods.filter(function(p){return p.nome;}).map(function(p){return p.nome;}).join(', ')||'—'),
+    '* Tipo de material: '+tipoMat,
+    '* Frete: '+(f.frete||'CIF'),
     '* Valor da nota fiscal: '+fmtBRL(f.valorNF),
     '* Quantidade de volumes: '+calcTotalVol(),
     '* Peso total: '+(f.pesoTotal||0)+' kg',
