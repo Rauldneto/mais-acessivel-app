@@ -259,6 +259,32 @@ function field(lbl_txt,el_node){
 // Cópia editável das transportadoras
 var TRANS_DATA = TRANS.map(function(t){return Object.assign({},t,{triangulacao:false});});
 
+// ── PERSISTÊNCIA: carregar cotações salvas do localStorage ──
+(function(){
+  try {
+    var raw = localStorage.getItem('maisacessivel_saved');
+    if(raw){
+      var loaded = JSON.parse(raw);
+      if(Array.isArray(loaded) && loaded.length > 0){
+        // Mesclar com SAVED inicial (sem duplicar por id)
+        var ids = loaded.map(function(s){return s.id;});
+        var base = SAVED.filter(function(s){return ids.indexOf(s.id)===-1;});
+        // loaded tem prioridade sobre os estáticos
+        SAVED.length = 0;
+        loaded.forEach(function(s){SAVED.push(s);});
+        base.forEach(function(s){SAVED.push(s);});
+        // Manter máx 30
+        if(SAVED.length>30) SAVED.splice(30);
+      }
+    }
+  } catch(e){}
+})();
+
+// ── Função para salvar no localStorage ──
+function persistSaved(){
+  try { localStorage.setItem('maisacessivel_saved', JSON.stringify(SAVED)); } catch(e){}
+}
+
 var STATE={
   auth:false, tab:'cotacao',
   form:Object.assign({},INIT),
@@ -360,6 +386,7 @@ function salvarCotacao(){
   if(idx>=0){SAVED[idx]=nova;} else {SAVED.unshift(nova);}
   // Mantém máximo 30 cotações
   if(SAVED.length>30) SAVED.splice(30);
+  persistSaved();
   alert('Cotação Nº '+num+' salva!\nDeseja imprimir em PDF?');
   if(confirm('Imprimir / salvar como PDF?')){
     // Gera HTML para impressão
