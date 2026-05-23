@@ -259,30 +259,138 @@ function field(lbl_txt,el_node){
 // Cópia editável das transportadoras
 var TRANS_DATA = TRANS.map(function(t){return Object.assign({},t,{triangulacao:false});});
 
-// ── PERSISTÊNCIA: carregar cotações salvas do localStorage ──
+// ── PERSISTÊNCIA: carregar dados do localStorage ──
 (function(){
+  // Cotações salvas
   try {
     var raw = localStorage.getItem('maisacessivel_saved');
     if(raw){
       var loaded = JSON.parse(raw);
       if(Array.isArray(loaded) && loaded.length > 0){
-        // Mesclar com SAVED inicial (sem duplicar por id)
         var ids = loaded.map(function(s){return s.id;});
         var base = SAVED.filter(function(s){return ids.indexOf(s.id)===-1;});
-        // loaded tem prioridade sobre os estáticos
         SAVED.length = 0;
         loaded.forEach(function(s){SAVED.push(s);});
         base.forEach(function(s){SAVED.push(s);});
-        // Manter máx 30
         if(SAVED.length>30) SAVED.splice(30);
+      }
+    }
+  } catch(e){}
+  // Transportadoras personalizadas
+  try {
+    var rawT = localStorage.getItem('maisacessivel_trans');
+    if(rawT){
+      var loadedT = JSON.parse(rawT);
+      if(Array.isArray(loadedT) && loadedT.length > 0){
+        TRANS_DATA.length = 0;
+        loadedT.forEach(function(t){TRANS_DATA.push(t);});
+      }
+    }
+  } catch(e){}
+  // Embalagens personalizadas
+  try {
+    var rawE = localStorage.getItem('maisacessivel_emb');
+    if(rawE){
+      var loadedE = JSON.parse(rawE);
+      if(Array.isArray(loadedE) && loadedE.length > 0){
+        EMBALAGENS.length = 0;
+        loadedE.forEach(function(e){EMBALAGENS.push(e);});
       }
     }
   } catch(e){}
 })();
 
-// ── Função para salvar no localStorage ──
+// ── FIREBASE REALTIME DATABASE ─────────────────────────────────
+var FIREBASE_DB = 'https://maisacessivel-1d0ad-default-rtdb.firebaseio.com';
+
+function fbPut(key, data) {
+  fetch(FIREBASE_DB + '/' + key + '.json', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  }).catch(function(e){ console.warn('[Firebase] Erro ao salvar '+key+':', e); });
+}
+
+// Inicializa: busca dados do Firebase e mescla
+function fbInit() {
+  fetch(FIREBASE_DB + '/.json')
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(data) {
+      var temDadosFirebase = data && (
+        (data.saved && data.saved.length > 0) ||
+        (data.trans && data.trans.length > 0) ||
+        (data.emb   && data.emb.length > 0)
+      );
+      if(temDadosFirebase) {
+        // Firebase tem dados → trazer para cá
+        if(data.saved && Array.isArray(data.saved) && data.saved.length > 0) {
+          SAVED.length = 0; data.saved.forEach(function(s){SAVED.push(s);});
+          try{localStorage.setItem('maisacessivel_saved',JSON.stringify(SAVED));}catch(e){}
+        }
+        if(data.trans && Array.isArray(data.trans) && data.trans.length > 0) {
+          TRANS_DATA.length = 0; data.trans.forEach(function(t){TRANS_DATA.push(t);});
+          try{localStorage.setItem('maisacessivel_trans',JSON.stringify(TRANS_DATA));}catch(e){}
+        }
+        if(data.emb && Array.isArray(data.emb) && data.emb.length > 0) {
+          EMBALAGENS.length = 0; data.emb.forEach(function(e){EMBALAGENS.push(e);});
+          try{localStorage.setItem('maisacessivel_emb',JSON.stringify(EMBALAGENS));}catch(e){}
+        }
+      } else {
+        // Firebase vazio → enviar dados locais (migração inicial)
+        if(SAVED.length > 0) fbPut('saved', SAVED);
+        if(TRANS_DATA.length > 0) fbPut('trans', TRANS_DATA);
+        if(EMBALAGENS.length > 0) fbPut('emb', EMBALAGENS);
+      }
+      if(typeof render === 'function') render();
+    })
+    .catch(function(e){ console.warn('[Firebase] Erro na inicialização:', e); });
+}
+
+// Auto-sync a cada 30 segundos — atualiza dados sem resetar formulário ativo
+setInterval(function() {
+  fetch(FIREBASE_DB + '/.json')
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if(!data) return;
+      var mudou = false;
+      if(data.saved && Array.isArray(data.saved)) {
+        var fbIds = data.saved.map(function(s){return s.id;}).sort().join(',');
+        var lIds  = SAVED.map(function(s){return s.id;}).sort().join(',');
+        if(fbIds !== lIds) {
+          SAVED.length = 0; data.saved.forEach(function(s){SAVED.push(s);}); mudou = true;
+          try{localStorage.setItem('maisacessivel_saved',JSON.stringify(SAVED));}catch(e){}
+        }
+      }
+      if(data.trans && Array.isArray(data.trans) && data.trans.length !== TRANS_DATA.length) {
+        TRANS_DATA.length = 0; data.trans.forEach(function(t){TRANS_DATA.push(t);}); mudou = true;
+        try{localStorage.setItem('maisacessivel_trans',JSON.stringify(TRANS_DATA));}catch(e){}
+      }
+      if(data.emb && Array.isArray(data.emb) && data.emb.length !== EMBALAGENS.length) {
+        EMBALAGENS.length = 0; data.emb.forEach(function(e){EMBALAGENS.push(e);}); mudou = true;
+        try{localStorage.setItem('maisacessivel_emb',JSON.stringify(EMBALAGENS));}catch(e){}
+      }
+      if(mudou) {
+        var badge = document.getElementById('syncBadge');
+        if(badge){ badge.style.display='inline-block'; setTimeout(function(){badge.style.display='none';},3000); }
+        // Re-renderiza apenas se não estiver na aba de cotação (não interrompe digitação)
+        if(STATE.tab !== 'cotacao') render();
+      }
+    })
+    .catch(function(){});
+}, 30000);
+
+// ── Funções para salvar no localStorage + Firebase ──
 function persistSaved(){
   try { localStorage.setItem('maisacessivel_saved', JSON.stringify(SAVED)); } catch(e){}
+  fbPut('saved', SAVED);
+}
+function persistTrans(){
+  try { localStorage.setItem('maisacessivel_trans', JSON.stringify(TRANS_DATA)); } catch(e){}
+  fbPut('trans', TRANS_DATA);
+}
+function persistEmb(){
+  try { localStorage.setItem('maisacessivel_emb', JSON.stringify(EMBALAGENS)); } catch(e){}
+  fbPut('emb', EMBALAGENS);
 }
 
 var STATE={
@@ -419,7 +527,7 @@ function renderHeader(){
     <div class="header-right">
       <span class="badge">📍 Goiânia — GO</span>
       <span style="font-family:monospace;font-size:11px;color:#888">35.017.646/0001-66</span>
-      <button id="btnNovaCot" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;padding:5px 13px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">✦ Nova Cotação</button>
+      <span id="syncBadge" style="display:none;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;margin-right:8px;vertical-align:middle">↻ Sincronizado!</span><button id="btnNovaCot" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;padding:5px 13px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">✦ Nova Cotação</button>
       <button id="btnSalvarHdr" style="background:linear-gradient(135deg,#059669,#34d399);color:#fff;border:none;padding:5px 13px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">💾 Salvar Cotação</button>
       <button class="btn-out" id="btnSair">🔒 Sair</button>
     </div>`;
@@ -1057,6 +1165,7 @@ function renderTrans(){
     if(!uf||!nome){alert('Informe pelo menos UF e Nome!'); return;}
     TRANS_DATA.unshift({uf:uf,nome:nome,tel:nTel.value.trim(),tipo:nTipo.value,triangulacao:nTri.checked});
     nUF.value=''; nNome.value=''; nTel.value='';
+    persistTrans();
     rebuildTransTable();
   };
   addRow.style.gridTemplateColumns='70px 1fr 1fr 120px 110px auto';
@@ -1131,6 +1240,7 @@ function buildTransTable(wrap,cnt){
         TRANS_DATA[realIdx].tel=document.getElementById('eTel_'+realIdx).value.trim();
         TRANS_DATA[realIdx].tipo=document.getElementById('eTipo_'+realIdx).value;
         var eTriSave=document.getElementById('eTri_'+realIdx); TRANS_DATA[realIdx].triangulacao=eTriSave?eTriSave.checked:false;
+        persistTrans();
         rebuildTransTable();
       };
       var btnCancel=document.createElement('button');
@@ -1146,6 +1256,7 @@ function buildTransTable(wrap,cnt){
     btnDel.onclick=function(){
       if(confirm('Excluir "'+t.nome+'"?')){
         TRANS_DATA.splice(realIdx,1);
+        persistTrans();
         rebuildTransTable();
       }
     };
@@ -1175,6 +1286,7 @@ function renderEmb(){
     if(!nome){alert('Informe a descrição do produto!'); return;}
     EMBALAGENS.unshift({n:nome, d:eDim.value.trim()||'—', c:eCabe.value.trim()||'—'});
     eNome.value=''; eDim.value=''; eCabe.value='';
+    persistEmb();
     rebuildEmbTable();
   };
   var eDimField=field('Dimensão (Comp x Larg x Alt)',eDim);
@@ -1227,6 +1339,7 @@ function buildEmbTable(wrap,cnt){
         EMBALAGENS[realIdx].n=document.getElementById('en_'+realIdx).value.trim()||e.n;
         EMBALAGENS[realIdx].d=document.getElementById('ed_'+realIdx).value.trim();
         EMBALAGENS[realIdx].c=document.getElementById('ec_'+realIdx).value.trim();
+        persistEmb();
         rebuildEmbTable();
       };
       var btnC=document.createElement('button');
@@ -1240,7 +1353,7 @@ function buildEmbTable(wrap,cnt){
     btnDel.style.cssText='background:#fff5f5;border:1px solid #fca5a5;color:#ef4444;padding:3px 9px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600';
     btnDel.textContent='🗑';
     btnDel.onclick=function(){
-      if(confirm('Excluir "'+e.n+'"?')){EMBALAGENS.splice(realIdx,1); rebuildEmbTable();}
+      if(confirm('Excluir "'+e.n+'"?')){EMBALAGENS.splice(realIdx,1); persistEmb(); rebuildEmbTable();}
     };
     tdA.appendChild(btnEdit); tdA.appendChild(btnDel);
     tr.appendChild(tdA);
@@ -1255,6 +1368,7 @@ function rebuildEmbTable(){
 // ── BOOT ──
 
 render();
+fbInit();
 </script>
 </body>
 </html>
