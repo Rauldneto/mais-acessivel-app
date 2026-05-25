@@ -401,6 +401,19 @@ var STATE={
   embSrch:'', trSrch:'', trUF:''
 };
 
+// ── AUTO-LOGIN: se token salvo no localStorage for válido, loga automaticamente ──
+(function(){
+  try{
+    var savedToken = localStorage.getItem('maisacessivel_blingtoken');
+    if(savedToken && savedToken === ACCESS_CODE){
+      STATE.auth = true;
+      // Verificar dados Bling pendentes (vindos do bookmarklet)
+      var bStr = sessionStorage.getItem('_blingPendente');
+      if(bStr){ window._blingImport = JSON.parse(bStr); sessionStorage.removeItem('_blingPendente'); }
+    }
+  }catch(e){}
+})();
+
 function getManRows(uf){
   return TRANS_DATA.filter(function(t){return t.uf===uf}).map(function(t,i){
     return Object.assign({},t,{nr:i+1,cotacao:'',prazo:'',valor:'',outros:'',credito:'',lucro:''});
@@ -437,7 +450,17 @@ function renderLogin(){
   var hint=document.createElement('div'); hint.className='login-hint'; hint.textContent='Não tem acesso? Solicite um convite ao administrador.';
 
   function tryLogin(){
-    if(inpEl.value===ACCESS_CODE){STATE.auth=true;render();}
+    if(inpEl.value===ACCESS_CODE){
+      STATE.auth=true;
+      // Salvar token no localStorage para auto-login futuro
+      try{ localStorage.setItem('maisacessivel_blingtoken', ACCESS_CODE); }catch(e){}
+      // Verificar dados Bling pendentes
+      try{
+        var bStr=sessionStorage.getItem('_blingPendente');
+        if(bStr){ window._blingImport=JSON.parse(bStr); sessionStorage.removeItem('_blingPendente'); }
+      }catch(e){}
+      render();
+    }
     else{
       inpEl.classList.add('error'); errEl.style.display='block';
       inpEl.classList.add('shake'); setTimeout(function(){inpEl.classList.remove('shake');},500);
@@ -531,7 +554,7 @@ function renderHeader(){
       <button id="btnSalvarHdr" style="background:linear-gradient(135deg,#059669,#34d399);color:#fff;border:none;padding:5px 13px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">💾 Salvar Cotação</button>
       <button class="btn-out" id="btnSair">🔒 Sair</button>
     </div>`;
-  el.querySelector('#btnSair').onclick=function(){STATE.auth=false;render();};
+  el.querySelector('#btnSair').onclick=function(){STATE.auth=false;try{localStorage.removeItem('maisacessivel_blingtoken');}catch(e){}render();};
   el.querySelector('#btnNovaCot').onclick=function(){
     if(confirm('Iniciar nova cotação? Os dados atuais serão apagados.')){
       STATE.form=Object.assign({},INIT);
@@ -568,6 +591,20 @@ function renderNav(){
 function renderCotacao(){
   var wrap=document.createElement('div');
   wrap.style.cssText='width:100%;min-width:0';
+  buildBlingPanel(wrap);
+  if(window._blingImport){
+    var _bd=window._blingImport; window._blingImport=null;
+    // Preencher automaticamente após 400ms
+    setTimeout(function(){
+      preencherDoBling(_bd);
+      // Mostrar notificação de sucesso
+      var banner=document.createElement('div');
+      banner.style.cssText='position:fixed;top:62px;left:50%;transform:translateX(-50%);background:#059669;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.25);pointer-events:none';
+      banner.innerHTML='\u2705 Or\u00e7amento Bling N\u00ba <b>'+(_bd.n||'?')+'<\/b> preenchido automaticamente!';
+      document.body.appendChild(banner);
+      setTimeout(function(){if(banner.parentNode)banner.remove();},5000);
+    },400);
+  }
   // Linha 1: Remetente | Destinatário
   var row1=document.createElement('div');
   row1.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;min-width:0;width:100%;align-items:stretch';
@@ -1364,6 +1401,98 @@ function buildEmbTable(wrap,cnt){
 function rebuildEmbTable(){
   buildEmbTable(document.getElementById('embTableWrap'),document.getElementById('embCount'));
 }
+
+
+// ══════════════════════════════════════════
+//  IMPORTAÇÃO BLING
+// ══════════════════════════════════════════
+
+function preencherDoBling(bd) {
+  // CNPJ formatado
+  if(bd.c){
+    var v=bd.c.replace(/\D/g,'');
+    if(v.length===14) v=v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
+    else if(v.length===11) v=v.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4');
+    STATE.form.cnpjDest=v;
+  }
+  // Número cotação
+  if(bd.n && !STATE.form.numeroCotacao) STATE.form.numeroCotacao=bd.n;
+  // Valor NF (já convertido de BR para float string)
+  if(bd.vi||bd.v){
+    var vStr=bd.vi||bd.v;
+    // Converter formato BR: "7.253,28" → "7253.28"
+    if(vStr.includes(',')&&vStr.includes('.')) vStr=vStr.replace(/\./g,'').replace(',','.');
+    else if(vStr.includes(',')) vStr=vStr.replace(',','.');
+    STATE.form.valorNF=vStr;
+  }
+  // Peso (já convertido pelo bookmarklet)
+  if(bd.kg) STATE.form.pesoTotal=bd.kg;
+  // Frete CIF/FOB
+  if(bd.ft) STATE.form.frete=bd.ft;
+  // Endereço: priorizar endereço de entrega se existir
+  if(bd.endE && bd.endE.length>3) STATE.form.endDest=bd.endE;
+  else if(bd.end) STATE.form.endDest=bd.end;
+  // Solicitante = Vendedor
+  if(bd.vend) STATE.form.solicitante=bd.vend;
+  // Volume total
+  if(bd.vol){
+    // Atualizar o primeiro produto com o volume correto
+    if(STATE.prods && STATE.prods.length>0) STATE.prods[0].vol=parseInt(bd.vol)||1;
+  }
+  STATE.tab='cotacao';
+  render();
+  // CEP → dispara ViaCEP
+  if(bd.p){
+    setTimeout(function(){
+      var el=document.getElementById('cepDestEl');
+      if(el){ el.value=bd.p.replace(/\D/g,'').replace(/(\d{5})(\d{3})/,'$1-$2'); el.dispatchEvent(new Event('input',{bubbles:true})); }
+    },300);
+  }
+}
+
+function buildBlingPanel(wrap){
+  var panel=document.createElement('div');
+  panel.style.cssText='background:#fffbeb;border:1.5px solid #f59e0b;border-radius:10px;padding:10px 16px;margin-bottom:14px';
+  var hdr=document.createElement('div');
+  hdr.style.cssText='display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none';
+  hdr.innerHTML='<span style="font-weight:700;font-size:13px;color:#92400e">🔗 Importar do Bling</span><span id="blingIcon" style="font-size:11px;color:#b45309">▼ expandir</span>';
+  var cont=document.createElement('div');
+  cont.id='blingContent';
+  cont.style.cssText='display:none;margin-top:10px';
+  var btn=document.createElement('a');
+  btn.href='javascript:%28function%28%29%7B%0Avar%20u%3Dwindow.location.href%3B%0Aif%28%21u.includes%28%27bling.com.br%27%29%29%7Balert%28%27Abra%20um%20or%5Cu00e7amento%20no%20Bling%20primeiro%21%27%29%3Breturn%3B%7D%0Afunction%20fld%28n%29%7Bvar%20e%3Ddocument.querySelector%28%27%5Bname%3D%22%27%2Bn%2B%27%22%5D%27%29%3Breturn%20e%3F%28e.value%7C%7C%27%27%29.trim%28%29%3A%27%27%3B%7D%0A%0Avar%20num%3Dfld%28%27numeroProposta%27%29%3B%0Avar%20vend%3Dfld%28%27nomeVendedor%27%29%3B%0Avar%20pesoStr%3Dfld%28%27pesoBruto%27%29.replace%28%27%2C%27%2C%27.%27%29%3B%0Avar%20kg%3DpesoStr%7C%7C%27%27%3B%0Avar%20vi%3Dfld%28%27totalOrcamento%27%29%3B%0Avar%20volRaw%3Dfld%28%27qtdVolumes%27%29%3B%0Avar%20vol%3D%28volRaw%26%26volRaw%21%3D%270%27%29%3FvolRaw%3Afld%28%27campoTotalQtds%27%29.split%28%27%2C%27%29%5B0%5D%3B%0Avar%20fm%3Dfld%28%27frete_modalidade%27%29%3B%0Avar%20ft%3D%28fm%3D%3D%3D%27R%27%7C%7Cfm%3D%3D%3D%27r%27%29%3F%27CIF%27%3A%27FOB%27%3B%0Avar%20idContato%3Dfld%28%27idContato%27%29%3B%0A%0A%2F%2A%20Endere%C3%A7o%20de%20entrega%20%28etiqueta%29%20%2A%2F%0Avar%20etCep%3Dfld%28%27etiqueta_cep%27%29.replace%28%2F%5CD%2Fg%2C%27%27%29%3B%0Avar%20etEnd%3D%5B%0A%20%20fld%28%27etiqueta_endereco%27%29%2C%0A%20%20fld%28%27etiqueta_numero%27%29%2C%0A%20%20fld%28%27etiqueta_complemento%27%29%2C%0A%20%20fld%28%27etiqueta_bairro%27%29%2C%0A%20%20fld%28%27etiqueta_municipio%27%29%2B%27%20-%20%27%2Bfld%28%27etiqueta_uf%27%29%0A%5D.filter%28function%28s%29%7Breturn%20s%26%26s.trim%28%29%26%26s%21%3D%27%20-%20%27%3B%7D%29.join%28%27%2C%20%27%29%3B%0A%0A%2F%2A%20Abre%20aba%20em%20branco%20AGORA%20%28sincrono%29%20para%20nao%20ser%20bloqueado%20%2A%2F%0Avar%20novaAba%3Dwindow.open%28%27about%3Ablank%27%2C%27_blank%27%29%3B%0A%0Afunction%20abrirApp%28cnpj%2Ccep%2Cend%29%7B%0A%20%20var%20d%3D%7Bn%3Anum%2Cvend%3Avend%2Cc%3Acnpj%2Cp%3Acep%2Cend%3Aend%2CendE%3A%27%27%2Ckg%3Akg%2Cft%3Aft%2Cvi%3Avi%2Cvol%3Avol%7D%3B%0A%20%20var%20url%3D%27https%3A%2F%2Frauldneto.github.io%2Fmais-acessivel-v2%2F%23bling%3D%27%2BencodeURIComponent%28JSON.stringify%28d%29%29%3B%0A%20%20novaAba.location.href%3Durl%3B%0A%7D%0A%0Aif%28idContato%29%7B%0A%20%20fetch%28%27%2FApi%2Fv3%2Fcontatos%2F%27%2BidContato%2C%7Bcredentials%3A%27include%27%7D%29%0A%20%20.then%28function%28r%29%7Breturn%20r.json%28%29%3B%7D%29%0A%20%20.then%28function%28resp%29%7B%0A%20%20%20%20var%20cnpj%3D%27%27%3B%0A%20%20%20%20var%20cep%3D%27%27%3B%0A%20%20%20%20var%20end%3D%27%27%3B%0A%0A%20%20%20%20if%28resp%26%26resp.data%29%7B%0A%20%20%20%20%20%20var%20c%3Dresp.data%3B%0A%20%20%20%20%20%20%2F%2A%20CPF%2FCNPJ%20%2A%2F%0A%20%20%20%20%20%20cnpj%3D%28c.cpf_cnpj%7C%7C%27%27%29.replace%28%2F%5B%5E%5Cd%5D%2Fg%2C%27%27%29%3B%0A%0A%20%20%20%20%20%20%2F%2A%20Endere%C3%A7o%20cadastrado%20%2A%2F%0A%20%20%20%20%20%20var%20cadCep%3D%28c.cep%7C%7C%27%27%29.replace%28%2F%5CD%2Fg%2C%27%27%29%3B%0A%20%20%20%20%20%20var%20cadEnd%3D%5Bc.endereco%2Cc.numero%2Cc.complemento%2Cc.bairro%2Cc.cidade%2B%27%20-%20%27%2Bc.uf%5D%0A%20%20%20%20%20%20%20%20.filter%28function%28s%29%7Breturn%20s%26%26String%28s%29.trim%28%29%26%26s%21%3D%27%20-%20%27%3B%7D%29.join%28%27%2C%20%27%29%3B%0A%0A%20%20%20%20%20%20%2F%2A%20PRIORIDADE%3A%20entrega%20diferente%20%3E%20cadastro%20%2A%2F%0A%20%20%20%20%20%20if%28etCep%20%26%26%20etCep%21%3D%3DcadCep%29%7B%0A%20%20%20%20%20%20%20%20%2F%2A%20Endereco%20de%20entrega%20diferente%20do%20cadastrado%20%2A%2F%0A%20%20%20%20%20%20%20%20cep%3DetCep%3B%0A%20%20%20%20%20%20%20%20end%3DetEnd%3B%0A%20%20%20%20%20%20%7D%20else%20%7B%0A%20%20%20%20%20%20%20%20%2F%2A%20Sem%20entrega%20diferente%3A%20usa%20cadastro%20%2A%2F%0A%20%20%20%20%20%20%20%20cep%3DcadCep%7C%7CetCep%3B%0A%20%20%20%20%20%20%20%20end%3DcadEnd%7C%7CetEnd%3B%0A%20%20%20%20%20%20%7D%0A%20%20%20%20%7D%20else%20%7B%0A%20%20%20%20%20%20cep%3DetCep%3B%0A%20%20%20%20%20%20end%3DetEnd%3B%0A%20%20%20%20%7D%0A%0A%20%20%20%20abrirApp%28cnpj%2Ccep%2Cend%29%3B%0A%20%20%7D%29%0A%20%20.catch%28function%28%29%7BabrirApp%28%27%27%2CetCep%2CetEnd%29%3B%7D%29%3B%0A%7D%20else%20%7B%0A%20%20abrirApp%28%27%27%2CetCep%2CetEnd%29%3B%0A%7D%0A%7D%29%28%29%3B';;
+  btn.setAttribute('draggable','true');
+  btn.textContent='\uD83D\uDCCB Importar Bling \u2192 App';
+  btn.style.cssText='display:inline-block;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;padding:8px 18px;border-radius:8px;font-weight:800;font-size:13px;text-decoration:none;cursor:grab;border:2px dashed #92400e';
+  var lbl=document.createElement('div');
+  lbl.style.cssText='font-size:11px;color:#78350f;font-weight:700;margin-bottom:8px';
+  lbl.textContent='\u2b50 Arraste o bot\u00e3o abaixo para a barra de favoritos. Depois abra um or\u00e7amento no Bling e clique!';
+  var tip=document.createElement('div');
+  tip.style.cssText='font-size:10px;color:#a16207;margin-top:4px;font-style:italic';
+  tip.textContent='\u2191 Arraste para a barra de favoritos do Chrome';
+  cont.appendChild(lbl); cont.appendChild(btn); cont.appendChild(tip);
+  panel.appendChild(hdr); panel.appendChild(cont); wrap.appendChild(panel);
+  hdr.onclick=function(){
+    var ic=document.getElementById('blingIcon');
+    if(cont.style.display==='none'){ cont.style.display='block'; ic.textContent='\u25b2 recolher'; }
+    else{ cont.style.display='none'; ic.textContent='\u25bc expandir'; }
+  };
+}
+
+// Detectar dados Bling na URL ao abrir
+(function(){
+  try{
+    var h=window.location.hash||'';
+    var bi=h.indexOf('bling=');
+    if(bi>-1){
+      var bd=JSON.parse(decodeURIComponent(h.slice(bi+6)));
+      history.replaceState(null,'',window.location.pathname);
+      window._blingImport=bd;
+      // Guardar no sessionStorage para sobreviver ao login
+      sessionStorage.setItem('_blingPendente', JSON.stringify(bd));
+    }
+  }catch(e){}
+})();
 
 // ── BOOT ──
 
