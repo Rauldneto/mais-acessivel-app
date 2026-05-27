@@ -386,20 +386,27 @@ function fbPut(key, data) {
 // Inicializa: busca dados do Firebase e mescla
 function fbInit() {
   // Carrega cotacoes salvas do Firebase (compartilhado entre todos os usuarios)
-  fetch(FIREBASE_DB + '/saved.json')
-    .then(function(r){ return r.ok ? r.json() : null; })
-    .then(function(data) {
-      if(data){
-        var arr=Array.isArray(data)?data:Object.values(data);
-        arr=arr.filter(function(s){return s&&s.id;});
+  function carregarSaved(){
+    return fetch(FIREBASE_DB + '/saved.json')
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if(!data) return;
+        var raw=Array.isArray(data)?data:Object.values(data);
+        // Deduplica por ID (mantém mais recente)
+        var map={};
+        raw.forEach(function(s){
+          if(s&&s.id) map[String(s.id)]=s;
+        });
+        var arr=Object.values(map);
         if(arr.length>0){
           SAVED.length=0;
           arr.forEach(function(s){SAVED.push(s);});
           try{localStorage.setItem('maisacessivel_saved',JSON.stringify(SAVED));}catch(e){}
           if(STATE.tab==='salvas') render();
         }
-      }
-    }).catch(function(){});
+      }).catch(function(){});
+  }
+  carregarSaved();
 
   // Carrega transportadoras e embalagens
   fetch(FIREBASE_DB + '/trans.json')
@@ -426,22 +433,8 @@ function fbInit() {
 
   // Atualiza cotacoes a cada 30s para pegar novas de outros usuarios
   setInterval(function(){
-    if(document.visibilityState==='visible'){
-      fetch(FIREBASE_DB + '/saved.json')
-        .then(function(r){ return r.ok ? r.json() : null; })
-        .then(function(data) {
-          if(data){
-            var arr=Array.isArray(data)?data:Object.values(data);
-            arr=arr.filter(function(s){return s&&s.id;});
-            if(arr.length!==SAVED.length){
-              SAVED.length=0; arr.forEach(function(s){SAVED.push(s);});
-              try{localStorage.setItem('maisacessivel_saved',JSON.stringify(SAVED));}catch(e){}
-              if(STATE.tab==='salvas') render();
-            }
-          }
-        }).catch(function(){});
-    }
-  }, 30000);
+    if(document.visibilityState==='visible') carregarSaved();
+  }, 15000);
 }
 
 
