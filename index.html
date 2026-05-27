@@ -162,8 +162,6 @@ async function fbInitAdmin(){
   }
 }
 
-STATE.usuarioLogado=null;
-STATE.roleLogado=null;
 
 var EMBALAGENS = [
   {n:"ACABAMENTO P/ VALVULA DE DESCARGA BENEFIT",d:"35 x 25 x 7",c:1},
@@ -467,6 +465,8 @@ function persistEmb(){
 }
 
 var STATE={
+  usuarioLogado:null,
+  roleLogado:null,
   auth:false, tab:'cotacao',
   form:Object.assign({},INIT),
   prods:[{nome:'',vol:1,dim:'',cabe:''}],
