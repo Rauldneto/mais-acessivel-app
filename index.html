@@ -1496,6 +1496,21 @@ function buildBlingPanel(wrap){
 
 // ── BOOT ──
 
+// Listener para quando a URL muda (aba aberta como about:blank e depois recebe URL)
+window.addEventListener('hashchange', function(){
+  try{
+    var h=window.location.hash||'';
+    var bi=h.indexOf('bling=');
+    if(bi>-1){
+      var bd=JSON.parse(decodeURIComponent(h.slice(bi+6)));
+      history.replaceState(null,'',window.location.pathname);
+      window._blingImport=bd;
+      sessionStorage.setItem('_blingPendente', JSON.stringify(bd));
+      render();
+    }
+  }catch(e){}
+});
+
 render();
 fbInit();
 </script>
