@@ -385,38 +385,65 @@ function fbPut(key, data) {
 
 // Inicializa: busca dados do Firebase e mescla
 function fbInit() {
-  fetch(FIREBASE_DB + '/.json')
+  // Carrega cotacoes salvas do Firebase (compartilhado entre todos os usuarios)
+  fetch(FIREBASE_DB + '/saved.json')
     .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(data) {
-      var temDadosFirebase = data && (
-        (data.saved && data.saved.length > 0) ||
-        (data.trans && data.trans.length > 0) ||
-        (data.emb   && data.emb.length > 0)
-      );
-      if(temDadosFirebase) {
-        // Firebase tem dados → trazer para cá
-        if(data.saved && Array.isArray(data.saved) && data.saved.length > 0) {
-          SAVED.length = 0; data.saved.forEach(function(s){SAVED.push(s);});
+      if(data){
+        var arr=Array.isArray(data)?data:Object.values(data);
+        arr=arr.filter(function(s){return s&&s.id;});
+        if(arr.length>0){
+          SAVED.length=0;
+          arr.forEach(function(s){SAVED.push(s);});
           try{localStorage.setItem('maisacessivel_saved',JSON.stringify(SAVED));}catch(e){}
+          if(STATE.tab==='salvas') render();
         }
-        if(data.trans && Array.isArray(data.trans) && data.trans.length > 0) {
-          TRANS_DATA.length = 0; data.trans.forEach(function(t){TRANS_DATA.push(t);});
-          try{localStorage.setItem('maisacessivel_trans',JSON.stringify(TRANS_DATA));}catch(e){}
-        }
-        if(data.emb && Array.isArray(data.emb) && data.emb.length > 0) {
-          EMBALAGENS.length = 0; data.emb.forEach(function(e){EMBALAGENS.push(e);});
-          try{localStorage.setItem('maisacessivel_emb',JSON.stringify(EMBALAGENS));}catch(e){}
-        }
-      } else {
-        // Firebase vazio → enviar dados locais (migração inicial)
-        if(SAVED.length > 0) fbPut('saved', SAVED);
-        if(TRANS_DATA.length > 0) fbPut('trans', TRANS_DATA);
-        if(EMBALAGENS.length > 0) fbPut('emb', EMBALAGENS);
       }
-      if(typeof render === 'function') render();
-    })
-    .catch(function(e){ console.warn('[Firebase] Erro na inicialização:', e); });
+    }).catch(function(){});
+
+  // Carrega transportadoras e embalagens
+  fetch(FIREBASE_DB + '/trans.json')
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if(data && Array.isArray(data) && data.length>0){
+        TRANS_DATA.length=0; data.forEach(function(t){TRANS_DATA.push(t);});
+        try{localStorage.setItem('maisacessivel_trans',JSON.stringify(TRANS_DATA));}catch(e){}
+      } else if(TRANS_DATA.length>0){
+        fbPut('trans', TRANS_DATA);
+      }
+    }).catch(function(){});
+
+  fetch(FIREBASE_DB + '/emb.json')
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if(data && Array.isArray(data) && data.length>0){
+        EMBALAGENS.length=0; data.forEach(function(e){EMBALAGENS.push(e);});
+        try{localStorage.setItem('maisacessivel_emb',JSON.stringify(EMBALAGENS));}catch(e){}
+      } else if(EMBALAGENS.length>0){
+        fbPut('emb', EMBALAGENS);
+      }
+    }).catch(function(){});
+
+  // Atualiza cotacoes a cada 30s para pegar novas de outros usuarios
+  setInterval(function(){
+    if(document.visibilityState==='visible'){
+      fetch(FIREBASE_DB + '/saved.json')
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(data) {
+          if(data){
+            var arr=Array.isArray(data)?data:Object.values(data);
+            arr=arr.filter(function(s){return s&&s.id;});
+            if(arr.length!==SAVED.length){
+              SAVED.length=0; arr.forEach(function(s){SAVED.push(s);});
+              try{localStorage.setItem('maisacessivel_saved',JSON.stringify(SAVED));}catch(e){}
+              if(STATE.tab==='salvas') render();
+            }
+          }
+        }).catch(function(){});
+    }
+  }, 30000);
 }
+
 
 // Auto-sync a cada 30 segundos — atualiza dados sem resetar formulário ativo
 setInterval(function() {
@@ -454,7 +481,12 @@ setInterval(function() {
 // ── Funções para salvar no localStorage + Firebase ──
 function persistSaved(){
   try { localStorage.setItem('maisacessivel_saved', JSON.stringify(SAVED)); } catch(e){}
-  fbPut('saved', SAVED);
+  // Salva cada cotacao individualmente no Firebase para evitar conflito entre usuarios
+  SAVED.forEach(function(s){
+    if(s && s.id){
+      fbPut('saved/'+String(s.id).replace(/[^a-zA-Z0-9_-]/g,'_'), s);
+    }
+  });
 }
 function persistTrans(){
   try { localStorage.setItem('maisacessivel_trans', JSON.stringify(TRANS_DATA)); } catch(e){}
