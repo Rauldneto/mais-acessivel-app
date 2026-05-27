@@ -90,7 +90,80 @@ pre{background:#f3f3f1;border:1px solid #e8e8e6;border-radius:7px;padding:12px;f
 // ══════════════════════════════════════════
 //  DADOS
 // ══════════════════════════════════════════
-const ACCESS_CODE = "maisacessivel2025";
+// ══ MULTI-USER AUTH ══
+const ADMIN_USER = "raul";
+const FIREBASE_USERS_PATH = "usuarios";
+const FIREBASE_LOGS_PATH  = "acessos";
+
+function hashSimple(str){
+  // Simple but consistent hash for passwords
+  var h=0;
+  for(var i=0;i<str.length;i++){h=((h<<5)-h)+str.charCodeAt(i);h|=0;}
+  return (h>>>0).toString(16);
+}
+
+async function fbGetUsers(){
+  try{
+    var r=await fetch(FIREBASE_DB+'/'+FIREBASE_USERS_PATH+'.json');
+    return r.ok?await r.json():null;
+  }catch(e){return null;}
+}
+
+async function fbSaveUser(id,data){
+  await fetch(FIREBASE_DB+'/'+FIREBASE_USERS_PATH+'/'+id+'.json',{
+    method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(data)
+  });
+}
+
+async function fbDeleteUser(id){
+  await fetch(FIREBASE_DB+'/'+FIREBASE_USERS_PATH+'/'+id+'.json',{method:'DELETE'});
+}
+
+async function fbLogAccess(usuario){
+  try{
+    var geo=await fetch('https://ipapi.co/json/').then(r=>r.json()).catch(()=>({}));
+    var log={
+      usuario:usuario,
+      ip:geo.ip||'',
+      cidade:geo.city||'',
+      regiao:geo.region||'',
+      pais:geo.country_name||'',
+      lat:geo.latitude||'',
+      lon:geo.longitude||'',
+      dt:new Date().toLocaleString('pt-BR')
+    };
+    var key=Date.now()+'_'+usuario;
+    await fetch(FIREBASE_DB+'/'+FIREBASE_LOGS_PATH+'/'+key+'.json',{
+      method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(log)
+    });
+  }catch(e){}
+}
+
+async function fbGetLogs(){
+  try{
+    var r=await fetch(FIREBASE_DB+'/'+FIREBASE_LOGS_PATH+'.json');
+    return r.ok?await r.json():null;
+  }catch(e){return null;}
+}
+
+// Inicializa admin padrão se não existir
+async function fbInitAdmin(){
+  var users=await fbGetUsers();
+  if(!users||!Object.values(users).find(u=>u.usuario===ADMIN_USER)){
+    await fbSaveUser('admin_raul',{
+      nome:'Raul Neto',
+      usuario:'raul',
+      senha:hashSimple('maisacessivel2025'),
+      role:'admin',
+      ativo:true
+    });
+  }
+}
+
+STATE.usuarioLogado=null;
+STATE.roleLogado=null;
 
 var EMBALAGENS = [
   {n:"ACABAMENTO P/ VALVULA DE DESCARGA BENEFIT",d:"35 x 25 x 7",c:1},
@@ -401,13 +474,14 @@ var STATE={
   embSrch:'', trSrch:'', trUF:''
 };
 
-// ── AUTO-LOGIN: se token salvo no localStorage for válido, loga automaticamente ──
+// ── AUTO-LOGIN: verifica sessão salva ──
 (function(){
   try{
-    var savedToken = localStorage.getItem('maisacessivel_blingtoken');
-    if(savedToken && savedToken === ACCESS_CODE){
+    var sess = JSON.parse(localStorage.getItem('maisacessivel_session')||'null');
+    if(sess && sess.usuario && sess.role){
       STATE.auth = true;
-      // Verificar dados Bling pendentes (vindos do bookmarklet)
+      STATE.usuarioLogado = sess.usuario;
+      STATE.roleLogado = sess.role;
       var bStr = sessionStorage.getItem('_blingPendente');
       if(bStr){ window._blingImport = JSON.parse(bStr); sessionStorage.removeItem('_blingPendente'); }
     }
@@ -434,46 +508,203 @@ function render(){
 function renderLogin(){
   var wrap=document.createElement('div');
   wrap.className='login-wrap';
-
   var card=document.createElement('div'); card.className='login-card';
-  var bar=document.createElement('div'); bar.className='login-bar';
-  card.appendChild(bar);
+  var bar=document.createElement('div'); bar.className='login-bar'; card.appendChild(bar);
+  var body=document.createElement('div'); body.className='login-body'; card.appendChild(body);
 
-  var body=document.createElement('div'); body.className='login-body';
-  var icon=document.createElement('div'); icon.className='login-icon'; icon.textContent='🔐';
-  var title=document.createElement('div'); title.className='login-title'; title.textContent='MAIS ACESSÍVEL APP';
-  var sub=document.createElement('div'); sub.className='login-sub'; sub.textContent='Área restrita — acesso por convite';
-  var lbl=document.createElement('label'); lbl.className='login-label'; lbl.textContent='Código de Acesso';
-  var inpEl=document.createElement('input'); inpEl.className='login-input'; inpEl.type='password'; inpEl.placeholder='Digite o código recebido...'; inpEl.autocomplete='off';
-  var errEl=document.createElement('div'); errEl.className='login-err'; errEl.style.display='none'; errEl.textContent='✕ Código incorreto. Verifique e tente novamente.';
-  var btnEl=document.createElement('button'); btnEl.className='login-btn'; btnEl.textContent='Entrar →';
-  var hint=document.createElement('div'); hint.className='login-hint'; hint.textContent='Não tem acesso? Solicite um convite ao administrador.';
+  var logo=document.createElement('div'); logo.className='login-logo';
+  logo.innerHTML='';
+  body.appendChild(logo);
 
-  function tryLogin(){
-    if(inpEl.value===ACCESS_CODE){
-      STATE.auth=true;
-      // Salvar token no localStorage para auto-login futuro
-      try{ localStorage.setItem('maisacessivel_blingtoken', ACCESS_CODE); }catch(e){}
-      // Verificar dados Bling pendentes
-      try{
+  var title=document.createElement('h2'); title.className='login-title'; title.textContent='MAIS ACESSÍVEL APP'; body.appendChild(title);
+  var sub=document.createElement('p'); sub.className='login-sub'; sub.textContent='Sistema de Cotação de Frete'; body.appendChild(sub);
+
+  // Usuário
+  var lblU=document.createElement('label'); lblU.textContent='Usuário'; lblU.style.cssText='font-size:12px;font-weight:600;color:#666;display:block;margin-top:16px;margin-bottom:4px'; body.appendChild(lblU);
+  var inpU=document.createElement('input'); inpU.type='text'; inpU.className='login-inp'; inpU.placeholder='seu usuário'; body.appendChild(inpU);
+
+  // Senha
+  var lblS=document.createElement('label'); lblS.textContent='Senha'; lblS.style.cssText='font-size:12px;font-weight:600;color:#666;display:block;margin-top:12px;margin-bottom:4px'; body.appendChild(lblS);
+  var inpS=document.createElement('input'); inpS.type='password'; inpS.className='login-inp'; inpS.placeholder='sua senha'; body.appendChild(inpS);
+
+  var err=document.createElement('p'); err.style.cssText='color:red;font-size:13px;margin-top:8px;min-height:18px'; body.appendChild(err);
+
+  var btn=document.createElement('button'); btn.className='login-btn'; btn.textContent='Entrar'; body.appendChild(btn);
+
+  async function tryLogin(){
+    var u=inpU.value.trim().toLowerCase();
+    var s=inpS.value;
+    if(!u||!s){err.textContent='Informe usuário e senha.';return;}
+    btn.textContent='Verificando...'; btn.disabled=true;
+    try{
+      var users=await fbGetUsers();
+      var found=null;
+      if(users){
+        Object.values(users).forEach(function(usr){
+          if(usr.usuario===u && usr.senha===hashSimple(s) && usr.ativo) found=usr;
+        });
+      }
+      if(found){
+        STATE.auth=true;
+        STATE.usuarioLogado=found.usuario;
+        STATE.roleLogado=found.role;
+        localStorage.setItem('maisacessivel_session',JSON.stringify({usuario:found.usuario,role:found.role}));
+        fbLogAccess(found.usuario);
         var bStr=sessionStorage.getItem('_blingPendente');
-        if(bStr){ window._blingImport=JSON.parse(bStr); sessionStorage.removeItem('_blingPendente'); }
-      }catch(e){}
-      render();
-    }
-    else{
-      inpEl.classList.add('error'); errEl.style.display='block';
-      inpEl.classList.add('shake'); setTimeout(function(){inpEl.classList.remove('shake');},500);
-    }
+        if(bStr){window._blingImport=JSON.parse(bStr);sessionStorage.removeItem('_blingPendente');}
+        render();
+      } else {
+        err.textContent='Usuário ou senha incorretos.';
+        btn.textContent='Entrar'; btn.disabled=false;
+      }
+    }catch(e){err.textContent='Erro ao conectar. Tente novamente.';btn.textContent='Entrar';btn.disabled=false;}
   }
-  btnEl.onclick=tryLogin;
-  inpEl.onkeydown=function(e){if(e.key==='Enter')tryLogin();};
 
-  body.appendChild(icon); body.appendChild(title); body.appendChild(sub);
-  body.appendChild(lbl); body.appendChild(inpEl); body.appendChild(errEl);
-  body.appendChild(btnEl); body.appendChild(hint);
-  card.appendChild(body);
+  btn.addEventListener('click', tryLogin);
+  inpS.addEventListener('keydown', function(e){if(e.key==='Enter')tryLogin();});
+  inpU.addEventListener('keydown', function(e){if(e.key==='Enter')inpS.focus();});
+
   wrap.appendChild(card);
+  return wrap;
+}
+
+
+
+function renderAdmin(){
+  var wrap=document.createElement('div');
+  wrap.style.cssText='max-width:900px;margin:24px auto;padding:0 16px';
+
+  // ── USERS SECTION ──
+  var secU=document.createElement('div');
+  secU.style.cssText='background:#fff;border-radius:12px;padding:24px;margin-bottom:24px;box-shadow:0 2px 8px rgba(0,0,0,.08)';
+  var h1=document.createElement('h2');
+  h1.style.cssText='font-size:16px;color:#e67e22;margin-bottom:16px';
+  h1.textContent='👥 Gerenciar Usuários';
+  secU.appendChild(h1);
+
+  // Form novo usuário
+  var formU=document.createElement('div');
+  formU.style.cssText='display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:8px;align-items:end;margin-bottom:16px';
+
+  function inp(ph,tp){var i=document.createElement('input');i.type=tp||'text';i.placeholder=ph;i.style.cssText='padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:100%';return i;}
+  var iNome=inp('Nome completo');
+  var iUser=inp('Usuário (login)');
+  var iSenha=inp('Senha','password');
+  var selRole=document.createElement('select');
+  selRole.innerHTML='<option value="user">Operador</option><option value="admin">Admin</option>';
+  selRole.style.cssText='padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px';
+  var btnAdd=document.createElement('button');
+  btnAdd.textContent='+ Adicionar';
+  btnAdd.style.cssText='padding:8px 14px;background:#27ae60;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap';
+
+  formU.appendChild(iNome); formU.appendChild(iUser); formU.appendChild(iSenha);
+  formU.appendChild(selRole); formU.appendChild(btnAdd);
+  secU.appendChild(formU);
+
+  var msgU=document.createElement('p');
+  msgU.style.cssText='font-size:13px;color:green;min-height:16px;margin-bottom:8px';
+  secU.appendChild(msgU);
+
+  // Users table
+  var tblWrap=document.createElement('div');
+  secU.appendChild(tblWrap);
+  wrap.appendChild(secU);
+
+  async function loadUsers(){
+    tblWrap.innerHTML='<p style="color:#999;font-size:13px">Carregando...</p>';
+    var users=await fbGetUsers();
+    tblWrap.innerHTML='';
+    if(!users||Object.keys(users).length===0){
+      tblWrap.innerHTML='<p style="color:#999;font-size:13px">Nenhum usuário cadastrado.</p>';
+      return;
+    }
+    var tbl=document.createElement('table');
+    tbl.style.cssText='width:100%;border-collapse:collapse;font-size:13px';
+    tbl.innerHTML='<thead><tr style="background:#f5f5f5"><th style="padding:8px;text-align:left">Nome</th><th>Usuário</th><th>Perfil</th><th>Status</th><th>Ações</th></tr></thead>';
+    var tbody=document.createElement('tbody');
+    Object.entries(users).forEach(function(e){
+      var id=e[0],u=e[1];
+      var tr=document.createElement('tr');
+      tr.style.borderBottom='1px solid #eee';
+      tr.innerHTML='<td style="padding:8px">'+u.nome+'</td><td style="padding:8px;text-align:center">'+u.usuario+'</td><td style="padding:8px;text-align:center"><span style="padding:3px 8px;border-radius:10px;background:'+(u.role==='admin'?'#e74c3c':'#3498db')+';color:#fff;font-size:11px">'+(u.role==='admin'?'Admin':'Operador')+'</span></td><td style="padding:8px;text-align:center"><span style="color:'+(u.ativo?'#27ae60':'#999')+'">'+(u.ativo?'✅ Ativo':'❌ Inativo')+'</span></td><td style="padding:8px;text-align:center"></td>';
+      var tdAcoes=tr.querySelector('td:last-child');
+      if(u.usuario!==ADMIN_USER){
+        var btnToggle=document.createElement('button');
+        btnToggle.textContent=u.ativo?'Desativar':'Ativar';
+        btnToggle.style.cssText='padding:3px 8px;font-size:11px;border:none;border-radius:4px;cursor:pointer;margin-right:4px;background:'+(u.ativo?'#e74c3c':'#27ae60')+';color:#fff';
+        btnToggle.onclick=async function(){
+          await fbSaveUser(id,Object.assign({},u,{ativo:!u.ativo}));
+          loadUsers();
+        };
+        var btnDel=document.createElement('button');
+        btnDel.textContent='Excluir';
+        btnDel.style.cssText='padding:3px 8px;font-size:11px;border:none;border-radius:4px;cursor:pointer;background:#999;color:#fff';
+        btnDel.onclick=async function(){
+          if(confirm('Excluir usuário '+u.nome+'?')){
+            await fbDeleteUser(id);
+            loadUsers();
+          }
+        };
+        tdAcoes.appendChild(btnToggle);
+        tdAcoes.appendChild(btnDel);
+      }
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+    tblWrap.appendChild(tbl);
+  }
+
+  btnAdd.onclick=async function(){
+    var n=iNome.value.trim(),u=iUser.value.trim().toLowerCase(),s=iSenha.value;
+    if(!n||!u||!s){msgU.style.color='red';msgU.textContent='Preencha todos os campos.';return;}
+    var users=await fbGetUsers();
+    if(users&&Object.values(users).find(function(x){return x.usuario===u;})){
+      msgU.style.color='red';msgU.textContent='Usuário já existe.';return;
+    }
+    var id='u_'+Date.now();
+    await fbSaveUser(id,{nome:n,usuario:u,senha:hashSimple(s),role:selRole.value,ativo:true});
+    msgU.style.color='green';msgU.textContent='✅ Usuário '+n+' criado!';
+    iNome.value='';iUser.value='';iSenha.value='';
+    loadUsers();
+  };
+
+  loadUsers();
+
+  // ── LOGS SECTION ──
+  var secL=document.createElement('div');
+  secL.style.cssText='background:#fff;border-radius:12px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,.08)';
+  var h2=document.createElement('h2');
+  h2.style.cssText='font-size:16px;color:#e67e22;margin-bottom:16px';
+  h2.textContent='📊 Registro de Acessos';
+  secL.appendChild(h2);
+  var logsWrap=document.createElement('div');
+  secL.appendChild(logsWrap);
+  wrap.appendChild(secL);
+
+  async function loadLogs(){
+    logsWrap.innerHTML='<p style="color:#999;font-size:13px">Carregando...</p>';
+    var logs=await fbGetLogs();
+    logsWrap.innerHTML='';
+    if(!logs||Object.keys(logs).length===0){
+      logsWrap.innerHTML='<p style="color:#999;font-size:13px">Nenhum acesso registrado.</p>';
+      return;
+    }
+    var arr=Object.values(logs).reverse().slice(0,100);
+    var tbl=document.createElement('table');
+    tbl.style.cssText='width:100%;border-collapse:collapse;font-size:13px';
+    tbl.innerHTML='<thead><tr style="background:#f5f5f5"><th style="padding:8px;text-align:left">Data/Hora</th><th>Usuário</th><th>IP</th><th>Cidade</th><th>Estado</th><th>País</th></tr></thead>';
+    var tbody=document.createElement('tbody');
+    arr.forEach(function(l){
+      var tr=document.createElement('tr');
+      tr.style.borderBottom='1px solid #eee';
+      tr.innerHTML='<td style="padding:8px">'+l.dt+'</td><td style="padding:8px;text-align:center"><b>'+l.usuario+'</b></td><td style="padding:8px;text-align:center">'+l.ip+'</td><td style="padding:8px">'+l.cidade+'</td><td style="padding:8px;text-align:center">'+l.regiao+'</td><td style="padding:8px">'+l.pais+'</td>';
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+    logsWrap.appendChild(tbl);
+  }
+  loadLogs();
+
   return wrap;
 }
 
@@ -489,6 +720,7 @@ function renderApp(){
   else if(STATE.tab==='salvas') main.appendChild(renderSalvas());
   else if(STATE.tab==='transportadoras') main.appendChild(renderTrans());
   else if(STATE.tab==='embalagens') main.appendChild(renderEmb());
+  else if(STATE.tab==='admin') main.appendChild(renderAdmin());
   wrap.appendChild(main);
   return wrap;
 }
@@ -554,7 +786,7 @@ function renderHeader(){
       <button id="btnSalvarHdr" style="background:linear-gradient(135deg,#059669,#34d399);color:#fff;border:none;padding:5px 13px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">💾 Salvar Cotação</button>
       <button class="btn-out" id="btnSair">🔒 Sair</button>
     </div>`;
-  el.querySelector('#btnSair').onclick=function(){STATE.auth=false;try{localStorage.removeItem('maisacessivel_blingtoken');}catch(e){}render();};
+  el.querySelector('#btnSair').onclick=function(){STATE.auth=false;try{localStorage.removeItem('maisacessivel_session');}catch(e){}render();};
   el.querySelector('#btnNovaCot').onclick=function(){
     if(confirm('Iniciar nova cotação? Os dados atuais serão apagados.')){
       STATE.form=Object.assign({},INIT);
@@ -570,6 +802,7 @@ function renderHeader(){
 
 function renderNav(){
   var tabs=[{id:'cotacao',icon:'📋',l:'Cotação Frete'},{id:'salvas',icon:'🗂️',l:'Cotações Salvas'},{id:'transportadoras',icon:'🚛',l:'Transportadoras'},{id:'embalagens',icon:'📦',l:'Embalagens'}];
+  if(STATE.roleLogado==='admin') tabs.push({id:'admin',icon:'⚙️',l:'Admin'});
   var nav=document.createElement('nav');
   tabs.forEach(function(t){
     var btn=document.createElement('button');
@@ -1511,6 +1744,7 @@ window.addEventListener('hashchange', function(){
   }catch(e){}
 });
 
+fbInitAdmin();
 render();
 fbInit();
 </script>
