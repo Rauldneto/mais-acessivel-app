@@ -81,6 +81,45 @@ pre{background:#f3f3f1;border:1px solid #e8e8e6;border-radius:7px;padding:12px;f
 .f12{font-size:12px}
 .nf-badge{background:#fff8eb;color:#92400e;border:1px solid #fde68a;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700}
 .tbl-wrap{overflow-x:auto}
+
+/* ========== ANÁLISE DE CRÉDITO ========== */
+.ac-wrap{padding:16px;max-width:1100px;margin:0 auto;}
+.ac-titulo{font-size:1.4em;font-weight:700;color:#b45309;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #f59e0b;}
+.ac-card{background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;padding:18px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.ac-card-title{font-weight:700;color:#92400e;font-size:1em;margin-bottom:14px;padding-bottom:6px;border-bottom:1px solid #fde68a;}
+.ac-sep{font-weight:600;color:#b45309;font-size:.85em;margin:14px 0 10px;padding:4px 8px;background:#fef3c7;border-radius:4px;}
+.ac-grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+.ac-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+@media(max-width:700px){.ac-grid-2,.ac-grid-3{grid-template-columns:1fr;}}
+.ac-field{display:flex;flex-direction:column;gap:4px;}
+.ac-label{font-size:.78em;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.03em;}
+.ac-input{border:1.5px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:.9em;outline:none;transition:border-color .2s;background:#fafafa;}
+.ac-input:focus{border-color:#f59e0b;background:#fff;}
+.ac-btn-area{display:flex;gap:12px;margin:8px 0 18px;justify-content:center;flex-wrap:wrap;}
+.ac-btn-gerar{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:8px;padding:12px 28px;font-size:1em;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(245,158,11,.3);}
+.ac-btn-gerar:hover{background:linear-gradient(135deg,#d97706,#b45309);}
+.ac-btn-limpar{background:#f3f4f6;color:#6b7280;border:1.5px solid #d1d5db;border-radius:8px;padding:12px 20px;font-size:.9em;font-weight:600;cursor:pointer;}
+.ac-btn-limpar:hover{background:#e5e7eb;}
+.ac-resumo{background:#fff;border:2px solid #f59e0b;border-radius:12px;padding:20px;margin-top:8px;}
+.ac-resumo-cliente{font-size:.9em;color:#374151;background:#fef9ee;border-radius:6px;padding:10px 14px;margin-bottom:16px;}
+.ac-tabela{border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;margin-bottom:20px;}
+.ac-tbl-row{display:grid;grid-template-columns:200px repeat(3,1fr);border-bottom:1px solid #f3f4f6;}
+.ac-tbl-row:last-child{border-bottom:none;}
+.ac-tbl-head{background:#92400e;color:#fff;font-weight:700;}
+.ac-tbl-row:nth-child(even){background:#fafafa;}
+.ac-tbl-cell{padding:9px 12px;font-size:.85em;border-right:1px solid #f3f4f6;}
+.ac-tbl-cell:last-child{border-right:none;}
+.ac-tbl-label{font-weight:600;color:#374151;background:#fef3c7;}
+@media(max-width:700px){.ac-tbl-row{grid-template-columns:1fr;}.ac-tbl-label{background:#92400e;color:#fff;}}
+.ac-score-area{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:16px 0;}
+@media(max-width:700px){.ac-score-area{grid-template-columns:1fr;}}
+.ac-score-box{background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;padding:14px;text-align:center;}
+.ac-score-title{font-size:.75em;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:6px;}
+.ac-score-num{font-size:2em;font-weight:800;color:#92400e;line-height:1;}
+.ac-score-bar{background:#e5e7eb;border-radius:99px;height:8px;margin:8px 0;}
+.ac-score-fill{background:linear-gradient(90deg,#f59e0b,#22c55e);height:100%;border-radius:99px;transition:width .4s;}
+.ac-score-nome{font-size:.8em;color:#6b7280;margin-top:6px;}
+.ac-veredicto{border-width:3px;border-style:solid;border-radius:12px;padding:20px;text-align:center;margin-top:16px;}
 </style>
 </head>
 <body>
@@ -746,6 +785,7 @@ function renderApp(){
   else if(STATE.tab==='salvas') main.appendChild(renderSalvas());
   else if(STATE.tab==='transportadoras') main.appendChild(renderTrans());
   else if(STATE.tab==='embalagens') main.appendChild(renderEmb());
+  else if(STATE.tab==='analise-credito') main.appendChild(renderAnaliseCredito());
   else if(STATE.tab==='admin') main.appendChild(renderAdmin());
   wrap.appendChild(main);
   return wrap;
@@ -826,8 +866,227 @@ function renderHeader(){
   return el;
 }
 
+function renderAnaliseCredito(){
+  // Estado local da análise de crédito
+  if(!window._AC) window._AC = {
+    cliente:{nome:'',cpfcnpj:'',telefone:'',email:''},
+    fornecedores:[
+      {nome:'',responsavel:'',telefone:'',tempocliente:'',limite:'',maiorcompra:'',pagaemdia:'',atrasou:'',diasatraso:'',debitoaberto:'',protestou:'',aindavende:'',valorsugerido:'',recomenda:'',obs:''},
+      {nome:'',responsavel:'',telefone:'',tempocliente:'',limite:'',maiorcompra:'',pagaemdia:'',atrasou:'',diasatraso:'',debitoaberto:'',protestou:'',aindavende:'',valorsugerido:'',recomenda:'',obs:''},
+      {nome:'',responsavel:'',telefone:'',tempocliente:'',limite:'',maiorcompra:'',pagaemdia:'',atrasou:'',diasatraso:'',debitoaberto:'',protestou:'',aindavende:'',valorsugerido:'',recomenda:'',obs:''}
+    ],
+    limitesolicitado:'',
+    exibirResumo:false
+  };
+  var AC = window._AC;
+
+  function el(tag,attrs,children){
+    var e=document.createElement(tag);
+    if(attrs) Object.keys(attrs).forEach(function(k){
+      if(k==='style') e.style.cssText=attrs[k];
+      else if(k==='class') e.className=attrs[k];
+      else e.setAttribute(k,attrs[k]);
+    });
+    if(children) children.forEach(function(c){ if(c) e.appendChild(typeof c==='string'?document.createTextNode(c):c); });
+    return e;
+  }
+  function inp(label,val,onch,placeholder,type){
+    var wrap=el('div',{class:'ac-field'});
+    var lb=el('label',{class:'ac-label'}); lb.textContent=label; wrap.appendChild(lb);
+    var i=el('input',{class:'ac-input',type:type||'text',placeholder:placeholder||'',value:val||''});
+    i.addEventListener('input',function(){ onch(i.value); });
+    wrap.appendChild(i); return wrap;
+  }
+  function sel(label,val,opts,onch){
+    var wrap=el('div',{class:'ac-field'});
+    var lb=el('label',{class:'ac-label'}); lb.textContent=label; wrap.appendChild(lb);
+    var s=el('select',{class:'ac-input'});
+    opts.forEach(function(o){
+      var op=el('option'); op.value=o.v; op.textContent=o.l;
+      if(o.v===val) op.selected=true;
+      s.appendChild(op);
+    });
+    s.addEventListener('change',function(){ onch(s.value); });
+    wrap.appendChild(s); return wrap;
+  }
+
+  // Calcular score de um fornecedor
+  function calcScore(f){
+    var s=0, max=10;
+    if(f.recomenda==='sim') s+=4;
+    else if(f.recomenda==='sim-ressalvas') s+=2;
+    if(f.pagaemdia==='sim') s+=2;
+    if(f.atrasou==='nao') s+=1;
+    if(f.debitoaberto==='nao') s+=1;
+    if(f.protestou==='nao') s+=1;
+    if(f.aindavende==='sim') s+=1;
+    return {score:s,max:max};
+  }
+  function scoreVeredicto(total,count){
+    var avg = count>0 ? total/count : 0;
+    if(avg>=8) return {v:'APROVADO',cor:'#22c55e',icon:'✅'};
+    if(avg>=5) return {v:'APROVADO COM RESSALVAS',cor:'#f59e0b',icon:'⚠️'};
+    return {v:'REPROVADO',cor:'#ef4444',icon:'❌'};
+  }
+
+  var wrap=el('div',{class:'ac-wrap'});
+
+  // Título
+  var titulo=el('div',{class:'ac-titulo'}); titulo.textContent='💳 Análise de Crédito';
+  wrap.appendChild(titulo);
+
+  // === BLOCO CLIENTE ===
+  var cardCliente=el('div',{class:'ac-card'});
+  var h2c=el('div',{class:'ac-card-title'}); h2c.textContent='👤 Dados do Cliente';
+  cardCliente.appendChild(h2c);
+  var gridCliente=el('div',{class:'ac-grid-2'});
+  gridCliente.appendChild(inp('Nome / Razão Social',AC.cliente.nome,function(v){AC.cliente.nome=v;},'Ex: João da Silva'));
+  gridCliente.appendChild(inp('CPF / CNPJ',AC.cliente.cpfcnpj,function(v){AC.cliente.cpfcnpj=v;},'000.000.000-00'));
+  gridCliente.appendChild(inp('Telefone',AC.cliente.telefone,function(v){AC.cliente.telefone=v;},'(62) 99999-9999'));
+  gridCliente.appendChild(inp('E-mail',AC.cliente.email,function(v){AC.cliente.email=v;},'cliente@email.com','email'));
+  gridCliente.appendChild(inp('Limite Solicitado (R$)',AC.limitesolicitado,function(v){AC.limitesolicitado=v;},'Ex: 5000,00','text'));
+  cardCliente.appendChild(gridCliente);
+  wrap.appendChild(cardCliente);
+
+  // === BLOCOS FORNECEDORES ===
+  var emojis=['1️⃣','2️⃣','3️⃣'];
+  AC.fornecedores.forEach(function(f,idx){
+    var card=el('div',{class:'ac-card'});
+    var h2=el('div',{class:'ac-card-title'}); h2.textContent=emojis[idx]+' Fornecedor '+(idx+1)+' — Referência Comercial';
+    card.appendChild(h2);
+
+    var g1=el('div',{class:'ac-grid-3'});
+    g1.appendChild(inp('Nome do Fornecedor',f.nome,function(v){f.nome=v;},'Razão Social'));
+    g1.appendChild(inp('Responsável',f.responsavel,function(v){f.responsavel=v;},'Nome do contato'));
+    g1.appendChild(inp('Telefone',f.telefone,function(v){f.telefone=v;},'(62) 99999-9999'));
+    card.appendChild(g1);
+
+    var sep=el('div',{class:'ac-sep'}); sep.textContent='📋 Relacionamento Comercial'; card.appendChild(sep);
+
+    var g2=el('div',{class:'ac-grid-3'});
+    g2.appendChild(inp('Há quanto tempo é cliente?',f.tempocliente,function(v){f.tempocliente=v;},'Ex: 2 anos'));
+    g2.appendChild(inp('Limite de crédito concedido (R$)',f.limite,function(v){f.limite=v;},'Ex: 10.000,00'));
+    g2.appendChild(inp('Maior compra parcelada (R$)',f.maiorcompra,function(v){f.maiorcompra=v;},'Ex: 3.000,00'));
+    card.appendChild(g2);
+
+    var sep2=el('div',{class:'ac-sep'}); sep2.textContent='💰 Comportamento de Pagamento'; card.appendChild(sep2);
+
+    var g3=el('div',{class:'ac-grid-3'});
+    g3.appendChild(sel('Paga em dia?',f.pagaemdia,[{v:'',l:'-- Selecione --'},{v:'sim',l:'Sim, sempre'},{v:'quase',l:'Quase sempre'},{v:'nao',l:'Não'}],function(v){f.pagaemdia=v;}));
+    g3.appendChild(sel('Já teve atraso?',f.atrasou,[{v:'',l:'-- Selecione --'},{v:'nao',l:'Nunca'},{v:'sim-raro',l:'Sim, raramente'},{v:'sim-freq',l:'Sim, com frequência'}],function(v){f.atrasou=v;}));
+    g3.appendChild(inp('Maior atraso (dias)',f.diasatraso,function(v){f.diasatraso=v;},'Ex: 15 dias'));
+    g3.appendChild(sel('Débito em aberto hoje?',f.debitoaberto,[{v:'',l:'-- Selecione --'},{v:'nao',l:'Não'},{v:'sim',l:'Sim'}],function(v){f.debitoaberto=v;}));
+    g3.appendChild(sel('Já teve título protestado?',f.protestou,[{v:'',l:'-- Selecione --'},{v:'nao',l:'Não'},{v:'sim',l:'Sim'}],function(v){f.protestou=v;}));
+    g3.appendChild(sel('Ainda vende para ele hoje?',f.aindavende,[{v:'',l:'-- Selecione --'},{v:'sim',l:'Sim'},{v:'nao',l:'Não, parou de vender'}],function(v){f.aindavende=v;}));
+    card.appendChild(g3);
+
+    var sep3=el('div',{class:'ac-sep'}); sep3.textContent='✅ Avaliação Final do Fornecedor'; card.appendChild(sep3);
+
+    var g4=el('div',{class:'ac-grid-3'});
+    g4.appendChild(inp('Até qual valor venderia parcelado? (R$)',f.valorsugerido,function(v){f.valorsugerido=v;},'Ex: 5.000,00'));
+    g4.appendChild(sel('Recomenda crédito para esse cliente?',f.recomenda,[{v:'',l:'-- Selecione --'},{v:'sim',l:'✅ Sim, recomendo'},{v:'sim-ressalvas',l:'⚠️ Sim, com ressalvas'},{v:'nao',l:'❌ Não recomendo'}],function(v){f.recomenda=v;}));
+    g4.appendChild(inp('Observações',f.obs,function(v){f.obs=v;},'Alguma informação relevante'));
+    card.appendChild(g4);
+    wrap.appendChild(card);
+  });
+
+  // Botão gerar resumo
+  var btnArea=el('div',{class:'ac-btn-area'});
+  var btnGerar=el('button',{class:'ac-btn-gerar'});
+  btnGerar.textContent='📊 Gerar Análise Final';
+  btnGerar.addEventListener('click',function(){
+    window._AC.exibirResumo=true;
+    render();
+  });
+  var btnLimpar=el('button',{class:'ac-btn-limpar'});
+  btnLimpar.textContent='🗑️ Nova Análise';
+  btnLimpar.addEventListener('click',function(){
+    if(confirm('Limpar todos os dados e iniciar nova análise?')){ delete window._AC; render(); }
+  });
+  btnArea.appendChild(btnGerar);
+  btnArea.appendChild(btnLimpar);
+  wrap.appendChild(btnArea);
+
+  // === RESUMO FINAL ===
+  if(AC.exibirResumo){
+    var resumo=el('div',{class:'ac-resumo'});
+    var hr=el('div',{class:'ac-card-title'}); hr.textContent='📊 Resultado da Análise';
+    resumo.appendChild(hr);
+
+    // Cabeçalho do cliente
+    var cliInfo=el('div',{class:'ac-resumo-cliente'});
+    cliInfo.innerHTML='<strong>Cliente:</strong> '+(AC.cliente.nome||'—')+
+      ' &nbsp;|&nbsp; <strong>CPF/CNPJ:</strong> '+(AC.cliente.cpfcnpj||'—')+
+      ' &nbsp;|&nbsp; <strong>Limite Solicitado:</strong> R$ '+(AC.limitesolicitado||'—');
+    resumo.appendChild(cliInfo);
+
+    // Tabela comparativa
+    var tbl=el('div',{class:'ac-tabela'});
+    var thead=el('div',{class:'ac-tbl-row ac-tbl-head'});
+    ['Critério','Fornecedor 1','Fornecedor 2','Fornecedor 3'].forEach(function(h){
+      var c=el('div',{class:'ac-tbl-cell'}); c.textContent=h; thead.appendChild(c);
+    });
+    tbl.appendChild(thead);
+
+    var criterios=[
+      {label:'Nome',key:'nome'},
+      {label:'Tempo como cliente',key:'tempocliente'},
+      {label:'Limite concedido',key:'limite'},
+      {label:'Maior compra',key:'maiorcompra'},
+      {label:'Paga em dia?',key:'pagaemdia',map:{sim:'✅ Sim',quase:'⚠️ Quase sempre',nao:'❌ Não','':'—'}},
+      {label:'Já atrasou?',key:'atrasou',map:{nao:'✅ Nunca','sim-raro':'⚠️ Raramente','sim-freq':'❌ Com frequência','':'—'}},
+      {label:'Dias de atraso',key:'diasatraso'},
+      {label:'Débito em aberto?',key:'debitoaberto',map:{nao:'✅ Não',sim:'❌ Sim','':'—'}},
+      {label:'Protestado?',key:'protestou',map:{nao:'✅ Não',sim:'❌ Sim','':'—'}},
+      {label:'Ainda vende?',key:'aindavende',map:{sim:'✅ Sim',nao:'❌ Parou','':'—'}},
+      {label:'Valor sugerido',key:'valorsugerido'},
+      {label:'Recomendação',key:'recomenda',map:{sim:'✅ Recomenda','sim-ressalvas':'⚠️ Com ressalvas',nao:'❌ Não recomenda','':'—'}}
+    ];
+
+    criterios.forEach(function(cr){
+      var row=el('div',{class:'ac-tbl-row'});
+      var lc=el('div',{class:'ac-tbl-cell ac-tbl-label'}); lc.textContent=cr.label; row.appendChild(lc);
+      AC.fornecedores.forEach(function(f){
+        var c=el('div',{class:'ac-tbl-cell'});
+        var val=f[cr.key]||'—';
+        if(cr.map && cr.map[f[cr.key]]!==undefined) val=cr.map[f[cr.key]];
+        c.textContent=val; row.appendChild(c);
+      });
+      tbl.appendChild(row);
+    });
+    resumo.appendChild(tbl);
+
+    // Score e veredicto
+    var scoreArea=el('div',{class:'ac-score-area'});
+    var totalScore=0, countF=0;
+    AC.fornecedores.forEach(function(f,i){
+      var sc=calcScore(f);
+      if(f.nome){ totalScore+=sc.score; countF++; }
+      var box=el('div',{class:'ac-score-box'});
+      box.innerHTML='<div class="ac-score-title">Fornecedor '+(i+1)+'</div>'+
+        '<div class="ac-score-num">'+sc.score+'/'+sc.max+'</div>'+
+        '<div class="ac-score-bar"><div class="ac-score-fill" style="width:'+(sc.score/sc.max*100)+'%"></div></div>'+
+        '<div class="ac-score-nome">'+(f.nome||'Não preenchido')+'</div>';
+      scoreArea.appendChild(box);
+    });
+    resumo.appendChild(scoreArea);
+
+    // Veredicto final
+    var verd=scoreVeredicto(totalScore, countF);
+    var verdDiv=el('div',{class:'ac-veredicto',style:'border-color:'+verd.cor+';background:'+verd.cor+'22'});
+    verdDiv.innerHTML='<div style="font-size:2em">'+verd.icon+'</div>'+
+      '<div style="font-size:1.3em;font-weight:700;color:'+verd.cor+'">'+verd.v+'</div>'+
+      '<div style="margin-top:8px;color:#666">Pontuação média: '+(countF>0?(totalScore/countF).toFixed(1):0)+'/10</div>';
+    resumo.appendChild(verdDiv);
+
+    wrap.appendChild(resumo);
+  }
+
+  return wrap;
+}
+
 function renderNav(){
-  var tabs=[{id:'cotacao',icon:'📋',l:'Cotação Frete'},{id:'salvas',icon:'🗂️',l:'Cotações Salvas'},{id:'transportadoras',icon:'🚛',l:'Transportadoras'},{id:'embalagens',icon:'📦',l:'Embalagens'}];
+  var tabs=[{id:'cotacao',icon:'📋',l:'Cotação Frete'},{id:'salvas',icon:'🗂️',l:'Cotações Salvas'},{id:'transportadoras',icon:'🚛',l:'Transportadoras'},{id:'embalagens',icon:'📦',l:'Embalagens'},{id:'analise-credito',icon:'💳',l:'Análise de Crédito'}];
   if(STATE.roleLogado==='admin') tabs.push({id:'admin',icon:'⚙️',l:'Admin'});
   var nav=document.createElement('nav');
   tabs.forEach(function(t){
