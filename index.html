@@ -3506,15 +3506,15 @@ function preencherDoBling(bd) {
     else if(vStr.includes(',')) vStr=vStr.replace(',','.');
     STATE.form.valorNF=vStr;
   }
-  // Peso real do Bling
-  if(bd.kg) STATE.form.pesoTotal=String(bd.kg);
+  // Peso: não preenche automaticamente — usuário informa manualmente
+  // if(bd.kg) STATE.form.pesoTotal=String(bd.kg);
   // Frete: freteModalidade 0=CIF, 1=FOB
   if(bd.ft) STATE.form.frete=bd.ft;
   if(bd.freteModalidade!==undefined){
     STATE.form.frete=(bd.freteModalidade===0||bd.freteModalidade==='0')?'CIF':'FOB';
   }
-  // Volumes
-  if(bd.vol) STATE.form.volTotal=String(bd.vol);
+  // Volumes: não preenche automaticamente — usuário informa manualmente
+  // if(bd.vol) STATE.form.volTotal=String(bd.vol);
   // Endereço destino
   if(bd.endE && bd.endE.length>3) STATE.form.endDest=bd.endE;
   else if(bd.end) STATE.form.endDest=bd.end;
