@@ -2520,7 +2520,6 @@ function renderHeader(){
 
 function renderNav(){
   var tabs=[{id:'cotacao',icon:'📋',l:'Cotação Frete'},{id:'salvas',icon:'🗂️',l:'Cotações Salvas'},{id:'transportadoras',icon:'🚛',l:'Transportadoras'},{id:'embalagens',icon:'📦',l:'Embalagens'},{id:'extensao',icon:'🧩',l:'Extensão'}];
-  if(STATE.roleLogado==='admin') tabs.push({id:'admin',icon:'⚙️',l:'Admin'});
   var nav=document.createElement('nav');
   tabs.forEach(function(t){
     var btn=document.createElement('button');
