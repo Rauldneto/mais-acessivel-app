@@ -3723,6 +3723,11 @@ function renderAceIA(){
   });
   wrap.appendChild(tabBar);
   wrap.appendChild(contentArea);
+  // Sincronizar configs com servidor ao abrir o painel
+  var cfgAtual=aceLoadConfig();
+  var rrAtual=aceLoadRespostas();
+  cfgAtual.respostas=rrAtual;
+  aceSyncConfig(cfgAtual);
   renderSubTab();
   return wrap;
 }
@@ -3888,7 +3893,7 @@ function renderRespostas(){
       iResp.type='text';iResp.value=item.resposta;
       iResp.placeholder='Ex: O prazo é de 5 a 10 dias úteis dependendo da região.';
       iResp.style.cssText='padding:8px;border:1.5px solid #d1d5db;border-radius:6px;font-size:12px;font-family:inherit;outline:none';
-      iResp.onchange=function(){rr[i].resposta=this.value;aceSaveRespostas(rr);};
+      iResp.onchange=function(){rr[i].resposta=this.value;aceSaveRespostas(rr);var cfg=aceLoadConfig();cfg.respostas=rr;aceSyncConfig(cfg);};
       var btnDel=document.createElement('button');
       btnDel.innerHTML='🗑️';
       btnDel.style.cssText='padding:7px 10px;background:#fee2e2;color:#dc2626;border:none;border-radius:6px;cursor:pointer;font-size:14px';
