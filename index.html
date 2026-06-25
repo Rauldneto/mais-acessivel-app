@@ -3679,34 +3679,323 @@ render();
 fbInitAdmin();
 fbInit();
 
+
 function renderAceIA(){
   var wrap=document.createElement('div');
-  wrap.style.cssText='padding:20px;max-width:900px;margin:0 auto';
+  wrap.style.cssText='padding:20px;max-width:960px;margin:0 auto';
+
+  // Titulo
   var h=document.createElement('h2');
-  h.style.cssText='font-size:16px;color:#b45309;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #f59e0b';
-  h.textContent='Ace IA — Painel de Gerenciamento';
+  h.style.cssText='font-size:16px;color:#b45309;margin-bottom:4px;padding-bottom:8px;border-bottom:2px solid #f59e0b;display:flex;align-items:center;gap:8px';
+  h.innerHTML='🤖 Ace IA <span style="font-size:11px;font-weight:400;color:#888;background:#fff8eb;border:1px solid #fde68a;border-radius:10px;padding:2px 10px">Painel de Gerenciamento</span>';
   wrap.appendChild(h);
-  var cardPrompt=document.createElement('div');
-  cardPrompt.style.cssText='background:#fff;border-radius:10px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1.5px solid #e5e7eb';
-  cardPrompt.innerHTML='<h3 style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:8px">INSTRUCOES DO ACE</h3><p style="font-size:12px;color:#888;margin-bottom:8px">Escreva como o Ace deve se comportar, o que pode ou nao falar, tom de voz, etc.</p>';
+
+  // Sub-tabs
+  var subTabs=[
+    {id:'instrucoes',icon:'📝',label:'Instruções'},
+    {id:'leads',icon:'👥',label:'Leads'},
+    {id:'respostas',icon:'⚡',label:'Respostas Rápidas'},
+    {id:'config',icon:'⚙️',label:'Configurações'}
+  ];
+  var subAtiva='instrucoes';
+  var tabBar=document.createElement('div');
+  tabBar.style.cssText='display:flex;gap:4px;margin:16px 0 20px;border-bottom:2px solid #f0f0f0;padding-bottom:0';
+  var contentArea=document.createElement('div');
+
+  function renderSubTab(){
+    contentArea.innerHTML='';
+    tabBar.querySelectorAll('button').forEach(function(b){
+      var active=b.dataset.id===subAtiva;
+      b.style.cssText='padding:8px 16px;border:none;border-bottom:'+(active?'2px solid #d97706':'2px solid transparent')+';background:transparent;color:'+(active?'#b45309':'#888')+';font-weight:'+(active?'700':'400')+';font-size:12px;cursor:pointer;font-family:inherit;margin-bottom:-2px';
+    });
+    if(subAtiva==='instrucoes') contentArea.appendChild(renderInstrucoes());
+    else if(subAtiva==='leads') contentArea.appendChild(renderLeads());
+    else if(subAtiva==='respostas') contentArea.appendChild(renderRespostas());
+    else if(subAtiva==='config') contentArea.appendChild(renderConfigAce());
+  }
+
+  subTabs.forEach(function(t){
+    var btn=document.createElement('button');
+    btn.dataset.id=t.id;
+    btn.innerHTML=t.icon+' '+t.label;
+    btn.onclick=function(){subAtiva=t.id;renderSubTab();};
+    tabBar.appendChild(btn);
+  });
+  wrap.appendChild(tabBar);
+  wrap.appendChild(contentArea);
+  renderSubTab();
+  return wrap;
+}
+
+// ── ABA: INSTRUCOES ──
+function renderInstrucoes(){
+  var div=document.createElement('div');
+  var cfg=aceLoadConfig();
+
+  function card(title,content){
+    var c=document.createElement('div');
+    c.style.cssText='background:#fff;border-radius:10px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.07);border:1.5px solid #e5e7eb';
+    var h=document.createElement('div');
+    h.style.cssText='font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px';
+    h.textContent=title;
+    c.appendChild(h);
+    c.appendChild(content);
+    return c;
+  }
+
+  // Instrucoes gerais
   var txtP=document.createElement('textarea');
-  txtP.style.cssText='width:100%;height:110px;border:1.5px solid #d1d5db;border-radius:7px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;outline:none';
-  txtP.placeholder='Ex: O Ace deve sempre pedir o nome e WhatsApp. Nao deve falar sobre precos. Deve recomendar ligar para (62) 3517-3971...';
-  txtP.value=localStorage.getItem('ace_custom_prompt')||'';
-  var btnSP=document.createElement('button');
-  btnSP.textContent='Salvar Instrucoes';
-  btnSP.style.cssText='margin-top:10px;padding:8px 18px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit';
-  btnSP.onclick=function(){localStorage.setItem('ace_custom_prompt',txtP.value);btnSP.textContent='Salvo!';setTimeout(function(){btnSP.textContent='Salvar Instrucoes';},2000);};
-  cardPrompt.appendChild(txtP);cardPrompt.appendChild(btnSP);
-  wrap.appendChild(cardPrompt);
+  txtP.style.cssText='width:100%;height:130px;border:1.5px solid #d1d5db;border-radius:7px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;outline:none;line-height:1.6';
+  txtP.placeholder='Ex: O Ace deve sempre pedir nome e WhatsApp. Não deve falar sobre preços sem consultar a equipe. Deve ser simpático e objetivo...';
+  txtP.value=cfg.instrucoes||'';
+  div.appendChild(card('📝 Instruções Gerais do Ace',txtP));
+
+  // Tom de voz
+  var selTom=document.createElement('select');
+  selTom.style.cssText='width:100%;padding:9px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit';
+  selTom.innerHTML='<option value="formal">Formal e Profissional</option><option value="amigavel">Amigável e Descontraído</option><option value="tecnico">Técnico e Detalhado</option>';
+  selTom.value=cfg.tom||'amigavel';
+  div.appendChild(card('🎙️ Tom de Voz',selTom));
+
+  // Dados da empresa
+  var gridEmp=document.createElement('div');
+  gridEmp.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:10px';
+  function inpCfg(ph,val){
+    var i=document.createElement('input');
+    i.type='text';i.placeholder=ph;i.value=val||'';
+    i.style.cssText='width:100%;padding:9px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;outline:none';
+    return i;
+  }
+  var iWhats=inpCfg('WhatsApp da empresa ex: 5562...',cfg.whatsapp||'556235173971');
+  var iSite=inpCfg('Site',cfg.site||'maisacessivel.com.br');
+  var iEnde=inpCfg('Endereço',cfg.endereco||'Goiânia, GO');
+  var iHora=inpCfg('Horário ex: Seg-Sex 8h-18h',cfg.horario||'');
+  gridEmp.appendChild(iWhats);gridEmp.appendChild(iSite);
+  gridEmp.appendChild(iEnde);gridEmp.appendChild(iHora);
+  div.appendChild(card('🏢 Dados da Empresa (Ace vai usar)',gridEmp));
+
+  // Palavras proibidas
+  var txtProib=document.createElement('textarea');
+  txtProib.style.cssText='width:100%;height:70px;border:1.5px solid #d1d5db;border-radius:7px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;outline:none';
+  txtProib.placeholder='Ex: concorrente, barato, desconto, não temos...';
+  txtProib.value=(cfg.proibidas||[]).join(', ');
+  div.appendChild(card('🚫 Palavras Proibidas (separadas por vírgula)',txtProib));
+
+  // Botao salvar
+  var btnSave=document.createElement('button');
+  btnSave.innerHTML='💾 Salvar Todas as Instruções';
+  btnSave.style.cssText='width:100%;padding:12px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit';
+  btnSave.onclick=function(){
+    cfg.instrucoes=txtP.value;
+    cfg.tom=selTom.value;
+    cfg.whatsapp=iWhats.value;
+    cfg.site=iSite.value;
+    cfg.endereco=iEnde.value;
+    cfg.horario=iHora.value;
+    cfg.proibidas=txtProib.value.split(',').map(function(s){return s.trim();}).filter(Boolean);
+    aceSaveConfig(cfg);
+    btnSave.innerHTML='✅ Salvo!';
+    setTimeout(function(){btnSave.innerHTML='💾 Salvar Todas as Instruções';},2000);
+  };
+  div.appendChild(btnSave);
+  return div;
+}
+
+// ── ABA: LEADS ──
+function renderLeads(){
+  var div=document.createElement('div');
+  var leads=aceLoadLeads();
+
+  var header=document.createElement('div');
+  header.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:16px';
+  header.innerHTML='<span style="font-size:13px;color:#666">Total: <b>'+leads.length+'</b> leads capturados</span>';
+  var btnExp=document.createElement('button');
+  btnExp.innerHTML='📥 Exportar CSV';
+  btnExp.style.cssText='padding:7px 14px;background:#059669;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;font-weight:600';
+  btnExp.onclick=function(){
+    var csv='Nome,WhatsApp,Interesse,Data\n';
+    leads.forEach(function(l){csv+='"'+l.nome+'","'+l.whatsapp+'","'+l.interesse+'","'+l.data+'"\n';});
+    var a=document.createElement('a');
+    a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+    a.download='leads_ace_'+new Date().toISOString().slice(0,10)+'.csv';
+    a.click();
+  };
+  header.appendChild(btnExp);
+  div.appendChild(header);
+
+  if(leads.length===0){
+    var empty=document.createElement('div');
+    empty.style.cssText='text-align:center;padding:40px;color:#999;background:#fff;border-radius:10px;border:1.5px dashed #e5e7eb';
+    empty.innerHTML='👥<br><br>Nenhum lead capturado ainda.<br><span style="font-size:12px">O Ace vai registrar automaticamente quando um cliente informar nome e WhatsApp.</span>';
+    div.appendChild(empty);
+    return div;
+  }
+
+  var tblWrap=document.createElement('div');
+  tblWrap.style.cssText='background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.07);border:1.5px solid #e5e7eb';
+  var tbl=document.createElement('table');
+  tbl.style.cssText='width:100%;border-collapse:collapse;font-size:13px';
+  tbl.innerHTML='<thead><tr style="background:#f9f9f7"><th style="padding:10px 12px;text-align:left;font-size:11px;color:#666;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Nome</th><th style="padding:10px 12px;text-align:left;font-size:11px;color:#666;font-weight:700;text-transform:uppercase;letter-spacing:.4px">WhatsApp</th><th style="padding:10px 12px;text-align:left;font-size:11px;color:#666;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Interesse</th><th style="padding:10px 12px;text-align:left;font-size:11px;color:#666;font-weight:700;text-transform:uppercase;letter-spacing:.4px">Data</th><th style="padding:10px 12px"></th></tr></thead>';
+  var tbody=document.createElement('tbody');
+  leads.forEach(function(l,i){
+    var tr=document.createElement('tr');
+    tr.style.borderBottom='1px solid #f0f0f0';
+    var btnWpp=document.createElement('button');
+    btnWpp.innerHTML='💬 WhatsApp';
+    btnWpp.style.cssText='padding:3px 8px;background:#25d366;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit';
+    btnWpp.onclick=function(){window.open('https://wa.me/'+l.whatsapp.replace(/\D/g,''),'_blank');};
+    var tdAcao=document.createElement('td');
+    tdAcao.style.padding='8px 12px';
+    tdAcao.appendChild(btnWpp);
+    tr.innerHTML='<td style="padding:8px 12px;font-weight:600">'+l.nome+'</td><td style="padding:8px 12px;font-family:monospace">'+l.whatsapp+'</td><td style="padding:8px 12px;color:#666">'+l.interesse+'</td><td style="padding:8px 12px;color:#999;font-size:11px">'+l.data+'</td>';
+    tr.appendChild(tdAcao);
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+  tblWrap.appendChild(tbl);
+  div.appendChild(tblWrap);
+  return div;
+}
+
+// ── ABA: RESPOSTAS RAPIDAS ──
+function renderRespostas(){
+  var div=document.createElement('div');
+  var rr=aceLoadRespostas();
+
+  var instrDiv=document.createElement('div');
+  instrDiv.style.cssText='background:#fff8eb;border:1px solid #fde68a;border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px;color:#92400e';
+  instrDiv.innerHTML='⚡ <b>Respostas Rápidas:</b> quando um cliente perguntar algo parecido com a "Pergunta", o Ace usará a "Resposta" cadastrada. Isso garante consistência nas informações.';
+  div.appendChild(instrDiv);
+
+  var listDiv=document.createElement('div');
+  listDiv.style.cssText='display:flex;flex-direction:column;gap:10px;margin-bottom:16px';
+
+  function renderLista(){
+    listDiv.innerHTML='';
+    rr.forEach(function(item,i){
+      var row=document.createElement('div');
+      row.style.cssText='background:#fff;border-radius:8px;padding:14px;border:1.5px solid #e5e7eb;display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:start';
+      var iPerg=document.createElement('input');
+      iPerg.type='text';iPerg.value=item.pergunta;
+      iPerg.placeholder='Ex: Qual o prazo de entrega?';
+      iPerg.style.cssText='padding:8px;border:1.5px solid #d1d5db;border-radius:6px;font-size:12px;font-family:inherit;outline:none';
+      iPerg.onchange=function(){rr[i].pergunta=this.value;aceSaveRespostas(rr);};
+      var iResp=document.createElement('input');
+      iResp.type='text';iResp.value=item.resposta;
+      iResp.placeholder='Ex: O prazo é de 5 a 10 dias úteis dependendo da região.';
+      iResp.style.cssText='padding:8px;border:1.5px solid #d1d5db;border-radius:6px;font-size:12px;font-family:inherit;outline:none';
+      iResp.onchange=function(){rr[i].resposta=this.value;aceSaveRespostas(rr);};
+      var btnDel=document.createElement('button');
+      btnDel.innerHTML='🗑️';
+      btnDel.style.cssText='padding:7px 10px;background:#fee2e2;color:#dc2626;border:none;border-radius:6px;cursor:pointer;font-size:14px';
+      btnDel.onclick=function(){rr.splice(i,1);aceSaveRespostas(rr);renderLista();};
+      row.appendChild(iPerg);row.appendChild(iResp);row.appendChild(btnDel);
+      listDiv.appendChild(row);
+    });
+  }
+  renderLista();
+  div.appendChild(listDiv);
+
+  var btnAdd=document.createElement('button');
+  btnAdd.innerHTML='+ Adicionar Resposta Rápida';
+  btnAdd.style.cssText='padding:9px 18px;background:#fff;border:1.5px dashed #d97706;color:#b45309;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;width:100%';
+  btnAdd.onclick=function(){
+    rr.push({pergunta:'',resposta:''});
+    aceSaveRespostas(rr);
+    renderLista();
+  };
+  div.appendChild(btnAdd);
+
+  // Chat de teste
+  var sep=document.createElement('div');
+  sep.style.cssText='margin:24px 0 16px;padding-top:16px;border-top:2px solid #f0f0f0;font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px';
+  sep.textContent='💬 Testar o Ace ao Vivo';
+  div.appendChild(sep);
+  div.appendChild(renderChatTeste());
+  return div;
+}
+
+// ── ABA: CONFIGURACOES ──
+function renderConfigAce(){
+  var div=document.createElement('div');
+  var cfg=aceLoadConfig();
+
+  function card(title,content){
+    var c=document.createElement('div');
+    c.style.cssText='background:#fff;border-radius:10px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.07);border:1.5px solid #e5e7eb';
+    var h=document.createElement('div');
+    h.style.cssText='font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px';
+    h.textContent=title;
+    c.appendChild(h);
+    c.appendChild(content);
+    return c;
+  }
+
+  // Horario de atendimento
+  var gridHor=document.createElement('div');
+  gridHor.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:10px';
+  function inpH(ph,val){var i=document.createElement('input');i.type='text';i.placeholder=ph;i.value=val||'';i.style.cssText='width:100%;padding:9px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;outline:none';return i;}
+  var iHorIni=inpH('Início ex: 08:00',cfg.horarioIni||'08:00');
+  var iHorFim=inpH('Fim ex: 18:00',cfg.horarioFim||'18:00');
+  gridHor.appendChild(iHorIni);gridHor.appendChild(iHorFim);
+  div.appendChild(card('🕐 Horário de Atendimento',gridHor));
+
+  // Mensagem fora do horario
+  var txtFora=document.createElement('textarea');
+  txtFora.style.cssText='width:100%;height:80px;border:1.5px solid #d1d5db;border-radius:7px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;outline:none';
+  txtFora.placeholder='Ex: Olá! Nosso horário de atendimento é de segunda a sexta das 8h às 18h. Deixe seu nome e WhatsApp que entraremos em contato!';
+  txtFora.value=cfg.msgForaHorario||'Olá! Nosso horário de atendimento é de segunda a sexta das 8h às 18h. Deixe seu nome e WhatsApp que retornaremos em breve!';
+  div.appendChild(card('🌙 Mensagem Fora do Horário',txtFora));
+
+  // Mensagem de boas vindas
+  var txtBV=document.createElement('textarea');
+  txtBV.style.cssText='width:100%;height:80px;border:1.5px solid #d1d5db;border-radius:7px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;outline:none';
+  txtBV.placeholder='Ex: Olá! Sou o Ace, assistente da Mais Acessível...';
+  txtBV.value=cfg.msgBoasVindas||'Olá! 👋 Sou o Ace, assistente virtual da Mais Acessível. Posso ajudar com barras de apoio, piso tátil, placas Braille e muito mais!\n\nQual é o seu nome?';
+  div.appendChild(card('👋 Mensagem de Boas-Vindas',txtBV));
+
+  // Captura automatica de leads
+  var divCaptura=document.createElement('div');
+  var chkCaptura=document.createElement('input');
+  chkCaptura.type='checkbox';chkCaptura.id='chkCaptura';chkCaptura.checked=cfg.capturaLeads!==false;
+  chkCaptura.style.cssText='width:16px;height:16px;cursor:pointer;accent-color:#d97706';
+  var lblCaptura=document.createElement('label');
+  lblCaptura.htmlFor='chkCaptura';
+  lblCaptura.style.cssText='font-size:13px;color:#333;cursor:pointer;margin-left:8px';
+  lblCaptura.textContent='Capturar automaticamente leads quando cliente informar nome e WhatsApp';
+  divCaptura.style.cssText='display:flex;align-items:center';
+  divCaptura.appendChild(chkCaptura);divCaptura.appendChild(lblCaptura);
+  div.appendChild(card('🎯 Captura de Leads',divCaptura));
+
+  // Botao salvar
+  var btnSave=document.createElement('button');
+  btnSave.innerHTML='💾 Salvar Configurações';
+  btnSave.style.cssText='width:100%;padding:12px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit';
+  btnSave.onclick=function(){
+    cfg.horarioIni=iHorIni.value;
+    cfg.horarioFim=iHorFim.value;
+    cfg.msgForaHorario=txtFora.value;
+    cfg.msgBoasVindas=txtBV.value;
+    cfg.capturaLeads=chkCaptura.checked;
+    aceSaveConfig(cfg);
+    btnSave.innerHTML='✅ Salvo!';
+    setTimeout(function(){btnSave.innerHTML='💾 Salvar Configurações';},2000);
+  };
+  div.appendChild(btnSave);
+  return div;
+}
+
+// ── CHAT DE TESTE ──
+function renderChatTeste(){
   var cardChat=document.createElement('div');
-  cardChat.style.cssText='background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1.5px solid #e5e7eb';
-  cardChat.innerHTML='<h3 style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:12px">TESTAR O ACE</h3>';
+  cardChat.style.cssText='background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.07);border:1.5px solid #e5e7eb';
   var msgs=document.createElement('div');
-  msgs.style.cssText='height:300px;overflow-y:auto;background:#f0f4f8;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;margin-bottom:12px';
+  msgs.style.cssText='height:280px;overflow-y:auto;background:#f0f4f8;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;margin-bottom:12px';
+  var cfg=aceLoadConfig();
+  var bv=cfg.msgBoasVindas||'Olá! Sou o Ace. Como posso ajudar?';
   var im=document.createElement('div');
   im.style.cssText='background:#fff;padding:10px 14px;border-radius:12px;font-size:13px;max-width:80%;align-self:flex-start;box-shadow:0 1px 3px rgba(0,0,0,.06)';
-  im.innerHTML='Ola! Sou o <b>Ace</b>. Este e o painel de testes. Qual e a sua pergunta?';
+  im.innerHTML=bv.replace(/\n/g,'<br>');
   msgs.appendChild(im);
   var ia=document.createElement('div');
   ia.style.cssText='display:flex;gap:8px';
@@ -3726,17 +4015,58 @@ function renderAceIA(){
   function envAce(){
     var t=inp.value.trim();if(!t)return;inp.value='';
     am(t,'u');H.push({role:'user',content:t});
-    var l=am('Ace esta digitando...','b');l.style.color='#888';l.style.fontStyle='italic';
+    var l=am('Ace está digitando...','b');l.style.color='#888';l.style.fontStyle='italic';
     fetch('https://maisacessivel-chatbot.onrender.com/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:H})})
-    .then(function(r){return r.json();}).then(function(d){l.remove();var rep=d.reply||'Erro.';am(rep,'b');H.push({role:'assistant',content:rep});})
-    .catch(function(){l.remove();am('Erro de conexao.','b');});
+    .then(function(r){return r.json();}).then(function(d){
+      l.remove();
+      var rep=d.reply||'Erro ao conectar.';
+      am(rep,'b');H.push({role:'assistant',content:rep});
+      // Capturar lead automaticamente
+      var cfgNow=aceLoadConfig();
+      if(cfgNow.capturaLeads!==false){
+        var wppMatch=rep.match(/(\+55|55)?[\s\-]?\(?[0-9]{2}\)?[\s\-]?[0-9]{4,5}[\s\-]?[0-9]{4}/);
+        if(wppMatch && H.length>2){
+          var nomeMatch=H[1]&&H[1].content;
+          if(nomeMatch) aceSaveLead({nome:nomeMatch,whatsapp:wppMatch[0],interesse:'via chat',data:new Date().toLocaleString('pt-BR')});
+        }
+      }
+    })
+    .catch(function(){l.remove();am('Erro de conexão.','b');});
   }
-  btnS.onclick=envAce;inp.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();envAce();}};
+  btnS.onclick=envAce;
+  inp.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();envAce();}};
   ia.appendChild(inp);ia.appendChild(btnS);
   cardChat.appendChild(msgs);cardChat.appendChild(ia);
-  wrap.appendChild(cardChat);
-  return wrap;
+  return cardChat;
 }
+
+// ── STORAGE HELPERS ──
+function aceLoadConfig(){
+  try{return JSON.parse(localStorage.getItem('ace_config'))||{};}catch(e){return {};}
+}
+function aceSaveConfig(cfg){
+  localStorage.setItem('ace_config',JSON.stringify(cfg));
+}
+function aceLoadLeads(){
+  try{return JSON.parse(localStorage.getItem('ace_leads'))||[];}catch(e){return [];}
+}
+function aceSaveLead(lead){
+  var leads=aceLoadLeads();
+  leads.unshift(lead);
+  if(leads.length>500) leads=leads.slice(0,500);
+  localStorage.setItem('ace_leads',JSON.stringify(leads));
+}
+function aceLoadRespostas(){
+  try{return JSON.parse(localStorage.getItem('ace_respostas'))||[
+    {pergunta:'Qual o prazo de entrega?',resposta:'O prazo varia de 5 a 10 dias úteis dependendo da região.'},
+    {pergunta:'Vocês emitem nota fiscal?',resposta:'Sim, emitimos nota fiscal para todos os pedidos.'},
+    {pergunta:'Como faço um orçamento?',resposta:'Entre em contato pelo WhatsApp (62) 3517-3971 ou pelo site maisacessivel.com.br'}
+  ];}catch(e){return [];}
+}
+function aceSaveRespostas(rr){
+  localStorage.setItem('ace_respostas',JSON.stringify(rr));
+}
+
 
 </script>
 </body>
