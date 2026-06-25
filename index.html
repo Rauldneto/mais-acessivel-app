@@ -945,91 +945,89 @@ function renderAdmin(){
   editWrap.style.cssText='display:none;background:#fffbea;border:1px solid #fde68a;border-radius:8px;padding:16px;margin-top:12px';
   secU.appendChild(editWrap);
 
+  // ID do usuario sendo editado
+  var editandoId=null;
+  var editandoUser=null;
+
   function abrirEdicao(id,u){
-    var isAdminAccount = (u.usuario===ADMIN_USER);
-    editWrap.style.display='block';
-    editWrap.innerHTML='';
-    var title=document.createElement('div');
-    title.style.cssText='font-size:13px;font-weight:700;color:#92400e;margin-bottom:10px';
-    title.textContent = isAdminAccount ? '🔑 Alterar minha senha' : '✏️ Editar usuário: '+u.nome;
-    editWrap.appendChild(title);
+    if(u.usuario===ADMIN_USER) return; // admin nao edita pelo form normal
+    editandoId=id;
+    editandoUser=u;
 
-    var grid=document.createElement('div');
-    grid.style.cssText='display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:8px;align-items:end';
+    // Preencher o formulario de cima com os dados do usuario
+    iNome.value=u.nome||'';
+    iUser.value=u.usuario||'';
+    iUser.disabled=true; // login nao muda
+    iSenha.value='';
+    iSenha.placeholder='Nova senha (deixe em branco para manter)';
+    selRole.value=u.role||'user';
 
-    var eNome=inp('Nome completo'); eNome.value=u.nome; eNome.disabled=isAdminAccount;
-    var eUser=inp('Usuário (login)'); eUser.value=u.usuario; eUser.disabled=true; // login não muda
-    var eSenha=inp('Nova senha (opcional)','password');
-    var eRole=document.createElement('select');
-    eRole.innerHTML='<option value="user">Operador</option><option value="admin">Admin</option>';
-    eRole.value=u.role; eRole.disabled=isAdminAccount;
-    eRole.style.cssText='padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px';
+    // Marcar checkboxes de abas com os dados do usuario
+    var abasAtivas=u.abas||['mod1','mod2','mod3','mod4'];
+    divAbas.querySelectorAll('input[name=abaAcesso]').forEach(function(cb){
+      cb.checked=abasAtivas.indexOf(cb.value)>-1;
+    });
 
-    if(isAdminAccount){
-      // Só mostra campo de senha para o admin
-      grid.style.gridTemplateColumns='1fr auto auto';
-      grid.appendChild(eSenha);
-    } else {
-      grid.appendChild(eNome); grid.appendChild(eUser); grid.appendChild(eSenha); grid.appendChild(eRole);
+    // Trocar botao de Adicionar para Salvar edicao
+    btnAdd.textContent='💾 Salvar Alterações';
+    btnAdd.style.background='#2563eb';
+
+    // Mostrar botao cancelar edicao
+    if(!document.getElementById('btnCancelarEdicao')){
+      var btnCancel=document.createElement('button');
+      btnCancel.id='btnCancelarEdicao';
+      btnCancel.textContent='✕ Cancelar';
+      btnCancel.style.cssText='padding:8px 14px;background:#fff;border:1px solid #ddd;color:#666;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit';
+      btnCancel.onclick=cancelarEdicao;
+      formU.appendChild(btnCancel);
     }
 
-    // Checkboxes de acesso às abas (apenas para nao-admin)
-    var divAbasEdit=null;
-    if(!isAdminAccount){
-      divAbasEdit=document.createElement('div');
-      divAbasEdit.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap;margin-top:4px';
-      divAbasEdit.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso às abas:</span>';
-      var abasAtivas=u.abas||['mod1','mod2','mod3','mod4'];
-      [{id:'mod1',label:'🚛 Frete'},{id:'mod2',label:'📁 Crédito'},{id:'mod3',label:'🤖 Ace IA'},{id:'mod4',label:'📁 Aba 4'}].forEach(function(ab){
-        var lbl=document.createElement('label');
-        lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;background:#fff;padding:4px 10px;border-radius:6px;border:1px solid #e5e7eb';
-        var cb=document.createElement('input');
-        cb.type='checkbox';cb.value=ab.id;cb.name='abaEditAcesso';
-        cb.checked=abasAtivas.indexOf(ab.id)>-1;
-        lbl.appendChild(cb);lbl.appendChild(document.createTextNode(' '+ab.label));
-        divAbasEdit.appendChild(lbl);
-      });
-      grid.appendChild(divAbasEdit);
-    }
+    // Mostrar aviso de edicao
+    msgU.style.color='#b45309';
+    msgU.textContent='✏️ Editando: '+u.nome+' — altere os campos e clique em Salvar.';
 
-    var btnSalvar=document.createElement('button');
-    btnSalvar.textContent='Salvar';
-    btnSalvar.style.cssText='padding:8px 14px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px';
-    var btnCancelar=document.createElement('button');
-    btnCancelar.textContent='Cancelar';
-    btnCancelar.style.cssText='padding:8px 14px;background:#fff;border:1px solid #ddd;color:#666;border-radius:6px;cursor:pointer;font-size:13px';
-    btnCancelar.onclick=function(){editWrap.style.display='none';};
+    // Scroll para o topo do form
+    secU.scrollIntoView({behavior:'smooth',block:'start'});
+    editWrap.style.display='none';
+  }
 
-    grid.appendChild(btnSalvar); grid.appendChild(btnCancelar);
-    editWrap.appendChild(grid);
-
-    var msgE=document.createElement('p');
-    msgE.style.cssText='font-size:12px;color:green;margin-top:8px;min-height:14px';
-    editWrap.appendChild(msgE);
-
-    btnSalvar.onclick=async function(){
-      var novaSenha=eSenha.value.trim();
-      var updated=Object.assign({},u);
-      if(!isAdminAccount){
-        var novoNome=eNome.value.trim();
-        if(!novoNome){msgE.style.color='red';msgE.textContent='Nome não pode ficar vazio.';return;}
-        updated.nome=novoNome;
-        updated.role=eRole.value;
-        if(divAbasEdit){
-          var abasSalvar=[];
-          divAbasEdit.querySelectorAll('input[name=abaEditAcesso]:checked').forEach(function(cb){abasSalvar.push(cb.value);});
-          updated.abas=abasSalvar.length>0?abasSalvar:['mod1'];
-        }
-      }
-      if(novaSenha){ updated.senha=hashSimple(novaSenha); }
-      await fbSaveUser(id,updated);
-      msgE.style.color='green';
-      msgE.textContent='✅ Atualizado com sucesso!';
-      setTimeout(function(){editWrap.style.display='none';loadUsers();},900);
-    };
+  function cancelarEdicao(){
+    editandoId=null;
+    editandoUser=null;
+    iNome.value='';
+    iUser.value='';
+    iUser.disabled=false;
+    iSenha.value='';
+    iSenha.placeholder='Senha';
+    selRole.value='user';
+    divAbas.querySelectorAll('input[name=abaAcesso]').forEach(function(cb){cb.checked=true;});
+    btnAdd.textContent='+ Adicionar';
+    btnAdd.style.background='#27ae60';
+    msgU.textContent='';
+    var bc=document.getElementById('btnCancelarEdicao');
+    if(bc) bc.remove();
   }
 
   btnAdd.onclick=async function(){
+    // Modo edicao
+    if(editandoId){
+      var novoNome=iNome.value.trim();
+      if(!novoNome){msgU.style.color='red';msgU.textContent='Nome nao pode ficar vazio.';return;}
+      var novaSenha=iSenha.value.trim();
+      var updated=Object.assign({},editandoUser);
+      updated.nome=novoNome;
+      updated.role=selRole.value;
+      if(novaSenha) updated.senha=hashSimple(novaSenha);
+      var abasEdit=[];
+      divAbas.querySelectorAll('input[name=abaAcesso]:checked').forEach(function(cb){abasEdit.push(cb.value);});
+      updated.abas=abasEdit.length>0?abasEdit:['mod1'];
+      await fbSaveUser(editandoId,updated);
+      msgU.style.color='green';msgU.textContent='✅ '+novoNome+' atualizado com sucesso!';
+      cancelarEdicao();
+      setTimeout(function(){loadUsers();msgU.textContent='';},1200);
+      return;
+    }
+    // Modo criacao
     var n=iNome.value.trim(),u=iUser.value.trim().toLowerCase(),s=iSenha.value;
     if(!n||!u||!s){msgU.style.color='red';msgU.textContent='Preencha todos os campos.';return;}
     var users=await fbGetUsers();
