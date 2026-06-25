@@ -4001,12 +4001,20 @@ function renderChatTeste(){
   cardChat.style.cssText='background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.07);border:1.5px solid #e5e7eb';
   var msgs=document.createElement('div');
   msgs.style.cssText='height:280px;overflow-y:auto;background:#f0f4f8;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;margin-bottom:12px';
-  var cfg=aceLoadConfig();
-  var bv=cfg.msgBoasVindas||'Olá! Sou o Ace. Como posso ajudar?';
   var im=document.createElement('div');
   im.style.cssText='background:#fff;padding:10px 14px;border-radius:12px;font-size:13px;max-width:80%;align-self:flex-start;box-shadow:0 1px 3px rgba(0,0,0,.06)';
-  im.innerHTML=bv.replace(/\n/g,'<br>');
+  im.innerHTML='Carregando...';
   msgs.appendChild(im);
+  // Buscar mensagem de boas vindas do servidor
+  fetch('https://maisacessivel-chatbot.onrender.com/config')
+  .then(function(r){return r.json();})
+  .then(function(cfg){
+    var bv=cfg.msgBoasVindas||'Olá! Sou o Ace. Como posso ajudar?';
+    im.innerHTML=bv.replace(/\n/g,'<br>');
+  })
+  .catch(function(){
+    im.innerHTML='Olá! Sou o Ace. Como posso ajudar?';
+  });
   var ia=document.createElement('div');
   ia.style.cssText='display:flex;gap:8px';
   var inp=document.createElement('input');
