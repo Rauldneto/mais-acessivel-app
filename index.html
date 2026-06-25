@@ -867,8 +867,19 @@ function renderAdmin(){
   btnAdd.textContent='+ Adicionar';
   btnAdd.style.cssText='padding:8px 14px;background:#27ae60;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap';
 
+  var divAbas=document.createElement('div');
+  divAbas.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap';
+  divAbas.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso &agrave;s abas:</span>';
+  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Aba 4'}].forEach(function(ab){
+    var lbl=document.createElement('label');
+    lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
+    var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=true;
+    lbl.appendChild(cb);lbl.appendChild(document.createTextNode(ab.label));
+    divAbas.appendChild(lbl);
+  });
   formU.appendChild(iNome); formU.appendChild(iUser); formU.appendChild(iSenha);
   formU.appendChild(selRole); formU.appendChild(btnAdd);
+  formU.appendChild(divAbas);
   secU.appendChild(formU);
 
   var msgU=document.createElement('p');
@@ -1002,7 +1013,8 @@ function renderAdmin(){
       msgU.style.color='red';msgU.textContent='Usuário já existe.';return;
     }
     var id='u_'+Date.now();
-    await fbSaveUser(id,{nome:n,usuario:u,senha:hashSimple(s),role:selRole.value,ativo:true});
+    var abasSel=[];if(typeof divAbas!=='undefined'){divAbas.querySelectorAll('input[name=abaAcesso]:checked').forEach(function(cb){abasSel.push(cb.value);});}
+    await fbSaveUser(id,{nome:n,usuario:u,senha:hashSimple(s),role:selRole.value,ativo:true,abas:abasSel.length>0?abasSel:['mod1','mod2','mod3','mod4']});
     msgU.style.color='green';msgU.textContent='✅ Usuário '+n+' criado!';
     iNome.value='';iUser.value='';iSenha.value='';
     loadUsers();
@@ -2341,7 +2353,7 @@ function renderModuloNav(){
   var MODULOS=[
     {id:'frete', icon:'🚛', label:'Frete'},
     {id:'mod2',  icon:'📁', label:'Análise de Crédito'},
-    {id:'mod3',  icon:'📁', label:'Aba 3'},
+    {id:'mod3', icon:'🤖', label:'Ace IA'},
     {id:'mod4',  icon:'📁', label:'Aba 4'}
   ];
   var bar=document.createElement('div');
@@ -2352,6 +2364,9 @@ function renderModuloNav(){
     btn.style.cssText='background:'+(isActive?'#d97706':'transparent')+';color:'+(isActive?'#fff':'#aaaaaa')+';border:none;padding:9px 18px;cursor:pointer;font-size:12px;font-weight:'+(isActive?'800':'500')+';font-family:inherit;border-radius:6px 6px 0 0;white-space:nowrap;transition:background .15s,color .15s;margin-top:4px';
     btn.innerHTML=m.icon+' '+m.label;
     btn.onclick=function(){
+      var user=STATE.usuarios&&STATE.usuarios[STATE.loginUser];
+      var abas=user&&user.abas;
+      if(abas&&abas.length>0&&abas.indexOf(m.id)===-1&&STATE.roleLogado!=='admin'){alert('Voce nao tem acesso a esta aba.');return;}
       STATE.modulo=m.id;
       if(m.id==='frete') STATE.tab='cotacao';
       else if(m.id==='mod2') STATE.tabCredito='analise';
@@ -2393,7 +2408,7 @@ function renderApp(){
     if(STATE.tabCredito==='historico') main.appendChild(renderHistoricoCredito());
     else main.appendChild(renderAnaliseCredito());
   } else if(STATE.modulo==='mod3'){
-    main.appendChild(renderModuloVazio(3));
+    main.appendChild(renderAceIA());
   } else if(STATE.modulo==='mod4'){
     main.appendChild(renderModuloVazio(4));
   }
@@ -3641,6 +3656,66 @@ window.addEventListener('hashchange', function(){
 render();
 fbInitAdmin();
 fbInit();
+
+function renderAceIA(){
+  var wrap=document.createElement('div');
+  wrap.style.cssText='padding:20px;max-width:900px;margin:0 auto';
+  var h=document.createElement('h2');
+  h.style.cssText='font-size:16px;color:#b45309;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #f59e0b';
+  h.textContent='Ace IA — Painel de Gerenciamento';
+  wrap.appendChild(h);
+  var cardPrompt=document.createElement('div');
+  cardPrompt.style.cssText='background:#fff;border-radius:10px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1.5px solid #e5e7eb';
+  cardPrompt.innerHTML='<h3 style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:8px">INSTRUCOES DO ACE</h3><p style="font-size:12px;color:#888;margin-bottom:8px">Escreva como o Ace deve se comportar, o que pode ou nao falar, tom de voz, etc.</p>';
+  var txtP=document.createElement('textarea');
+  txtP.style.cssText='width:100%;height:110px;border:1.5px solid #d1d5db;border-radius:7px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;outline:none';
+  txtP.placeholder='Ex: O Ace deve sempre pedir o nome e WhatsApp. Nao deve falar sobre precos. Deve recomendar ligar para (62) 3517-3971...';
+  txtP.value=localStorage.getItem('ace_custom_prompt')||'';
+  var btnSP=document.createElement('button');
+  btnSP.textContent='Salvar Instrucoes';
+  btnSP.style.cssText='margin-top:10px;padding:8px 18px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit';
+  btnSP.onclick=function(){localStorage.setItem('ace_custom_prompt',txtP.value);btnSP.textContent='Salvo!';setTimeout(function(){btnSP.textContent='Salvar Instrucoes';},2000);};
+  cardPrompt.appendChild(txtP);cardPrompt.appendChild(btnSP);
+  wrap.appendChild(cardPrompt);
+  var cardChat=document.createElement('div');
+  cardChat.style.cssText='background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1.5px solid #e5e7eb';
+  cardChat.innerHTML='<h3 style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:12px">TESTAR O ACE</h3>';
+  var msgs=document.createElement('div');
+  msgs.style.cssText='height:300px;overflow-y:auto;background:#f0f4f8;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;margin-bottom:12px';
+  var im=document.createElement('div');
+  im.style.cssText='background:#fff;padding:10px 14px;border-radius:12px;font-size:13px;max-width:80%;align-self:flex-start;box-shadow:0 1px 3px rgba(0,0,0,.06)';
+  im.innerHTML='Ola! Sou o <b>Ace</b>. Este e o painel de testes. Qual e a sua pergunta?';
+  msgs.appendChild(im);
+  var ia=document.createElement('div');
+  ia.style.cssText='display:flex;gap:8px';
+  var inp=document.createElement('input');
+  inp.type='text';inp.placeholder='Digite para testar o Ace...';
+  inp.style.cssText='flex:1;border:1.5px solid #d1d5db;border-radius:24px;padding:9px 16px;font-size:13px;font-family:inherit;outline:none';
+  var btnS=document.createElement('button');
+  btnS.innerHTML='&#10148;';
+  btnS.style.cssText='background:#d97706;color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:16px;cursor:pointer;flex-shrink:0';
+  var H=[];
+  function am(t,tp){
+    var d=document.createElement('div');
+    d.style.cssText='padding:10px 14px;border-radius:12px;font-size:13px;max-width:80%;'+(tp==='u'?'align-self:flex-end;background:#d97706;color:#fff':'align-self:flex-start;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.06)');
+    d.innerHTML=t.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>');
+    msgs.appendChild(d);msgs.scrollTop=9999;return d;
+  }
+  function envAce(){
+    var t=inp.value.trim();if(!t)return;inp.value='';
+    am(t,'u');H.push({role:'user',content:t});
+    var l=am('Ace esta digitando...','b');l.style.color='#888';l.style.fontStyle='italic';
+    fetch('https://maisacessivel-chatbot.onrender.com/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:H})})
+    .then(function(r){return r.json();}).then(function(d){l.remove();var rep=d.reply||'Erro.';am(rep,'b');H.push({role:'assistant',content:rep});})
+    .catch(function(){l.remove();am('Erro de conexao.','b');});
+  }
+  btnS.onclick=envAce;inp.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();envAce();}};
+  ia.appendChild(inp);ia.appendChild(btnS);
+  cardChat.appendChild(msgs);cardChat.appendChild(ia);
+  wrap.appendChild(cardChat);
+  return wrap;
+}
+
 </script>
 </body>
 </html>
