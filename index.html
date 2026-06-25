@@ -973,6 +973,25 @@ function renderAdmin(){
       grid.appendChild(eNome); grid.appendChild(eUser); grid.appendChild(eSenha); grid.appendChild(eRole);
     }
 
+    // Checkboxes de acesso às abas (apenas para nao-admin)
+    var divAbasEdit=null;
+    if(!isAdminAccount){
+      divAbasEdit=document.createElement('div');
+      divAbasEdit.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap;margin-top:4px';
+      divAbasEdit.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso às abas:</span>';
+      var abasAtivas=u.abas||['mod1','mod2','mod3','mod4'];
+      [{id:'mod1',label:'🚛 Frete'},{id:'mod2',label:'📁 Crédito'},{id:'mod3',label:'🤖 Ace IA'},{id:'mod4',label:'📁 Aba 4'}].forEach(function(ab){
+        var lbl=document.createElement('label');
+        lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;background:#fff;padding:4px 10px;border-radius:6px;border:1px solid #e5e7eb';
+        var cb=document.createElement('input');
+        cb.type='checkbox';cb.value=ab.id;cb.name='abaEditAcesso';
+        cb.checked=abasAtivas.indexOf(ab.id)>-1;
+        lbl.appendChild(cb);lbl.appendChild(document.createTextNode(' '+ab.label));
+        divAbasEdit.appendChild(lbl);
+      });
+      grid.appendChild(divAbasEdit);
+    }
+
     var btnSalvar=document.createElement('button');
     btnSalvar.textContent='Salvar';
     btnSalvar.style.cssText='padding:8px 14px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px';
@@ -996,6 +1015,11 @@ function renderAdmin(){
         if(!novoNome){msgE.style.color='red';msgE.textContent='Nome não pode ficar vazio.';return;}
         updated.nome=novoNome;
         updated.role=eRole.value;
+        if(divAbasEdit){
+          var abasSalvar=[];
+          divAbasEdit.querySelectorAll('input[name=abaEditAcesso]:checked').forEach(function(cb){abasSalvar.push(cb.value);});
+          updated.abas=abasSalvar.length>0?abasSalvar:['mod1'];
+        }
       }
       if(novaSenha){ updated.senha=hashSimple(novaSenha); }
       await fbSaveUser(id,updated);
