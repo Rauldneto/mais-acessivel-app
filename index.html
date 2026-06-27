@@ -3776,13 +3776,30 @@ function renderInstrucoes(){
     i.style.cssText='width:100%;padding:9px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;outline:none';
     return i;
   }
-  var iWhats=inpCfg('WhatsApp da empresa ex: 5562...',cfg.whatsapp||'556235173971');
+  var iWhats=inpCfg('WhatsApp ex: 5562...',cfg.whatsapp||'556235173971');
   var iSite=inpCfg('Site',cfg.site||'maisacessivel.com.br');
-  var iEnde=inpCfg('Endereço',cfg.endereco||'Goiânia, GO');
+  var iEnde=inpCfg('Endereço completo',cfg.endereco||'Goiânia, GO');
   var iHora=inpCfg('Horário ex: Seg-Sex 8h-18h',cfg.horario||'');
+  var iEmail=inpCfg('E-mail',cfg.email||'');
+  var iCnpj=inpCfg('CNPJ',cfg.cnpj||'');
+  var iRazao=inpCfg('Razão Social',cfg.razaoSocial||'');
+  var iCidade=inpCfg('Cidade / UF',cfg.cidade||'Goiânia / GO');
+  var iCep=inpCfg('CEP',cfg.cep||'');
+  var iTelFixo=inpCfg('Telefone fixo',cfg.telFixo||'');
+  var iInsta=inpCfg('Instagram',cfg.instagram||'');
+  var iFace=inpCfg('Facebook',cfg.facebook||'');
+  var iDesc=document.createElement('textarea');
+  iDesc.placeholder='Descrição da empresa (quem somos, missão, diferenciais...)';
+  iDesc.value=cfg.descricao||'';
+  iDesc.style.cssText='width:100%;padding:9px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;outline:none;grid-column:1/-1;height:70px;resize:vertical';
   gridEmp.appendChild(iWhats);gridEmp.appendChild(iSite);
   gridEmp.appendChild(iEnde);gridEmp.appendChild(iHora);
-  div.appendChild(card('🏢 Dados da Empresa (Ace vai usar)',gridEmp));
+  gridEmp.appendChild(iEmail);gridEmp.appendChild(iCnpj);
+  gridEmp.appendChild(iRazao);gridEmp.appendChild(iCidade);
+  gridEmp.appendChild(iCep);gridEmp.appendChild(iTelFixo);
+  gridEmp.appendChild(iInsta);gridEmp.appendChild(iFace);
+  gridEmp.appendChild(iDesc);
+  div.appendChild(card('🏢 Dados da Empresa',gridEmp));
 
   // Palavras proibidas
   var txtProib=document.createElement('textarea');
@@ -3920,12 +3937,6 @@ function renderRespostas(){
   };
   div.appendChild(btnAdd);
 
-  // Chat de teste
-  var sep=document.createElement('div');
-  sep.style.cssText='margin:24px 0 16px;padding-top:16px;border-top:2px solid #f0f0f0;font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px';
-  sep.textContent='💬 Testar o Ace ao Vivo';
-  div.appendChild(sep);
-  div.appendChild(renderChatTeste());
   return div;
 }
 
@@ -4216,9 +4227,69 @@ function renderConfigurarComIA(){
     });
   }
 
+  // Botao de audio
+  var btnAudio=document.createElement('button');
+  btnAudio.innerHTML='🎤';
+  btnAudio.title='Gravar áudio';
+  btnAudio.style.cssText='background:#1a2f5a;color:#fff;border:none;border-radius:50%;width:42px;height:42px;font-size:18px;cursor:pointer;flex-shrink:0';
+  var gravando=false;
+  var mediaRec=null;
+  var audioChunks=[];
+  btnAudio.onclick=function(){
+    if(!gravando){
+      navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
+        gravando=true;btnAudio.innerHTML='⏹️';btnAudio.style.background='#dc2626';
+        audioChunks=[];
+        mediaRec=new MediaRecorder(stream);
+        mediaRec.ondataavailable=function(e){audioChunks.push(e.data);};
+        mediaRec.onstop=function(){
+          gravando=false;btnAudio.innerHTML='🎤';btnAudio.style.background='#1a2f5a';
+          var blob=new Blob(audioChunks,{type:'audio/webm'});
+          var reader=new FileReader();
+          reader.onload=function(){
+            var base64=reader.result.split(',')[1];
+            // Transcrever via Claude
+            var l=addMsgConfig('🎤 Transcrevendo áudio...','b');
+            l.style.color='#888';l.style.fontStyle='italic';
+            fetch('https://api.anthropic.com/v1/messages',{
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({
+                model:'claude-sonnet-4-6',
+                max_tokens:500,
+                messages:[{role:'user',content:[
+                  {type:'text',text:'Transcreva exatamente o que está sendo dito neste áudio. Retorne apenas a transcrição, sem comentários.'},
+                  {type:'document',source:{type:'base64',media_type:'audio/webm',data:base64}}
+                ]}]
+              })
+            })
+            .then(function(r){return r.json();})
+            .then(function(data){
+              l.remove();
+              var transcricao=(data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+              if(transcricao){
+                inp.value=transcricao;
+                addMsgConfig('🎤 <i>Áudio transcrito:</i> "'+transcricao+'"','b');
+                enviarConfigIA();
+              } else {
+                addMsgConfig('Não consegui transcrever o áudio. Tente digitar.','b');
+              }
+            })
+            .catch(function(){l.remove();addMsgConfig('Erro ao transcrever. Tente digitar.','b');});
+          };
+          reader.readAsDataURL(blob);
+          stream.getTracks().forEach(function(t){t.stop();});
+        };
+        mediaRec.start();
+      }).catch(function(){addMsgConfig('Permita o acesso ao microfone para gravar áudio.','b');});
+    } else {
+      if(mediaRec) mediaRec.stop();
+    }
+  };
+
   btn.onclick=enviarConfigIA;
   inp.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();enviarConfigIA();}};
-  ia.appendChild(inp);ia.appendChild(btn);
+  ia.appendChild(inp);ia.appendChild(btnAudio);ia.appendChild(btn);
   card.appendChild(msgs);card.appendChild(ia);
   div.appendChild(card);
   return div;
