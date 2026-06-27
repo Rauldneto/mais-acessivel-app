@@ -3819,8 +3819,18 @@ function renderInstrucoes(){
     cfg.site=iSite.value;
     cfg.endereco=iEnde.value;
     cfg.horario=iHora.value;
+    cfg.email=iEmail.value;
+    cfg.cnpj=iCnpj.value;
+    cfg.razaoSocial=iRazao.value;
+    cfg.cidade=iCidade.value;
+    cfg.cep=iCep.value;
+    cfg.telFixo=iTelFixo.value;
+    cfg.instagram=iInsta.value;
+    cfg.facebook=iFace.value;
+    cfg.descricao=iDesc.value;
     cfg.proibidas=txtProib.value.split(',').map(function(s){return s.trim();}).filter(Boolean);
     aceSaveConfig(cfg);
+    aceSyncConfig(cfg);
     btnSave.innerHTML='✅ Salvo!';
     setTimeout(function(){btnSave.innerHTML='💾 Salvar Todas as Instruções';},2000);
   };
