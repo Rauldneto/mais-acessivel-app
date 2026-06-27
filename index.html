@@ -192,7 +192,7 @@ pre{background:#f3f3f1;border:1px solid #e8e8e6;border-radius:7px;padding:12px;f
 .ac-btn-add-refcom:hover{background:#ede9fe;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<!-- v:1782577909 1782577490 <!-- old:1782573715 -->
+<!-- vv:1782578055 1782577909 1782577490 <!-- old:1782573715 -->
 </head>
 <body>
 
@@ -4199,71 +4199,39 @@ function renderConfigurarComIA(){
     var l=addMsgConfig('Analisando e atualizando configurações...','b');
     l.style.color='#888';l.style.fontStyle='italic';
 
-    // Buscar config atual
+    // Buscar config atual e enviar para o servidor configurar
     fetch('https://maisacessivel-chatbot.onrender.com/config')
     .then(function(r){return r.json();})
     .then(function(cfgAtual){
-      var systemPromptConfig='Você é um assistente especializado em configurar o chatbot "Ace" da Mais Acessível. '+
-        'O usuário vai te dizer em linguagem natural o que quer que o Ace faça. '+
-        'Você deve: 1) Entender o pedido, 2) Atualizar as instruções do Ace adequadamente, 3) Explicar o que foi alterado. '+
-        'A configuração atual do Ace é: '+JSON.stringify(cfgAtual,null,2)+'. '+
-        'Responda SEMPRE em português brasileiro. '+
-        'Ao final da sua resposta, inclua um bloco JSON com as configurações ATUALIZADAS no formato: <CONFIG>{"instrucoes":"...","tom":"...","proibidas":[...],"respostas":[...]}</CONFIG>. '+
-        'Inclua TODAS as configurações no JSON, não apenas as alteradas.';
-
-      return fetch('https://api.anthropic.com/v1/messages',{
+      return fetch('https://maisacessivel-chatbot.onrender.com/configurar',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          model:'claude-sonnet-4-6',
-          max_tokens:2000,
-          system:systemPromptConfig,
-          messages:Hconfig
-        })
+        body:JSON.stringify({messages:Hconfig, configAtual:cfgAtual})
       });
     })
     .then(function(r){return r.json();})
     .then(function(data){
       l.remove();
-      var reply=(data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
-
-      // Extrair JSON de config
-      var configMatch=reply.match(/<CONFIG>([\s\S]*?)<\/CONFIG>/);
-      var textoLimpo=reply.replace(/<CONFIG>[\s\S]*?<\/CONFIG>/,'').trim();
-
+      var textoLimpo=data.reply||'Erro ao processar.';
       addMsgConfig(textoLimpo,'b');
-      Hconfig.push({role:'assistant',content:reply});
-
-      if(configMatch){
-        try{
-          var novaConfig=JSON.parse(configMatch[1]);
-          // Salvar no servidor
-          fetch('https://maisacessivel-chatbot.onrender.com/config',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify(novaConfig)
-          }).then(function(){
-            // Salvar no historico
-            var hist=aceLoadHistorico();
-            hist.unshift({
-              data:new Date().toLocaleString('pt-BR'),
-              pedido:Hconfig[Hconfig.length-2]?.content||t,
-              alteracao:textoLimpo.substring(0,200),
-              config:novaConfig
-            });
-            if(hist.length>100) hist=hist.slice(0,100);
-            localStorage.setItem('ace_historico_config',JSON.stringify(hist));
-            var ok=document.createElement('div');
-            ok.style.cssText='background:#d1fae5;color:#065f46;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;margin-top:4px;align-self:flex-start';
-            ok.textContent='✅ Configurações atualizadas e salvas!';
-            msgs.appendChild(ok);msgs.scrollTop=9999;
-          });
-        }catch(e){
-          console.log('Erro ao parsear config:',e);
-        }
+      Hconfig.push({role:'assistant',content:textoLimpo});
+      if(data.configAtualizada){
+        // Salvar no historico local
+        var hist=aceLoadHistorico();
+        hist.unshift({
+          data:new Date().toLocaleString('pt-BR'),
+          pedido:Hconfig[Hconfig.length-2]?Hconfig[Hconfig.length-2].content:t,
+          alteracao:textoLimpo.substring(0,200),
+        });
+        if(hist.length>100) hist=hist.slice(0,100);
+        localStorage.setItem('ace_historico_config',JSON.stringify(hist));
+        var ok=document.createElement('div');
+        ok.style.cssText='background:#d1fae5;color:#065f46;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;margin-top:4px;align-self:flex-start';
+        ok.textContent='✅ Configurações atualizadas e salvas!';
+        msgs.appendChild(ok);msgs.scrollTop=9999;
       }
     })
-    .catch(function(e){
+    .catch(function(){
       l.remove();
       addMsgConfig('Erro de conexão. Tente novamente.','b');
     });
