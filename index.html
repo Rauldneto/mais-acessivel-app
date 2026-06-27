@@ -192,7 +192,7 @@ pre{background:#f3f3f1;border:1px solid #e8e8e6;border-radius:7px;padding:12px;f
 .ac-btn-add-refcom:hover{background:#ede9fe;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<!-- vv:1782578055 1782577909 1782577490 <!-- old:1782573715 -->
+<!-- vvv:1782578399 1782578055 1782577909 1782577490 <!-- old:1782573715 -->
 </head>
 <body>
 
@@ -4243,39 +4243,55 @@ function renderConfigurarComIA(){
   btnAudio.title='Clique para falar';
   btnAudio.style.cssText='background:#1a2f5a;color:#fff;border:none;border-radius:50%;width:42px;height:42px;font-size:18px;cursor:pointer;flex-shrink:0';
   var recognition=null;
+  var gravandoVoz=false;
   btnAudio.onclick=function(){
     if(!('webkitSpeechRecognition' in window||'SpeechRecognition' in window)){
       addMsgConfig('Seu navegador não suporta reconhecimento de voz. Use o Chrome.','b');
       return;
     }
-    var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    recognition=new SR();
-    recognition.lang='pt-BR';
-    recognition.continuous=false;
-    recognition.interimResults=false;
-    recognition.onstart=function(){
+    if(!gravandoVoz){
+      // INICIAR gravacao
+      gravandoVoz=true;
+      var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+      recognition=new SR();
+      recognition.lang='pt-BR';
+      recognition.continuous=true;
+      recognition.interimResults=true;
       btnAudio.innerHTML='⏹️';
       btnAudio.style.background='#dc2626';
-      btnAudio.title='Gravando... clique para parar';
-    };
-    recognition.onresult=function(e){
-      var texto=e.results[0][0].transcript;
-      inp.value=texto;
+      btnAudio.title='Gravando... clique para parar e transcrever';
+      var textoFinal='';
+      recognition.onresult=function(e){
+        textoFinal='';
+        for(var i=0;i<e.results.length;i++){
+          if(e.results[i].isFinal) textoFinal+=e.results[i][0].transcript;
+        }
+        inp.value=textoFinal||e.results[e.results.length-1][0].transcript;
+      };
+      recognition.onerror=function(){
+        gravandoVoz=false;
+        btnAudio.innerHTML='🎤';
+        btnAudio.style.background='#1a2f5a';
+        addMsgConfig('Erro no microfone. Tente novamente.','b');
+      };
+      recognition.start();
+    } else {
+      // PARAR e transcrever
+      gravandoVoz=false;
       btnAudio.innerHTML='🎤';
       btnAudio.style.background='#1a2f5a';
-      addMsgConfig('🎤 <i>Você disse:</i> "'+texto+'"','b');
-      enviarConfigIA();
-    };
-    recognition.onerror=function(){
-      btnAudio.innerHTML='🎤';
-      btnAudio.style.background='#1a2f5a';
-      addMsgConfig('Não entendi. Tente novamente ou digite.','b');
-    };
-    recognition.onend=function(){
-      btnAudio.innerHTML='🎤';
-      btnAudio.style.background='#1a2f5a';
-    };
-    recognition.start();
+      if(recognition) recognition.stop();
+      // Aguardar resultado final e enviar
+      setTimeout(function(){
+        var texto=inp.value.trim();
+        if(texto){
+          addMsgConfig('🎤 <i>Você disse:</i> "'+texto+'"','b');
+          enviarConfigIA();
+        } else {
+          addMsgConfig('Nada gravado. Tente novamente.','b');
+        }
+      },500);
+    }
   };
 
   btn.onclick=enviarConfigIA;
