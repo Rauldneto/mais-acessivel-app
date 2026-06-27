@@ -3696,7 +3696,9 @@ function renderAceIA(){
     {id:'instrucoes',icon:'📝',label:'Instruções'},
     {id:'leads',icon:'👥',label:'Leads'},
     {id:'respostas',icon:'⚡',label:'Respostas Rápidas'},
-    {id:'config',icon:'⚙️',label:'Configurações'}
+    {id:'config',icon:'⚙️',label:'Configurações'},
+    {id:'configurar',icon:'🧠',label:'Configurar com IA'},
+    {id:'historico',icon:'🕐',label:'Histórico'}
   ];
   var subAtiva='instrucoes';
   var tabBar=document.createElement('div');
@@ -3713,6 +3715,8 @@ function renderAceIA(){
     else if(subAtiva==='leads') contentArea.appendChild(renderLeads());
     else if(subAtiva==='respostas') contentArea.appendChild(renderRespostas());
     else if(subAtiva==='config') contentArea.appendChild(renderConfigAce());
+    else if(subAtiva==='configurar') contentArea.appendChild(renderConfigurarComIA());
+    else if(subAtiva==='historico') contentArea.appendChild(renderHistoricoConfig());
   }
 
   subTabs.forEach(function(t){
@@ -4089,6 +4093,211 @@ function aceSaveRespostas(rr){
   localStorage.setItem('ace_respostas',JSON.stringify(rr));
 }
 
+
+
+// ── ABA: CONFIGURAR COM IA ──
+function renderConfigurarComIA(){
+  var div=document.createElement('div');
+
+  var info=document.createElement('div');
+  info.style.cssText='background:#fff8eb;border:1px solid #fde68a;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#92400e;line-height:1.6';
+  info.innerHTML='🧠 <b>Configure o Ace conversando!</b><br>Diga em linguagem natural o que você quer que o Ace faça. Ex: <i>"Quero que o Ace sempre cumprimente pelo nome após perguntar"</i> ou <i>"O Ace não deve mencionar preços"</i>. A IA vai entender e atualizar as configurações automaticamente.';
+  div.appendChild(info);
+
+  var card=document.createElement('div');
+  card.style.cssText='background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.07);border:1.5px solid #e5e7eb';
+
+  var msgs=document.createElement('div');
+  msgs.id='config-ia-msgs';
+  msgs.style.cssText='height:350px;overflow-y:auto;background:#f0f4f8;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;margin-bottom:12px';
+
+  var bv=document.createElement('div');
+  bv.style.cssText='background:#fff;padding:10px 14px;border-radius:12px;font-size:13px;max-width:85%;align-self:flex-start;box-shadow:0 1px 3px rgba(0,0,0,.06)';
+  bv.innerHTML='Olá! Sou seu assistente de configuração. Me diga o que você quer que o Ace faça e eu atualizo as configurações automaticamente! 🎯';
+  msgs.appendChild(bv);
+
+  var ia=document.createElement('div');
+  ia.style.cssText='display:flex;gap:8px';
+  var inp=document.createElement('input');
+  inp.id='config-ia-input';
+  inp.type='text';
+  inp.placeholder='Ex: Quero que o Ace pergunte o CNPJ antes do CEP...';
+  inp.style.cssText='flex:1;border:1.5px solid #d1d5db;border-radius:24px;padding:10px 16px;font-size:13px;font-family:inherit;outline:none';
+  inp.onfocus=function(){this.style.borderColor='#d97706';};
+  inp.onblur=function(){this.style.borderColor='#d1d5db';};
+
+  var btn=document.createElement('button');
+  btn.innerHTML='&#10148;';
+  btn.style.cssText='background:#d97706;color:#fff;border:none;border-radius:50%;width:42px;height:42px;font-size:16px;cursor:pointer;flex-shrink:0';
+
+  var Hconfig=[];
+
+  function addMsgConfig(text,tipo){
+    var d=document.createElement('div');
+    d.style.cssText='padding:10px 14px;border-radius:12px;font-size:13px;max-width:85%;'+(tipo==='u'?'align-self:flex-end;background:#d97706;color:#fff':'align-self:flex-start;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.06)');
+    d.innerHTML=text.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>');
+    msgs.appendChild(d);msgs.scrollTop=9999;return d;
+  }
+
+  function enviarConfigIA(){
+    var t=inp.value.trim();if(!t)return;inp.value='';
+    addMsgConfig(t,'u');
+    Hconfig.push({role:'user',content:t});
+    var l=addMsgConfig('Analisando e atualizando configurações...','b');
+    l.style.color='#888';l.style.fontStyle='italic';
+
+    // Buscar config atual
+    fetch('https://maisacessivel-chatbot.onrender.com/config')
+    .then(function(r){return r.json();})
+    .then(function(cfgAtual){
+      var systemPromptConfig='Você é um assistente especializado em configurar o chatbot "Ace" da Mais Acessível. '+
+        'O usuário vai te dizer em linguagem natural o que quer que o Ace faça. '+
+        'Você deve: 1) Entender o pedido, 2) Atualizar as instruções do Ace adequadamente, 3) Explicar o que foi alterado. '+
+        'A configuração atual do Ace é: '+JSON.stringify(cfgAtual,null,2)+'. '+
+        'Responda SEMPRE em português brasileiro. '+
+        'Ao final da sua resposta, inclua um bloco JSON com as configurações ATUALIZADAS no formato: <CONFIG>{"instrucoes":"...","tom":"...","proibidas":[...],"respostas":[...]}</CONFIG>. '+
+        'Inclua TODAS as configurações no JSON, não apenas as alteradas.';
+
+      return fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          model:'claude-sonnet-4-6',
+          max_tokens:2000,
+          system:systemPromptConfig,
+          messages:Hconfig
+        })
+      });
+    })
+    .then(function(r){return r.json();})
+    .then(function(data){
+      l.remove();
+      var reply=(data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+
+      // Extrair JSON de config
+      var configMatch=reply.match(/<CONFIG>([\s\S]*?)<\/CONFIG>/);
+      var textoLimpo=reply.replace(/<CONFIG>[\s\S]*?<\/CONFIG>/,'').trim();
+
+      addMsgConfig(textoLimpo,'b');
+      Hconfig.push({role:'assistant',content:reply});
+
+      if(configMatch){
+        try{
+          var novaConfig=JSON.parse(configMatch[1]);
+          // Salvar no servidor
+          fetch('https://maisacessivel-chatbot.onrender.com/config',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(novaConfig)
+          }).then(function(){
+            // Salvar no historico
+            var hist=aceLoadHistorico();
+            hist.unshift({
+              data:new Date().toLocaleString('pt-BR'),
+              pedido:Hconfig[Hconfig.length-2]?.content||t,
+              alteracao:textoLimpo.substring(0,200),
+              config:novaConfig
+            });
+            if(hist.length>100) hist=hist.slice(0,100);
+            localStorage.setItem('ace_historico_config',JSON.stringify(hist));
+            var ok=document.createElement('div');
+            ok.style.cssText='background:#d1fae5;color:#065f46;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;margin-top:4px;align-self:flex-start';
+            ok.textContent='✅ Configurações atualizadas e salvas!';
+            msgs.appendChild(ok);msgs.scrollTop=9999;
+          });
+        }catch(e){
+          console.log('Erro ao parsear config:',e);
+        }
+      }
+    })
+    .catch(function(e){
+      l.remove();
+      addMsgConfig('Erro de conexão. Tente novamente.','b');
+    });
+  }
+
+  btn.onclick=enviarConfigIA;
+  inp.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();enviarConfigIA();}};
+  ia.appendChild(inp);ia.appendChild(btn);
+  card.appendChild(msgs);card.appendChild(ia);
+  div.appendChild(card);
+  return div;
+}
+
+// ── ABA: HISTORICO DE CONFIGURACOES ──
+function aceLoadHistorico(){
+  try{return JSON.parse(localStorage.getItem('ace_historico_config'))||[];}catch(e){return [];}
+}
+
+function renderHistoricoConfig(){
+  var div=document.createElement('div');
+  var hist=aceLoadHistorico();
+
+  var header=document.createElement('div');
+  header.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:16px';
+  header.innerHTML='<span style="font-size:13px;color:#666">Total: <b>'+hist.length+'</b> alterações registradas</span>';
+
+  var btnLimpar=document.createElement('button');
+  btnLimpar.textContent='🗑️ Limpar histórico';
+  btnLimpar.style.cssText='padding:6px 12px;background:#fee2e2;color:#dc2626;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit';
+  btnLimpar.onclick=function(){
+    if(confirm('Limpar todo o histórico?')){
+      localStorage.removeItem('ace_historico_config');
+      div.innerHTML='';
+      div.appendChild(renderHistoricoConfig());
+    }
+  };
+  header.appendChild(btnLimpar);
+  div.appendChild(header);
+
+  if(hist.length===0){
+    var empty=document.createElement('div');
+    empty.style.cssText='text-align:center;padding:40px;color:#999;background:#fff;border-radius:10px;border:1.5px dashed #e5e7eb';
+    empty.innerHTML='🕐<br><br>Nenhuma alteração registrada ainda.<br><span style="font-size:12px">As alterações feitas na aba "Configurar com IA" aparecerão aqui.</span>';
+    div.appendChild(empty);
+    return div;
+  }
+
+  hist.forEach(function(item){
+    var card=document.createElement('div');
+    card.style.cssText='background:#fff;border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);border:1.5px solid #e5e7eb;border-left:4px solid #d97706';
+
+    var data=document.createElement('div');
+    data.style.cssText='font-size:11px;color:#999;margin-bottom:6px';
+    data.textContent=item.data;
+
+    var pedido=document.createElement('div');
+    pedido.style.cssText='font-size:13px;font-weight:600;color:#333;margin-bottom:6px';
+    pedido.innerHTML='📝 <b>Pedido:</b> '+item.pedido;
+
+    var alt=document.createElement('div');
+    alt.style.cssText='font-size:12px;color:#666;line-height:1.5';
+    alt.innerHTML='🤖 <b>Alteração:</b> '+item.alteracao+'...';
+
+    var btnRestaurar=document.createElement('button');
+    btnRestaurar.textContent='↩️ Restaurar esta configuração';
+    btnRestaurar.style.cssText='margin-top:8px;padding:5px 12px;background:#f3f4f6;color:#333;border:1px solid #e5e7eb;border-radius:6px;cursor:pointer;font-size:11px;font-family:inherit';
+    btnRestaurar.onclick=function(){
+      if(confirm('Restaurar esta configuração?')){
+        fetch('https://maisacessivel-chatbot.onrender.com/config',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify(item.config)
+        }).then(function(){
+          alert('✅ Configuração restaurada!');
+        });
+      }
+    };
+
+    card.appendChild(data);
+    card.appendChild(pedido);
+    card.appendChild(alt);
+    card.appendChild(btnRestaurar);
+    div.appendChild(card);
+  });
+
+  return div;
+}
 
 </script>
 </body>
