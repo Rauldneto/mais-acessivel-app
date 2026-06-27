@@ -192,7 +192,7 @@ pre{background:#f3f3f1;border:1px solid #e8e8e6;border-radius:7px;padding:12px;f
 .ac-btn-add-refcom:hover{background:#ede9fe;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<!-- vvv:1782578399 1782578055 1782577909 1782577490 <!-- old:1782573715 -->
+<!-- v4:1782583259 1782578399 1782578055 1782577909 1782577490 <!-- old:1782573715 -->
 </head>
 <body>
 
@@ -4259,38 +4259,36 @@ function renderConfigurarComIA(){
       recognition.interimResults=true;
       btnAudio.innerHTML='⏹️';
       btnAudio.style.background='#dc2626';
-      btnAudio.title='Gravando... clique para parar e transcrever';
-      var textoFinal='';
+      btnAudio.title='Gravando... clique para parar';
+      inp.value='';
+      inp.placeholder='Gravando...';
       recognition.onresult=function(e){
-        textoFinal='';
+        var textoFinal='';
+        var textoInterim='';
         for(var i=0;i<e.results.length;i++){
-          if(e.results[i].isFinal) textoFinal+=e.results[i][0].transcript;
+          if(e.results[i].isFinal) textoFinal+=e.results[i][0].transcript+' ';
+          else textoInterim+=e.results[i][0].transcript;
         }
-        inp.value=textoFinal||e.results[e.results.length-1][0].transcript;
+        inp.value=textoFinal+textoInterim;
       };
       recognition.onerror=function(){
         gravandoVoz=false;
         btnAudio.innerHTML='🎤';
         btnAudio.style.background='#1a2f5a';
+        inp.placeholder='Ex: Quero que o Ace pergunte o CNPJ antes do CEP...';
         addMsgConfig('Erro no microfone. Tente novamente.','b');
       };
       recognition.start();
     } else {
-      // PARAR e transcrever
+      // PARAR — apenas mostra o texto no campo, nao envia
       gravandoVoz=false;
       btnAudio.innerHTML='🎤';
       btnAudio.style.background='#1a2f5a';
+      btnAudio.title='Clique para falar';
+      inp.placeholder='Ex: Quero que o Ace pergunte o CNPJ antes do CEP...';
       if(recognition) recognition.stop();
-      // Aguardar resultado final e enviar
-      setTimeout(function(){
-        var texto=inp.value.trim();
-        if(texto){
-          addMsgConfig('🎤 <i>Você disse:</i> "'+texto+'"','b');
-          enviarConfigIA();
-        } else {
-          addMsgConfig('Nada gravado. Tente novamente.','b');
-        }
-      },500);
+      // Foco no campo para o usuario poder editar antes de enviar
+      setTimeout(function(){ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); },300);
     }
   };
 
