@@ -192,7 +192,7 @@ pre{background:#f3f3f1;border:1px solid #e8e8e6;border-radius:7px;padding:12px;f
 .ac-btn-add-refcom:hover{background:#ede9fe;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<!-- build:1782573715 -->
+<!-- build-new:1782577490 <!-- old:1782573715 -->
 </head>
 <body>
 
@@ -3696,7 +3696,6 @@ function renderAceIA(){
   var subTabs=[
     {id:'instrucoes',icon:'📝',label:'Instruções'},
     {id:'leads',icon:'👥',label:'Leads'},
-    {id:'respostas',icon:'⚡',label:'Respostas Rápidas'},
     {id:'config',icon:'⚙️',label:'Configurações'},
     {id:'configurar',icon:'🧠',label:'Configurar com IA'},
     {id:'historico',icon:'🕐',label:'Histórico'}
@@ -3714,7 +3713,6 @@ function renderAceIA(){
     });
     if(subAtiva==='instrucoes') contentArea.appendChild(renderInstrucoes());
     else if(subAtiva==='leads') contentArea.appendChild(renderLeads());
-    else if(subAtiva==='respostas') contentArea.appendChild(renderRespostas());
     else if(subAtiva==='config') contentArea.appendChild(renderConfigAce());
     else if(subAtiva==='configurar') contentArea.appendChild(renderConfigurarComIA());
     else if(subAtiva==='historico') contentArea.appendChild(renderHistoricoConfig());
@@ -3755,13 +3753,47 @@ function renderInstrucoes(){
   }
 
   // Instrucoes gerais
-  var txtP=document.createElement('textarea');
-  txtP.style.cssText='width:100%;height:130px;border:1.5px solid #d1d5db;border-radius:7px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;outline:none;line-height:1.6';
-  txtP.placeholder='Ex: O Ace deve sempre pedir nome e WhatsApp. Não deve falar sobre preços sem consultar a equipe. Deve ser simpático e objetivo...';
-  txtP.value=cfg.instrucoes||'';
-  div.appendChild(card('📝 Instruções Gerais do Ace',txtP));
+
 
   // Tom de voz
+  // Respostas Rapidas dentro de Instrucoes
+  var cardRR=document.createElement('div');
+  cardRR.style.cssText='background:#fff;border-radius:10px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.07);border:1.5px solid #e5e7eb';
+  var hRR=document.createElement('div');
+  hRR.style.cssText='font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px';
+  hRR.textContent='⚡ Respostas Rápidas';
+  var instrRR=document.createElement('div');
+  instrRR.style.cssText='font-size:12px;color:#888;margin-bottom:10px';
+  instrRR.textContent='Cadastre perguntas frequentes com respostas prontas que o Ace usará automaticamente.';
+  var listRR=document.createElement('div');
+  listRR.style.cssText='display:flex;flex-direction:column;gap:8px;margin-bottom:10px';
+  var rrData=aceLoadRespostas();
+  function renderListaRR(){
+    listRR.innerHTML='';
+    rrData.forEach(function(item,i){
+      var row=document.createElement('div');
+      row.style.cssText='display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center';
+      var iP=document.createElement('input');iP.type='text';iP.value=item.pergunta;iP.placeholder='Pergunta do cliente';
+      iP.style.cssText='padding:8px;border:1.5px solid #d1d5db;border-radius:6px;font-size:12px;font-family:inherit;outline:none';
+      iP.onchange=function(){rrData[i].pergunta=this.value;aceSaveRespostas(rrData);};
+      var iR=document.createElement('input');iR.type='text';iR.value=item.resposta;iR.placeholder='Resposta do Ace';
+      iR.style.cssText='padding:8px;border:1.5px solid #d1d5db;border-radius:6px;font-size:12px;font-family:inherit;outline:none';
+      iR.onchange=function(){rrData[i].resposta=this.value;aceSaveRespostas(rrData);var cfg=aceLoadConfig();cfg.respostas=rrData;aceSyncConfig(cfg);};
+      var btnD=document.createElement('button');btnD.innerHTML='🗑️';
+      btnD.style.cssText='padding:6px 10px;background:#fee2e2;color:#dc2626;border:none;border-radius:6px;cursor:pointer';
+      btnD.onclick=function(){rrData.splice(i,1);aceSaveRespostas(rrData);renderListaRR();};
+      row.appendChild(iP);row.appendChild(iR);row.appendChild(btnD);
+      listRR.appendChild(row);
+    });
+  }
+  renderListaRR();
+  var btnAddRR=document.createElement('button');
+  btnAddRR.textContent='+ Adicionar Resposta Rápida';
+  btnAddRR.style.cssText='padding:8px 14px;background:#fff;border:1.5px dashed #d97706;color:#b45309;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;width:100%';
+  btnAddRR.onclick=function(){rrData.push({pergunta:'',resposta:''});aceSaveRespostas(rrData);renderListaRR();};
+  cardRR.appendChild(hRR);cardRR.appendChild(instrRR);cardRR.appendChild(listRR);cardRR.appendChild(btnAddRR);
+  div.appendChild(cardRR);
+
   var selTom=document.createElement('select');
   selTom.style.cssText='width:100%;padding:9px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit';
   selTom.innerHTML='<option value="formal">Formal e Profissional</option><option value="amigavel">Amigável e Descontraído</option><option value="tecnico">Técnico e Detalhado</option>';
@@ -3814,7 +3846,6 @@ function renderInstrucoes(){
   btnSave.innerHTML='💾 Salvar Todas as Instruções';
   btnSave.style.cssText='width:100%;padding:12px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit';
   btnSave.onclick=function(){
-    cfg.instrucoes=txtP.value;
     cfg.tom=selTom.value;
     cfg.whatsapp=iWhats.value;
     cfg.site=iSite.value;
