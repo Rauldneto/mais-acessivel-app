@@ -192,7 +192,7 @@ pre{background:#f3f3f1;border:1px solid #e8e8e6;border-radius:7px;padding:12px;f
 .ac-btn-add-refcom:hover{background:#ede9fe;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<!-- v4:1782583259 1782578399 1782578055 1782577909 1782577490 <!-- old:1782573715 -->
+<!-- v5:1782662943 1782583259 1782578399 1782578055 1782577909 1782577490 <!-- old:1782573715 -->
 </head>
 <body>
 
@@ -4121,7 +4121,24 @@ function aceLoadConfig(){
   try{return JSON.parse(localStorage.getItem('ace_config'))||{};}catch(e){return {};}
 }
 function aceSyncConfig(cfg){
-  fetch('https://maisacessivel-chatbot.onrender.com/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)}).catch(function(){});
+  // Sempre sobrescrever no servidor com a config atual
+  fetch('https://maisacessivel-chatbot.onrender.com/config',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(cfg)
+  }).catch(function(){});
+}
+function aceLoadConfigFromServer(callback){
+  // Buscar sempre do servidor (fonte de verdade)
+  fetch('https://maisacessivel-chatbot.onrender.com/config')
+  .then(function(r){return r.json();})
+  .then(function(cfg){
+    if(cfg && cfg.instrucoes !== undefined){
+      localStorage.setItem('ace_config', JSON.stringify(cfg));
+      if(callback) callback(cfg);
+    }
+  })
+  .catch(function(){if(callback) callback(aceLoadConfig());});
 }
 function aceSaveConfig(cfg){
   localStorage.setItem('ace_config',JSON.stringify(cfg));
