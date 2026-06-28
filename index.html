@@ -192,7 +192,7 @@ pre{background:#f3f3f1;border:1px solid #e8e8e6;border-radius:7px;padding:12px;f
 .ac-btn-add-refcom:hover{background:#ede9fe;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<!-- v5:1782662943 1782583259 1782578399 1782578055 1782577909 1782577490 <!-- old:1782573715 -->
+<!-- v6:1782663552 1782662943 1782583259 1782578399 1782578055 1782577909 1782577490 <!-- old:1782573715 -->
 </head>
 <body>
 
@@ -3739,49 +3739,121 @@ function renderAceIA(){
 // ── ABA: INSTRUCOES ──
 function renderInstrucoes(){
   var div=document.createElement('div');
-  var cfg=aceLoadConfig();
 
-  function card(title,content){
+  // Buscar config sempre do servidor
+  var cfg={};
+  fetch('https://maisacessivel-chatbot.onrender.com/config')
+  .then(function(r){return r.json();})
+  .then(function(serverCfg){
+    cfg=serverCfg||{};
+    localStorage.setItem('ace_config',JSON.stringify(cfg));
+    preencherCampos(cfg);
+  }).catch(function(){
+    cfg=aceLoadConfig();
+    preencherCampos(cfg);
+  });
+
+  function card(title,sub,content){
     var c=document.createElement('div');
-    c.style.cssText='background:#fff;border-radius:10px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.07);border:1.5px solid #e5e7eb';
+    c.style.cssText='background:#fff;border-radius:10px;padding:20px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.07);border:1.5px solid #e5e7eb';
     var h=document.createElement('div');
-    h.style.cssText='font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px';
+    h.style.cssText='font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px';
     h.textContent=title;
     c.appendChild(h);
+    if(sub){var s=document.createElement('div');s.style.cssText='font-size:11px;color:#999;margin-bottom:10px';s.textContent=sub;c.appendChild(s);}
     c.appendChild(content);
     return c;
   }
 
-  // Instrucoes gerais
+  function inpField(ph,val,key){
+    var i=document.createElement('input');
+    i.type='text';i.placeholder=ph;i.value=val||'';i.dataset.key=key;
+    i.style.cssText='width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;outline:none';
+    i.onfocus=function(){this.style.borderColor='#d97706';};
+    i.onblur=function(){this.style.borderColor='#d1d5db';};
+    return i;
+  }
 
+  function taField(ph,val,key,h){
+    var t=document.createElement('textarea');
+    t.placeholder=ph;t.value=val||'';t.dataset.key=key;
+    t.style.cssText='width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;outline:none;resize:vertical;height:'+(h||70)+'px;line-height:1.5';
+    t.onfocus=function(){this.style.borderColor='#d97706';};
+    t.onblur=function(){this.style.borderColor='#d1d5db';};
+    return t;
+  }
 
-  // Tom de voz
-  // Respostas Rapidas dentro de Instrucoes
+  function selField(opts,val,key){
+    var s=document.createElement('select');
+    s.dataset.key=key;
+    s.style.cssText='width:100%;padding:9px 12px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;outline:none;background:#fff';
+    opts.forEach(function(o){
+      var op=document.createElement('option');
+      op.value=o.v;op.textContent=o.l;
+      if(o.v===val)op.selected=true;
+      s.appendChild(op);
+    });
+    return s;
+  }
+
+  // CAMPOS
+  var fAbordagem = taField('Ex: Cumprimente pelo nome, pergunte se é PF ou PJ sem enrolação...','',  'abordagem', 80);
+  var fPF = taField('Dados necessários para Pessoa Física...', '', 'dadosPF', 60);
+  var fPJ = taField('Dados necessários para Pessoa Jurídica...', '', 'dadosPJ', 60);
+  var fRecusa = taField('O que fazer quando o cliente recusar o cadastro...', '', 'recusa', 60);
+  var fEncerramento = taField('O que dizer ao final do atendimento / após cadastro...', '', 'encerramento', 60);
+  var fProib = inpField('Ex: preço, desconto, concorrente', '', 'proibidasTexto');
+  var fTom = selField([
+    {v:'amigavel',l:'😊 Amigável e Descontraído'},
+    {v:'formal',l:'👔 Formal e Profissional'},
+    {v:'tecnico',l:'🔧 Técnico e Detalhado'}
+  ], '', 'tom');
+
+  function preencherCampos(cfg){
+    var inst = cfg.instrucoes || '';
+    fAbordagem.value = cfg.abordagem || inst;
+    fPF.value = cfg.dadosPF || 'Nome Completo, CPF, CEP e WhatsApp';
+    fPJ.value = cfg.dadosPJ || 'CNPJ, E-mail de contato e WhatsApp';
+    fRecusa.value = cfg.recusa || 'Explique com calma que somente com o cadastro é possível informar preços e condições especiais.';
+    fEncerramento.value = cfg.encerramento || 'Informe que a equipe de vendas entrará em contato em breve pelo WhatsApp informado.';
+    fProib.value = (cfg.proibidas||[]).join(', ');
+    fTom.value = cfg.tom || 'amigavel';
+  }
+
+  div.appendChild(card('🎯 Abordagem Inicial', 'Como o Ace deve iniciar e conduzir o atendimento', fAbordagem));
+  
+  var gridPFPJ=document.createElement('div');
+  gridPFPJ.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:12px';
+  gridPFPJ.appendChild(card('👤 Dados — Pessoa Física', 'Quais informações coletar de PF', fPF));
+  gridPFPJ.appendChild(card('🏢 Dados — Pessoa Jurídica', 'Quais informações coletar de PJ', fPJ));
+  div.appendChild(gridPFPJ);
+
+  div.appendChild(card('🚧 Quando Cliente Recusar Cadastro', 'O que o Ace deve fazer nessa situação', fRecusa));
+  div.appendChild(card('✅ Encerramento do Atendimento', 'Mensagem após cadastro realizado', fEncerramento));
+  div.appendChild(card('🚫 Palavras Proibidas', 'Separadas por vírgula — o Ace nunca vai usar', fProib));
+  div.appendChild(card('🎙️ Tom de Voz', '', fTom));
+
+  // Respostas rapidas
   var cardRR=document.createElement('div');
-  cardRR.style.cssText='background:#fff;border-radius:10px;padding:20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.07);border:1.5px solid #e5e7eb';
-  var hRR=document.createElement('div');
-  hRR.style.cssText='font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px';
-  hRR.textContent='⚡ Respostas Rápidas';
-  var instrRR=document.createElement('div');
-  instrRR.style.cssText='font-size:12px;color:#888;margin-bottom:10px';
-  instrRR.textContent='Cadastre perguntas frequentes com respostas prontas que o Ace usará automaticamente.';
-  var listRR=document.createElement('div');
-  listRR.style.cssText='display:flex;flex-direction:column;gap:8px;margin-bottom:10px';
+  cardRR.style.cssText='background:#fff;border-radius:10px;padding:20px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.07);border:1.5px solid #e5e7eb';
+  var hRR=document.createElement('div');hRR.style.cssText='font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px';hRR.textContent='⚡ Respostas Rápidas';
+  var sRR=document.createElement('div');sRR.style.cssText='font-size:11px;color:#999;margin-bottom:10px';sRR.textContent='Perguntas frequentes com respostas prontas que o Ace usará automaticamente';
+  var listRR=document.createElement('div');listRR.style.cssText='display:flex;flex-direction:column;gap:8px;margin-bottom:10px';
   var rrData=aceLoadRespostas();
   function renderListaRR(){
     listRR.innerHTML='';
     rrData.forEach(function(item,i){
       var row=document.createElement('div');
       row.style.cssText='display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center';
-      var iP=document.createElement('input');iP.type='text';iP.value=item.pergunta;iP.placeholder='Pergunta do cliente';
+      var iP=document.createElement('input');iP.type='text';iP.value=item.pergunta||'';iP.placeholder='Pergunta do cliente';
       iP.style.cssText='padding:8px;border:1.5px solid #d1d5db;border-radius:6px;font-size:12px;font-family:inherit;outline:none';
-      iP.onchange=function(){rrData[i].pergunta=this.value;aceSaveRespostas(rrData);};
-      var iR=document.createElement('input');iR.type='text';iR.value=item.resposta;iR.placeholder='Resposta do Ace';
+      iP.onchange=function(){rrData[i].pergunta=this.value;};
+      var iR=document.createElement('input');iR.type='text';iR.value=item.resposta||'';iR.placeholder='Resposta do Ace';
       iR.style.cssText='padding:8px;border:1.5px solid #d1d5db;border-radius:6px;font-size:12px;font-family:inherit;outline:none';
-      iR.onchange=function(){rrData[i].resposta=this.value;aceSaveRespostas(rrData);var cfg=aceLoadConfig();cfg.respostas=rrData;aceSyncConfig(cfg);};
+      iR.onchange=function(){rrData[i].resposta=this.value;};
       var btnD=document.createElement('button');btnD.innerHTML='🗑️';
-      btnD.style.cssText='padding:6px 10px;background:#fee2e2;color:#dc2626;border:none;border-radius:6px;cursor:pointer';
-      btnD.onclick=function(){rrData.splice(i,1);aceSaveRespostas(rrData);renderListaRR();};
+      btnD.style.cssText='padding:6px 10px;background:#fee2e2;color:#dc2626;border:none;border-radius:6px;cursor:pointer;font-size:13px';
+      btnD.onclick=function(){rrData.splice(i,1);renderListaRR();};
       row.appendChild(iP);row.appendChild(iR);row.appendChild(btnD);
       listRR.appendChild(row);
     });
@@ -3789,88 +3861,66 @@ function renderInstrucoes(){
   renderListaRR();
   var btnAddRR=document.createElement('button');
   btnAddRR.textContent='+ Adicionar Resposta Rápida';
-  btnAddRR.style.cssText='padding:8px 14px;background:#fff;border:1.5px dashed #d97706;color:#b45309;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;width:100%';
-  btnAddRR.onclick=function(){rrData.push({pergunta:'',resposta:''});aceSaveRespostas(rrData);renderListaRR();};
-  cardRR.appendChild(hRR);cardRR.appendChild(instrRR);cardRR.appendChild(listRR);cardRR.appendChild(btnAddRR);
+  btnAddRR.style.cssText='padding:8px 14px;background:#fff;border:1.5px dashed #d97706;color:#b45309;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;width:100%;margin-bottom:4px';
+  btnAddRR.onclick=function(){rrData.push({pergunta:'',resposta:''});renderListaRR();};
+  cardRR.appendChild(hRR);cardRR.appendChild(sRR);cardRR.appendChild(listRR);cardRR.appendChild(btnAddRR);
   div.appendChild(cardRR);
-
-  var selTom=document.createElement('select');
-  selTom.style.cssText='width:100%;padding:9px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit';
-  selTom.innerHTML='<option value="formal">Formal e Profissional</option><option value="amigavel">Amigável e Descontraído</option><option value="tecnico">Técnico e Detalhado</option>';
-  selTom.value=cfg.tom||'amigavel';
-  div.appendChild(card('🎙️ Tom de Voz',selTom));
-
-  // Dados da empresa
-  var gridEmp=document.createElement('div');
-  gridEmp.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:10px';
-  function inpCfg(ph,val){
-    var i=document.createElement('input');
-    i.type='text';i.placeholder=ph;i.value=val||'';
-    i.style.cssText='width:100%;padding:9px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;outline:none';
-    return i;
-  }
-  var iWhats=inpCfg('WhatsApp ex: 5562...',cfg.whatsapp||'556235173971');
-  var iSite=inpCfg('Site',cfg.site||'maisacessivel.com.br');
-  var iEnde=inpCfg('Endereço completo',cfg.endereco||'Goiânia, GO');
-  var iHora=inpCfg('Horário ex: Seg-Sex 8h-18h',cfg.horario||'');
-  var iEmail=inpCfg('E-mail',cfg.email||'');
-  var iCnpj=inpCfg('CNPJ',cfg.cnpj||'');
-  var iRazao=inpCfg('Razão Social',cfg.razaoSocial||'');
-  var iCidade=inpCfg('Cidade / UF',cfg.cidade||'Goiânia / GO');
-  var iCep=inpCfg('CEP',cfg.cep||'');
-  var iTelFixo=inpCfg('Telefone fixo',cfg.telFixo||'');
-  var iInsta=inpCfg('Instagram',cfg.instagram||'');
-  var iFace=inpCfg('Facebook',cfg.facebook||'');
-  var iDesc=document.createElement('textarea');
-  iDesc.placeholder='Descrição da empresa (quem somos, missão, diferenciais...)';
-  iDesc.value=cfg.descricao||'';
-  iDesc.style.cssText='width:100%;padding:9px;border:1.5px solid #d1d5db;border-radius:7px;font-size:13px;font-family:inherit;outline:none;grid-column:1/-1;height:70px;resize:vertical';
-  gridEmp.appendChild(iWhats);gridEmp.appendChild(iSite);
-  gridEmp.appendChild(iEnde);gridEmp.appendChild(iHora);
-  gridEmp.appendChild(iEmail);gridEmp.appendChild(iCnpj);
-  gridEmp.appendChild(iRazao);gridEmp.appendChild(iCidade);
-  gridEmp.appendChild(iCep);gridEmp.appendChild(iTelFixo);
-  gridEmp.appendChild(iInsta);gridEmp.appendChild(iFace);
-  gridEmp.appendChild(iDesc);
-  div.appendChild(card('🏢 Dados da Empresa',gridEmp));
-
-  // Palavras proibidas
-  var txtProib=document.createElement('textarea');
-  txtProib.style.cssText='width:100%;height:70px;border:1.5px solid #d1d5db;border-radius:7px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;outline:none';
-  txtProib.placeholder='Ex: concorrente, barato, desconto, não temos...';
-  txtProib.value=(cfg.proibidas||[]).join(', ');
-  div.appendChild(card('🚫 Palavras Proibidas (separadas por vírgula)',txtProib));
 
   // Botao salvar
   var btnSave=document.createElement('button');
-  btnSave.innerHTML='💾 Salvar Todas as Instruções';
-  btnSave.style.cssText='width:100%;padding:12px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit';
+  btnSave.innerHTML='💾 Salvar Configurações';
+  btnSave.style.cssText='width:100%;padding:14px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px';
   btnSave.onclick=function(){
-    cfg.tom=selTom.value;
-    cfg.whatsapp=iWhats.value;
-    cfg.site=iSite.value;
-    cfg.endereco=iEnde.value;
-    cfg.horario=iHora.value;
-    cfg.email=iEmail.value;
-    cfg.cnpj=iCnpj.value;
-    cfg.razaoSocial=iRazao.value;
-    cfg.cidade=iCidade.value;
-    cfg.cep=iCep.value;
-    cfg.telFixo=iTelFixo.value;
-    cfg.instagram=iInsta.value;
-    cfg.facebook=iFace.value;
-    cfg.descricao=iDesc.value;
-    cfg.proibidas=txtProib.value.split(',').map(function(s){return s.trim();}).filter(Boolean);
-    aceSaveConfig(cfg);
-    aceSyncConfig(cfg);
-    btnSave.innerHTML='✅ Salvo!';
-    setTimeout(function(){btnSave.innerHTML='💾 Salvar Todas as Instruções';},2000);
+    // Montar prompt completo a partir dos campos
+    var instrucoes = [
+      '1° Saudação conforme horário (Bom dia/Boa tarde/Boa noite).',
+      '2° ' + (fAbordagem.value.trim() || 'Pergunte o nome e se é PF ou PJ.'),
+      '3° Se Pessoa Física: colete ' + (fPF.value.trim() || 'Nome, CPF, CEP, WhatsApp') + '.',
+      '4° Se Pessoa Jurídica: colete ' + (fPJ.value.trim() || 'CNPJ, E-mail, WhatsApp') + '.',
+      '5° Se cliente recusar: ' + (fRecusa.value.trim() || 'Explique que precisa do cadastro.'),
+      '6° Após cadastro: ' + (fEncerramento.value.trim() || 'Informe que a equipe entrará em contato.')
+    ].join('\n');
+
+    var novaConfig = {
+      instrucoes: instrucoes,
+      abordagem: fAbordagem.value.trim(),
+      dadosPF: fPF.value.trim(),
+      dadosPJ: fPJ.value.trim(),
+      recusa: fRecusa.value.trim(),
+      encerramento: fEncerramento.value.trim(),
+      tom: fTom.value,
+      proibidas: fProib.value.split(',').map(function(s){return s.trim();}).filter(Boolean),
+      respostas: rrData.filter(function(r){return r.pergunta&&r.resposta;})
+    };
+
+    // Salvar respostas rapidas
+    aceSaveRespostas(novaConfig.respostas);
+
+    // Salvar no localStorage
+    aceSaveConfig(novaConfig);
+
+    // Salvar no servidor (Firebase)
+    btnSave.disabled=true;
+    btnSave.innerHTML='Salvando...';
+    fetch('https://maisacessivel-chatbot.onrender.com/config',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(novaConfig)
+    }).then(function(){
+      btnSave.disabled=false;
+      btnSave.innerHTML='✅ Salvo com sucesso!';
+      setTimeout(function(){btnSave.innerHTML='💾 Salvar Configurações';},3000);
+    }).catch(function(){
+      btnSave.disabled=false;
+      btnSave.innerHTML='❌ Erro ao salvar. Tente novamente.';
+      setTimeout(function(){btnSave.innerHTML='💾 Salvar Configurações';},3000);
+    });
   };
   div.appendChild(btnSave);
   return div;
 }
 
-// ── ABA: LEADS ──
+
 function renderLeads(){
   var div=document.createElement('div');
   // Buscar leads do servidor
