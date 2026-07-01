@@ -192,7 +192,7 @@ pre{background:#f3f3f1;border:1px solid #e8e8e6;border-radius:7px;padding:12px;f
 .ac-btn-add-refcom:hover{background:#ede9fe;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<!-- v7:1782937797 1782663552 1782662943 1782583259 1782578399 1782578055 1782577909 1782577490 <!-- old:1782573715 -->
+<!-- v8:1782937830 1782937797 1782663552 1782662943 1782583259 1782578399 1782578055 1782577909 1782577490 <!-- old:1782573715 -->
 </head>
 <body>
 
@@ -877,7 +877,7 @@ function renderAdmin(){
   [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Aba 4'}].forEach(function(ab){
     var lbl=document.createElement('label');
     lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
-    var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=true;
+    var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=false;
     lbl.appendChild(cb);lbl.appendChild(document.createTextNode(ab.label));
     divAbas.appendChild(lbl);
   });
