@@ -192,7 +192,7 @@ pre{background:#f3f3f1;border:1px solid #e8e8e6;border-radius:7px;padding:12px;f
 .ac-btn-add-refcom:hover{background:#ede9fe;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<!-- v6:1782663552 1782662943 1782583259 1782578399 1782578055 1782577909 1782577490 <!-- old:1782573715 -->
+<!-- v7:1782937797 1782663552 1782662943 1782583259 1782578399 1782578055 1782577909 1782577490 <!-- old:1782573715 -->
 </head>
 <body>
 
@@ -667,6 +667,7 @@ function persistEmb(){
 var STATE={
   usuarioLogado:null,
   roleLogado:null,
+  abasPermitidas:null,
   auth:false, tab:'cotacao', modulo:'frete', tabCredito:'analise',
   form:Object.assign({},INIT),
   prods:[{nome:'',vol:0,dim:'',cabe:''}],
@@ -683,6 +684,7 @@ var STATE={
       STATE.auth = true;
       STATE.usuarioLogado = sess.usuario;
       STATE.roleLogado = sess.role;
+      STATE.abasPermitidas = sess.abas || null;
       var bStr = sessionStorage.getItem('_blingPendente');
       if(bStr){ window._blingImport = JSON.parse(bStr); sessionStorage.removeItem('_blingPendente'); }
     }
@@ -749,7 +751,8 @@ function renderLogin(){
         STATE.auth=true;
         STATE.usuarioLogado=found.usuario;
         STATE.roleLogado=found.role;
-        localStorage.setItem('maisacessivel_session',JSON.stringify({usuario:found.usuario,role:found.role}));
+        STATE.abasPermitidas=found.abas||null;
+        localStorage.setItem('maisacessivel_session',JSON.stringify({usuario:found.usuario,role:found.role,abas:found.abas||null}));
         fbLogAccess(found.usuario);
         var bStr=sessionStorage.getItem('_blingPendente');
         if(bStr){window._blingImport=JSON.parse(bStr);sessionStorage.removeItem('_blingPendente');}
@@ -2373,12 +2376,24 @@ function renderHistoricoCredito(){
 }
 
 function renderModuloNav(){
-  var MODULOS=[
+  var TODOS_MODULOS=[
     {id:'frete', icon:'🚛', label:'Frete'},
     {id:'mod2',  icon:'📁', label:'Análise de Crédito'},
     {id:'mod3', icon:'🤖', label:'Ace IA'},
     {id:'mod4',  icon:'📁', label:'Aba 4'}
   ];
+  // Mapeamento id antigo -> novo
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4'};
+  // Admin ve tudo; outros so veem abas permitidas
+  var MODULOS=TODOS_MODULOS;
+  if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
+    var permitidas=STATE.abasPermitidas.map(function(a){return MAPA_IDS[a]||a;});
+    MODULOS=TODOS_MODULOS.filter(function(m){return permitidas.indexOf(m.id)>=0;});
+    // Se modulo atual nao esta permitido, ir para o primeiro permitido
+    if(MODULOS.length>0 && permitidas.indexOf(STATE.modulo)<0){
+      STATE.modulo=MODULOS[0].id;
+    }
+  }
   var bar=document.createElement('div');
   bar.style.cssText='background:#2d2d2d;display:flex;align-items:center;gap:2px;padding:0 18px;border-bottom:2px solid #d97706;overflow-x:auto';
   MODULOS.forEach(function(m){
