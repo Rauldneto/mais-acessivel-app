@@ -1249,7 +1249,17 @@ function importarAnaliseAC(file){
           if(blocos[0]&&blocos[0].length>100) m=[null,blocos[0]];
         }
         if(!m||!m[1]) throw new Error('Nao foi possivel ler os dados. Gere um novo PDF pelo botao PDF e tente novamente.');
-        var json=JSON.parse(decodeURIComponent(escape(atob(m[1]))));
+        var json;
+        try{
+          // Decodificacao robusta de base64 com suporte a UTF-8
+          var bytes=atob(m[1]);
+          var arr=new Uint8Array(bytes.length);
+          for(var bi=0;bi<bytes.length;bi++) arr[bi]=bytes.charCodeAt(bi);
+          json=JSON.parse(new TextDecoder('utf-8').decode(arr));
+        }catch(e2){
+          // Fallback para ASCII
+          try{ json=JSON.parse(atob(m[1])); }catch(e3){ throw new Error('Erro ao decodificar dados do PDF: '+e3.message); }
+        }
         if(!json||json.v!==2) throw new Error('Versao do PDF incompativel.');
         window._AC_contratoTexto=json.snapshotContratoTexto||'';
         window._AC_imovelTexto=json.snapshotImovelTexto||'';
