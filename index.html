@@ -1211,7 +1211,7 @@ function gerarImpressaoAC(){
     +'<h2>Veredito Final</h2><div class="'+verCls+'">'+verLabel+'</div>'
     +(reg.veredictoMotivo?'<p style="font-size:10px;color:#374151;margin-bottom:8px;">'+esc(reg.veredictoMotivo)+'</p>':'')
     +'<div class="footer">Gerado em: '+hoje+' - MAIS ACESSIVEL - JDFER Comercio e Servicos Ltda</div>'
-    +'<div class="hidden-data" id="ac-export-data">ACDATA:'+jsonB64+':ACDATA</div>'
+    +'<div style="font-size:6px;color:#d1d5db;word-break:break-all;line-height:1.2;margin-top:2px;">ACDATA:'+jsonB64+':ACDATA</div>'
     +'</body></html>';
   var w=window.open('','_blank','width=900,height=700');
   w.document.write(html);
@@ -1241,8 +1241,12 @@ function importarAnaliseAC(file){
         }));
       }).then(function(partes){
         var textoTotal=partes.join('');
-        var m=textoTotal.match(/ACDATA:([A-Za-z0-9+\/=]+):ACDATA/);
-        if(!m||!m[1]) throw new Error('Este PDF nao foi gerado por esta plataforma ou foi gerado em versao anterior. Use o botao PDF para gerar um novo e depois importe-o.');
+        var m=textoTotal.match(/ACDATA:([A-Za-z0-9+\/=]{20,}):ACDATA/);
+        if(!m||!m[1]){
+          var mFb=(textoTotal.replace(/\s/g,'')).match(/([A-Za-z0-9+\/]{200,}={0,2})/);
+          if(mFb) m=[null,mFb[1]];
+        }
+        if(!m||!m[1]) throw new Error('Nao foi possivel ler os dados. Gere um novo PDF pelo botao PDF e tente novamente.');
         var json=JSON.parse(decodeURIComponent(escape(atob(m[1]))));
         if(!json||json.v!==2) throw new Error('Versao do PDF incompativel.');
         window._AC_contratoTexto=json.snapshotContratoTexto||'';
