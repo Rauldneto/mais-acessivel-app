@@ -1211,7 +1211,7 @@ function gerarImpressaoAC(){
     +'<h2>Veredito Final</h2><div class="'+verCls+'">'+verLabel+'</div>'
     +(reg.veredictoMotivo?'<p style="font-size:10px;color:#374151;margin-bottom:8px;">'+esc(reg.veredictoMotivo)+'</p>':'')
     +'<div class="footer">Gerado em: '+hoje+' - MAIS ACESSIVEL - JDFER Comercio e Servicos Ltda</div>'
-    +'<div class="hidden-data" id="ac-export-data">ACDATA:'+jsonB64+':ACDATA</div>'
+    +'<div style="page-break-before:always;font-size:6px;color:#e5e7eb;font-family:monospace;word-break:break-all;line-height:1.4;padding:4px;margin-top:2px;">ACDATA_V2_START'+jsonB64+'ACDATA_V2_END</div>'
     +'</body></html>';
   var w=window.open('','_blank','width=900,height=700');
   w.document.write(html);
@@ -1242,13 +1242,14 @@ function importarAnaliseAC(file){
       }).then(function(partes){
         var textoTotal=partes.join('');
         var textoSemEsp=textoTotal.replace(/\s/g,'');
-        var m=textoSemEsp.match(/ACDATA:([A-Za-z0-9+\/=]{20,}):ACDATA/);
+        var m=textoSemEsp.match(/ACDATA_V2_START([A-Za-z0-9+\/=]+)ACDATA_V2_END/);
+        if(!m||!m[1]) m=textoSemEsp.match(/ACDATA:([A-Za-z0-9+\/=]{20,}):ACDATA/);
         if(!m||!m[1]){
-          var blocos=(textoSemEsp.match(/[A-Za-z0-9+\/]{100,}={0,2}/g)||[]);
+          var blocos=(textoSemEsp.match(/[A-Za-z0-9+\/]{200,}={0,2}/g)||[]);
           blocos.sort(function(a,b){return b.length-a.length;});
-          if(blocos[0]&&blocos[0].length>100) m=[null,blocos[0]];
+          if(blocos[0]&&blocos[0].length>200) m=[null,blocos[0]];
         }
-        if(!m||!m[1]) throw new Error('Nao foi possivel ler os dados. Gere um novo PDF pelo botao PDF e tente novamente.');
+        if(!m||!m[1]) throw new Error('Nao foi possivel ler os dados do PDF.');
         var json;
         try{
           // Decodificacao robusta de base64 com suporte a UTF-8
