@@ -1242,7 +1242,7 @@ function importarAnaliseAC(file){
       }).then(function(partes){
         var textoTotal=partes.join('');
         var m=textoTotal.match(/ACDATA:([A-Za-z0-9+\/=]+):ACDATA/);
-        if(!m||!m[1]) throw new Error('PDF nao reconhecido como exportado pelo sistema. Verifique se e um PDF gerado por esta plataforma.');
+        if(!m||!m[1]) throw new Error('Este PDF nao foi gerado por esta plataforma ou foi gerado em versao anterior. Use o botao PDF para gerar um novo e depois importe-o.');
         var json=JSON.parse(decodeURIComponent(escape(atob(m[1]))));
         if(!json||json.v!==2) throw new Error('Versao do PDF incompativel.');
         window._AC_contratoTexto=json.snapshotContratoTexto||'';
