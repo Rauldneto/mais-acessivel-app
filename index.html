@@ -668,7 +668,7 @@ var STATE={
   usuarioLogado:null,
   roleLogado:null,
   abasPermitidas:null,
-  auth:false, tab:'cotacao', modulo:'frete', tabCredito:'analise', etapaCredito:1,
+  auth:false, tab:'cotacao', modulo:'frete', tabCredito:'analise',
   form:Object.assign({},INIT),
   prods:[{nome:'',vol:0,dim:'',cabe:''}],
   manRows:[],
@@ -1420,8 +1420,7 @@ function renderAnaliseCredito(){
 
   // ======= FASE 2: aprofundamento (oculta até consulta da Fase 1) =======
   var fase2Wrap=el('div','');
-  var _etapaAtual = STATE.etapaCredito||1;
-  fase2Wrap.style.display = (_etapaAtual>=3 && AC.ultimoResultado && AC.ultimoResultado.registro) ? 'block' : 'none';
+  fase2Wrap.style.display = (AC.ultimoResultado && AC.ultimoResultado.registro) ? 'block' : 'none';
   var fase2Aviso=el('div','');
   fase2Wrap.appendChild(fase2Aviso);
   function atualizarAvisoFase2(){
@@ -1507,12 +1506,6 @@ function renderAnaliseCredito(){
   }
 
   // ======= VERIFICAÇÃO MANUAL: ENDEREÇO, EMPRESA NO GOOGLE, EMPRESA NO INSTAGRAM =======
-  // Etapa 2: apenas CENPROT
-  var etapa2Wrap=el('div','');
-  etapa2Wrap.id='ac-etapa2-wrap';
-  etapa2Wrap.style.display='none';
-  wrap.appendChild(etapa2Wrap);
-
   var verificacoesDiv=el('div','');
   verificacoesDiv.id='ac-verificacoes-div';
   fase2Wrap.appendChild(verificacoesDiv);
@@ -1940,10 +1933,6 @@ function renderAnaliseCredito(){
       }
 
       // Gerar parecer da IA
-      STATE.etapaCredito=1;
-      (function(){ var e2r=document.getElementById('ac-etapa2-wrap'); if(e2r){e2r.style.display='none';e2r.innerHTML='';} })();
-      fase2Wrap.style.display='none';
-      var trC=document.getElementById('ac-triagem-card'); if(trC) trC.innerHTML='';
       iaBody.innerHTML='<div class="ac-ia-loading">🤖 Gerando parecer inteligente...</div>';
       var tempo=anosDesde(est.data_inicio_atividade);
       var simples=(d.simples||{}).simples||'';
@@ -2433,61 +2422,7 @@ function renderAnaliseCredito(){
         };
         btnSalvar.disabled=false;btnSalvar.style.opacity='1';btnSalvar.textContent='💾 Salvar';
         if(typeof btnImprimirPDF!=='undefined'){btnImprimirPDF.disabled=false;btnImprimirPDF.style.opacity='1';}
-        // ===== TRIAGEM EM 3 ETAPAS =====
-        var _ok1 = ativa;
-        var _ok2 = (function(){ if(!est.data_inicio_atividade) return false; var d0=new Date(est.data_inicio_atividade),n=new Date(); return ((n-d0)/2592000000)>=12; })();
-        var _ok3 = (function(){ if(!d.socios||!d.socios[0]||!d.socios[0].data_entrada) return true; var ds=new Date(d.socios[0].data_entrada),n=new Date(); return ((n-ds)/2592000000)>=18; })();
-        var _trOk = _ok1 && _ok2 && _ok3;
-        var trCard=document.getElementById('ac-triagem-card');
-        if(!trCard){trCard=el('div','');trCard.id='ac-triagem-card';iaBody.appendChild(trCard);}
-        trCard.innerHTML='';
-        trCard.style.cssText='margin-top:14px;border-top:2px solid #e5e7eb;padding-top:12px;';
-        function mkTr(ok,txt){
-          var d0=el('div','');
-          d0.style.cssText='display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;margin-bottom:6px;background:'+(ok?'#dcfce7':'#fee2e2')+';font-size:.9em;font-weight:600;color:'+(ok?'#166534':'#991b1b')+';;';
-          d0.innerHTML=(ok?'<span>✅</span>':'<span>❌</span>')+' '+txt;
-          return d0;
-        }
-        var _t1='Empresa ATIVA perante a Receita Federal'+(ativa?'':' (⚠️ Situação: '+sit+')');
-        var _t2=_ok2?('Empresa com mais de 12 meses de funcionamento ('+tempo+')'):'Empresa com menos de 12 meses (⚠️ tempo insuficiente)';
-        var _t3nome=d.socios&&d.socios[0]?d.socios[0].nome:'';
-        var _t3=_ok3?('Sem alteração do sócio majoritário nos últimos 18 meses'+(socioEntrada?' (entrada: '+socioEntrada+')':'')):'Alteração de sócio majoritário há menos de 18 meses (⚠️ entrada: '+socioEntrada+')';
-        trCard.appendChild(mkTr(_ok1,_t1));
-        trCard.appendChild(mkTr(_ok2,_t2));
-        trCard.appendChild(mkTr(_ok3,_t3));
-        if(!_trOk){
-          var negD=el('div',''); negD.style.cssText='background:#fee2e2;border:2px solid #dc2626;border-radius:10px;padding:14px;margin-top:10px;text-align:center;';
-          negD.innerHTML='<div style="font-size:1.05em;font-weight:800;color:#991b1b;">❌ NEGADO — VENDA SOMENTE À VISTA</div><div style="font-size:.83em;color:#7f1d1d;margin-top:5px;">Uma ou mais condições de triagem não foram atendidas. Para prosseguir sem entrada: aprovação de um dos diretores.</div>';
-          trCard.appendChild(negD);
-          STATE.etapaCredito=1;
-          document.getElementById('ac-etapa2-wrap').style.display='none';
-          fase2Wrap.style.display='none';
-        } else {
-          var okD=el('div',''); okD.style.cssText='background:#dcfce7;border:2px solid #16a34a;border-radius:10px;padding:12px;margin-top:10px;text-align:center;';
-          okD.innerHTML='<div style="font-size:1em;font-weight:700;color:#166534;">✅ Triagem inicial aprovada — prossiga para verificação de pendências em cartório</div>';
-          trCard.appendChild(okD);
-          STATE.etapaCredito=2;
-          var e2=document.getElementById('ac-etapa2-wrap');
-          e2.innerHTML=''; e2.style.display='block';
-          var e2card=el('div','ac-upload-card');
-          e2card.style.cssText='margin-top:16px;padding:16px;border:2px solid #d97706;border-radius:10px;background:#fffbeb;';
-          e2card.innerHTML='<h3 style="font-size:14px;font-weight:700;color:#92400e;margin:0 0 10px;">ðï¸ Etapa 2 — Verificação de Protestos em Cartório (CENPROT)</h3><p style="font-size:12px;color:#6b7280;margin:0 0 12px;">Consulte o CENPROT e marque o resultado. A análise aprofundada só será liberada se não houver protestos.</p>';
-          var cenBtns=el('div',''); cenBtns.style.cssText='display:flex;align-items:center;gap:10px;flex-wrap:wrap;';
-          var cenLink=document.createElement('a'); cenLink.href='https://www.pesquisaprotesto.com.br/'; cenLink.target='_blank'; cenLink.className='ac-endereco-maps-link';
-          cenLink.innerHTML='ðï¸ Consultar CENPROT';
-          cenBtns.appendChild(cenLink);
-          var btnSP=document.createElement('button'); btnSP.type='button'; btnSP.className='ac-endereco-btn ac-endereco-btn-ok'; btnSP.innerHTML='✅ Sem protesto';
-          var btnCP=document.createElement('button'); btnCP.type='button'; btnCP.className='ac-endereco-btn ac-endereco-btn-err'; btnCP.innerHTML='❌ Há protesto';
-          cenBtns.appendChild(btnSP); cenBtns.appendChild(btnCP);
-          e2card.appendChild(cenBtns);
-          var cenSt=el('span','ac-endereco-status',''); e2card.appendChild(cenSt);
-          e2.appendChild(e2card);
-          function _apEstCen(s){ if(s==='CONFERE'){btnSP.style.cssText='opacity:1;font-weight:700;box-shadow:0 0 0 2px #166534;';btnCP.style.cssText='opacity:.35;filter:grayscale(60%);';} else if(s==='NAO_CONFERE'){btnCP.style.cssText='opacity:1;font-weight:700;box-shadow:0 0 0 2px #991b1b;';btnSP.style.cssText='opacity:.35;filter:grayscale(60%);';} }
-          var _cs=lerConfirmacao('cenprot'); if(_cs) _apEstCen(_cs);
-          if(_cs==='CONFERE'){ STATE.etapaCredito=3; fase2Wrap.style.display='block'; atualizarAvisoFase2(); window._montarVerificacoes(data.fantasia||data.nome,cnpj,mapsQuery); }
-          btnSP.onclick=function(){ cenSt.textContent='✅ Sem protesto no CENPROT.'; cenSt.style.color='#166534'; _apEstCen('CONFERE'); var _ch=fbHistChaveCnpj(cnpj)+'_cenprot'; AC.confirmacoesManuais=AC.confirmacoesManuais||{}; AC.confirmacoesManuais[_ch]='CONFERE'; if(AC.ultimoResultado){AC.ultimoResultado.confirmacoesManuais=AC.ultimoResultado.confirmacoesManuais||{};AC.ultimoResultado.confirmacoesManuais['cenprot']='CONFERE';} STATE.etapaCredito=3; fase2Wrap.style.display='block'; atualizarAvisoFase2(); window._montarVerificacoes(data.fantasia||data.nome,cnpj,mapsQuery); };
-          btnCP.onclick=function(){ cenSt.textContent='❌ HÁ protesto no CENPROT.'; cenSt.style.color='#991b1b'; _apEstCen('NAO_CONFERE'); var _ch=fbHistChaveCnpj(cnpj)+'_cenprot'; AC.confirmacoesManuais=AC.confirmacoesManuais||{}; AC.confirmacoesManuais[_ch]='NAO_CONFERE'; if(AC.ultimoResultado){AC.ultimoResultado.confirmacoesManuais=AC.ultimoResultado.confirmacoesManuais||{};AC.ultimoResultado.confirmacoesManuais['cenprot']='NAO_CONFERE';} var negCen=document.createElement('div'); negCen.style.cssText='background:#fee2e2;border:2px solid #dc2626;border-radius:10px;padding:14px;margin-top:10px;text-align:center;'; negCen.innerHTML='<div style="font-size:1.05em;font-weight:800;color:#991b1b;">❌ NEGADO — VENDA SOMENTE À VISTA</div><div style="font-size:.83em;color:#7f1d1d;margin-top:5px;">Protesto(s) identificado(s) no CENPROT. Venda a prazo não autorizada.</div>'; e2card.appendChild(negCen); STATE.etapaCredito=2; fase2Wrap.style.display='none'; };
-        }
+        fase2Wrap.style.display='block';
         atualizarAvisoFase2();
       }).catch(function(){iaBody.innerHTML='<div class="ac-ia-loading">Não foi possível conectar com a IA. Tente novamente.</div>';});
 
