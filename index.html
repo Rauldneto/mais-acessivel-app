@@ -1940,6 +1940,10 @@ function renderAnaliseCredito(){
       }
 
       // Gerar parecer da IA
+      STATE.etapaCredito=1;
+      (function(){ var e2r=document.getElementById('ac-etapa2-wrap'); if(e2r){e2r.style.display='none';e2r.innerHTML='';} })();
+      fase2Wrap.style.display='none';
+      var trC=document.getElementById('ac-triagem-card'); if(trC) trC.innerHTML='';
       iaBody.innerHTML='<div class="ac-ia-loading">🤖 Gerando parecer inteligente...</div>';
       var tempo=anosDesde(est.data_inicio_atividade);
       var simples=(d.simples||{}).simples||'';
@@ -2467,7 +2471,7 @@ function renderAnaliseCredito(){
           e2.innerHTML=''; e2.style.display='block';
           var e2card=el('div','ac-upload-card');
           e2card.style.cssText='margin-top:16px;padding:16px;border:2px solid #d97706;border-radius:10px;background:#fffbeb;';
-          e2card.innerHTML='<h3 style="font-size:14px;font-weight:700;color:#92400e;margin:0 0 10px;">ðï¸ Etapa 2 — Verificação de Protes‰tos em Cartório (CENPROT)</h3><p style="font-size:12px;color:#6b7280;margin:0 0 12px;">Consulte o CENPROT e marque o resultado. A análise aprofundada só será liberada se não houver protestos.</p>';
+          e2card.innerHTML='<h3 style="font-size:14px;font-weight:700;color:#92400e;margin:0 0 10px;">ðï¸ Etapa 2 — Verificação de Protestos em Cartório (CENPROT)</h3><p style="font-size:12px;color:#6b7280;margin:0 0 12px;">Consulte o CENPROT e marque o resultado. A análise aprofundada só será liberada se não houver protestos.</p>';
           var cenBtns=el('div',''); cenBtns.style.cssText='display:flex;align-items:center;gap:10px;flex-wrap:wrap;';
           var cenLink=document.createElement('a'); cenLink.href='https://www.pesquisaprotesto.com.br/'; cenLink.target='_blank'; cenLink.className='ac-endereco-maps-link';
           cenLink.innerHTML='ðï¸ Consultar CENPROT';
@@ -2482,7 +2486,7 @@ function renderAnaliseCredito(){
           var _cs=lerConfirmacao('cenprot'); if(_cs) _apEstCen(_cs);
           if(_cs==='CONFERE'){ STATE.etapaCredito=3; fase2Wrap.style.display='block'; atualizarAvisoFase2(); window._montarVerificacoes(data.fantasia||data.nome,cnpj,mapsQuery); }
           btnSP.onclick=function(){ cenSt.textContent='✅ Sem protesto no CENPROT.'; cenSt.style.color='#166534'; _apEstCen('CONFERE'); var _ch=fbHistChaveCnpj(cnpj)+'_cenprot'; AC.confirmacoesManuais=AC.confirmacoesManuais||{}; AC.confirmacoesManuais[_ch]='CONFERE'; if(AC.ultimoResultado){AC.ultimoResultado.confirmacoesManuais=AC.ultimoResultado.confirmacoesManuais||{};AC.ultimoResultado.confirmacoesManuais['cenprot']='CONFERE';} STATE.etapaCredito=3; fase2Wrap.style.display='block'; atualizarAvisoFase2(); window._montarVerificacoes(data.fantasia||data.nome,cnpj,mapsQuery); };
-          btnCP.onclick=function(){ cenSt.textContent='❌ HÁ protesto no CENPROT.'; cenSt.style.color='#991b1b'; _apEstCen('NAO_CONFERE'); var _ch=fbHistChaveCnpj(cnpj)+'_cenprot'; AC.confirmacoesManuais=AC.confirmacoesManuais||{}; AC.confirmacoesManuais[_ch]='NAO_CONFERE'; if(AC.ultimoResultado){AC.ultimoResultado.confirmacoesManuais=AC.ultimoResultado.confirmacoesManuais||{};AC.ultimoResultado.confirmacoesManuais['cenprot']='NAO_CONFERE';} var negCen=document.createElement('div'); negCen.style.cssText='background:#fee2e2;border:2px solid #dc2626;border-radius:10px;padding:14px;margin-top:10px;text-align:center;'; negCen.innerHTML='<div style="font-size:1.05em;font-weight:800;color:#991b1b;">❌ NEGADO — VENDA SOMENTE À VISTA</div><div style="font-size:.83em;color:#7f1d1d;margin-top:5px;">Protes‰to(s) identificado(s) no CENPROT. Venda a prazo não autorizada.</div>'; e2card.appendChild(negCen); STATE.etapaCredito=2; fase2Wrap.style.display='none'; };
+          btnCP.onclick=function(){ cenSt.textContent='❌ HÁ protesto no CENPROT.'; cenSt.style.color='#991b1b'; _apEstCen('NAO_CONFERE'); var _ch=fbHistChaveCnpj(cnpj)+'_cenprot'; AC.confirmacoesManuais=AC.confirmacoesManuais||{}; AC.confirmacoesManuais[_ch]='NAO_CONFERE'; if(AC.ultimoResultado){AC.ultimoResultado.confirmacoesManuais=AC.ultimoResultado.confirmacoesManuais||{};AC.ultimoResultado.confirmacoesManuais['cenprot']='NAO_CONFERE';} var negCen=document.createElement('div'); negCen.style.cssText='background:#fee2e2;border:2px solid #dc2626;border-radius:10px;padding:14px;margin-top:10px;text-align:center;'; negCen.innerHTML='<div style="font-size:1.05em;font-weight:800;color:#991b1b;">❌ NEGADO — VENDA SOMENTE À VISTA</div><div style="font-size:.83em;color:#7f1d1d;margin-top:5px;">Protesto(s) identificado(s) no CENPROT. Venda a prazo não autorizada.</div>'; e2card.appendChild(negCen); STATE.etapaCredito=2; fase2Wrap.style.display='none'; };
         }
         atualizarAvisoFase2();
       }).catch(function(){iaBody.innerHTML='<div class="ac-ia-loading">Não foi possível conectar com a IA. Tente novamente.</div>';});
