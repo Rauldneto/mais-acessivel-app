@@ -2781,21 +2781,58 @@ function renderModeloEmTeste(){
     if(raw.length!==14){alert('CNPJ inv\u00e1lido');return;}
     limpar5();
     var pb=div.querySelector('#m5-pb');pb.textContent='Buscando dados na Receita Federal...';
-    var d=CEN[raw]||CEN['35017646000166'];
-    S.mE=d.mE;S.mS=d.mS;S.nS=d.nS;S.sit=d.sit;
-    D.nome=d.nome;D.fantasia=d.fantasia;D.cnpj=inp2.value;D.socio=d.socio;D.capital=d.capital;
-    setTimeout(function(){
-      var ativa=d.sit=='ATIVA',m2=d.mE>=24,m12=d.mE>=12,sOk=d.mS>=12;
-      var tE=tStr(d.mE),tSo=tStr(d.mS);
-      pb.innerHTML='<strong>'+D.nome+'</strong> ('+D.fantasia+'), CNPJ '+D.cnpj+', situa\u00e7\u00e3o <strong>'+d.sit+'</strong>, '+tE+' de exist\u00eancia. S\u00f3cio: <strong>'+D.socio+'</strong> h\u00e1 <strong>'+tSo+'</strong>. Capital: <strong>'+D.capital+'</strong>.';
+    // Tentar API real, fallback para CEN simulado
+    var cnpjFormatado=inp2.value;
+    pb.textContent='Consultando Receita Federal...';
+    fetch('https://publica.cnpj.ws/cnpj/'+raw)
+      .then(function(r){return r.json();})
+      .then(function(api){
+        var est=api.estabelecimento||{};
+        var sit=(est.situacao_cadastral||{}).descricao||'DESCONHECIDA';
+        var abertura=est.data_inicio_atividade||est.data_abertura||'';
+        var meses=0;
+        if(abertura){
+          var partes=abertura.split('-');
+          var dtAb=new Date(parseInt(partes[0]),parseInt(partes[1])-1,parseInt(partes[2]));
+          var agora=new Date();
+          meses=Math.floor((agora-dtAb)/(1000*60*60*24*30.44));
+        }
+        var socios=api.socios||[];
+        var socio=socios.length>0?(socios[0].nome||'N\u00e3o informado'):'N\u00e3o informado';
+        var mesesSocio=0;
+        if(socios.length>0&&socios[0].data_entrada){
+          var partes2=(socios[0].data_entrada).split('-');
+          var dtS=new Date(parseInt(partes2[0]),parseInt(partes2[1])-1,parseInt(partes2[2]));
+          mesesSocio=Math.floor((new Date()-dtS)/(1000*60*60*24*30.44));
+        }
+        var nome=api.razao_social||est.nome_fantasia||'N\u00e3o informado';
+        var fantasia=est.nome_fantasia||nome;
+        var capital=api.capital_social?'R$ '+parseFloat(api.capital_social).toLocaleString('pt-BR',{minimumFractionDigits:2}):'N\u00e3o informado';
+        var nSocios=socios.length||1;
+        S.mE=meses;S.mS=mesesSocio;S.nS=nSocios;S.sit=sit.toUpperCase();
+        D.nome=nome;D.fantasia=fantasia;D.cnpj=cnpjFormatado;D.socio=socio;D.capital=capital;
+        processarE1();
+      })
+      .catch(function(){
+        // Fallback simulado
+        var d=CEN[raw]||{sit:'ATIVA',mE:36,mS:36,nS:1,nome:'EMPRESA LTDA',fantasia:'EMPRESA',socio:'SOCIO DA EMPRESA',capital:'R$ 50.000,00'};
+        S.mE=d.mE;S.mS=d.mS;S.nS=d.nS;S.sit=d.sit;
+        D.nome=d.nome;D.fantasia=d.fantasia;D.cnpj=cnpjFormatado;D.socio=d.socio;D.capital=d.capital;
+        processarE1();
+      });
+    function processarE1(){
+
+      var ativa=S.sit=='ATIVA',m2=S.mE>=24,m12=S.mE>=12,sOk=S.mS>=12;
+      var tE=tStr(S.mE),tSo=tStr(S.mS);
+      pb.innerHTML='<strong>'+D.nome+'</strong> ('+D.fantasia+'), CNPJ '+D.cnpj+', situa\u00e7\u00e3o <strong>'+S.sit+'</strong>, '+tE+' de exist\u00eancia. S\u00f3cio: <strong>'+D.socio+'</strong> h\u00e1 <strong>'+tSo+'</strong>. Capital: <strong>'+D.capital+'</strong>.';
       var its=[],negs=[],ats=[];
-      if(!ativa){its.push({c:'neg',i:'ti-x',t:'Empresa <strong>'+d.sit+'</strong> \u2014 inativa na Receita Federal'});negs.push('Empresa '+d.sit+' \u2014 impossibilidade de emiss\u00e3o de NF. Sem exce\u00e7\u00e3o.');}
+      if(!ativa){its.push({c:'neg',i:'ti-x',t:'Empresa <strong>'+S.sit+'</strong> \u2014 inativa na Receita Federal'});negs.push('Empresa '+S.sit+' \u2014 impossibilidade de emiss\u00e3o de NF. Sem exce\u00e7\u00e3o.');}
       else its.push({c:'ok',i:'ti-check',t:'Empresa <strong>ATIVA</strong> na Receita Federal'});
       if(!m12){its.push({c:'warn',i:'ti-alert-triangle',t:'Apenas <strong>'+tE+'</strong> de exist\u00eancia \u2014 aten\u00e7\u00e3o (menos de 12 meses)'});ats.push('empresa_menos12m');}
       else if(!m2){its.push({c:'warn',i:'ti-alert-triangle',t:'<strong>'+tE+'</strong> de exist\u00eancia (12\u201324 meses \u2014 aten\u00e7\u00e3o)'});ats.push('empresa_12_24m');}
       else its.push({c:'ok',i:'ti-check',t:'<strong>'+tE+'</strong> de exist\u00eancia (acima de 24 meses)'});
       if(!sOk){
-        if(d.nS==1&&m2){its.push({c:'neg',i:'ti-x',t:'S\u00f3cio \u00fanico alterado h\u00e1 <strong>'+tSo+'</strong>. Sem exce\u00e7\u00e3o.'});negs.push('S\u00f3cio \u00fanico com altera\u00e7\u00e3o nos \u00faltimos 12m. Sem exce\u00e7\u00e3o.');}
+        if(S.nS==1&&m2){its.push({c:'neg',i:'ti-x',t:'S\u00f3cio \u00fanico alterado h\u00e1 <strong>'+tSo+'</strong>. Sem exce\u00e7\u00e3o.'});negs.push('S\u00f3cio \u00fanico com altera\u00e7\u00e3o nos \u00faltimos 12m. Sem exce\u00e7\u00e3o.');}
         else{its.push({c:'warn',i:'ti-alert-triangle',t:'S\u00f3cio majorit\u00e1rio alterado h\u00e1 <strong>'+tSo+'</strong>. Aten\u00e7\u00e3o.'});ats.push('socio_menos12m');}
       } else its.push({c:'ok',i:'ti-check',t:'S\u00f3cio est\u00e1vel h\u00e1 <strong>'+tSo+'</strong> (acima de 12 meses)'});
       var s1=div.querySelector('#m5-s1');s1.classList.remove('hidden');
@@ -2814,7 +2851,8 @@ function renderModeloEmTeste(){
         its.forEach(function(it){if(it.c!='neg')ck(it.c,it.i,it.t.replace(/<[^>]+>/g,''));});
         s1.innerHTML=h;setTimeout(function(){bE2_5();},400);
       }
-    },900);
+    }
+    setTimeout(function(){processarE1();},900);
   }
 
   function bE2_5(){
@@ -2984,7 +3022,7 @@ function renderModeloEmTeste(){
   div.innerHTML=
     '<div style="background:var(--fill-accent);color:var(--on-accent);border-radius:0 0 12px 12px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500"><i class="ti ti-flask"></i> Modelo em Teste \u2014 Novo Fluxo de An\u00e1lise de Cr\u00e9dito (5 Etapas)</div>'
     +'<div style="padding:0 4px">'
-    +'<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap"><label style="font-size:13px;color:var(--text-secondary);font-weight:500">CNPJ</label><input id="m5-inp" type="text" placeholder="00.000.000/0001-00" maxlength="18" value="35.017.646/0001-66" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:7px 11px;font-size:13px;width:190px;background:var(--surface-1);color:var(--text-primary);outline:none"><button style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="consultar5()"><i class="ti ti-search"></i> Consultar</button><button style="background:var(--surface-1);color:var(--text-secondary);border:0.5px solid var(--border);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="limpar5()"><i class="ti ti-x"></i></button></div>'
+    +'<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap"><label style="font-size:13px;color:var(--text-secondary);font-weight:500">CNPJ</label><input id="m5-inp" type="text" placeholder="00.000.000/0001-00" maxlength="18" value="" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:7px 11px;font-size:13px;width:190px;background:var(--surface-1);color:var(--text-primary);outline:none"><button style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="consultar5()"><i class="ti ti-search"></i> Consultar</button><button style="background:var(--surface-1);color:var(--text-secondary);border:0.5px solid var(--border);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="limpar5()"><i class="ti ti-x"></i></button></div>'
     +'<div style="background:var(--bg-warning);border:1.5px solid var(--border-warning);border-radius:12px;padding:16px 18px;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><i class="ti ti-robot" style="font-size:22px;color:var(--text-warning)"></i><span style="font-size:15px;font-weight:500;color:var(--text-primary)">Parecer Inteligente \u2014 An\u00e1lise de Risco</span></div><div id="m5-pb" style="font-size:13px;color:var(--text-secondary);line-height:1.6;font-style:italic">Digite o CNPJ e clique em Consultar para gerar o parecer.</div><div id="m5-cl" style="margin-top:10px"></div></div>'
     +'<div id="m5-s1" class="hidden"></div>'
     +'<div id="m5-s2" class="hidden"></div>'
