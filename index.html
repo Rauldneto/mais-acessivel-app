@@ -967,7 +967,7 @@ function renderAdmin(){
     selRole.value=u.role||'user';
 
     // Marcar checkboxes de abas com os dados do usuario
-    var abasAtivas=u.abas||['mod1','mod2','mod3','mod4'];
+    var abasAtivas=u.abas||['mod1','mod2','mod3','mod4','mod5'];
     divAbas.querySelectorAll('input[name=abaAcesso]').forEach(function(cb){
       cb.checked=abasAtivas.indexOf(cb.value)>-1;
     });
@@ -2625,10 +2625,11 @@ function renderModuloNav(){
     {id:'frete', icon:'🚛', label:'Frete'},
     {id:'mod2',  icon:'📁', label:'Análise de Crédito'},
     {id:'mod3', icon:'🤖', label:'Ace IA'},
-    {id:'mod4',  icon:'📁', label:'Aba 4'}
+    {id:'mod4',  icon:'📁', label:'Aba 4'},
+    {id:'mod5',  icon:'🧪', label:'Modelo em Teste'}
   ];
   // Mapeamento id antigo -> novo
-  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4'};
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5'};
   // Admin ve tudo; outros so veem abas permitidas
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
@@ -2694,6 +2695,8 @@ function renderApp(){
     main.appendChild(renderAceIA());
   } else if(STATE.modulo==='mod4'){
     main.appendChild(renderModuloVazio(4));
+  } else if(STATE.modulo==='mod5'){
+    main.appendChild(renderModeloEmTeste());
   }
   wrap.appendChild(main);
   if(STATE.showConfigPanel && STATE.roleLogado==='admin'){
@@ -2715,6 +2718,295 @@ function renderApp(){
     wrap.appendChild(overlay);
   }
   return wrap;
+
+function renderModeloEmTeste(){
+  var div=document.createElement('div');
+  div.id='mod5-wrap';
+  div.style.cssText='padding:0 0 40px 0';
+
+  var S={checks:[],negado:false,atencoes:[],protestoDiretor:false,mE:0,mS:0,nS:1,sit:'ATIVA',endTerceiro:false,simDoc:{1:0,2:0,3:0},simLoc:0,refs:[{},{},{}],mOk:false,lOk:false};
+  var D={nome:'',fantasia:'',cnpj:'',socio:'',capital:''};
+  var CEN={
+    '35017646000166':{sit:'ATIVA',mE:82,mS:66,nS:1,nome:'JDFER COMERCIO E SERVICOS LTDA',fantasia:'MAIS ACESSIVEL',socio:'RAUL JOSE DIAS NETO',capital:'R$ 110.000,00'},
+    '11111111000111':{sit:'BAIXADA',mE:84,mS:66,nS:1,nome:'EMPRESA INATIVA LTDA',fantasia:'INATIVA',socio:'JOSE SILVA',capital:'R$ 50.000,00'},
+    '22222222000122':{sit:'ATIVA',mE:8,mS:8,nS:1,nome:'EMPRESA NOVA LTDA',fantasia:'NOVA',socio:'ANA SOUZA',capital:'R$ 10.000,00'},
+    '33333333000133':{sit:'ATIVA',mE:30,mS:6,nS:1,nome:'EMPRESA SOCIO UNICO LTDA',fantasia:'SOCIO NOVO',socio:'CARLOS NOVO',capital:'R$ 30.000,00'},
+    '44444444000144':{sit:'ATIVA',mE:20,mS:6,nS:2,nome:'EMPRESA DOIS SOCIOS LTDA',fantasia:'DOIS SOCIOS',socio:'MARIA LIMA',capital:'R$ 80.000,00'}
+  };
+
+  function tStr(m){var a=Math.floor(m/12),r=m%12;return(a?a+(a==1?' ano':' anos')+(r?' e ':''):'' )+(r?r+(r==1?' m\u00eas':' meses'):'');}
+  function ck(cls,ico,txt){S.checks.push({cls,ico,txt});rCk();}
+  function rCk(){var cl=div.querySelector('#m5-cl');if(!cl)return;cl.innerHTML=S.checks.map(c=>'<div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;padding:6px 10px;border-radius:6px;background:var(--bg-'+c.cls+');color:var(--text-'+c.cls+');margin-bottom:4px"><i class="ti '+c.ico+'"></i><span>'+c.txt+'</span></div>').join('');}
+  function fmtC(v){v=v.replace(/\D/g,'').slice(0,14);if(v.length>12)return v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*/,'$1.$2.$3/$4-$5');if(v.length>8)return v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4}).*/,'$1.$2.$3/$4');if(v.length>6)return v.replace(/^(\d{2})(\d{3})(\d{3}).*/,'$1.$2.$3');if(v.length>3)return v.replace(/^(\d{2})(\d{3}).*/,'$1.$2');return v;}
+  function sty(bg,brd,cor,txt,sub,cond){return '<div style="border-radius:14px;padding:18px 20px;background:'+bg+';border:2px solid '+brd+';text-align:center;margin-bottom:12px"><div style="font-size:17px;font-weight:500;color:'+cor+';margin-bottom:6px">'+txt+'</div><div style="font-size:13px;color:'+cor+';margin-bottom:8px">'+sub+'</div><div style="font-size:12px;line-height:1.7;padding:10px 14px;background:rgba(255,255,255,0.6);border-radius:8px"><strong>Condi\u00e7\u00e3o de pagamento:</strong><br>'+cond+'</div></div>';}
+  function itDiv(cls,ico,txt){return '<div style="display:flex;align-items:flex-start;gap:9px;padding:8px 10px;border-radius:6px;margin-bottom:5px;font-size:13px;font-weight:500;line-height:1.5;background:var(--bg-'+cls+');color:var(--text-'+cls+')"><i class="ti '+ico+'" style="font-size:15px;flex-shrink:0;margin-top:1px"></i><span>'+txt+'</span></div>';}
+  function btn(label,onclick,extra){return '<button style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px'+(extra?';'+extra:'')+'" onclick="'+onclick+'">'+label+'</button>';}
+  function inp(id,ph,w){return '<input type="text" id="'+id+'" placeholder="'+ph+'" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:6px 9px;font-size:13px;background:var(--surface-2);color:var(--text-primary);outline:none;'+(w?'width:'+w:'width:100%')+'">';}
+  function sel(id,opts){return '<select id="'+id+'" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:6px 9px;font-size:13px;background:var(--surface-2);color:var(--text-primary);outline:none;width:100%"><option>--</option>'+opts.map(o=>'<option>'+o+'</option>').join('')+'</select>';}
+  function fld(lbl,inner){return '<div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:500;color:var(--text-secondary)">'+lbl+'</label>'+inner+'</div>';}
+
+  function calcCondicao(){
+    if(S.negado) return 'av';
+    if(S.mE<12) return '70';
+    if(S.mS<12&&S.nS==1&&S.mE>=12) return 'av';
+    if(S.mS<12&&S.nS>1) return '70';
+    if(S.protestoDiretor) return '30';
+    if(S.mE>=12&&S.mE<24) return '50';
+    return '100';
+  }
+
+  function mostrarVeredito(){
+    var sv=div.querySelector('#m5-sv');if(!sv)return;sv.classList.remove('hidden');
+    var c=calcCondicao();
+    var V={
+      '100':sty('#E8F5E9','#2E7D32','#1B5E20','\u2705 Aprovado \u2014 100% boleto sem entrada','Todas as etapas com resultado positivo.','Faturamento integral no boleto parcelado, sem necessidade de entrada.'),
+      '30':sty('#E3F2FD','#1565C0','#1565C0','\u2705 Aprovado \u2014 30% entrada + boleto','Protesto liberado pelo diretor.','30% de entrada + restante no boleto.'),
+      '50':sty('#FAEEDA','#854F0B','#854F0B','\u26a0\ufe0f Aprovado com aten\u00e7\u00e3o \u2014 50% entrada + boleto','Empresa entre 12 e 24 meses de exist\u00eancia.','50% de entrada + restante no boleto.'),
+      '70':sty('#FFF3E0','#E65100','#E65100','\u26a0\ufe0f Aprovado com aten\u00e7\u00e3o \u2014 70% entrada + 1 parcela','Empresa ou s\u00f3cio com menos de 12 meses.','70% de entrada + saldo em 1 parcela no boleto.'),
+      'av':sty('#FCEBEB','#A32D2D','#A32D2D','\u274c Negado \u2014 somente \u00e0 vista','Uma ou mais negativas identificadas.','Venda autorizada somente \u00e0 vista.')
+    };
+    sv.innerHTML=V[c];
+  }
+
+  function limpar5(){
+    S={checks:[],negado:false,atencoes:[],protestoDiretor:false,mE:0,mS:0,nS:1,sit:'ATIVA',endTerceiro:false,simDoc:{1:0,2:0,3:0},simLoc:0,refs:[{},{},{}],mOk:false,lOk:false};
+    D={nome:'',fantasia:'',cnpj:'',socio:'',capital:''};
+    ['m5-s1','m5-s2','m5-s3','m5-s4','m5-s5','m5-sv'].forEach(function(id){var el=div.querySelector('#'+id);if(el){el.innerHTML='';el.classList.add('hidden');}});
+    var cl=div.querySelector('#m5-cl');if(cl)cl.innerHTML='';
+    var pb=div.querySelector('#m5-pb');if(pb)pb.textContent='Digite o CNPJ e clique em Consultar para gerar o parecer.';
+  }
+
+  function consultar5(){
+    var inp2=div.querySelector('#m5-inp');var raw=inp2.value.replace(/\D/g,'');
+    if(raw.length!==14){alert('CNPJ inv\u00e1lido');return;}
+    limpar5();
+    var pb=div.querySelector('#m5-pb');pb.textContent='Buscando dados na Receita Federal...';
+    var d=CEN[raw]||CEN['35017646000166'];
+    S.mE=d.mE;S.mS=d.mS;S.nS=d.nS;S.sit=d.sit;
+    D.nome=d.nome;D.fantasia=d.fantasia;D.cnpj=inp2.value;D.socio=d.socio;D.capital=d.capital;
+    setTimeout(function(){
+      var ativa=d.sit=='ATIVA',m2=d.mE>=24,m12=d.mE>=12,sOk=d.mS>=12;
+      var tE=tStr(d.mE),tSo=tStr(d.mS);
+      pb.innerHTML='<strong>'+D.nome+'</strong> ('+D.fantasia+'), CNPJ '+D.cnpj+', situa\u00e7\u00e3o <strong>'+d.sit+'</strong>, '+tE+' de exist\u00eancia. S\u00f3cio: <strong>'+D.socio+'</strong> h\u00e1 <strong>'+tSo+'</strong>. Capital: <strong>'+D.capital+'</strong>.';
+      var its=[],negs=[],ats=[];
+      if(!ativa){its.push({c:'neg',i:'ti-x',t:'Empresa <strong>'+d.sit+'</strong> \u2014 inativa na Receita Federal'});negs.push('Empresa '+d.sit+' \u2014 impossibilidade de emiss\u00e3o de NF. Sem exce\u00e7\u00e3o.');}
+      else its.push({c:'ok',i:'ti-check',t:'Empresa <strong>ATIVA</strong> na Receita Federal'});
+      if(!m12){its.push({c:'warn',i:'ti-alert-triangle',t:'Apenas <strong>'+tE+'</strong> de exist\u00eancia \u2014 aten\u00e7\u00e3o (menos de 12 meses)'});ats.push('empresa_menos12m');}
+      else if(!m2){its.push({c:'warn',i:'ti-alert-triangle',t:'<strong>'+tE+'</strong> de exist\u00eancia (12\u201324 meses \u2014 aten\u00e7\u00e3o)'});ats.push('empresa_12_24m');}
+      else its.push({c:'ok',i:'ti-check',t:'<strong>'+tE+'</strong> de exist\u00eancia (acima de 24 meses)'});
+      if(!sOk){
+        if(d.nS==1&&m2){its.push({c:'neg',i:'ti-x',t:'S\u00f3cio \u00fanico alterado h\u00e1 <strong>'+tSo+'</strong>. Sem exce\u00e7\u00e3o.'});negs.push('S\u00f3cio \u00fanico com altera\u00e7\u00e3o nos \u00faltimos 12m. Sem exce\u00e7\u00e3o.');}
+        else{its.push({c:'warn',i:'ti-alert-triangle',t:'S\u00f3cio majorit\u00e1rio alterado h\u00e1 <strong>'+tSo+'</strong>. Aten\u00e7\u00e3o.'});ats.push('socio_menos12m');}
+      } else its.push({c:'ok',i:'ti-check',t:'S\u00f3cio est\u00e1vel h\u00e1 <strong>'+tSo+'</strong> (acima de 12 meses)'});
+      var s1=div.querySelector('#m5-s1');s1.classList.remove('hidden');
+      var h='<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px"><div style="font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Etapa 1 \u2014 Triagem inicial</div>';
+      its.forEach(function(it){h+=itDiv(it.c,it.i,it.t);});
+      h+='</div>';
+      if(negs.length){
+        S.negado=true;
+        h+='<div style="background:var(--bg-danger,#FCEBEB);border:2px solid var(--border-danger,#A32D2D);border-radius:12px;padding:16px 18px;margin-bottom:12px"><div style="font-size:15px;font-weight:500;color:var(--text-danger,#A32D2D);display:flex;align-items:center;gap:8px"><i class="ti ti-x"></i> Venda faturada negada \u2014 sem exce\u00e7\u00e3o</div>';
+        negs.forEach(function(n){h+='<div style="font-size:13px;color:var(--text-danger,#A32D2D);margin-bottom:6px;margin-top:6px">'+n+'</div>';ck('neg','ti-x',n);});
+        h+='</div>';
+        s1.innerHTML=h;setTimeout(function(){mostrarVeredito();},300);
+      } else {
+        if(ats.length){h+='<div style="background:var(--bg-warn,#FAEEDA);border:1.5px solid var(--border-warning,#854F0B);border-radius:12px;padding:12px 16px;margin-bottom:12px;text-align:center"><div style="font-size:14px;font-weight:500;color:var(--text-warning,#854F0B)"><i class="ti ti-alert-triangle"></i> Etapa 1 \u2014 aten\u00e7\u00e3o</div></div>';ats.forEach(function(a){S.atencoes.push(a);});}
+        else{h+='<div style="background:var(--bg-success);border:1.5px solid var(--border-success);border-radius:12px;padding:12px 16px;margin-bottom:12px;text-align:center"><div style="font-size:14px;font-weight:500;color:var(--text-success)"><i class="ti ti-check"></i> Etapa 1 aprovada</div></div>';ck('ok','ti-check','Triagem: ATIVA, '+tE+', s\u00f3cio est\u00e1vel h\u00e1 '+tSo);}
+        its.forEach(function(it){if(it.c!='neg')ck(it.c,it.i,it.t.replace(/<[^>]+>/g,''));});
+        s1.innerHTML=h;setTimeout(function(){bE2_5();},400);
+      }
+    },900);
+  }
+
+  function bE2_5(){
+    var s2=div.querySelector('#m5-s2');s2.classList.remove('hidden');
+    s2.innerHTML='<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px"><div style="font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Etapa 2 \u2014 Protestos em cart\u00f3rio (CENPROT)</div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"><a href="https://www.pesquisaprotesto.com.br/" target="_blank" style="display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:500;color:var(--text-accent);text-decoration:none;padding:7px 12px;border:0.5px solid var(--border-accent);border-radius:6px;background:var(--bg-accent)"><i class="ti ti-building-bank"></i> Consultar CENPROT</a><button id="m5-bSP" style="border:0.5px solid var(--border-success);border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;background:var(--bg-success);color:var(--text-success);display:inline-flex;align-items:center;gap:6px" onclick="window._m5cenprot(true)"><i class="ti ti-check"></i> Sem protesto</button><button id="m5-bCP" style="border:0.5px solid var(--border-danger);border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;background:var(--bg-danger);color:var(--text-danger);display:inline-flex;align-items:center;gap:6px" onclick="window._m5cenprot(false)"><i class="ti ti-x"></i> H\u00e1 protesto</button></div><div id="m5-cst" class="hidden" style="font-size:12px;font-weight:500;margin-top:6px"></div></div><div id="m5-re2" class="hidden"></div>';
+  }
+
+  window._m5cenprot=function(ok){
+    var bSP=div.querySelector('#m5-bSP'),bCP=div.querySelector('#m5-bCP'),cst=div.querySelector('#m5-cst'),re2=div.querySelector('#m5-re2');
+    bSP.style.opacity=ok?'1':'0.3';bCP.style.opacity=!ok?'1':'0.3';
+    cst.classList.remove('hidden');cst.style.color=ok?'var(--text-success)':'var(--text-danger)';
+    cst.textContent=ok?'Confirmado: sem protestos em cart\u00f3rio.':'Confirmado: h\u00e1 protesto(s) em cart\u00f3rio.';
+    re2.classList.remove('hidden');
+    if(ok){
+      re2.innerHTML='<div style="background:var(--bg-success);border:1.5px solid var(--border-success);border-radius:12px;padding:12px 16px;margin-bottom:12px;text-align:center"><div style="font-size:14px;font-weight:500;color:var(--text-success)"><i class="ti ti-check"></i> Etapa 2 aprovada</div></div>';
+      ck('ok','ti-check','CENPROT: sem protestos em cart\u00f3rio');
+      setTimeout(function(){bE3_5();},400);
+    } else {
+      re2.innerHTML='<div style="background:var(--bg-danger);border:2px solid var(--border-danger);border-radius:12px;padding:16px 18px;margin-bottom:12px"><div style="font-size:15px;font-weight:500;color:var(--text-danger);margin-bottom:8px;display:flex;align-items:center;gap:8px"><i class="ti ti-x"></i> Venda faturada negada</div><div style="font-size:13px;color:var(--text-danger);line-height:1.6;margin-bottom:10px">Protesto(s) em cart\u00f3rio identificado(s).</div><div style="background:var(--surface-2);border:1.5px solid var(--border-warning);border-radius:10px;padding:14px;margin-bottom:10px"><div style="font-size:11px;font-weight:500;color:var(--text-warning);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px"><i class="ti ti-file-certificate"></i> Exce\u00e7\u00e3o 1 \u2014 Carta de anu\u00eancia</div><p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:10px">Carta original do credor quitando o protesto. Requisitos: identifica\u00e7\u00e3o credor/devedor, n\u00ba protesto, declara\u00e7\u00e3o quita\u00e7\u00e3o, data at\u00e9 90 dias, firma reconhecida.</p><div style="background:var(--bg-danger);color:var(--text-danger);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;display:flex;align-items:flex-start;gap:8px"><i class="ti ti-alert-triangle" style="flex-shrink:0;margin-top:1px"></i><span><strong>Aten\u00e7\u00e3o, operador:</strong> ao confirmar voc\u00ea declara ter verificado o documento original.</span></div><button style="background:var(--fill-success);color:var(--on-success);border:none;border-radius:6px;padding:11px 18px;width:100%;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px" onclick="window._m5confAnu()"><i class="ti ti-file-check"></i> Confirmo ter verificado a carta \u2014 prosseguir para Etapa 3</button></div><div style="background:var(--surface-2);border:1.5px solid var(--border-accent);border-radius:10px;padding:14px"><div style="font-size:11px;font-weight:500;color:var(--text-accent);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px"><i class="ti ti-building"></i> Exce\u00e7\u00e3o 2 \u2014 Protesto contestado / disputa jur\u00eddica</div><p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:10px">Cliente alega protesto desconhecido ou em disputa. Acione um diretor para avaliar e autorizar.</p><button style="background:var(--fill-accent);color:var(--on-accent);border:none;border-radius:6px;padding:11px 18px;width:100%;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px" onclick="window._m5confDir()"><i class="ti ti-shield-check"></i> Diretor avaliou e autorizou \u2014 ir para Etapa 3</button></div></div>';
+      ck('neg','ti-x','CENPROT: protesto identificado');
+    }
+  };
+  window._m5confAnu=function(){S.protestoDiretor=true;ck('warn','ti-alert-triangle','Carta de anu\u00eancia verificada \u2014 protesto quitado');setTimeout(function(){bE3_5();},400);};
+  window._m5confDir=function(){S.protestoDiretor=true;ck('warn','ti-alert-triangle','Diretor autorizou o avan\u00e7o \u2014 protesto contestado');setTimeout(function(){bE3_5();},400);};
+
+  function bE3_5(){
+    S.simDoc={1:0,2:0,3:0};S.endTerceiro=false;
+    var s3=div.querySelector('#m5-s3');s3.classList.remove('hidden');
+    function dF(bid,iaid,icon,lbl,sub,n){
+      return '<div style="background:var(--surface-1);border:0.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="width:34px;height:34px;border-radius:8px;background:var(--bg-accent);display:flex;align-items:center;justify-content:center"><i class="ti '+icon+'" style="font-size:17px;color:var(--text-accent)"></i></div><div><div style="font-size:13px;font-weight:500">'+lbl+' <span style="background:var(--bg-danger);color:var(--text-danger);font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px">Obrigat\u00f3rio</span></div><div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+sub+'</div></div></div><div style="display:flex;align-items:center;gap:8px"><span id="'+bid+'" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:var(--surface-0);color:var(--text-muted);border:0.5px solid var(--border)"><i class="ti ti-clock"></i> Aguardando</span><label style="background:var(--surface-2);border:0.5px solid var(--border-strong);border-radius:6px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;color:var(--text-primary);display:inline-flex;align-items:center;gap:4px"><i class="ti ti-upload"></i> Selecionar<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none" data-n="'+n+'" onchange="window._m5upDoc(this)"></label></div><div id="'+iaid+'" class="hidden" style="margin-top:8px"></div></div>';
+    }
+    s3.innerHTML='<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px"><div style="font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Etapa 3 \u2014 Documentos obrigat\u00f3rios <span style="background:var(--bg-accent);color:var(--text-accent);font-size:10px;padding:2px 7px;border-radius:20px;margin-left:4px">simulado</span></div><p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;padding:8px 10px;background:var(--surface-1);border-radius:6px;line-height:1.6">Upload alterna cen\u00e1rios \u2014 Contrato (1=ok/2=CNPJ div/3=s\u00f3cio div) \u00b7 Endere\u00e7o (1=empresa/2=s\u00f3cio/3=terceiro/4=inv\u00e1lido/5=vencido) \u00b7 Doc s\u00f3cio (1=ok/2=diverge)</p>'+dF('m5-eb1','m5-eia1','ti-file-certificate','Contrato Social Alterado','IA: CNPJ, s\u00f3cio e capital','1')+dF('m5-eb2','m5-eia2','ti-home','Comprovante de Endere\u00e7o','Conta \u00e1gua/energia/telefone/cart\u00e3o (90 dias) ou contrato loca\u00e7\u00e3o','2')+dF('m5-eb3','m5-eia3','ti-id-badge','Documento do S\u00f3cio (RG, CNH ou Carteira)','IA: nome confere com Receita Federal','3')+'<div id="m5-bdocs" class="hidden" style="margin-top:8px"><button style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="window._m5concluirE3()"><i class="ti ti-flag"></i> Concluir an\u00e1lise documental</button> <span id="m5-dcnt" style="font-size:12px;color:var(--text-muted)"></span></div></div><div id="m5-re3" class="hidden"></div>';
+    window._m5div=div;
+  }
+
+  window._m5upDoc=function(input){
+    var d=window._m5div;if(!d)return;
+    var n=parseInt(input.getAttribute('data-n'));
+    var file=input.files[0];if(!file)return;
+    var b=d.querySelector('#m5-eb'+n);b.innerHTML='<i class="ti ti-loader"></i> Analisando...';b.style.background='var(--bg-accent)';b.style.color='var(--text-accent)';
+    var ia=d.querySelector('#m5-eia'+n);ia.classList.remove('hidden');
+    ia.innerHTML='<div style="font-size:12px;color:var(--text-muted);font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-robot"></i> IA lendo documento...</div>';
+    setTimeout(function(){
+      S.simDoc[n]=(S.simDoc[n]||0)+1;var s=S.simDoc[n];
+      var cls,ico,txt;
+      if(n==1){
+        if(s%3==1){cls='ok';ico='ti-check';txt='Contrato Social: CNPJ <strong>'+D.cnpj+'</strong> confirmado. S\u00f3cio <strong>'+D.socio+'</strong> confere. Capital '+D.capital+'.';}
+        else if(s%3==2){cls='neg';ico='ti-x';txt='Contrato Social: CNPJ identificado <strong>22.333.444/0001-55</strong> \u2014 <strong>diverge</strong> do CNPJ consultado. Diverg\u00eancia documental.';}
+        else{cls='neg';ico='ti-x';txt='Contrato Social: s\u00f3cio <strong>CARLOS ALBERTO SOUZA</strong> \u2014 <strong>n\u00e3o confere</strong> com '+D.socio+' (Receita Federal).';}
+      } else if(n==2){
+        S.endTerceiro=false;
+        if(s%5==1){cls='ok';ico='ti-check';txt='Conta de energia em nome de <strong>'+D.nome+'</strong> \u2014 confere. Emiss\u00e3o h\u00e1 45 dias (dentro de 90 dias).';}
+        else if(s%5==2){cls='ok';ico='ti-check';txt='Fatura de telefone em nome de <strong>'+D.socio+'</strong> (s\u00f3cio) \u2014 confere.';}
+        else if(s%5==3){cls='warn';ico='ti-alert-triangle';txt='Conta de \u00e1gua em nome de <strong>MARIA APARECIDA SOUZA</strong> (terceiro) \u2014 n\u00e3o confere. Etapa 4 obrigat\u00f3ria.';S.endTerceiro=true;}
+        else if(s%5==4){cls='neg';ico='ti-x';txt='Documento identificado como <strong>Nota Fiscal</strong> \u2014 inv\u00e1lido como comprovante de endere\u00e7o.';}
+        else{cls='neg';ico='ti-x';txt='Conta com emiss\u00e3o h\u00e1 <strong>120 dias</strong> \u2014 acima do prazo m\u00e1ximo de 90 dias.';}
+      } else {
+        if(s%2==1){cls='ok';ico='ti-check';txt='RG com nome <strong>'+D.socio+'</strong> \u2014 confere com contrato social e Receita Federal.';}
+        else{cls='neg';ico='ti-x';txt='Nome identificado <strong>CARLOS ALBERTO SOUZA</strong> \u2014 <strong>n\u00e3o confere</strong> com '+D.socio+'.';}
+      }
+      b.innerHTML='<i class="ti ti-check"></i> '+file.name.slice(0,20)+(file.name.length>20?'...':'');b.style.background='var(--bg-success)';b.style.color='var(--text-success)';
+      ia.innerHTML=itDiv(cls,ico,txt);
+      ck(cls,ico,(n==1?'Contrato Social':n==2?'Comprovante endere\u00e7o':'Doc s\u00f3cio')+': '+txt.replace(/<[^>]+>/g,''));
+      var tot=Object.values(S.simDoc).filter(function(v){return v>0;}).length;
+      if(tot>0){var bd=d.querySelector('#m5-bdocs');bd.classList.remove('hidden');var dc=d.querySelector('#m5-dcnt');dc.textContent=tot+'/3 docs enviados';}
+    },1200);
+  };
+
+  window._m5concluirE3=function(){
+    var d=window._m5div;if(!d)return;
+    var temNegDoc=S.checks.some(function(c){return c.cls=='neg'&&(c.txt.includes('Contrato Social')||c.txt.includes('Doc s')||c.txt.includes('diverge')||c.txt.includes('Diverg')||c.txt.includes('inv\u00e1lido')||c.txt.includes('vencido'));});
+    var re3=d.querySelector('#m5-re3');re3.classList.remove('hidden');
+    if(temNegDoc){S.negado=true;re3.innerHTML='<div style="background:var(--bg-danger);border:2px solid var(--border-danger);border-radius:12px;padding:16px 18px;margin-bottom:12px"><div style="font-size:15px;font-weight:500;color:var(--text-danger);display:flex;align-items:center;gap:8px"><i class="ti ti-x"></i> Venda faturada negada \u2014 diverg\u00eancia documental</div></div>';mostrarVeredito();}
+    else if(S.endTerceiro){re3.innerHTML='<div style="background:var(--bg-warn,#FAEEDA);border:1.5px solid var(--border-warning,#854F0B);border-radius:12px;padding:12px 16px;margin-bottom:12px;text-align:center"><div style="font-size:14px;font-weight:500;color:var(--text-warning,#854F0B)"><i class="ti ti-alert-triangle"></i> Etapa 3 \u2014 aten\u00e7\u00e3o. Endere\u00e7o em nome de terceiro. Etapa 4 obrigat\u00f3ria.</div></div>';setTimeout(function(){bE4_5();},400);}
+    else{re3.innerHTML='<div style="background:var(--bg-success);border:1.5px solid var(--border-success);border-radius:12px;padding:12px 16px;margin-bottom:12px;text-align:center"><div style="font-size:14px;font-weight:500;color:var(--text-success)"><i class="ti ti-check"></i> Etapa 3 aprovada</div></div>';setTimeout(function(){bE5_5();},400);}
+  };
+
+  function bE4_5(){
+    var s4=div.querySelector('#m5-s4');s4.classList.remove('hidden');
+    var qE='Rua FL-42, 71, Quadra 12, Lote 03, Residencial das Ac\u00e1cias, Goi\u00e2nia GO';
+    var qN=(D.fantasia||'MAIS ACESSIVEL')+', Goi\u00e2nia, GO';
+    S.simLoc=0;
+    s4.innerHTML='<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px"><div style="font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Etapa 4 \u2014 Loca\u00e7\u00e3o + Maps <span style="background:var(--bg-accent);color:var(--text-accent);font-size:10px;padding:2px 7px;border-radius:20px;margin-left:4px">simulado</span></div><div style="padding:10px 12px;background:var(--bg-warn,#FAEEDA);border-radius:6px;font-size:13px;color:var(--text-warning,#854F0B);font-weight:500;margin-bottom:14px;display:flex;align-items:center;gap:8px"><i class="ti ti-alert-triangle"></i> Upload alterna: 1=ok(24m) \u00b7 2=aten\u00e7\u00e3o(10m) \u00b7 3=negado(vencido)</div><div style="font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Bloco A \u2014 Contrato de loca\u00e7\u00e3o</div><div style="background:var(--surface-1);border:0.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span id="m5-b4" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:var(--surface-0);color:var(--text-muted);border:0.5px solid var(--border)"><i class="ti ti-clock"></i> Aguardando</span><label style="background:var(--surface-2);border:0.5px solid var(--border-strong);border-radius:6px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;color:var(--text-primary);display:inline-flex;align-items:center;gap:4px"><i class="ti ti-upload"></i> Selecionar<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none" onchange="window._m5upLoc(this)"></label></div><div id="m5-ia4" class="hidden" style="margin-top:8px"></div></div><div id="m5-re4n" class="hidden" style="margin-top:4px"><div style="background:var(--bg-danger);border:1.5px solid var(--border-danger);border-radius:10px;padding:12px 16px;margin-bottom:8px;text-align:center"><div style="font-size:14px;font-weight:500;color:var(--text-danger)"><i class="ti ti-x"></i> Negado \u2014 contrato inv\u00e1lido ou vencido</div></div></div><hr style="border:0;border-top:0.5px solid var(--border);margin:12px 0"><div style="font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Bloco B \u2014 Google Maps</div><div style="background:var(--surface-1);border:0.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px"><div style="font-size:13px;font-weight:500"><i class="ti ti-map-pin" style="color:var(--text-accent)"></i> Op\u00e7\u00e3o 1 \u2014 Endere\u00e7o</div><div style="font-size:12px;color:var(--text-secondary);font-family:monospace;background:var(--surface-0);padding:5px 10px;border-radius:6px;margin-top:6px;word-break:break-all;border:0.5px solid var(--border)">'+qE+'</div><div style="margin-top:8px"><a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(qE)+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:var(--fill-accent);color:var(--on-accent);border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none"><i class="ti ti-map-pin"></i> Ver no Maps</a></div></div><div style="background:var(--surface-1);border:0.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px"><div style="font-size:13px;font-weight:500"><i class="ti ti-building-store" style="color:var(--text-accent)"></i> Op\u00e7\u00e3o 2 \u2014 Nome fantasia</div><div style="font-size:12px;color:var(--text-secondary);font-family:monospace;background:var(--surface-0);padding:5px 10px;border-radius:6px;margin-top:6px;border:0.5px solid var(--border)">'+qN+'</div><div style="margin-top:8px"><a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(qN)+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:var(--fill-accent);color:var(--on-accent);border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none"><i class="ti ti-building-store"></i> Buscar empresa</a></div></div><p style="font-size:13px;color:var(--text-secondary);margin:4px 0 10px">Marque o resultado da verifica\u00e7\u00e3o:</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="m5-bMok" style="border:0.5px solid var(--border-success);border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;background:var(--bg-success);color:var(--text-success);display:inline-flex;align-items:center;gap:6px" onclick="window._m5mRes(true)"><i class="ti ti-check"></i> Confere \u2014 fachada encontrada</button><button id="m5-bMneg" style="border:0.5px solid var(--border-danger);border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;background:var(--bg-danger);color:var(--text-danger);display:inline-flex;align-items:center;gap:6px" onclick="window._m5mRes(false)"><i class="ti ti-x"></i> N\u00e3o confere</button></div><div id="m5-mst" class="hidden" style="font-size:12px;font-weight:500;margin-top:6px"></div><hr style="border:0;border-top:0.5px solid var(--border);margin:12px 0"><div id="m5-av4" class="hidden"><button style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="window._m5bE5()"><i class="ti ti-arrow-right"></i> Prosseguir para refer\u00eancias comerciais</button><p style="font-size:12px;color:var(--text-muted);margin-top:6px">Etapa 4 n\u00e3o bloqueia \u2014 prossiga mesmo com aten\u00e7\u00f5es.</p></div></div>';
+  }
+
+  window._m5upLoc=function(input){
+    var d=window._m5div;if(!d)return;
+    var file=input.files[0];if(!file)return;
+    S.simLoc++;
+    var b=d.querySelector('#m5-b4');b.innerHTML='<i class="ti ti-loader"></i> Analisando...';
+    var ia=d.querySelector('#m5-ia4');ia.classList.remove('hidden');
+    ia.innerHTML='<div style="font-size:12px;color:var(--text-muted);font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-robot"></i> Analisando contrato de loca\u00e7\u00e3o...</div>';
+    setTimeout(function(){
+      var s=S.simLoc%3;var cls,ico,txt;
+      if(s==1){cls='ok';ico='ti-check';txt='Contrato em nome de <strong>'+D.nome+'</strong>. Validade: <strong>24 meses</strong> \u2014 prazo adequado (acima de 14 meses).';S.lOk=true;}
+      else if(s==2){cls='warn';ico='ti-alert-triangle';txt='Contrato em nome de <strong>'+D.socio+'</strong> (s\u00f3cio). Aten\u00e7\u00e3o: <strong>10 meses</strong> restantes (8\u201314 meses).';S.lOk=true;}
+      else{cls='neg';ico='ti-x';txt='Contrato <strong>vencido</strong> h\u00e1 3 meses. Venda faturada negada.';S.lOk=false;}
+      b.innerHTML='<i class="ti ti-check"></i> '+file.name.slice(0,20)+'...';b.style.background='var(--bg-success)';b.style.color='var(--text-success)';
+      ia.innerHTML=itDiv(cls,ico,'<strong>Contrato:</strong> '+txt);
+      ck(cls,ico,'Contrato loca\u00e7\u00e3o: '+txt.replace(/<[^>]+>/g,''));
+      if(cls=='neg'){S.negado=true;d.querySelector('#m5-re4n').classList.remove('hidden');mostrarVeredito();}
+      else window._m5tAv4();
+    },1200);
+  };
+  window._m5mRes=function(ok){
+    var d=window._m5div;if(!d)return;
+    d.querySelector('#m5-bMok').style.opacity=ok?'1':'0.3';d.querySelector('#m5-bMneg').style.opacity=!ok?'1':'0.3';
+    var mst=d.querySelector('#m5-mst');mst.classList.remove('hidden');S.mOk=true;
+    if(ok){mst.style.color='var(--text-success)';mst.textContent='Fachada confirmada.';ck('ok','ti-check','Google Maps: fachada confirmada');}
+    else{mst.style.color='var(--text-warning)';mst.textContent='Sem fachada \u2014 avalia\u00e7\u00e3o manual necess\u00e1ria.';ck('warn','ti-alert-triangle','Google Maps: sem fachada');}
+    window._m5tAv4();
+  };
+  window._m5tAv4=function(){var d=window._m5div;if(S.lOk&&S.mOk&&d)d.querySelector('#m5-av4').classList.remove('hidden');};
+  window._m5bE5=function(){bE5_5();};
+
+  function bE5_5(){
+    S.refs=[{},{},{}];
+    var s5=div.querySelector('#m5-s5');s5.classList.remove('hidden');
+    var REFS_SIM=[
+      {n:'DISTRIBUIDORA NORTE LTDA',r:'Carlos Mendes',t:'(62) 99812-4455',d:'03/2021',l:'R$ 25.000,00',dc:'11/2024',vc:'R$ 18.500,00',p:'\u2705 Sim',a:'\u2705 Nunca',da:'0',db:'\u2705 N\u00e3o',rc:'\u2705 Sim'},
+      {n:'ATACADO CENTRAL BRASIL LTDA',r:'Fernanda Rocha',t:'(62) 3254-8800',d:'07/2020',l:'R$ 40.000,00',dc:'09/2024',vc:'R$ 32.000,00',p:'\u2705 Sim',a:'\u2705 Nunca',da:'0',db:'\u2705 N\u00e3o',rc:'\u2705 Sim'},
+      {n:'COMERCIAL GOIAS DISTRIBUIDORA',r:'Paulo Henrique',t:'(62) 98745-3322',d:'01/2022',l:'R$ 15.000,00',dc:'12/2024',vc:'R$ 12.800,00',p:'\u2705 Sim',a:'\u26a0\ufe0f Raramente',da:'7',db:'\u2705 N\u00e3o',rc:'\u2705 Sim'}
+    ];
+    window._m5REFS_SIM=REFS_SIM;window._m5div=div;
+    function rfC(i){
+      var n=i+1;
+      return '<div style="background:var(--surface-1);border:0.5px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;border-bottom:0.5px solid var(--border);padding-bottom:10px"><span style="width:22px;height:22px;border-radius:50%;background:var(--bg-accent);color:var(--text-accent);font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">'+n+'</span><span style="font-size:13px;font-weight:500">Refer\u00eancia '+n+'</span></div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px"><div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:500;color:var(--text-secondary)">Nome do fornecedor</label><input type="text" id="m5r'+i+'n" placeholder="Raz\u00e3o Social" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:6px 9px;font-size:13px;background:var(--surface-2);color:var(--text-primary);outline:none"></div><div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:500;color:var(--text-secondary)">Respons\u00e1vel</label><input type="text" id="m5r'+i+'r" placeholder="Nome" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:6px 9px;font-size:13px;background:var(--surface-2);color:var(--text-primary);outline:none"></div></div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px"><div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:500;color:var(--text-secondary)">Telefone</label><input type="text" id="m5r'+i+'t" placeholder="(00) 00000-0000" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:6px 9px;font-size:13px;background:var(--surface-2);color:var(--text-primary);outline:none"></div><div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:500;color:var(--text-secondary)">Cliente desde</label><input type="text" id="m5r'+i+'d" placeholder="MM/AAAA" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:6px 9px;font-size:13px;background:var(--surface-2);color:var(--text-primary);outline:none"></div></div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px"><div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:500;color:var(--text-secondary)">Limite (R$)</label><input type="text" id="m5r'+i+'l" placeholder="10.000,00" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:6px 9px;font-size:13px;background:var(--surface-2);color:var(--text-primary);outline:none"></div><div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:500;color:var(--text-secondary)">Data maior compra</label><input type="text" id="m5r'+i+'dc" placeholder="MM/AAAA" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:6px 9px;font-size:13px;background:var(--surface-2);color:var(--text-primary);outline:none"></div><div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:500;color:var(--text-secondary)">Valor maior compra</label><input type="text" id="m5r'+i+'vc" placeholder="3.000,00" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:6px 9px;font-size:13px;background:var(--surface-2);color:var(--text-primary);outline:none"></div></div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px"><div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:500;color:var(--text-secondary)">Paga em dia?</label><select id="m5r'+i+'p" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:6px 9px;font-size:13px;background:var(--surface-2);color:var(--text-primary);outline:none"><option>--</option><option>\u2705 Sim</option><option>\u26a0\ufe0f Quase sempre</option><option>\u274c N\u00e3o</option></select></div><div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:500;color:var(--text-secondary)">J\u00e1 teve atraso?</label><select id="m5r'+i+'a" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:6px 9px;font-size:13px;background:var(--surface-2);color:var(--text-primary);outline:none"><option>--</option><option>\u2705 Nunca</option><option>\u26a0\ufe0f Raramente</option><option>\u274c Com frequ\u00eancia</option></select></div><div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:500;color:var(--text-secondary)">Maior atraso (dias)</label><input type="text" id="m5r'+i+'da" placeholder="0" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:6px 9px;font-size:13px;background:var(--surface-2);color:var(--text-primary);outline:none"></div></div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:500;color:var(--text-secondary)">D\u00e9bito em aberto?</label><select id="m5r'+i+'db" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:6px 9px;font-size:13px;background:var(--surface-2);color:var(--text-primary);outline:none"><option>--</option><option>\u2705 N\u00e3o</option><option>\u274c Sim</option></select></div><div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:500;color:var(--text-secondary)">Recomenda cr\u00e9dito?</label><select id="m5r'+i+'rc" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:6px 9px;font-size:13px;background:var(--surface-2);color:var(--text-primary);outline:none"><option>--</option><option>\u2705 Sim</option><option>\u26a0\ufe0f Com ressalvas</option><option>\u274c N\u00e3o</option></select></div></div>'
+        +'</div>';
+    }
+    s5.innerHTML='<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px"><div style="font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Etapa 5 \u2014 Refer\u00eancias comerciais</div><p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px">M\u00ednimo 3 refer\u00eancias \u00b7 at\u00e9 8</p><div id="m5-refs-c">'+[0,1,2].map(rfC).join('')+'</div><div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="window._m5preencher()"><i class="ti ti-wand"></i> Preencher simulado (positivo)</button><button style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px" id="m5-btnR" onclick="window._m5gRefs()"><i class="ti ti-brain"></i> Gerar parecer</button></div></div><div id="m5-re5" class="hidden"></div>';
+  }
+
+  window._m5preencher=function(){
+    var d=window._m5div,rs=window._m5REFS_SIM;if(!d||!rs)return;
+    rs.forEach(function(r,i){
+      var set=function(id,v){var el=d.querySelector('#m5r'+i+id);if(el)el.value=v;};
+      set('n',r.n);set('r',r.r);set('t',r.t);set('d',r.d);set('l',r.l);set('dc',r.dc);set('vc',r.vc);set('p',r.p);set('a',r.a);set('da',r.da);set('db',r.db);set('rc',r.rc);
+    });
+  };
+
+  window._m5gRefs=function(){
+    var d=window._m5div;if(!d)return;
+    var prec=[0,1,2].map(function(i){return (d.querySelector('#m5r'+i+'n')||{}).value||'';}).filter(Boolean);
+    if(!prec.length){alert('Preencha ao menos uma refer\u00eancia.');return;}
+    var temNegRef=[0,1,2].some(function(i){var rc=(d.querySelector('#m5r'+i+'rc')||{}).value||'';return rc.includes('N\u00e3o');});
+    var b=d.querySelector('#m5-btnR');b.disabled=true;b.innerHTML='<i class="ti ti-loader"></i> Analisando...';
+    setTimeout(function(){
+      var re5=d.querySelector('#m5-re5');re5.classList.remove('hidden');
+      if(temNegRef){
+        S.negado=true;ck('neg','ti-x','Refer\u00eancias: hist\u00f3rico negativo \u2014 recomenda\u00e7\u00e3o negada');
+        re5.innerHTML='<div style="background:var(--bg-danger);border:2px solid var(--border-danger);border-radius:12px;padding:16px 18px;margin-bottom:12px"><div style="font-size:15px;font-weight:500;color:var(--text-danger);display:flex;align-items:center;gap:8px"><i class="ti ti-x"></i> Refer\u00eancias negativas \u2014 venda faturada negada</div></div>';
+      } else {
+        ck('ok','ti-check','Refer\u00eancias: '+prec.length+' consultadas \u2014 hist\u00f3rico favor\u00e1vel');
+        re5.innerHTML='<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px">'+itDiv('ok','ti-check','<strong>'+prec.length+' refer\u00eancias</strong> consultadas. Hist\u00f3rico de pagamento favor\u00e1vel. Todos recomendam cr\u00e9dito.')+'</div>';
+      }
+      mostrarVeredito();
+      b.disabled=false;b.innerHTML='<i class="ti ti-brain"></i> Gerar parecer';
+    },1500);
+  };
+
+  // Construir HTML principal do m\u00f3dulo
+  div.innerHTML=
+    '<div style="background:var(--fill-accent);color:var(--on-accent);border-radius:0 0 12px 12px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500"><i class="ti ti-flask"></i> Modelo em Teste \u2014 Novo Fluxo de An\u00e1lise de Cr\u00e9dito (5 Etapas)</div>'
+    +'<div style="padding:0 4px">'
+    +'<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap"><label style="font-size:13px;color:var(--text-secondary);font-weight:500">CNPJ</label><input id="m5-inp" type="text" placeholder="00.000.000/0001-00" maxlength="18" value="35.017.646/0001-66" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:7px 11px;font-size:13px;width:190px;background:var(--surface-1);color:var(--text-primary);outline:none"><button style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="consultar5()"><i class="ti ti-search"></i> Consultar</button><button style="background:var(--surface-1);color:var(--text-secondary);border:0.5px solid var(--border);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="limpar5()"><i class="ti ti-x"></i></button></div>'
+    +'<div style="background:var(--bg-warning);border:1.5px solid var(--border-warning);border-radius:12px;padding:16px 18px;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><i class="ti ti-robot" style="font-size:22px;color:var(--text-warning)"></i><span style="font-size:15px;font-weight:500;color:var(--text-primary)">Parecer Inteligente \u2014 An\u00e1lise de Risco</span></div><div id="m5-pb" style="font-size:13px;color:var(--text-secondary);line-height:1.6;font-style:italic">Digite o CNPJ e clique em Consultar para gerar o parecer.</div><div id="m5-cl" style="margin-top:10px"></div></div>'
+    +'<div id="m5-s1" class="hidden"></div>'
+    +'<div id="m5-s2" class="hidden"></div>'
+    +'<div id="m5-s3" class="hidden"></div>'
+    +'<div id="m5-s4" class="hidden"></div>'
+    +'<div id="m5-s5" class="hidden"></div>'
+    +'<div id="m5-sv" class="hidden"></div>'
+    +'</div>';
+
+  setTimeout(function(){
+    var inp2=div.querySelector('#m5-inp');
+    if(inp2) inp2.addEventListener('input',function(){this.value=fmtC(this.value);});
+    window._m5div=div;
+    window.consultar5=consultar5;
+    window.limpar5=limpar5;
+    window.bE5_5=bE5_5;
+  },100);
+
+  return div;
+}
+
+
 }
 
 function salvarCotacao(){
