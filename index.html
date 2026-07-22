@@ -5229,7 +5229,12 @@ function renderModeloEmTeste(){
 
   setTimeout(function(){
     var inp=q('#m5inp');
-    if(inp)inp.addEventListener('input',function(){this.value=fmtC(this.value);});
+    if(inp)inp.addEventListener('input',function(){
+      var pos=this.selectionStart;
+      var raw=this.value.replace(/\D/g,'').slice(0,14);
+      var formatted=fmtC(raw);
+      this.value=formatted;
+    });
     var bc=q('#m5btnC');if(bc)bc.onclick=consultar;
     var bl=q('#m5btnL');if(bl)bl.onclick=limpar;
   },50);
