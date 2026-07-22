@@ -2777,50 +2777,54 @@ function renderModeloEmTeste(){
   }
 
   function consultar5(){
-    var inp2=div.querySelector('#m5-inp');var raw=inp2.value.replace(/\D/g,'');
-    if(raw.length!==14){alert('CNPJ inv\u00e1lido');return;}
+    var inp2=div.querySelector('#m5-inp');
+    var raw=inp2.value.replace(/\D/g,'');
+    if(raw.length!==14){alert('CNPJ inv\u00e1lido. Digite 14 d\u00edgitos.');return;}
     limpar5();
-    var pb=div.querySelector('#m5-pb');pb.textContent='Buscando dados na Receita Federal...';
-    // Tentar API real, fallback para CEN simulado
-    var cnpjFormatado=inp2.value;
+    var pb=div.querySelector('#m5-pb');
     pb.textContent='Consultando Receita Federal...';
-    fetch('https://publica.cnpj.ws/cnpj/'+raw)
-      .then(function(r){return r.json();})
-      .then(function(api){
-        var est=api.estabelecimento||{};
-        var sit=(est.situacao_cadastral||{}).descricao||'DESCONHECIDA';
-        var abertura=est.data_inicio_atividade||est.data_abertura||'';
-        var meses=0;
+    (async function(){
+      try{
+        var r=await fetch('https://publica.cnpj.ws/cnpj/'+raw);
+        if(!r.ok) throw new Error('CNPJ n\u00e3o encontrado ('+r.status+')');
+        var d=await r.json();
+        var est=d.estabelecimento||{};
+        // Situacao
+        var sit=(est.situacao_cadastral||'').toUpperCase().trim();
+        // Tempo empresa
+        var abertura=est.data_inicio_atividade||'';
+        var mesesEmp=0;
         if(abertura){
-          var partes=abertura.split('-');
-          var dtAb=new Date(parseInt(partes[0]),parseInt(partes[1])-1,parseInt(partes[2]));
-          var agora=new Date();
-          meses=Math.floor((agora-dtAb)/(1000*60*60*24*30.44));
+          var pa=abertura.split('-');
+          var dtA=new Date(parseInt(pa[0]),parseInt(pa[1])-1,parseInt(pa[2]));
+          mesesEmp=Math.floor((new Date()-dtA)/(1000*60*60*24*30.44));
         }
-        var socios=api.socios||[];
-        var socio=socios.length>0?(socios[0].nome||'N\u00e3o informado'):'N\u00e3o informado';
+        // Socios
+        var socsArr=d.socios||[];
+        var nomeSocio=socsArr.length>0?(socsArr[0].nome||'N\u00e3o informado'):'N\u00e3o informado';
         var mesesSocio=0;
-        if(socios.length>0&&socios[0].data_entrada){
-          var partes2=(socios[0].data_entrada).split('-');
-          var dtS=new Date(parseInt(partes2[0]),parseInt(partes2[1])-1,parseInt(partes2[2]));
-          mesesSocio=Math.floor((new Date()-dtS)/(1000*60*60*24*30.44));
+        if(socsArr.length>0&&socsArr[0].data_entrada){
+          var pe=socsArr[0].data_entrada.split('-');
+          var dtE=new Date(parseInt(pe[0]),parseInt(pe[1])-1,parseInt(pe[2]));
+          mesesSocio=Math.floor((new Date()-dtE)/(1000*60*60*24*30.44));
         }
-        var nome=api.razao_social||est.nome_fantasia||'N\u00e3o informado';
+        var nSocios=socsArr.length||1;
+        // Nome e capital
+        var nome=d.razao_social||'N\u00e3o informado';
         var fantasia=est.nome_fantasia||nome;
-        var capital=api.capital_social?'R$ '+parseFloat(api.capital_social).toLocaleString('pt-BR',{minimumFractionDigits:2}):'N\u00e3o informado';
-        var nSocios=socios.length||1;
-        S.mE=meses;S.mS=mesesSocio;S.nS=nSocios;S.sit=sit.toUpperCase();
-        D.nome=nome;D.fantasia=fantasia;D.cnpj=cnpjFormatado;D.socio=socio;D.capital=capital;
+        var capital=d.capital_social?'R$ '+parseFloat(d.capital_social).toLocaleString('pt-BR',{minimumFractionDigits:2}):'N\u00e3o informado';
+        // Popular estado
+        S.mE=mesesEmp;S.mS=mesesSocio;S.nS=nSocios;S.sit=sit;
+        D.nome=nome;D.fantasia=fantasia;D.cnpj=inp2.value;D.socio=nomeSocio;D.capital=capital;
         processarE1();
-      })
-      .catch(function(){
-        // Fallback simulado
-        var d=CEN[raw]||{sit:'ATIVA',mE:36,mS:36,nS:1,nome:'EMPRESA LTDA',fantasia:'EMPRESA',socio:'SOCIO DA EMPRESA',capital:'R$ 50.000,00'};
-        S.mE=d.mE;S.mS=d.mS;S.nS=d.nS;S.sit=d.sit;
-        D.nome=d.nome;D.fantasia=d.fantasia;D.cnpj=cnpjFormatado;D.socio=d.socio;D.capital=d.capital;
-        processarE1();
-      });
-    function processarE1(){
+      }catch(err){
+        var pb2=div.querySelector('#m5-pb');
+        if(pb2) pb2.innerHTML='<span style="color:var(--text-danger)"><i class=\"ti ti-x\"></i> '+err.message+'. Verifique o CNPJ e tente novamente.</span>';
+      }
+    })();
+  }
+
+  function processarE1(){
 
       var ativa=S.sit=='ATIVA',m2=S.mE>=24,m12=S.mE>=12,sOk=S.mS>=12;
       var tE=tStr(S.mE),tSo=tStr(S.mS);
@@ -2836,7 +2840,7 @@ function renderModeloEmTeste(){
         else{its.push({c:'warn',i:'ti-alert-triangle',t:'S\u00f3cio majorit\u00e1rio alterado h\u00e1 <strong>'+tSo+'</strong>. Aten\u00e7\u00e3o.'});ats.push('socio_menos12m');}
       } else its.push({c:'ok',i:'ti-check',t:'S\u00f3cio est\u00e1vel h\u00e1 <strong>'+tSo+'</strong> (acima de 12 meses)'});
       var s1=div.querySelector('#m5-s1');s1.classList.remove('hidden');
-      var h='<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px"><div style="font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Etapa 1 \u2014 Triagem inicial</div>';
+      var h='<div style="background:var(--surface-2);border:0.5px solid var(--border);border-left:4px solid #0f6e56;border-radius:12px;padding:14px 16px;margin-bottom:12px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="background:#0f6e56;color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">1</span><span style="font-size:12px;font-weight:600;color:#0f6e56;text-transform:uppercase;letter-spacing:.06em">Triagem inicial \u2014 Dados da Receita Federal</span></div>';
       its.forEach(function(it){h+=itDiv(it.c,it.i,it.t);});
       h+='</div>';
       if(negs.length){
@@ -2884,7 +2888,7 @@ function renderModeloEmTeste(){
     function dF(bid,iaid,icon,lbl,sub,n){
       return '<div style="background:var(--surface-1);border:0.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="width:34px;height:34px;border-radius:8px;background:var(--bg-accent);display:flex;align-items:center;justify-content:center"><i class="ti '+icon+'" style="font-size:17px;color:var(--text-accent)"></i></div><div><div style="font-size:13px;font-weight:500">'+lbl+' <span style="background:var(--bg-danger);color:var(--text-danger);font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px">Obrigat\u00f3rio</span></div><div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+sub+'</div></div></div><div style="display:flex;align-items:center;gap:8px"><span id="'+bid+'" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:var(--surface-0);color:var(--text-muted);border:0.5px solid var(--border)"><i class="ti ti-clock"></i> Aguardando</span><label style="background:var(--surface-2);border:0.5px solid var(--border-strong);border-radius:6px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;color:var(--text-primary);display:inline-flex;align-items:center;gap:4px"><i class="ti ti-upload"></i> Selecionar<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none" data-n="'+n+'" onchange="window._m5upDoc(this)"></label></div><div id="'+iaid+'" class="hidden" style="margin-top:8px"></div></div>';
     }
-    s3.innerHTML='<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px"><div style="font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Etapa 3 \u2014 Documentos obrigat\u00f3rios <span style="background:var(--bg-accent);color:var(--text-accent);font-size:10px;padding:2px 7px;border-radius:20px;margin-left:4px">simulado</span></div><p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;padding:8px 10px;background:var(--surface-1);border-radius:6px;line-height:1.6">Upload alterna cen\u00e1rios \u2014 Contrato (1=ok/2=CNPJ div/3=s\u00f3cio div) \u00b7 Endere\u00e7o (1=empresa/2=s\u00f3cio/3=terceiro/4=inv\u00e1lido/5=vencido) \u00b7 Doc s\u00f3cio (1=ok/2=diverge)</p>'+dF('m5-eb1','m5-eia1','ti-file-certificate','Contrato Social Alterado','IA: CNPJ, s\u00f3cio e capital','1')+dF('m5-eb2','m5-eia2','ti-home','Comprovante de Endere\u00e7o','Conta \u00e1gua/energia/telefone/cart\u00e3o (90 dias) ou contrato loca\u00e7\u00e3o','2')+dF('m5-eb3','m5-eia3','ti-id-badge','Documento do S\u00f3cio (RG, CNH ou Carteira)','IA: nome confere com Receita Federal','3')+'<div id="m5-bdocs" class="hidden" style="margin-top:8px"><button style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="window._m5concluirE3()"><i class="ti ti-flag"></i> Concluir an\u00e1lise documental</button> <span id="m5-dcnt" style="font-size:12px;color:var(--text-muted)"></span></div></div><div id="m5-re3" class="hidden"></div>';
+    s3.innerHTML='<div style="background:var(--surface-2);border:0.5px solid var(--border);border-left:4px solid #6A1B9A;border-radius:12px;padding:14px 16px;margin-bottom:12px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="background:#6A1B9A;color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">3</span><span style="font-size:12px;font-weight:600;color:#6A1B9A;text-transform:uppercase;letter-spacing:.06em">Documentos Obrigat\u00f3rios \u2014 An\u00e1lise pela IA</span></div><p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;padding:8px 10px;background:var(--surface-1);border-radius:6px;line-height:1.6">Envie os documentos abaixo. A IA verifica as informa\u00e7\u00f5es e cruza com os dados da Receita Federal. Cada upload alterna cen\u00e1rios simulados para teste.</p>'+dF('m5-eb1','m5-eia1','ti-file-certificate','Contrato Social Alterado','IA: CNPJ, s\u00f3cio e capital','1')+dF('m5-eb2','m5-eia2','ti-home','Comprovante de Endere\u00e7o','Conta \u00e1gua/energia/telefone/cart\u00e3o (90 dias) ou contrato loca\u00e7\u00e3o','2')+dF('m5-eb3','m5-eia3','ti-id-badge','Documento do S\u00f3cio (RG, CNH ou Carteira)','IA: nome confere com Receita Federal','3')+'<div id="m5-bdocs" class="hidden" style="margin-top:8px"><button style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="window._m5concluirE3()"><i class="ti ti-flag"></i> Concluir an\u00e1lise documental</button> <span id="m5-dcnt" style="font-size:12px;color:var(--text-muted)"></span></div></div><div id="m5-re3" class="hidden"></div>';
     window._m5div=div;
   }
 
@@ -3011,7 +3015,7 @@ function renderModeloEmTeste(){
         re5.innerHTML='<div style="background:var(--bg-danger);border:2px solid var(--border-danger);border-radius:12px;padding:16px 18px;margin-bottom:12px"><div style="font-size:15px;font-weight:500;color:var(--text-danger);display:flex;align-items:center;gap:8px"><i class="ti ti-x"></i> Refer\u00eancias negativas \u2014 venda faturada negada</div></div>';
       } else {
         ck('ok','ti-check','Refer\u00eancias: '+prec.length+' consultadas \u2014 hist\u00f3rico favor\u00e1vel');
-        re5.innerHTML='<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px">'+itDiv('ok','ti-check','<strong>'+prec.length+' refer\u00eancias</strong> consultadas. Hist\u00f3rico de pagamento favor\u00e1vel. Todos recomendam cr\u00e9dito.')+'</div>';
+        re5.innerHTML='<div style="background:var(--surface-2);border:0.5px solid var(--border);border-left:4px solid #1565C0;border-left:4px solid #1B5E20;border-radius:12px;padding:14px 16px;margin-bottom:12px">'+itDiv('ok','ti-check','<strong>'+prec.length+' refer\u00eancias</strong> consultadas. Hist\u00f3rico de pagamento favor\u00e1vel. Todos recomendam cr\u00e9dito.')+'</div>';
       }
       mostrarVeredito();
       b.disabled=false;b.innerHTML='<i class="ti ti-brain"></i> Gerar parecer';
@@ -3020,7 +3024,7 @@ function renderModeloEmTeste(){
 
   // Construir HTML principal do m\u00f3dulo
   div.innerHTML=
-    '<div style="background:var(--fill-accent);color:var(--on-accent);border-radius:0 0 12px 12px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500"><i class="ti ti-flask"></i> Modelo em Teste \u2014 Novo Fluxo de An\u00e1lise de Cr\u00e9dito (5 Etapas)</div>'
+    '<div style="background:linear-gradient(135deg,#1a3a5c,#0f6e56);color:#fff;border-radius:0 0 14px 14px;padding:14px 18px;margin-bottom:18px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><i class="ti ti-flask" style="font-size:20px"></i><span style="font-size:15px;font-weight:600">Modelo em Teste \u2014 Novo Fluxo de An\u00e1lise de Cr\u00e9dito</span></div><div style="font-size:12px;opacity:.8">5 etapas sequenciais \u00b7 Consulta Receita Federal em tempo real \u00b7 Veredito autom\u00e1tico com condi\u00e7\u00e3o de pagamento</div></div>'
     +'<div style="padding:0 4px">'
     +'<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap"><label style="font-size:13px;color:var(--text-secondary);font-weight:500">CNPJ</label><input id="m5-inp" type="text" placeholder="00.000.000/0001-00" maxlength="18" value="" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:7px 11px;font-size:13px;width:190px;background:var(--surface-1);color:var(--text-primary);outline:none"><button style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="consultar5()"><i class="ti ti-search"></i> Consultar</button><button style="background:var(--surface-1);color:var(--text-secondary);border:0.5px solid var(--border);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px" onclick="limpar5()"><i class="ti ti-x"></i></button></div>'
     +'<div style="background:var(--bg-warning);border:1.5px solid var(--border-warning);border-radius:12px;padding:16px 18px;margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><i class="ti ti-robot" style="font-size:22px;color:var(--text-warning)"></i><span style="font-size:15px;font-weight:500;color:var(--text-primary)">Parecer Inteligente \u2014 An\u00e1lise de Risco</span></div><div id="m5-pb" style="font-size:13px;color:var(--text-secondary);line-height:1.6;font-style:italic">Digite o CNPJ e clique em Consultar para gerar o parecer.</div><div id="m5-cl" style="margin-top:10px"></div></div>'
