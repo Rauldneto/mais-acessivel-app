@@ -1,4 +1,4 @@
-<!-- v5.2-1784723174 -->
+<!-- v5.1-1784723174 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -4833,12 +4833,15 @@ function renderModeloEmTeste(){
   }
 
   function fmtC(v){
-    v=v.replace(/\D/g,'').slice(0,14);
-    if(v.length>12)return v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*/,'$1.$2.$3/$4-$5');
-    if(v.length>8)return v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4}).*/,'$1.$2.$3/$4');
-    if(v.length>6)return v.replace(/^(\d{2})(\d{3})(\d{3}).*/,'$1.$2.$3');
-    if(v.length>3)return v.replace(/^(\d{2})(\d{3}).*/,'$1.$2');
-    return v;
+    var d=v.replace(/\D/g,'').slice(0,14);
+    var r='';
+    for(var i=0;i<d.length;i++){
+      if(i===2||i===5)r+='.';
+      else if(i===8)r+='/';
+      else if(i===12)r+='-';
+      r+=d[i];
+    }
+    return r;
   }
 
   function consultar(){
@@ -5230,10 +5233,7 @@ function renderModeloEmTeste(){
   setTimeout(function(){
     var inp=q('#m5inp');
     if(inp)inp.addEventListener('input',function(){
-      var pos=this.selectionStart;
-      var raw=this.value.replace(/\D/g,'').slice(0,14);
-      var formatted=fmtC(raw);
-      this.value=formatted;
+      this.value=fmtC(this.value);
     });
     var bc=q('#m5btnC');if(bc)bc.onclick=consultar;
     var bl=q('#m5btnL');if(bl)bl.onclick=limpar;
