@@ -4815,6 +4815,24 @@ function renderModeloEmTeste(){
     sv.style.display='block';
     sv.scrollIntoView({behavior:'smooth'});
     var c=calcCond();
+    // Salvar no Firebase com responsavel
+    try{
+      var _agora=new Date();
+      var _dtStr=_agora.toLocaleDateString('pt-BR')+' '+_agora.toLocaleTimeString('pt-BR');
+      var _reg={
+        cnpj:D.cnpj,empresa:D.nome,fantasia:D.fantasia,socio:D.socio,capital:D.capital,
+        situacao:S.sit,meses_empresa:S.mE,meses_socio:S.mS,
+        responsavel:STATE.usuarioLogado||'desconhecido',
+        dataHora:_dtStr,
+        condicao_pagamento:calcCond(),
+        excecao1:S.excecao1||null,
+        excecao2:S.excecao2||null,
+        protestoDiretor:S.protestoDiretor,
+        negado:S.negado,
+        modulo:'Modelo em Teste'
+      };
+      fbSaveHistoricoAnalise(D.cnpj.replace(/\D/g,''),_reg);
+    }catch(_esave){console.warn('Erro ao salvar historico:',_esave);}
     var M={
       '100':{bg:'#E8F5E9',br:'#2E7D32',co:'#1B5E20',ic:'\u2705',t:'Aprovado \u2014 100% boleto sem entrada',s:'Todas as etapas positivas.',p:'Faturamento integral no boleto, sem entrada.'},
       '30': {bg:'#E3F2FD',br:'#1565C0',co:'#1565C0',ic:'\u2705',t:'Aprovado \u2014 30% entrada + boleto',s:'Protesto liberado pelo diretor.',p:'30% de entrada + restante no boleto.'},
@@ -4831,7 +4849,7 @@ function renderModeloEmTeste(){
   }
 
   function limpar(){
-    S={checks:[],negado:false,protestoDiretor:false,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},simLoc:0,mOk:false,lOk:false};
+    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},simLoc:0,mOk:false,lOk:false};
     D={nome:'',fantasia:'',cnpj:'',socio:'',capital:''};
     var cl=q('#m5cl');if(cl)cl.innerHTML='';
     var pb=q('#m5pb');if(pb)pb.textContent='Digite o CNPJ e clique em Consultar.';
@@ -4941,55 +4959,106 @@ function renderModeloEmTeste(){
   }
 
   function cenprot(ok){
-    // Atualizar visual dos botoes
     q('#m5bSP').style.opacity=ok?'1':'0.3';
     q('#m5bCP').style.opacity=ok?'0.3':'1';
     var cst=q('#m5cst');cst.style.display='block';
     cst.style.color=ok?'#166534':'#991b1b';
     cst.textContent=ok?'Confirmado: sem protestos.':'Confirmado: h\u00e1 protesto(s).';
 
-    // SEMPRE esconder E3 ao mudar selecao do CENPROT
+    // Esconder E3 ao mudar selecao
     var s3=q('#m5s3');
     if(s3){s3.style.display='none';s3.innerHTML='';}
-    // Limpar checks de E2 anteriores (manter apenas os de E1)
     S.checks=S.checks.filter(function(ck){
-      return !ck.txt.includes('CENPROT')&&!ck.txt.includes('anu\u00eancia')&&!ck.txt.includes('Diretor');
+      return !ck.txt.includes('CENPROT')&&!ck.txt.includes('anu\u00eancia')&&!ck.txt.includes('Diretor')&&!ck.txt.includes('Excec');
     });
     S.protestoDiretor=false;
 
     var re2=q('#m5re2');re2.style.display='block';
+    // Pegar usuario logado
+    var operador=STATE.usuarioLogado||'desconhecido';
+
     if(ok){
       re2.innerHTML=resBox('ok','Etapa 2 aprovada','Sem protestos. Prossiga para os documentos.');
       addCk('ok','ti-check','CENPROT: sem protestos em cart\u00f3rio');
       setTimeout(buildE3,400);
     } else {
       addCk('neg','ti-x','CENPROT: protesto identificado');
-      re2.innerHTML='<div style="background:#fee2e2;border:2px solid #c62828;border-radius:12px;padding:16px 18px;margin-bottom:12px">'
-        +'<div style="font-size:14px;font-weight:700;color:#b71c1c;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-x-circle" style="font-size:18px"></i> Venda faturada negada \u2014 protesto em cart\u00f3rio</div>'
-        +'<p style="font-size:13px;color:#7f1d1d;margin-bottom:12px">Protesto(s) identificado(s) em cart\u00f3rio. Venda a prazo n\u00e3o autorizada. Verifique as exce\u00e7\u00f5es abaixo:</p>'
-        +'<div style="background:#ffffff;border:2px solid #fbbf24;border-radius:10px;padding:14px;margin-bottom:10px">'
-        +'<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;margin-bottom:8px"><i class="ti ti-file-certificate"></i> Exce\u00e7\u00e3o 1 \u2014 Carta de anu\u00eancia</div>'
-        +'<p style="font-size:13px;color:#475569;line-height:1.7;margin-bottom:10px">Carta original do credor quitando o protesto. Requisitos: identifica\u00e7\u00e3o credor/devedor, n\u00ba protesto, declara\u00e7\u00e3o de quita\u00e7\u00e3o, data at\u00e9 90 dias, firma reconhecida.</p>'
-        +'<div style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;display:flex;gap:8px;align-items:flex-start"><i class="ti ti-alert-triangle" style="flex-shrink:0"></i><span><strong>Aten\u00e7\u00e3o, operador:</strong> ao confirmar, voc\u00ea declara ter verificado o documento original. Registro vinculado ao seu usu\u00e1rio.</span></div>'
-        +'<button id="m5bAnu" style="background:linear-gradient(135deg,#15803d,#166534);color:#ffffff;border:none;border-radius:8px;padding:11px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 6px rgba(21,128,61,0.3)"><i class="ti ti-file-check"></i> Confirmo ter verificado a carta de anu\u00eancia \u2014 prosseguir para Etapa 3</button>'
+      re2.innerHTML='<div style="background:#ffebee;border:2px solid #c62828;border-radius:12px;padding:16px 18px;margin-bottom:12px;box-shadow:0 2px 8px rgba(198,40,40,0.12)">'
+        +'<div style="font-size:15px;font-weight:700;color:#b71c1c;margin-bottom:8px;display:flex;align-items:center;gap:8px"><i class="ti ti-x-circle" style="font-size:20px"></i> Venda faturada negada \u2014 protesto em cart\u00f3rio</div>'
+        +'<p style="font-size:13px;color:#7f1d1d;margin-bottom:14px;line-height:1.7">Protesto(s) identificado(s) em cart\u00f3rio. Venda a prazo n\u00e3o autorizada. Verifique as exce\u00e7\u00f5es abaixo:</p>'
+
+        // EXCECAO 1 - Carta de anuencia
+        +'<div style="background:#fff;border:2px solid #fbbf24;border-radius:10px;padding:16px;margin-bottom:12px">'
+        +'<div style="font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-file-certificate" style="font-size:16px"></i> Exce\u00e7\u00e3o 1 \u2014 Carta de anu\u00eancia</div>'
+        +'<p style="font-size:13px;color:#475569;line-height:1.7;margin-bottom:10px">Carta original do credor quitando o protesto. Requisitos: identifica\u00e7\u00e3o credor/devedor, n\u00ba protesto, declara\u00e7\u00e3o de quita\u00e7\u00e3o, data at\u00e9 90 dias, firma reconhecida em cart\u00f3rio.</p>'
+        +'<div style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;display:flex;gap:8px;align-items:flex-start">'
+        +'<i class="ti ti-alert-triangle" style="flex-shrink:0;margin-top:1px"></i>'
+        +'<span><strong>Aten\u00e7\u00e3o, operador '+operador+':</strong> ao confirmar, voc\u00ea declara ter verificado pessoalmente o documento original e assume responsabilidade por esta declara\u00e7\u00e3o. O registro ser\u00e1 gravado com seu nome, data e hora.</span>'
         +'</div>'
-        +'<div style="background:#ffffff;border:2px solid #93c5fd;border-radius:10px;padding:14px">'
-        +'<div style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;margin-bottom:8px"><i class="ti ti-building"></i> Exce\u00e7\u00e3o 2 \u2014 Protesto contestado / disputa jur\u00eddica</div>'
-        +'<p style="font-size:13px;color:#475569;line-height:1.7;margin-bottom:10px">Cliente alega protesto desconhecido ou em disputa jur\u00eddica. Acione um diretor para avaliar e autorizar o avan\u00e7o.</p>'
-        +'<button id="m5bDir" style="background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#ffffff;border:none;border-radius:8px;padding:11px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 6px rgba(37,99,235,0.3)"><i class="ti ti-shield-check"></i> Diretor avaliou e autorizou \u2014 ir para Etapa 3</button>'
+        +'<button id="m5bAnu" style="background:linear-gradient(135deg,#15803d,#166534);color:#fff;border:none;border-radius:8px;padding:12px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 8px rgba(21,128,61,0.3)">'
+        +'<i class="ti ti-file-check"></i> Confirmo ter verificado a carta de anu\u00eancia \u2014 prosseguir para Etapa 3'
+        +'</button>'
+        +'</div>'
+
+        // EXCECAO 2 - Diretor
+        +'<div style="background:#fff;border:2px solid #93c5fd;border-radius:10px;padding:16px">'
+        +'<div style="font-size:12px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-building" style="font-size:16px"></i> Exce\u00e7\u00e3o 2 \u2014 Protesto contestado / disputa jur\u00eddica</div>'
+        +'<p style="font-size:13px;color:#475569;line-height:1.7;margin-bottom:12px">Cliente alega protesto desconhecido ou em disputa jur\u00eddica. Necess\u00e1rio acionar um diretor para avaliar e autorizar o avan\u00e7o.</p>'
+        // Campos obrigatorios para excecao 2
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'
+        +'<div style="display:flex;flex-direction:column;gap:4px">'
+        +'<label style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.04em">Nome do Diretor que autorizou *</label>'
+        +'<input id="m5dirNome" type="text" placeholder="Nome completo do diretor" style="border:2px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:13px;background:#f0f9ff;color:#0f172a;outline:none;font-weight:500">'
+        +'</div>'
+        +'<div style="display:flex;flex-direction:column;gap:4px">'
+        +'<label style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.04em">Data e hora da autoriza\u00e7\u00e3o *</label>'
+        +'<input id="m5dirData" type="datetime-local" style="border:2px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:13px;background:#f0f9ff;color:#0f172a;outline:none">'
+        +'</div>'
+        +'</div>'
+        +'<button id="m5bDir" style="background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;border:none;border-radius:8px;padding:12px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 8px rgba(37,99,235,0.3)">'
+        +'<i class="ti ti-shield-check"></i> Registrar autoriza\u00e7\u00e3o do diretor \u2014 prosseguir para Etapa 3'
+        +'</button>'
         +'</div></div>';
+
+      // Excecao 1 - registra com nome do operador + timestamp
       q('#m5bAnu').onclick=function(){
+        var agora=new Date();
+        var dtStr=agora.toLocaleDateString('pt-BR')+' '+agora.toLocaleTimeString('pt-BR');
         S.protestoDiretor=true;
-        addCk('warn','ti-alert-triangle','Carta de anu\u00eancia verificada pelo operador');
+        S.excecao1={operador:operador,dataHora:dtStr};
+        addCk('warn','ti-alert-triangle','Exce\u00e7\u00e3o 1: carta de anu\u00eancia verificada por '+operador+' em '+dtStr);
         this.disabled=true;
-        this.innerHTML='<i class="ti ti-check"></i> Carta de anu\u00eancia registrada';
+        this.innerHTML='<i class="ti ti-check"></i> Registrado por '+operador+' em '+dtStr;
+        this.style.background='#15803d';
         setTimeout(buildE3,400);
       };
+
+      // Excecao 2 - valida campos e registra
       q('#m5bDir').onclick=function(){
+        var nomeDiretor=(q('#m5dirNome').value||'').trim();
+        var dataDiretor=(q('#m5dirData').value||'').trim();
+        if(!nomeDiretor){
+          q('#m5dirNome').style.borderColor='#dc2626';
+          q('#m5dirNome').focus();
+          q('#m5dirNome').placeholder='\u26a0\ufe0f Preencha o nome do diretor';
+          return;
+        }
+        if(!dataDiretor){
+          q('#m5dirData').style.borderColor='#dc2626';
+          q('#m5dirData').focus();
+          return;
+        }
+        var dtFormatada=new Date(dataDiretor).toLocaleDateString('pt-BR')+' '+new Date(dataDiretor).toLocaleTimeString('pt-BR');
+        var agora2=new Date();
+        var dtRegistro=agora2.toLocaleDateString('pt-BR')+' '+agora2.toLocaleTimeString('pt-BR');
         S.protestoDiretor=true;
-        addCk('warn','ti-alert-triangle','Diretor autorizou o avan\u00e7o \u2014 protesto contestado');
+        S.excecao2={dirAutorizou:nomeDiretor,dataHoraAutorizacao:dtFormatada,operador:operador,dataHoraRegistro:dtRegistro};
+        addCk('warn','ti-alert-triangle','Exce\u00e7\u00e3o 2: autorizado por Dir. '+nomeDiretor+' em '+dtFormatada+' | Registrado por '+operador);
         this.disabled=true;
-        this.innerHTML='<i class="ti ti-check"></i> Autoriza\u00e7\u00e3o do diretor registrada';
+        q('#m5dirNome').disabled=true;
+        q('#m5dirData').disabled=true;
+        this.innerHTML='<i class="ti ti-check"></i> Autoriza\u00e7\u00e3o de '+nomeDiretor+' registrada por '+operador;
+        this.style.background='#1d4ed8';
         setTimeout(buildE3,400);
       };
     }
