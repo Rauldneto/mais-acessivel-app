@@ -4879,7 +4879,7 @@ function renderModeloEmTeste(){
         processarE1();
       }catch(err){
         var pb2=q('#m5pb');
-        if(pb2)pb2.innerHTML='<span style="color:var(--text-danger)"><i class="ti ti-x"></i> '+err.message+'</span>';
+        if(pb2)pb2.innerHTML='<span style="color:#991b1b"><i class="ti ti-x"></i> '+err.message+'</span>';
       }
     })();
   }
@@ -4930,9 +4930,9 @@ function renderModeloEmTeste(){
     q('#m5s2').innerHTML=card('#1565C0',
       sec(2,'#1565C0','Protestos em Cart\u00f3rio \u2014 CENPROT')
       +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
-      +'<a href="https://www.pesquisaprotesto.com.br/" target="_blank" style="display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:500;color:var(--text-accent);text-decoration:none;padding:7px 12px;border:0.5px solid var(--border-accent);border-radius:6px;background:var(--bg-accent)"><i class="ti ti-building-bank"></i> Consultar CENPROT</a>'
-      +'<button id="m5bSP" style="border:0.5px solid var(--border-success);border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;background:var(--bg-success);color:var(--text-success);display:inline-flex;align-items:center;gap:6px"><i class="ti ti-check"></i> Sem protesto</button>'
-      +'<button id="m5bCP" style="border:0.5px solid var(--border-danger);border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;background:var(--bg-danger);color:var(--text-danger);display:inline-flex;align-items:center;gap:6px"><i class="ti ti-x"></i> H\u00e1 protesto</button>'
+      +'<a href="https://www.pesquisaprotesto.com.br/" target="_blank" style="display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#1d4ed8;text-decoration:none;padding:10px 16px;border:2px solid #3b82f6;border-radius:10px;background:#eff6ff;box-shadow:0 1px 4px rgba(59,130,246,0.2)"><i class="ti ti-building-bank" style="font-size:16px"></i> Consultar CENPROT</a>'
+      +'<button id="m5bSP" style="border:2px solid #16a34a;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;background:#dcfce7;color:#166534;display:inline-flex;align-items:center;gap:8px;box-shadow:0 1px 4px rgba(22,163,74,0.2)"><i class="ti ti-check" style="font-size:16px"></i> Sem protesto</button>'
+      +'<button id="m5bCP" style="border:2px solid #dc2626;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;background:#fee2e2;color:#991b1b;display:inline-flex;align-items:center;gap:8px;box-shadow:0 1px 4px rgba(220,38,38,0.2)"><i class="ti ti-x" style="font-size:16px"></i> H\u00e1 protesto</button>'
       +'</div><div id="m5cst" style="display:none;font-size:12px;font-weight:500;margin-top:6px"></div>'
     )+'<div id="m5re2" style="display:none"></div>';
     show('m5s2');
@@ -4944,7 +4944,7 @@ function renderModeloEmTeste(){
     q('#m5bSP').style.opacity=ok?'1':'0.3';
     q('#m5bCP').style.opacity=ok?'0.3':'1';
     var cst=q('#m5cst');cst.style.display='block';
-    cst.style.color=ok?'var(--text-success)':'var(--text-danger)';
+    cst.style.color=ok?'#166534':'#991b1b';
     cst.textContent=ok?'Confirmado: sem protestos.':'Confirmado: h\u00e1 protesto(s).';
     var re2=q('#m5re2');re2.style.display='block';
     if(ok){
@@ -4953,18 +4953,18 @@ function renderModeloEmTeste(){
       setTimeout(buildE3,400);
     } else {
       addCk('neg','ti-x','CENPROT: protesto identificado');
-      re2.innerHTML='<div style="background:var(--bg-danger);border:2px solid var(--border-danger);border-radius:12px;padding:16px 18px;margin-bottom:12px">'
-        +'<div style="font-size:14px;font-weight:500;color:var(--text-danger);margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-x"></i> Venda faturada negada \u2014 protesto em cart\u00f3rio</div>'
-        +'<div style="background:var(--surface-2);border:1.5px solid var(--border-warning);border-radius:10px;padding:14px;margin-bottom:10px">'
-        +'<div style="font-size:11px;font-weight:600;color:var(--text-warning);text-transform:uppercase;margin-bottom:8px"><i class="ti ti-file-certificate"></i> Exce\u00e7\u00e3o 1 \u2014 Carta de anu\u00eancia</div>'
-        +'<p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:10px">Carta original do credor quitando o protesto. Requisitos: identifica\u00e7\u00e3o credor/devedor, n\u00ba protesto, declara\u00e7\u00e3o de quita\u00e7\u00e3o, data at\u00e9 90 dias, firma reconhecida.</p>'
-        +'<div style="background:var(--bg-danger);color:var(--text-danger);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;display:flex;gap:8px;align-items:flex-start"><i class="ti ti-alert-triangle" style="flex-shrink:0"></i><span>Ao confirmar, voc\u00ea declara ter verificado o documento original. Registro vinculado ao seu usu\u00e1rio.</span></div>'
-        +'<button id="m5bAnu" style="background:var(--fill-success);color:var(--on-success);border:none;border-radius:6px;padding:10px 16px;width:100%;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-file-check"></i> Confirmo ter verificado a carta \u2014 prosseguir para Etapa 3</button>'
+      re2.innerHTML='<div style="background:#fee2e2;border:2px solid #fca5a5;border-radius:12px;padding:16px 18px;margin-bottom:12px">'
+        +'<div style="font-size:14px;font-weight:500;color:#991b1b;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-x"></i> Venda faturada negada \u2014 protesto em cart\u00f3rio</div>'
+        +'<div style="background:#ffffff;border:1.5px solid #fde047;border-radius:10px;padding:14px;margin-bottom:10px">'
+        +'<div style="font-size:11px;font-weight:600;color:#854d0e;text-transform:uppercase;margin-bottom:8px"><i class="ti ti-file-certificate"></i> Exce\u00e7\u00e3o 1 \u2014 Carta de anu\u00eancia</div>'
+        +'<p style="font-size:13px;color:#475569;line-height:1.7;margin-bottom:10px">Carta original do credor quitando o protesto. Requisitos: identifica\u00e7\u00e3o credor/devedor, n\u00ba protesto, declara\u00e7\u00e3o de quita\u00e7\u00e3o, data at\u00e9 90 dias, firma reconhecida.</p>'
+        +'<div style="background:#fee2e2;color:#991b1b;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;display:flex;gap:8px;align-items:flex-start"><i class="ti ti-alert-triangle" style="flex-shrink:0"></i><span>Ao confirmar, voc\u00ea declara ter verificado o documento original. Registro vinculado ao seu usu\u00e1rio.</span></div>'
+        +'<button id="m5bAnu" style="background:#16a34a;color:#ffffff;border:none;border-radius:6px;padding:10px 16px;width:100%;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-file-check"></i> Confirmo ter verificado a carta \u2014 prosseguir para Etapa 3</button>'
         +'</div>'
-        +'<div style="background:var(--surface-2);border:1.5px solid var(--border-accent);border-radius:10px;padding:14px">'
-        +'<div style="font-size:11px;font-weight:600;color:var(--text-accent);text-transform:uppercase;margin-bottom:8px"><i class="ti ti-building"></i> Exce\u00e7\u00e3o 2 \u2014 Protesto contestado</div>'
-        +'<p style="font-size:13px;color:var(--text-secondary);line-height:1.7;margin-bottom:10px">Cliente alega protesto desconhecido ou em disputa jur\u00eddica. Acione um diretor para autorizar.</p>'
-        +'<button id="m5bDir" style="background:var(--fill-accent);color:var(--on-accent);border:none;border-radius:6px;padding:10px 16px;width:100%;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-shield-check"></i> Diretor autorizou \u2014 ir para Etapa 3</button>'
+        +'<div style="background:#ffffff;border:1.5px solid #93c5fd;border-radius:10px;padding:14px">'
+        +'<div style="font-size:11px;font-weight:600;color:#1d4ed8;text-transform:uppercase;margin-bottom:8px"><i class="ti ti-building"></i> Exce\u00e7\u00e3o 2 \u2014 Protesto contestado</div>'
+        +'<p style="font-size:13px;color:#475569;line-height:1.7;margin-bottom:10px">Cliente alega protesto desconhecido ou em disputa jur\u00eddica. Acione um diretor para autorizar.</p>'
+        +'<button id="m5bDir" style="background:#2563eb;color:#ffffff;border:none;border-radius:6px;padding:10px 16px;width:100%;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-shield-check"></i> Diretor autorizou \u2014 ir para Etapa 3</button>'
         +'</div></div>';
       q('#m5bAnu').onclick=function(){S.protestoDiretor=true;addCk('warn','ti-alert-triangle','Carta de anu\u00eancia verificada');this.disabled=true;this.innerHTML='<i class="ti ti-check"></i> Registrado';setTimeout(buildE3,400);};
       q('#m5bDir').onclick=function(){S.protestoDiretor=true;addCk('warn','ti-alert-triangle','Diretor autorizou');this.disabled=true;this.innerHTML='<i class="ti ti-check"></i> Autoriza\u00e7\u00e3o registrada';setTimeout(buildE3,400);};
@@ -4974,19 +4974,19 @@ function renderModeloEmTeste(){
   function buildE3(){
     S.simDoc={1:0,2:0,3:0};S.endTerceiro=false;
     function dRow(bid,eid,ico,lbl,sub,n){
-      return '<div style="background:var(--surface-1);border:0.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px">'
+      return '<div style="background:#f1f5f9;border:0.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:8px">'
         +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
-        +'<div style="width:34px;height:34px;border-radius:8px;background:var(--bg-accent);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti '+ico+'" style="font-size:17px;color:var(--text-accent)"></i></div>'
-        +'<div><div style="font-size:13px;font-weight:500">'+lbl+' <span style="background:var(--bg-danger);color:var(--text-danger);font-size:10px;padding:2px 8px;border-radius:20px">Obrigat\u00f3rio</span></div>'
-        +'<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+sub+'</div></div></div>'
+        +'<div style="width:34px;height:34px;border-radius:8px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti '+ico+'" style="font-size:17px;color:#1d4ed8"></i></div>'
+        +'<div><div style="font-size:13px;font-weight:500">'+lbl+' <span style="background:#fee2e2;color:#991b1b;font-size:10px;padding:2px 8px;border-radius:20px">Obrigat\u00f3rio</span></div>'
+        +'<div style="font-size:11px;color:#94a3b8;margin-top:2px">'+sub+'</div></div></div>'
         +'<div style="display:flex;align-items:center;gap:8px">'
-        +'<span id="'+bid+'" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:var(--surface-0);color:var(--text-muted);border:0.5px solid var(--border)"><i class="ti ti-clock"></i> Aguardando</span>'
-        +'<label style="background:var(--surface-2);border:0.5px solid var(--border-strong);border-radius:6px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;color:var(--text-primary);display:inline-flex;align-items:center;gap:4px"><i class="ti ti-upload"></i> Selecionar<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none" data-n="'+n+'"></label>'
+        +'<span id="'+bid+'" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#f8fafc;color:#94a3b8;border:0.5px solid #e2e8f0"><i class="ti ti-clock"></i> Aguardando</span>'
+        +'<label style="background:#ffffff;border:0.5px solid #94a3b8;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;color:#0f172a;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-upload"></i> Selecionar<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none" data-n="'+n+'"></label>'
         +'</div><div id="'+eid+'" style="display:none;margin-top:8px"></div></div>';
     }
     q('#m5s3').innerHTML=card('#6A1B9A',
       sec(3,'#6A1B9A','Documentos Obrigat\u00f3rios \u2014 An\u00e1lise pela IA')
-      +'<p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;padding:8px 10px;background:var(--surface-1);border-radius:6px;line-height:1.6">'
+      +'<p style="font-size:12px;color:#475569;margin-bottom:12px;padding:8px 10px;background:#f1f5f9;border-radius:6px;line-height:1.6">'
       +'<strong>Simulado:</strong> Contrato (1\u00ba=ok / 2\u00ba=CNPJ diverge / 3\u00ba=s\u00f3cio diverge) \u00b7 '
       +'Endere\u00e7o (1\u00ba=empresa / 2\u00ba=s\u00f3cio / 3\u00ba=terceiro / 4\u00ba=inv\u00e1lido / 5\u00ba=vencido) \u00b7 '
       +'Doc s\u00f3cio (1\u00ba=ok / 2\u00ba=diverge)</p>'
@@ -4994,8 +4994,8 @@ function renderModeloEmTeste(){
       +dRow('m5eb2','m5ei2','ti-home','Comprovante de Endere\u00e7o','Conta \u00e1gua/energia/telefone/cart\u00e3o (at\u00e9 90 dias) ou contrato de loca\u00e7\u00e3o','2')
       +dRow('m5eb3','m5ei3','ti-id-badge','Documento do S\u00f3cio (RG, CNH ou Carteira)','IA verifica se nome confere com a Receita Federal','3')
       +'<div id="m5bdoc" style="display:none;margin-top:8px">'
-      +'<button id="m5btnDoc" style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-flag"></i> Concluir an\u00e1lise documental</button>'
-      +' <span id="m5dcnt" style="font-size:12px;color:var(--text-muted)"></span></div>'
+      +'<button id="m5btnDoc" style="background:#2563eb;color:#ffffff;border:0.5px solid #2563eb;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-flag"></i> Concluir an\u00e1lise documental</button>'
+      +' <span id="m5dcnt" style="font-size:12px;color:#94a3b8"></span></div>'
     )+'<div id="m5re3" style="display:none"></div>';
     show('m5s3');
     wrap.querySelectorAll('#m5s3 input[type=file]').forEach(function(inp){
@@ -5008,9 +5008,9 @@ function renderModeloEmTeste(){
     var file=inp.files[0];if(!file)return;
     var b=q('#m5eb'+n);
     b.innerHTML='<i class="ti ti-loader"></i> Analisando...';
-    b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:var(--bg-accent);color:var(--text-accent);border:0.5px solid var(--border-accent)';
+    b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#eff6ff;color:#1d4ed8;border:0.5px solid #93c5fd';
     var ei=q('#m5ei'+n);ei.style.display='block';
-    ei.innerHTML='<div style="font-size:12px;color:var(--text-muted);font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-robot"></i> IA lendo...</div>';
+    ei.innerHTML='<div style="font-size:12px;color:#94a3b8;font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-robot"></i> IA lendo...</div>';
     setTimeout(function(){
       S.simDoc[n]=(S.simDoc[n]||0)+1;var s=S.simDoc[n];
       var cls,ico,txt;
@@ -5030,7 +5030,7 @@ function renderModeloEmTeste(){
         else{cls='neg';ico='ti-x';txt='Nome <strong>CARLOS ALBERTO SOUZA</strong> \u2014 n\u00e3o confere com '+D.socio+'.';}
       }
       b.innerHTML='<i class="ti ti-check"></i> '+file.name.slice(0,18)+(file.name.length>18?'...':'');
-      b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:var(--bg-success);color:var(--text-success);border:0.5px solid var(--border-success)';
+      b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#dcfce7;color:#166534;border:0.5px solid #86efac';
       var lbl=n===1?'Contrato Social':n===2?'Comprovante endere\u00e7o':'Doc s\u00f3cio';
       ei.innerHTML=it(cls,ico,'<strong>'+lbl+':</strong> '+txt);
       addCk(cls,ico,lbl+': '+txt.replace(/<[^>]+>/g,''));
@@ -5070,35 +5070,35 @@ function renderModeloEmTeste(){
     var qN=(D.fantasia||D.nome)+', Goi\u00e2nia, GO';
     q('#m5s4').innerHTML=card('#E65100',
       sec(4,'#E65100','Loca\u00e7\u00e3o + Verifica\u00e7\u00e3o de Endere\u00e7o')
-      +'<div style="padding:10px 12px;background:var(--bg-warning);border-radius:6px;font-size:13px;color:var(--text-warning);font-weight:500;margin-bottom:14px;display:flex;align-items:center;gap:8px"><i class="ti ti-alert-triangle"></i> Endere\u00e7o em nome de terceiro. Envie o contrato e verifique o Maps.</div>'
-      +'<div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Bloco A \u2014 Contrato de loca\u00e7\u00e3o <span style="background:var(--bg-accent);color:var(--text-accent);font-size:10px;padding:2px 6px;border-radius:20px">1\u00ba=ok / 2\u00ba=aten\u00e7\u00e3o / 3\u00ba=negado</span></div>'
-      +'<div style="background:var(--surface-1);border:0.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">'
+      +'<div style="padding:10px 12px;background:#fef9c3;border-radius:6px;font-size:13px;color:#854d0e;font-weight:500;margin-bottom:14px;display:flex;align-items:center;gap:8px"><i class="ti ti-alert-triangle"></i> Endere\u00e7o em nome de terceiro. Envie o contrato e verifique o Maps.</div>'
+      +'<div style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Bloco A \u2014 Contrato de loca\u00e7\u00e3o <span style="background:#eff6ff;color:#1d4ed8;font-size:10px;padding:2px 6px;border-radius:20px">1\u00ba=ok / 2\u00ba=aten\u00e7\u00e3o / 3\u00ba=negado</span></div>'
+      +'<div style="background:#f1f5f9;border:0.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px">'
       +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
-      +'<span id="m5b4" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:var(--surface-0);color:var(--text-muted);border:0.5px solid var(--border)"><i class="ti ti-clock"></i> Aguardando</span>'
-      +'<label style="background:var(--surface-2);border:0.5px solid var(--border-strong);border-radius:6px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;color:var(--text-primary);display:inline-flex;align-items:center;gap:4px"><i class="ti ti-upload"></i> Selecionar<input id="m5inpL" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none"></label>'
+      +'<span id="m5b4" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#f8fafc;color:#94a3b8;border:0.5px solid #e2e8f0"><i class="ti ti-clock"></i> Aguardando</span>'
+      +'<label style="background:#ffffff;border:0.5px solid #94a3b8;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;color:#0f172a;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-upload"></i> Selecionar<input id="m5inpL" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none"></label>'
       +'</div><div id="m5ia4" style="display:none;margin-top:8px"></div></div>'
       +'<div id="m5re4n" style="display:none">'+resBox('neg','Negado \u2014 contrato vencido ou insuficiente','Venda faturada negada.')+'</div>'
-      +'<hr style="border:0;border-top:0.5px solid var(--border);margin:14px 0">'
-      +'<div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Bloco B \u2014 Google Maps</div>'
-      +'<div style="background:var(--surface-1);border:0.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px">'
-      +'<div style="font-size:13px;font-weight:500;margin-bottom:6px"><i class="ti ti-map-pin" style="color:var(--text-accent)"></i> Op\u00e7\u00e3o 1 \u2014 Endere\u00e7o</div>'
-      +'<div style="font-family:monospace;font-size:12px;background:var(--surface-0);padding:6px 10px;border-radius:6px;border:0.5px solid var(--border);margin-bottom:8px">'+qE+'</div>'
-      +'<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(qE)+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:var(--fill-accent);color:var(--on-accent);border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none"><i class="ti ti-map-pin"></i> Ver no Maps</a>'
+      +'<hr style="border:0;border-top:0.5px solid #e2e8f0;margin:14px 0">'
+      +'<div style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Bloco B \u2014 Google Maps</div>'
+      +'<div style="background:#f1f5f9;border:0.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:8px">'
+      +'<div style="font-size:13px;font-weight:500;margin-bottom:6px"><i class="ti ti-map-pin" style="color:#1d4ed8"></i> Op\u00e7\u00e3o 1 \u2014 Endere\u00e7o</div>'
+      +'<div style="font-family:monospace;font-size:12px;background:#f8fafc;padding:6px 10px;border-radius:6px;border:0.5px solid #e2e8f0;margin-bottom:8px">'+qE+'</div>'
+      +'<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(qE)+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#2563eb;color:#ffffff;border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none"><i class="ti ti-map-pin"></i> Ver no Maps</a>'
       +'</div>'
-      +'<div style="background:var(--surface-1);border:0.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px">'
-      +'<div style="font-size:13px;font-weight:500;margin-bottom:6px"><i class="ti ti-building-store" style="color:var(--text-accent)"></i> Op\u00e7\u00e3o 2 \u2014 Nome fantasia</div>'
-      +'<div style="font-family:monospace;font-size:12px;background:var(--surface-0);padding:6px 10px;border-radius:6px;border:0.5px solid var(--border);margin-bottom:8px">'+qN+'</div>'
-      +'<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(qN)+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:var(--fill-accent);color:var(--on-accent);border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none"><i class="ti ti-building-store"></i> Buscar empresa</a>'
+      +'<div style="background:#f1f5f9;border:0.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:12px">'
+      +'<div style="font-size:13px;font-weight:500;margin-bottom:6px"><i class="ti ti-building-store" style="color:#1d4ed8"></i> Op\u00e7\u00e3o 2 \u2014 Nome fantasia</div>'
+      +'<div style="font-family:monospace;font-size:12px;background:#f8fafc;padding:6px 10px;border-radius:6px;border:0.5px solid #e2e8f0;margin-bottom:8px">'+qN+'</div>'
+      +'<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(qN)+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#2563eb;color:#ffffff;border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none"><i class="ti ti-building-store"></i> Buscar empresa</a>'
       +'</div>'
-      +'<p style="font-size:13px;color:var(--text-secondary);margin:4px 0 10px">Marque o resultado da verifica\u00e7\u00e3o:</p>'
+      +'<p style="font-size:13px;color:#475569;margin:4px 0 10px">Marque o resultado da verifica\u00e7\u00e3o:</p>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
-      +'<button id="m5bMok" style="border:0.5px solid var(--border-success);border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;background:var(--bg-success);color:var(--text-success);display:inline-flex;align-items:center;gap:6px"><i class="ti ti-check"></i> Confere \u2014 fachada encontrada</button>'
-      +'<button id="m5bMno" style="border:0.5px solid var(--border-danger);border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;background:var(--bg-danger);color:var(--text-danger);display:inline-flex;align-items:center;gap:6px"><i class="ti ti-x"></i> N\u00e3o confere</button>'
+      +'<button id="m5bMok" style="border:0.5px solid #86efac;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;background:#dcfce7;color:#166534;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-check"></i> Confere \u2014 fachada encontrada</button>'
+      +'<button id="m5bMno" style="border:0.5px solid #fca5a5;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;background:#fee2e2;color:#991b1b;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-x"></i> N\u00e3o confere</button>'
       +'</div><div id="m5mst" style="display:none;font-size:12px;font-weight:500;margin-top:6px"></div>'
-      +'<hr style="border:0;border-top:0.5px solid var(--border);margin:14px 0">'
+      +'<hr style="border:0;border-top:0.5px solid #e2e8f0;margin:14px 0">'
       +'<div id="m5av4" style="display:none">'
-      +'<button id="m5btnAv4" style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-arrow-right"></i> Prosseguir para refer\u00eancias</button>'
-      +'<p style="font-size:12px;color:var(--text-muted);margin-top:6px">Etapa 4 n\u00e3o bloqueia \u2014 prossiga mesmo com aten\u00e7\u00f5es.</p></div>'
+      +'<button id="m5btnAv4" style="background:#2563eb;color:#ffffff;border:0.5px solid #2563eb;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-arrow-right"></i> Prosseguir para refer\u00eancias</button>'
+      +'<p style="font-size:12px;color:#94a3b8;margin-top:6px">Etapa 4 n\u00e3o bloqueia \u2014 prossiga mesmo com aten\u00e7\u00f5es.</p></div>'
     )+'<div id="m5re4r" style="display:none"></div>';
     show('m5s4');
     q('#m5inpL').onchange=function(){upLoc(this);};
@@ -5112,14 +5112,14 @@ function renderModeloEmTeste(){
     S.simLoc++;
     var b=q('#m5b4');b.innerHTML='<i class="ti ti-loader"></i> Analisando...';
     var ia=q('#m5ia4');ia.style.display='block';
-    ia.innerHTML='<div style="font-size:12px;color:var(--text-muted);font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-robot"></i> Analisando contrato...</div>';
+    ia.innerHTML='<div style="font-size:12px;color:#94a3b8;font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-robot"></i> Analisando contrato...</div>';
     setTimeout(function(){
       var s=S.simLoc%3;var cls,ico,txt;
       if(s===1){cls='ok';ico='ti-check';txt='Em nome de <strong>'+D.nome+'</strong>. Validade: <strong>24 meses</strong> \u2014 prazo adequado.';S.lOk=true;}
       else if(s===2){cls='warn';ico='ti-alert-triangle';txt='Em nome de <strong>'+D.socio+'</strong>. <strong>10 meses</strong> restantes \u2014 aten\u00e7\u00e3o, n\u00e3o bloqueia.';S.lOk=true;}
       else{cls='neg';ico='ti-x';txt='Contrato <strong>vencido</strong>. Venda faturada negada.';S.lOk=false;}
       b.innerHTML='<i class="ti ti-check"></i> '+file.name.slice(0,16)+'...';
-      b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:var(--bg-success);color:var(--text-success);border:0.5px solid var(--border-success)';
+      b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#dcfce7;color:#166534;border:0.5px solid #86efac';
       ia.innerHTML=it(cls,ico,'<strong>Contrato:</strong> '+txt);
       addCk(cls,ico,'Contrato loca\u00e7\u00e3o: '+txt.replace(/<[^>]+>/g,''));
       if(cls==='neg'){S.negado=true;q('#m5re4n').style.display='block';veredito();}
@@ -5131,8 +5131,8 @@ function renderModeloEmTeste(){
     q('#m5bMok').style.opacity=ok?'1':'0.3';
     q('#m5bMno').style.opacity=ok?'0.3':'1';
     var mst=q('#m5mst');mst.style.display='block';S.mOk=true;
-    if(ok){mst.style.color='var(--text-success)';mst.textContent='Fachada confirmada.';addCk('ok','ti-check','Google Maps: fachada confirmada');}
-    else{mst.style.color='var(--text-warning)';mst.textContent='Sem fachada \u2014 avalia\u00e7\u00e3o manual necess\u00e1ria.';addCk('warn','ti-alert-triangle','Google Maps: sem fachada');}
+    if(ok){mst.style.color='#166534';mst.textContent='Fachada confirmada.';addCk('ok','ti-check','Google Maps: fachada confirmada');}
+    else{mst.style.color='#854d0e';mst.textContent='Sem fachada \u2014 avalia\u00e7\u00e3o manual necess\u00e1ria.';addCk('warn','ti-alert-triangle','Google Maps: sem fachada');}
     tryAv4();
   }
   function tryAv4(){if(S.lOk&&S.mOk)q('#m5av4').style.display='block';}
@@ -5146,13 +5146,13 @@ function renderModeloEmTeste(){
   function buildE5(){
     q('#m5s5').innerHTML=card('#1B5E20',
       sec(5,'#1B5E20','Refer\u00eancias Comerciais \u2014 Hist\u00f3rico de Pagamento')
-      +'<p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px">M\u00ednimo 3 refer\u00eancias \u00b7 at\u00e9 8 \u00b7 Preencha os dados de cada fornecedor</p>'
+      +'<p style="font-size:13px;color:#475569;margin-bottom:14px">M\u00ednimo 3 refer\u00eancias \u00b7 at\u00e9 8 \u00b7 Preencha os dados de cada fornecedor</p>'
       +'<div id="m5rC">'
       +[0,1,2].map(rfC).join('')
       +'</div>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
-      +'<button id="m5bSim" style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-wand"></i> Preencher simulado</button>'
-      +'<button id="m5bPar" style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-brain"></i> Gerar parecer</button>'
+      +'<button id="m5bSim" style="background:#2563eb;color:#ffffff;border:0.5px solid #2563eb;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-wand"></i> Preencher simulado</button>'
+      +'<button id="m5bPar" style="background:#2563eb;color:#ffffff;border:0.5px solid #2563eb;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-brain"></i> Gerar parecer</button>'
       +'</div>'
     )+'<div id="m5re5" style="display:none"></div>';
     show('m5s5');
@@ -5170,21 +5170,21 @@ function renderModeloEmTeste(){
     var g2='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px';
     var g3='display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px';
     var fl='display:flex;flex-direction:column;gap:4px';
-    var lb='font-size:11px;font-weight:500;color:var(--text-secondary)';
-    var is='border:0.5px solid var(--border-strong);border-radius:6px;padding:6px 9px;font-size:13px;background:var(--surface-2);color:var(--text-primary);outline:none;width:100%';
+    var lb='font-size:11px;font-weight:500;color:#475569';
+    var is='border:0.5px solid #94a3b8;border-radius:6px;padding:6px 9px;font-size:13px;background:#ffffff;color:#0f172a;outline:none;width:100%';
     function fi(id,ph){return '<input type="text" id="m5r'+i+id+'" placeholder="'+ph+'" style="'+is+'">';}
     function fs(id,ops){return '<select id="m5r'+i+id+'" style="'+is+'"><option>--</option>'+ops.map(function(o){return '<option>'+o+'</option>';}).join('')+'</select>';}
     function fd(l,inner){return '<div style="'+fl+'"><label style="'+lb+'">'+l+'</label>'+inner+'</div>';}
-    return '<div style="background:var(--surface-1);border:0.5px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px">'
-      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;border-bottom:0.5px solid var(--border);padding-bottom:10px">'
-      +'<span style="width:22px;height:22px;border-radius:50%;background:var(--bg-accent);color:var(--text-accent);font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">'+n+'</span>'
+    return '<div style="background:#f1f5f9;border:0.5px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:10px">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;border-bottom:0.5px solid #e2e8f0;padding-bottom:10px">'
+      +'<span style="width:22px;height:22px;border-radius:50%;background:#eff6ff;color:#1d4ed8;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center">'+n+'</span>'
       +'<span style="font-size:13px;font-weight:500">Refer\u00eancia '+n+'</span></div>'
-      +'<div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">Fornecedor</div>'
+      +'<div style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;margin-bottom:8px">Fornecedor</div>'
       +'<div style="'+g2+'">'+fd('Nome',fi('n','Raz\u00e3o Social'))+fd('Respons\u00e1vel',fi('r','Nome'))+'</div>'
       +'<div style="'+g2+'">'+fd('Telefone',fi('t','(00) 00000-0000'))+fd('Cliente desde',fi('d','MM/AAAA'))+'</div>'
-      +'<div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin:8px 0">Relacionamento</div>'
+      +'<div style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;margin:8px 0">Relacionamento</div>'
       +'<div style="'+g3+'">'+fd('Limite (R$)',fi('l','10.000,00'))+fd('Data maior compra',fi('dc','MM/AAAA'))+fd('Valor maior compra',fi('vc','3.000,00'))+'</div>'
-      +'<div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin:8px 0">Pagamento</div>'
+      +'<div style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;margin:8px 0">Pagamento</div>'
       +'<div style="'+g3+'">'+fd('Paga em dia?',fs('p',['\u2705 Sim','\u26a0\ufe0f Quase sempre','\u274c N\u00e3o']))+fd('J\u00e1 teve atraso?',fs('a',['\u2705 Nunca','\u26a0\ufe0f Raramente','\u274c Com frequ\u00eancia']))+fd('Maior atraso (dias)',fi('da','0'))+'</div>'
       +'<div style="'+g2+'">'+fd('D\u00e9bito em aberto?',fs('db',['\u2705 N\u00e3o','\u274c Sim']))+fd('Recomenda cr\u00e9dito?',fs('rc',['\u2705 Sim','\u26a0\ufe0f Com ressalvas','\u274c N\u00e3o']))+'</div>'
       +'</div>';
