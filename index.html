@@ -5007,41 +5007,96 @@ function renderModeloEmTeste(){
   function upDoc(n,inp){
     var file=inp.files[0];if(!file)return;
     var b=q('#m5eb'+n);
-    b.innerHTML='<i class="ti ti-loader"></i> Analisando...';
+    b.innerHTML='<i class="ti ti-loader"></i> Lendo...';
     b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#eff6ff;color:#1d4ed8;border:0.5px solid #93c5fd';
     var ei=q('#m5ei'+n);ei.style.display='block';
-    ei.innerHTML='<div style="font-size:12px;color:#94a3b8;font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-robot"></i> IA lendo...</div>';
-    setTimeout(function(){
-      S.simDoc[n]=(S.simDoc[n]||0)+1;var s=S.simDoc[n];
-      var cls,ico,txt;
-      if(n===1){
-        if(s%3===1){cls='ok';ico='ti-check';txt='CNPJ <strong>'+D.cnpj+'</strong> confirmado. S\u00f3cio <strong>'+D.socio+'</strong> confere. Capital '+D.capital+'.';}
-        else if(s%3===2){cls='neg';ico='ti-x';txt='CNPJ identificado <strong>22.333.444/0001-55</strong> \u2014 <strong>diverge</strong> do CNPJ consultado.';}
-        else{cls='neg';ico='ti-x';txt='S\u00f3cio <strong>CARLOS ALBERTO SOUZA</strong> \u2014 <strong>n\u00e3o confere</strong> com '+D.socio+'.';}
-      } else if(n===2){
-        S.endTerceiro=false;
-        if(s%5===1){cls='ok';ico='ti-check';txt='Conta de energia em nome de <strong>'+D.nome+'</strong> \u2014 confere. Emiss\u00e3o h\u00e1 45 dias.';}
-        else if(s%5===2){cls='ok';ico='ti-check';txt='Fatura em nome de <strong>'+D.socio+'</strong> (s\u00f3cio) \u2014 confere.';}
-        else if(s%5===3){cls='warn';ico='ti-alert-triangle';txt='Em nome de <strong>MARIA APARECIDA SOUZA</strong> (terceiro). Etapa 4 obrigat\u00f3ria.';S.endTerceiro=true;}
-        else if(s%5===4){cls='neg';ico='ti-x';txt='Documento inv\u00e1lido (Nota Fiscal). Aceitos: conta \u00e1gua/energia/telefone/cart\u00e3o.';}
-        else{cls='neg';ico='ti-x';txt='Documento com <strong>120 dias</strong> \u2014 prazo m\u00e1ximo \u00e9 90 dias.';}
-      } else {
-        if(s%2===1){cls='ok';ico='ti-check';txt='Nome <strong>'+D.socio+'</strong> confirmado \u2014 confere com a Receita Federal.';}
-        else{cls='neg';ico='ti-x';txt='Nome <strong>CARLOS ALBERTO SOUZA</strong> \u2014 n\u00e3o confere com '+D.socio+'.';}
+    ei.innerHTML='<div style="font-size:12px;color:#94a3b8;font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-robot"></i> IA analisando o documento...</div>';
+    S.simDoc[n]=(S.simDoc[n]||0)+1;
+
+    var basePrompt={
+      1:'Voce e um analisador de documentos para analise de credito comercial.\nEmpresa analisada: '+D.nome+' (CNPJ: '+D.cnpj+')\nSocio majoritario: '+D.socio+'\nCapital esperado: '+D.capital+'\n\nAnalise o documento (Contrato Social Alterado) e responda APENAS com JSON valido sem markdown:\n{"cnpj_encontrado":"cnpj no doc","cnpj_confere":true,"socio_encontrado":"nome","socio_confere":true,"capital_encontrado":"valor","resultado":"ok","resumo":"texto curto do que encontrou"}',
+      2:'Voce e um analisador de documentos para analise de credito comercial.\nEmpresa: '+D.nome+' CNPJ: '+D.cnpj+'\nSocio: '+D.socio+'\n\nAnalise o documento como comprovante de endereco. Tipos aceitos: conta agua, energia, telefone, cartao credito (ate 90 dias) ou contrato locacao. Qualquer outro tipo e invalido.\nResponda APENAS com JSON valido sem markdown:\n{"tipo_documento":"comprovante_endereco ou contrato_locacao ou invalido","tipo_especifico":"conta_agua ou conta_energia ou conta_telefone ou cartao_credito ou contrato_locacao ou outro","titular_encontrado":"nome","titular_confere":"empresa ou socio ou terceiro","dentro_90_dias":true,"resultado":"ok","resumo":"texto curto"}',
+      3:'Voce e um analisador de documentos para analise de credito comercial.\nSocio esperado: '+D.socio+'\n\nAnalise o documento de identificacao (RG, CNH ou carteira profissional) e responda APENAS com JSON valido sem markdown:\n{"nome_encontrado":"nome","confere":true,"tipo_doc":"RG ou CNH ou outro","resultado":"ok","resumo":"texto curto"}'
+    };
+
+    (async function(){
+      try{
+        var msgs=[];
+        if(file.type==='application/pdf'){
+          var texto='';
+          try{
+            if(typeof pdfjsLib!=='undefined'){
+              pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+              var buf=await file.arrayBuffer();
+              var pdf=await pdfjsLib.getDocument({data:buf}).promise;
+              for(var p=1;p<=pdf.numPages;p++){
+                var pg=await pdf.getPage(p);
+                var ct=await pg.getTextContent();
+                texto+=ct.items.map(function(it){return it.str;}).join(' ')+' ';
+              }
+            }
+          }catch(epdf){console.warn('pdfjs:',epdf);}
+          msgs=[{role:'user',content:basePrompt[n]+(texto?'\n\nTexto extraido do documento:\n'+texto.slice(0,4000):'\n\nNao foi possivel extrair texto do PDF.')}];
+        } else {
+          var b64=await new Promise(function(res,rej){
+            var rd=new FileReader();
+            rd.onload=function(e){res(e.target.result.split(',')[1]);};
+            rd.onerror=rej;
+            rd.readAsDataURL(file);
+          });
+          msgs=[{role:'user',content:[
+            {type:'text',text:basePrompt[n]},
+            {type:'image',source:{type:'base64',media_type:file.type||'image/jpeg',data:b64}}
+          ]}];
+        }
+
+        var resp=await fetch('https://soft-limit-b3a1.rauldias.workers.dev',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:600,messages:msgs})
+        });
+        var data=await resp.json();
+        var txtResp=(data.content&&data.content[0])?data.content[0].text:'{}';
+        var json=JSON.parse(txtResp.replace(/```json|```/g,'').trim());
+
+        b.innerHTML='<i class="ti ti-check"></i> '+file.name.slice(0,18)+(file.name.length>18?'...':'');
+        b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#dcfce7;color:#166534;border:0.5px solid #86efac';
+
+        var cls=json.resultado==='ok'?'ok':json.resultado==='warn'?'warn':'neg';
+        var ico=cls==='ok'?'ti-check':cls==='warn'?'ti-alert-triangle':'ti-x';
+        var lbl=n===1?'Contrato Social':n===2?'Comprovante endere\u00e7o':'Doc s\u00f3cio';
+        ei.innerHTML=it(cls,ico,'<strong>'+lbl+':</strong> '+json.resumo);
+        addCk(cls,ico,lbl+': '+json.resumo);
+
+        if(n===2){
+          S.endTerceiro=false;
+          if(json.tipo_documento==='contrato_locacao'||json.titular_confere==='terceiro'){
+            S.endTerceiro=true;
+          }
+          if(json.tipo_documento==='invalido'||json.dentro_90_dias===false){
+            cls='neg';
+            ei.innerHTML=it('neg','ti-x','<strong>'+lbl+':</strong> '+json.resumo);
+          }
+        }
+        if(n===1&&json.cnpj_confere===false){addCk('neg','ti-x','Contrato Social: CNPJ diverge');}
+        if(n===1&&json.socio_confere===false){addCk('neg','ti-x','Contrato Social: socio diverge');}
+
+      }catch(err){
+        b.innerHTML='<i class="ti ti-alert-triangle"></i> Erro';
+        b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#fee2e2;color:#991b1b;border:0.5px solid #fca5a5';
+        ei.innerHTML=it('neg','ti-x','Erro ao processar: '+err.message);
+        addCk('neg','ti-x','Erro ao processar documento');
       }
-      b.innerHTML='<i class="ti ti-check"></i> '+file.name.slice(0,18)+(file.name.length>18?'...':'');
-      b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#dcfce7;color:#166534;border:0.5px solid #86efac';
-      var lbl=n===1?'Contrato Social':n===2?'Comprovante endere\u00e7o':'Doc s\u00f3cio';
-      ei.innerHTML=it(cls,ico,'<strong>'+lbl+':</strong> '+txt);
-      addCk(cls,ico,lbl+': '+txt.replace(/<[^>]+>/g,''));
-      if(S.endTerceiro)addCk('warn','ti-alert-triangle','Endere\u00e7o: terceiro \u2014 Etapa 4 obrigat\u00f3ria');
-      var tot=Object.values(S.simDoc).filter(function(v){return v>0;}).length;
-      if(tot>0){
+
+      if(Object.values(S.simDoc).some(function(v){return v>0;})){
         q('#m5bdoc').style.display='block';
-        q('#m5dcnt').textContent=tot+'/3 doc'+(tot!==1?'s':'')+' enviado'+(tot!==1?'s':'');
+        var tot=Object.values(S.simDoc).filter(function(v){return v>0;}).length;
+        q('#m5dcnt').textContent=tot+'/3 docs enviados';
       }
-    },1200);
+    })();
   }
+
+
 
   function concluirE3(){
     var neg=S.checks.some(function(k){
