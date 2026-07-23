@@ -4731,10 +4731,10 @@ function renderModeloEmTeste(){
     S.checks.push({cls:cls,ico:ico,txt:txt});
     var cl=q('#m5cl');
     if(!cl)return;
+    var CKC={ok:{bg:'#dcfce7',co:'#166534',bd:'#86efac'},neg:{bg:'#fee2e2',co:'#991b1b',bd:'#fca5a5'},warn:{bg:'#fef9c3',co:'#854d0e',bd:'#fde047'}};
     cl.innerHTML=S.checks.map(function(k){
-      return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;'
-        +'font-weight:500;padding:6px 10px;border-radius:6px;margin-bottom:3px;'
-        +'background:var(--bg-'+k.cls+');color:var(--text-'+k.cls+')">'
+      var cc=CKC[k.cls]||{bg:'#f1f5f9',co:'#334155',bd:'#cbd5e1'};
+      return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;padding:7px 11px;border-radius:8px;margin-bottom:4px;background:'+cc.bg+';color:'+cc.co+';border:1px solid '+cc.bd+'">'
         +'<i class="ti '+k.ico+'"></i><span>'+k.txt+'</span></div>';
     }).join('');
   }
@@ -5218,16 +5218,17 @@ function renderModeloEmTeste(){
     +'<div style="font-size:12px;opacity:.85">5 etapas \u00b7 Consulta Receita Federal em tempo real \u00b7 Veredito autom\u00e1tico com condi\u00e7\u00e3o de pagamento</div>'
     +'</div>'
     +'<div style="padding:0 4px">'
-    +'<div style="background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">'
-    +'<label style="font-size:13px;color:var(--text-secondary);font-weight:500">CNPJ</label>'
-    +'<input id="m5inp" type="text" placeholder="00.000.000/0001-00" maxlength="18" style="border:0.5px solid var(--border-strong);border-radius:6px;padding:7px 11px;font-size:13px;width:190px;background:var(--surface-1);color:var(--text-primary);outline:none">'
-    +'<button id="m5btnC" style="background:var(--fill-accent);color:var(--on-accent);border:0.5px solid var(--fill-accent);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-search"></i> Consultar</button>'
-    +'<button id="m5btnL" style="background:var(--surface-1);color:var(--text-secondary);border:0.5px solid var(--border);border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-x"></i> Limpar</button>'
+    +'<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;box-shadow:0 1px 4px rgba(0,0,0,0.06)">'
+    +'<label style="font-size:13px;color:#475569;font-weight:600;white-space:nowrap">CNPJ</label>'
+    +'<input id="m5inp" type="text" placeholder="00.000.000/0001-00" maxlength="18" style="border:1.5px solid #cbd5e1;border-radius:8px;padding:9px 13px;font-size:14px;width:200px;background:#fff;color:#1e293b;outline:none;font-weight:500;transition:border .2s" onfocus="this.style.borderColor=\'#0f6e56\'" onblur="this.style.borderColor=\'#cbd5e1\'">'
+    +'<button id="m5btnC" style="background:linear-gradient(135deg,#0f6e56,#1a9d78);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(15,110,86,0.3)"><i class="ti ti-search"></i> Consultar</button>'
+    +'<button id="m5btnL" style="background:#f1f5f9;color:#64748b;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-x"></i> Limpar</button>'
     +'</div>'
-    +'<div style="background:var(--bg-warning);border:1.5px solid var(--border-warning);border-radius:12px;padding:16px 18px;margin-bottom:14px">'
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><i class="ti ti-robot" style="font-size:22px;color:var(--text-warning)"></i>'
-    +'<span style="font-size:15px;font-weight:500;color:var(--text-primary)">Parecer Inteligente \u2014 An\u00e1lise de Risco</span></div>'
-    +'<div id="m5pb" style="font-size:13px;color:var(--text-secondary);line-height:1.6;font-style:italic">Digite o CNPJ e clique em Consultar para gerar o parecer.</div>'
+    +'<div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1.5px solid #f59e0b;border-radius:14px;padding:18px 20px;margin-bottom:16px;box-shadow:0 2px 8px rgba(245,158,11,0.12)">'
+    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><i class="ti ti-robot" style="font-size:26px;color:#d97706"></i>'
+    +'<div><div style="font-size:15px;font-weight:700;color:#92400e">Parecer Inteligente \u2014 An\u00e1lise de Risco</div>'
+    +'<div style="font-size:11px;color:#b45309;margin-top:1px">Resultado consolidado de todas as etapas</div></div></div>'
+    +'<div id="m5pb" style="font-size:13px;color:#78350f;line-height:1.7;font-style:italic;padding:8px 12px;background:rgba(255,255,255,0.5);border-radius:8px">Digite o CNPJ e clique em Consultar para gerar o parecer.</div>'
     +'<div id="m5cl" style="margin-top:10px"></div>'
     +'</div>'
     +'<div id="m5s1" style="display:none"></div>'
