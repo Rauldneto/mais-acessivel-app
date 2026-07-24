@@ -5041,6 +5041,8 @@ function renderModeloEmTeste(){
         var dtStr=agora.toLocaleDateString('pt-BR')+' '+agora.toLocaleTimeString('pt-BR');
         S.protestoDiretor=true;
         S.excecao1={operador:operador,dataHora:dtStr};
+        // Esmaecer Excecao 2
+        var _bDir=q('#m5bDir');if(_bDir){var _bE2=_bDir.parentElement;while(_bE2&&!_bE2.style.border)_bE2=_bE2.parentElement;if(_bE2){_bE2.style.opacity='0.35';_bE2.style.pointerEvents='none';}}
         addCk('warn','ti-alert-triangle','Exce\u00e7\u00e3o 1: carta de anu\u00eancia verificada por '+operador+' em '+dtStr);
         this.disabled=true;
         this.innerHTML='<i class="ti ti-check"></i> Registrado por '+operador+' em '+dtStr;
@@ -5068,6 +5070,7 @@ function renderModeloEmTeste(){
         var dtRegistro=agora2.toLocaleDateString('pt-BR')+' '+agora2.toLocaleTimeString('pt-BR');
         S.protestoDiretor=true;
         S.excecao2={dirAutorizou:nomeDiretor,dataHoraAutorizacao:dtFormatada,operador:operador,dataHoraRegistro:dtRegistro};
+        var _bAnu=q('#m5bAnu');if(_bAnu){var _p=_bAnu.parentElement;while(_p&&_p.style.borderRadius===undefined)_p=_p.parentElement;if(_p){_p.style.opacity='0.35';_p.style.pointerEvents='none';}}
         addCk('warn','ti-alert-triangle','Exce\u00e7\u00e3o 2: autorizado por Dir. '+nomeDiretor+' em '+dtFormatada+' | Registrado por '+operador);
         this.disabled=true;
         q('#m5dirNome').disabled=true;
@@ -5177,7 +5180,28 @@ function upDoc(n,inp){
               }
             }
           }catch(epdf){console.warn('pdfjs:',epdf);}
-          msgs=[{role:'user',content:basePrompt[n]+(texto?'\n\nTexto extraido do documento:\n'+texto.slice(0,4000):'\n\nNao foi possivel extrair texto do PDF.')}];
+          // Se texto muito curto (scan/imagem dentro do PDF), renderizar pagina e enviar como imagem
+          if(texto.trim().length<50){
+            ei.innerHTML='<div style="font-size:12px;color:#94a3b8;font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-scan"></i> Documento digitalizado detectado. Enviando imagem para a IA...</div>';
+            try{
+              var buf2=await file.arrayBuffer();
+              var pdf2=await pdfjsLib.getDocument({data:buf2}).promise;
+              var pg1=await pdf2.getPage(1);
+              var vp=pg1.getViewport({scale:2.0});
+              var cv=document.createElement('canvas');
+              cv.width=vp.width;cv.height=vp.height;
+              await pg1.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+              var imgB64=cv.toDataURL('image/jpeg',0.85).split(',')[1];
+              msgs=[{role:'user',content:[
+                {type:'text',text:basePrompt[n]+'\n\nATENCAO: Este documento foi digitalizado (scan). Leia a imagem com cuidado, mesmo que seja preto e branco ou baixa qualidade.'},
+                {type:'image',source:{type:'base64',media_type:'image/jpeg',data:imgB64}}
+              ]}];
+            }catch(escan){
+              msgs=[{role:'user',content:basePrompt[n]+'\n\nDocumento escaneado - nao foi possivel renderizar a imagem. Informe que o documento nao pude ser lido e solicite nova versao.'}];
+            }
+          } else {
+            msgs=[{role:'user',content:basePrompt[n]+'\n\nTexto extraido do documento:\n'+texto.slice(0,4000)}];
+          }
         } else {
           var b64=await new Promise(function(res,rej){
             var rd=new FileReader();
