@@ -4898,8 +4898,11 @@ function renderModeloEmTeste(){
         D.capital=d.capital_social?'R$ '+parseFloat(d.capital_social).toLocaleString('pt-BR',{minimumFractionDigits:2}):'N\u00e3o informado';
         // Montar endereco completo do cartao CNPJ
         var _end=[];
-        if(est.tipo_logradouro)_end.push(est.tipo_logradouro);
-        if(est.logradouro)_end.push(est.logradouro);
+        // Unir tipo_logradouro + logradouro SEM virgula (ex: Avenida Elias Bofai)
+        var _log='';
+        if(est.tipo_logradouro)_log=est.tipo_logradouro+' ';
+        if(est.logradouro)_log+=est.logradouro;
+        if(_log)_end.push(_log.trim());
         if(est.numero&&est.numero!=='S/N')_end.push(est.numero);
         if(est.quadra)_end.push('QD '+est.quadra);
         if(est.lote)_end.push('LT '+est.lote);
@@ -5543,56 +5546,112 @@ function upDoc(n,inp){
 
   function buildE4(){
     S.simLoc=0;S.mOk=false;S.lOk=false;
-    // Montar strings de busca com dados reais do cartao CNPJ
+
+    // Montar endereco sem virgula apos tipo de logradouro
+    // API retorna tipo_logradouro separado do logradouro - unir sem virgula
     var _endParts=[];
-    if(D.endereco)_endParts.push(D.endereco);
-    if(D.cep)_endParts.push('CEP: '+D.cep);
+    var _logradouro='';
+    if(D.endereco){
+      // D.endereco ja esta montado no consultar() - garantir sem virgula entre tipo e nome
+      _logradouro=D.endereco;
+    }
+    if(_logradouro)_endParts.push(_logradouro);
     if(D.cidade)_endParts.push(D.cidade);
     if(D.estado)_endParts.push(D.estado);
     var qE=_endParts.join(', ')||D.cnpj+' endereco';
+
     var _nomeBusca=D.fantasia&&D.fantasia!==D.nome?D.fantasia:D.nome;
     var _locBusca=[];
     if(D.cidade)_locBusca.push(D.cidade);
     if(D.estado)_locBusca.push(D.estado);
     var qN=_nomeBusca+(_locBusca.length?', '+_locBusca.join(' - '):'');
+
+    // Bloco A - contrato de locacao: APENAS se endTerceiro
+    var blocoA='';
+    if(S.endTerceiro){
+      blocoA='<div style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Bloco A \u2014 Contrato de loca\u00e7\u00e3o</div>'
+        +'<div style="background:#f1f5f9;border:0.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px">'
+        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+        +'<span id="m5b4" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#f8fafc;color:#94a3b8;border:0.5px solid #e2e8f0"><i class="ti ti-clock"></i> Aguardando</span>'
+        +'<label style="background:#ffffff;border:0.5px solid #94a3b8;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;color:#0f172a;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-upload"></i> Selecionar<input id="m5inpL" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none"></label>'
+        +'</div><div id="m5ia4" style="display:none;margin-top:8px"></div></div>'
+        +'<div id="m5re4n" style="display:none">'+resBox('neg','Negado \u2014 contrato vencido ou insuficiente','Venda faturada negada.')+'</div>'
+        +'<hr style="border:0;border-top:0.5px solid #e2e8f0;margin:14px 0">';
+    }
+
+    var avisoEnd=S.endTerceiro
+      ?'<div style="padding:10px 12px;background:#fef9c3;border-radius:6px;font-size:13px;color:#854d0e;font-weight:500;margin-bottom:14px;display:flex;align-items:center;gap:8px"><i class="ti ti-alert-triangle"></i> Endere\u00e7o em nome de terceiro. Envie o contrato e verifique o Maps.</div>'
+      :'';
+
     q('#m5s4').innerHTML=card('#E65100',
-      sec(4,'#E65100','Loca\u00e7\u00e3o + Verifica\u00e7\u00e3o de Endere\u00e7o')
-      +'<div style="padding:10px 12px;background:#fef9c3;border-radius:6px;font-size:13px;color:#854d0e;font-weight:500;margin-bottom:14px;display:flex;align-items:center;gap:8px"><i class="ti ti-alert-triangle"></i> Endere\u00e7o em nome de terceiro. Envie o contrato e verifique o Maps.</div>'
-      +'<div style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Bloco A \u2014 Contrato de loca\u00e7\u00e3o <span style="background:#eff6ff;color:#1d4ed8;font-size:10px;padding:2px 6px;border-radius:20px">1\u00ba=ok / 2\u00ba=aten\u00e7\u00e3o / 3\u00ba=negado</span></div>'
-      +'<div style="background:#f1f5f9;border:0.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:10px">'
-      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
-      +'<span id="m5b4" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#f8fafc;color:#94a3b8;border:0.5px solid #e2e8f0"><i class="ti ti-clock"></i> Aguardando</span>'
-      +'<label style="background:#ffffff;border:0.5px solid #94a3b8;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;color:#0f172a;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-upload"></i> Selecionar<input id="m5inpL" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none"></label>'
-      +'</div><div id="m5ia4" style="display:none;margin-top:8px"></div></div>'
-      +'<div id="m5re4n" style="display:none">'+resBox('neg','Negado \u2014 contrato vencido ou insuficiente','Venda faturada negada.')+'</div>'
-      +'<hr style="border:0;border-top:0.5px solid #e2e8f0;margin:14px 0">'
+      sec(4,'#E65100','Verifica\u00e7\u00e3o de Endere\u00e7o')
+      +avisoEnd
+      +blocoA
       +'<div style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Bloco B \u2014 Google Maps</div>'
+      // OPCAO 1 - Endereco
       +'<div style="background:#f1f5f9;border:0.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:8px">'
       +'<div style="font-size:13px;font-weight:500;margin-bottom:6px"><i class="ti ti-map-pin" style="color:#1d4ed8"></i> Op\u00e7\u00e3o 1 \u2014 Endere\u00e7o</div>'
       +'<div style="font-family:monospace;font-size:12px;background:#f8fafc;padding:6px 10px;border-radius:6px;border:0.5px solid #e2e8f0;margin-bottom:8px">'+qE+'</div>'
-      +'<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(qE)+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#2563eb;color:#ffffff;border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none"><i class="ti ti-map-pin"></i> Ver no Maps</a>'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+      +'<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(qE)+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#2563eb;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none"><i class="ti ti-map-pin"></i> Ver no Maps</a>'
+      +'<button id="m5bMaps1ok" style="border:2px solid #16a34a;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;background:#dcfce7;color:#166534;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-circle-check"></i> Empresa encontrada</button>'
+      +'<button id="m5bMaps1no" style="border:2px solid #dc2626;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;background:#fee2e2;color:#991b1b;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-circle-x"></i> N\u00e3o encontrada</button>'
       +'</div>'
+      +'<div id="m5mst1" style="display:none;font-size:12px;font-weight:600;margin-top:8px"></div>'
+      +'</div>'
+      // OPCAO 2 - Nome fantasia
       +'<div style="background:#f1f5f9;border:0.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:12px">'
       +'<div style="font-size:13px;font-weight:500;margin-bottom:6px"><i class="ti ti-building-store" style="color:#1d4ed8"></i> Op\u00e7\u00e3o 2 \u2014 Nome fantasia</div>'
       +'<div style="font-family:monospace;font-size:12px;background:#f8fafc;padding:6px 10px;border-radius:6px;border:0.5px solid #e2e8f0;margin-bottom:8px">'+qN+'</div>'
-      +'<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(qN)+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#2563eb;color:#ffffff;border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none"><i class="ti ti-building-store"></i> Buscar empresa</a>'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+      +'<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(qN)+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#2563eb;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none"><i class="ti ti-building-store"></i> Buscar empresa</a>'
+      +'<button id="m5bMaps2ok" style="border:2px solid #16a34a;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;background:#dcfce7;color:#166534;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-circle-check"></i> Empresa encontrada</button>'
+      +'<button id="m5bMaps2no" style="border:2px solid #dc2626;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;background:#fee2e2;color:#991b1b;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-circle-x"></i> N\u00e3o encontrada</button>'
       +'</div>'
-      +'<p style="font-size:13px;color:#475569;margin:4px 0 10px">Marque o resultado da verifica\u00e7\u00e3o:</p>'
-      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
-      +'<button id="m5bMok" style="border:0.5px solid #86efac;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;background:#dcfce7;color:#166534;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-check"></i> Confere \u2014 fachada encontrada</button>'
-      +'<button id="m5bMno" style="border:0.5px solid #fca5a5;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;background:#fee2e2;color:#991b1b;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-x"></i> N\u00e3o confere</button>'
-      +'</div><div id="m5mst" style="display:none;font-size:12px;font-weight:500;margin-top:6px"></div>'
-      +'<hr style="border:0;border-top:0.5px solid #e2e8f0;margin:14px 0">'
+      +'<div id="m5mst2" style="display:none;font-size:12px;font-weight:600;margin-top:8px"></div>'
+      +'</div>'
       +'<div id="m5av4" style="display:none">'
-      +'<button id="m5btnAv4" style="background:#2563eb;color:#ffffff;border:0.5px solid #2563eb;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-arrow-right"></i> Prosseguir para refer\u00eancias</button>'
-      +'<p style="font-size:12px;color:#94a3b8;margin-top:6px">Etapa 4 n\u00e3o bloqueia \u2014 prossiga mesmo com aten\u00e7\u00f5es.</p></div>'
+      +'<button id="m5btnAv4" style="background:linear-gradient(135deg,#0f6e56,#16a34a);color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(22,163,74,0.25)"><i class="ti ti-arrow-right"></i> Prosseguir para refer\u00eancias comerciais</button>'
+      +'<p style="font-size:12px;color:#94a3b8;margin-top:6px">Marque o resultado em ao menos uma das op\u00e7\u00f5es acima para prosseguir.</p></div>'
     )+'<div id="m5re4r" style="display:none"></div>';
+
     show('m5s4');
-    q('#m5inpL').onchange=function(){upLoc(this);};
-    q('#m5bMok').onclick=function(){mapRes(true);};
-    q('#m5bMno').onclick=function(){mapRes(false);};
+
+    // Bind contrato (so existe se endTerceiro)
+    if(S.endTerceiro){
+      var _inpL=q('#m5inpL');
+      if(_inpL)_inpL.onchange=function(){upLoc(this);};
+    }
+
+    // Bind botoes Maps - Opcao 1
+    function mapsRes(opt,ok){
+      var mst=q('#m5mst'+opt);
+      var b1ok=q('#m5bMaps'+opt+'ok');
+      var b1no=q('#m5bMaps'+opt+'no');
+      b1ok.style.opacity=ok?'1':'0.35';
+      b1no.style.opacity=ok?'0.35':'1';
+      mst.style.display='block';
+      if(ok){
+        mst.style.color='#166534';
+        mst.innerHTML='<i class="ti ti-check"></i> Empresa/endere\u00e7o confirmado no Maps.';
+        addCk('ok','ti-check','Google Maps Op\u00e7\u00e3o '+opt+': empresa encontrada no endere\u00e7o');
+      } else {
+        mst.style.color='#991b1b';
+        mst.innerHTML='<i class="ti ti-x"></i> N\u00e3o encontrada \u2014 avalia\u00e7\u00e3o manual necess\u00e1ria.';
+        addCk('warn','ti-alert-triangle','Google Maps Op\u00e7\u00e3o '+opt+': empresa n\u00e3o encontrada');
+      }
+      S.mOk=true;
+      if(!S.endTerceiro||S.lOk) q('#m5av4').style.display='block';
+    }
+
+    q('#m5bMaps1ok').onclick=function(){mapsRes(1,true);};
+    q('#m5bMaps1no').onclick=function(){mapsRes(1,false);};
+    q('#m5bMaps2ok').onclick=function(){mapsRes(2,true);};
+    q('#m5bMaps2no').onclick=function(){mapsRes(2,false);};
     q('#m5btnAv4').onclick=buildE5;
   }
+
+
 
   function upLoc(inp){
     var file=inp.files[0];if(!file)return;
