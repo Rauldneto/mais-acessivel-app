@@ -5004,11 +5004,11 @@ function renderModeloEmTeste(){
 
         // EXCECAO 2 - Diretor
         +'<div style="background:#fff;border:2px solid #93c5fd;border-radius:10px;padding:16px">'
-        +'<div style="font-size:12px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-building" style="font-size:16px"></i> Exce\u00e7\u00e3o 2 \u2014 Protesto contestado / disputa jur\u00eddica</div>'
-        +'<p style="font-size:13px;color:#475569;line-height:1.7;margin-bottom:12px">Cliente alega protesto desconhecido ou em disputa jur\u00eddica. Necess\u00e1rio acionar um diretor para avaliar e autorizar o avan\u00e7o.</p>'        +'<div style="background:#eff6ff;border:1.5px solid #3b82f6;border-radius:10px;padding:14px 16px;margin-bottom:14px">'
+        +'<div style="font-size:12px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-building" style="font-size:16px"></i> Exce\u00e7\u00e3o 2 \u2014 Protesto Contestado</div>'
+        +'<p style="font-size:13px;color:#475569;line-height:1.7;margin-bottom:12px">Cliente alega que desconhece o protesto em cart\u00f3rio, ou que o protesto j\u00e1 foi pago por\u00e9m n\u00e3o conseguiu obter a baixa, ou ainda que est\u00e1 em disputa judicial. Nessa condi\u00e7\u00e3o \u00e9 necess\u00e1rio acionar um diretor para avaliar e autorizar o avan\u00e7o.</p>'        +'<div style="background:#eff6ff;border:1.5px solid #3b82f6;border-radius:10px;padding:14px 16px;margin-bottom:14px">'
         +'<div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-info-circle"></i> Como proceder</div>'
         +'<ol style="font-size:13px;color:#1e3a5f;line-height:1.9;padding-left:18px;margin:0">'
-        +'<li>Encaminhe uma mensagem pelo <strong>WhatsApp financeiro</strong> ao diretor responsavel, informando: nome do cliente, CNPJ e a situacao do protesto identificado.</li>'
+        +'<li>Encaminhe uma mensagem pelo <strong>WhatsApp para o grupo financeiro da empresa</strong>, informando: nome do cliente, CNPJ e a situacao do protesto identificado.</li>'
         +'<li>Aguarde a resposta do diretor com a <strong>autorizacao ou negativa</strong>.</li>'
         +'<li>Somente apos receber a autorizacao, preencha abaixo o <strong>nome do diretor</strong> e a <strong>data e hora da mensagem enviada</strong>.</li>'
         +'<li>Esses dados ficam gravados no historico para auditoria e conferencia futura.</li>'
@@ -5416,7 +5416,7 @@ function upDoc(n,inp){
         +'<div style="background:#eff6ff;border:1.5px solid #3b82f6;border-radius:10px;padding:14px 16px;margin-bottom:14px">'
         +'<div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-info-circle"></i> Como proceder</div>'
         +'<ol style="font-size:13px;color:#1e3a5f;line-height:1.9;padding-left:18px;margin:0">'
-        +'<li>Encaminhe as diverg\u00eancias acima via <strong>WhatsApp financeiro</strong> ao respons\u00e1vel.</li>'
+        +'<li>Encaminhe as diverg\u00eancias acima via <strong>WhatsApp para o grupo financeiro da empresa</strong>.</li>'
         +'<li>Aguarde a <strong>autoriza\u00e7\u00e3o ou negativa</strong>.</li>'
         +'<li>Ap\u00f3s autoriza\u00e7\u00e3o, preencha o <strong>nome de quem autorizou</strong> e a <strong>data/hora da mensagem</strong>.</li>'
         +'<li>Registro gravado no hist\u00f3rico para auditoria.</li>'
@@ -5661,4 +5661,79 @@ function upDoc(n,inp){
 
 </script>
 </body>
-</html>
+</html>function mostrarVeredito(){
+    var sv=q('#m5sv');if(!sv)return;
+    sv.style.display='block';
+    sv.scrollIntoView({behavior:'smooth'});
+    var cond=calcCond();
+
+    // Salvar no Firebase com responsavel
+    try{
+      var _agora=new Date();
+      var _dtStr=_agora.toLocaleDateString('pt-BR')+' '+_agora.toLocaleTimeString('pt-BR');
+      var _reg={
+        cnpj:D.cnpj,empresa:D.nome,fantasia:D.fantasia,socio:D.socio,capital:D.capital,
+        situacao:S.sit,meses_empresa:S.mE,meses_socio:S.mS,
+        responsavel:STATE.usuarioLogado||'desconhecido',
+        dataHora:_dtStr,
+        condicao_pagamento:cond,
+        excecao1:S.excecao1||null,
+        excecao2:S.excecao2||null,
+        excecao_doc:S.excecao_doc||null,
+        protestoDiretor:S.protestoDiretor,
+        negado:S.negado,
+        modulo:'Modelo em Teste'
+      };
+      fbSaveHistoricoAnalise(D.cnpj.replace(/\D/g,''),_reg);
+    }catch(_esave){console.warn('Erro ao salvar:',_esave);}
+
+    var M={
+      '100':{bg:'#e8f5e9',br:'#2e7d32',co:'#1b5e20',ic:'\u2705',t:'Aprovado \u2014 100% boleto sem entrada',s:'Todas as etapas com resultado positivo. Empresa ativa com tempo e s\u00f3cio est\u00e1veis.',p:'Faturamento integral no boleto parcelado. Sem necessidade de entrada.'},
+      '30': {bg:'#e3f2fd',br:'#1565c0',co:'#1565c0',ic:'\u2705',t:'Aprovado \u2014 30% entrada + boleto',s:'Protesto em cart\u00f3rio liberado por diretor. Demais etapas positivas.',p:'30% de entrada no pedido + restante faturado no boleto.'},
+      '50': {bg:'#fff8e1',br:'#f9a825',co:'#7b4f00',ic:'\u26a0\ufe0f',t:'Aprovado com aten\u00e7\u00e3o \u2014 50% entrada + boleto',s:'Empresa entre 12 e 24 meses de exist\u00eancia.',p:'50% de entrada na aprova\u00e7\u00e3o do pedido + restante no boleto.'},
+      '70': {bg:'#fff3e0',br:'#e65100',co:'#bf360c',ic:'\u26a0\ufe0f',t:'Aprovado com aten\u00e7\u00e3o \u2014 70% entrada + 1 parcela',s:'Empresa ou s\u00f3cio com menos de 12 meses.',p:'70% de entrada + saldo em 1 parcela no boleto.'},
+      'av': {bg:'#ffebee',br:'#b71c1c',co:'#b71c1c',ic:'\u274c',t:'Negado \u2014 somente \u00e0 vista',s:'Negativa identificada no processo de an\u00e1lise.',p:'Venda somente \u00e0 vista. Faturamento: apenas com aprova\u00e7\u00e3o da diretoria.'}
+    };
+    var v=M[cond];
+
+    // Montar resumo das etapas concluidas
+    var resumoEtapas='';
+    S.checks.forEach(function(ck){
+      var bg=ck.cls==='ok'?'#dcfce7':ck.cls==='neg'?'#fee2e2':'#fef9c3';
+      var co=ck.cls==='ok'?'#166534':ck.cls==='neg'?'#991b1b':'#854d0e';
+      var ic=ck.cls==='ok'?'ti-check':ck.cls==='neg'?'ti-x':'ti-alert-triangle';
+      resumoEtapas+='<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 10px;border-radius:6px;margin-bottom:4px;font-size:12px;font-weight:500;background:'+bg+';color:'+co+'">'
+        +'<i class="ti '+ic+'" style="flex-shrink:0;margin-top:1px"></i><span>'+ck.txt+'</span></div>';
+    });
+
+    // Veredito final
+    sv.innerHTML='<div style="border-radius:16px;padding:22px 24px;background:'+v.bg+';border:3px solid '+v.br+';box-shadow:0 4px 20px '+v.br+'33;margin-bottom:16px">'
+      +'<div style="font-size:20px;font-weight:700;color:'+v.co+';margin-bottom:6px">'+v.ic+' '+v.t+'</div>'
+      +'<div style="font-size:14px;color:'+v.co+';margin-bottom:12px;line-height:1.6">'+v.s+'</div>'
+      +'<div style="font-size:13px;padding:12px 16px;background:rgba(255,255,255,0.8);border-radius:10px;color:#1e293b;border-left:4px solid '+v.br+'">'
+      +'<strong>Condi\u00e7\u00e3o de pagamento:</strong> '+v.p+'</div>'
+      +'</div>';
+
+    // Atualizar o parecer no topo com o veredito + resumo
+    var pb=q('#m5pb');
+    if(pb){
+      pb.innerHTML='<div style="margin-bottom:10px"><strong>'+D.nome+'</strong>'+(D.fantasia&&D.fantasia!==D.nome?' ('+D.fantasia+')':'')+', CNPJ '+D.cnpj+', <strong>'+S.sit+'</strong>, '+tStr(S.mE)+' de exist\u00eancia. S\u00f3cio: <strong>'+D.socio+'</strong> h\u00e1 '+tStr(S.mS)+'. Capital: <strong>'+D.capital+'</strong>.</div>'
+        +'<div style="padding:12px 14px;border-radius:10px;background:'+(cond==='av'?'#ffebee':cond==='100'?'#dcfce7':'#fff8e1')+';border:2px solid '+(cond==='av'?'#b71c1c':cond==='100'?'#16a34a':'#f59e0b')+';margin-bottom:8px">'
+        +'<div style="font-size:15px;font-weight:700;color:'+(cond==='av'?'#b71c1c':cond==='100'?'#166534':'#92400e')+'">'+v.ic+' '+v.t+'</div>'
+        +'<div style="font-size:12px;margin-top:4px;color:'+(cond==='av'?'#7f1d1d':cond==='100'?'#166534':'#78350f')+'">'+v.p+'</div>'
+        +'</div>';
+      if(resumoEtapas){
+        var cl=q('#m5cl');
+        if(cl) cl.innerHTML=resumoEtapas;
+      }
+    }
+
+    // Botao voltar ao topo
+    var topo='<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">'
+      +'<button onclick="window.scrollTo({top:0,behavior:'smooth'})" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-arrow-up"></i> Voltar ao topo</button>'
+      +'<button onclick="limpar()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-refresh"></i> Nova consulta</button>'
+      +'</div>';
+    sv.innerHTML+=topo;
+  }
+
+
