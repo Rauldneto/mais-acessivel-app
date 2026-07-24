@@ -4850,7 +4850,7 @@ function renderModeloEmTeste(){
   }
 
   function limpar(){
-    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},simLoc:0,mOk:false,lOk:false};
+    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},simLoc:0,mOk:false,lOk:false};
     S_DOCS={contrato:null,comprovante:null,docSocio:null};
     D={nome:'',fantasia:'',cnpj:'',socio:'',capital:''};
     var cl=q('#m5cl');if(cl)cl.innerHTML='';
@@ -5483,20 +5483,31 @@ function upDoc(n,inp){
       var _op3=STATE.usuarioLogado||'desconhecido';
       re3.innerHTML=htmlCruz
         +'<div style="background:#fff;border:2px solid #dc2626;border-radius:12px;padding:16px 18px;margin-bottom:12px">'
-        +'<div style="font-size:15px;font-weight:700;color:#b71c1c;margin-bottom:8px;display:flex;align-items:center;gap:8px"><i class="ti ti-x-circle" style="font-size:20px"></i> Venda faturada negada \u2014 diverg\u00eancia documental</div>'
-        +'<p style="font-size:13px;color:#7f1d1d;line-height:1.7;margin-bottom:14px">Diverg\u00eancias identificadas. Caso haja autoriza\u00e7\u00e3o do respons\u00e1vel para prosseguir, registre abaixo.</p>'
-        +'<div style="background:#eff6ff;border:1.5px solid #3b82f6;border-radius:10px;padding:14px 16px;margin-bottom:14px">'
+        +'<div style="font-size:15px;font-weight:700;color:#b71c1c;margin-bottom:8px;display:flex;align-items:center;gap:8px"><i class="ti ti-x-circle" style="font-size:20px"></i> Diverg\u00eancia documental identificada</div>'
+        +'<p style="font-size:13px;color:#7f1d1d;line-height:1.7;margin-bottom:14px">Foram encontradas diverg\u00eancias entre os documentos. Antes de solicitar autoriza\u00e7\u00e3o ao diretor, <strong>justifique abaixo</strong> o que o cliente explicou ou alegou sobre cada diverg\u00eancia.</p>'
+        // Declaracao do colaborador
+        +'<div style="background:#f9fafb;border:2px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:14px">'
+        +'<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-message-dots"></i> Justificativa do colaborador</div>'
+        +'<p style="font-size:12px;color:#6b7280;margin-bottom:8px;line-height:1.6">Descreva o que o cliente alegou sobre as diverg\u00eancias. Esta declara\u00e7\u00e3o ser\u00e1 registrada no parecer inteligente e no hist\u00f3rico.</p>'
+        +'<textarea id="m5justDiv" rows="3" placeholder="Ex: O cliente informou que o endere\u00e7o est\u00e1 em nome do esposo da propriet\u00e1ria. A empresa funciona no local h\u00e1 5 anos." style="width:100%;border:1.5px solid #d1d5db;border-radius:8px;padding:9px 12px;font-size:13px;background:#fff;color:#1e293b;outline:none;resize:vertical;box-sizing:border-box"></textarea>'
+        +'<button id="m5btnJustDiv" style="margin-top:10px;background:linear-gradient(135deg,#374151,#1f2937);color:#fff;border:none;border-radius:8px;padding:10px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-check"></i> Confirmar justificativa e solicitar autoriza\u00e7\u00e3o</button>'
+        +'</div>'
+        // Bloco autoriza director (oculto ate confirmar justificativa)
+        +'<div id="m5blocoDir" style="display:none">'
+        +'<div style="background:#eff6ff;border:1.5px solid #3b82f6;border-radius:10px;padding:14px;margin-bottom:14px">'
         +'<div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-info-circle"></i> Como proceder</div>'
         +'<ol style="font-size:13px;color:#1e3a5f;line-height:1.9;padding-left:18px;margin:0">'
-        +'<li>Encaminhe as diverg\u00eancias acima via <strong>WhatsApp para o grupo financeiro da empresa</strong>.</li>'
-        +'<li>Aguarde a <strong>autoriza\u00e7\u00e3o ou negativa</strong>.</li>'
-        +'<li>Ap\u00f3s autoriza\u00e7\u00e3o, preencha o <strong>nome de quem autorizou</strong> e a <strong>data/hora da mensagem</strong>.</li>'
-        +'<li>Registro gravado no hist\u00f3rico para auditoria.</li>'
+        +'<li>Encaminhe as diverg\u00eancias via <strong>WhatsApp para o grupo financeiro da empresa</strong>, incluindo a justificativa acima.</li>'
+        +'<li>Aguarde a <strong>autoriza\u00e7\u00e3o ou negativa</strong> do diretor.</li>'
+        +'<li>Somente ap\u00f3s autoriza\u00e7\u00e3o, preencha o <strong>nome de quem autorizou</strong> e a <strong>data/hora da mensagem</strong>.</li>'
+        +'<li>Dados gravados no hist\u00f3rico para auditoria.</li>'
         +'</ol>'
         +'<div style="margin-top:10px;padding:8px 12px;background:#dbeafe;border-radius:6px;font-size:12px;color:#1e40af;display:flex;gap:6px;align-items:flex-start">'
         +'<i class="ti ti-alert-triangle" style="flex-shrink:0;margin-top:1px"></i>'
         +'<span><strong>Aten\u00e7\u00e3o, operador '+_op3+':</strong> ao confirmar, voc\u00ea assume responsabilidade por esta autoriza\u00e7\u00e3o. Registro gravado com seu nome.</span>'
         +'</div></div>'
+        +'<div style="background:#fff;border:2px solid #fca5a5;border-radius:10px;padding:14px;margin-bottom:12px">'
+        +'<div style="font-size:12px;font-weight:700;color:#dc2626;margin-bottom:12px;display:flex;align-items:center;gap:6px"><i class="ti ti-shield-check"></i> Autoriza\u00e7\u00e3o do diretor</div>'
         +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'
         +'<div style="display:flex;flex-direction:column;gap:4px">'
         +'<label style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase">Nome de quem autorizou *</label>'
@@ -5510,8 +5521,29 @@ function upDoc(n,inp){
         +'</div></div>'
         +'<button id="m5btnDiv" style="background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;border:none;border-radius:8px;padding:12px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 8px rgba(220,38,38,0.3)">'
         +'<i class="ti ti-shield-check"></i> Autorizado pelo respons\u00e1vel \u2014 prosseguir com diverg\u00eancia'
-        +'</button></div>';
+        +'</button></div>'
+        +'</div></div>';
       setTimeout(function(){
+        // Listener declaracao
+        var _decl=q('#m5justDiv');
+        if(_decl)_decl.addEventListener('input',function(){S.decl_divergencia=this.value;});
+        // Botao confirmar justificativa -> mostrar bloco diretor
+        var btnJD=q('#m5btnJustDiv');
+        if(btnJD)btnJD.onclick=function(){
+          if(!S.decl_divergencia||S.decl_divergencia.trim().length<10){
+            q('#m5justDiv').style.borderColor='#dc2626';
+            q('#m5justDiv').focus();
+            return;
+          }
+          this.style.background='#16a34a';
+          this.innerHTML='<i class="ti ti-check"></i> Justificativa registrada';
+          this.disabled=true;
+          q('#m5justDiv').disabled=true;
+          addCk('warn','ti-edit','Justificativa: '+S.decl_divergencia.slice(0,80));
+          var bd=q('#m5blocoDir');
+          if(bd){bd.style.display='block';bd.scrollIntoView({behavior:'smooth'});}
+        };
+        // Botao autorizar diretor
         var btnDiv=q('#m5btnDiv');if(!btnDiv)return;
         btnDiv.onclick=function(){
           var nome=(q('#m5divNome').value||'').trim();
@@ -5520,7 +5552,7 @@ function upDoc(n,inp){
           if(!data){q('#m5divData').style.borderColor='#dc2626';q('#m5divData').focus();return;}
           var dtF=new Date(data).toLocaleDateString('pt-BR')+' '+new Date(data).toLocaleTimeString('pt-BR');
           var dtR=new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR');
-          S.excecao_doc={autorizador:nome,dataHoraMsg:dtF,operador:_op3,dataHoraRegistro:dtR};
+          S.excecao_doc={autorizador:nome,dataHoraMsg:dtF,operador:_op3,dataHoraRegistro:dtR,declaracao_colaborador:S.decl_divergencia||''};
           S.negado=false;
           addCk('warn','ti-alert-triangle','Diverg\u00eancia autorizada por '+nome+' | Op.: '+_op3+' em '+dtR);
           btnDiv.disabled=true;q('#m5divNome').disabled=true;q('#m5divData').disabled=true;
