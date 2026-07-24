@@ -4849,7 +4849,7 @@ function renderModeloEmTeste(){
   }
 
   function limpar(){
-    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},simLoc:0,mOk:false,lOk:false};
+    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},simLoc:0,mOk:false,lOk:false};
     S_DOCS={contrato:null,comprovante:null,docSocio:null};
     D={nome:'',fantasia:'',cnpj:'',socio:'',capital:''};
     var cl=q('#m5cl');if(cl)cl.innerHTML='';
@@ -5391,8 +5391,56 @@ function upDoc(n,inp){
     // Definir resultado
     if(negCruz){
       S.negado=true;
-      re3.innerHTML=htmlCruz+'<div style="background:#ffebee;border:2px solid #c62828;border-radius:12px;padding:14px 18px;margin-bottom:12px;text-align:center"><div style="font-size:15px;font-weight:700;color:#b71c1c"><i class="ti ti-x-circle"></i> Venda faturada negada \u2014 diverg\u00eancia documental</div><div style="font-size:12px;color:#7f1d1d;margin-top:4px">Corrija os documentos e realize nova consulta.</div></div>';
-      mostrarVeredito();
+      var _op3=STATE.usuarioLogado||'desconhecido';
+      re3.innerHTML=htmlCruz
+        +'<div style="background:#fff;border:2px solid #dc2626;border-radius:12px;padding:16px 18px;margin-bottom:12px">'
+        +'<div style="font-size:15px;font-weight:700;color:#b71c1c;margin-bottom:8px;display:flex;align-items:center;gap:8px"><i class="ti ti-x-circle" style="font-size:20px"></i> Venda faturada negada \\u2014 diverg\\u00eancia documental</div>'
+        +'<p style="font-size:13px;color:#7f1d1d;line-height:1.7;margin-bottom:14px">Diverg\\u00eancias identificadas. Caso haja autoriza\\u00e7\\u00e3o do respons\\u00e1vel para prosseguir, registre abaixo.</p>'
+        +'<div style="background:#eff6ff;border:1.5px solid #3b82f6;border-radius:10px;padding:14px 16px;margin-bottom:14px">'
+        +'<div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-info-circle"></i> Como proceder</div>'
+        +'<ol style="font-size:13px;color:#1e3a5f;line-height:1.9;padding-left:18px;margin:0">'
+        +'<li>Encaminhe as diverg\\u00eancias acima via <strong>WhatsApp financeiro</strong> ao respons\\u00e1vel.</li>'
+        +'<li>Aguarde a <strong>autoriza\\u00e7\\u00e3o ou negativa</strong>.</li>'
+        +'<li>Ap\\u00f3s autoriza\\u00e7\\u00e3o, preencha o <strong>nome de quem autorizou</strong> e a <strong>data/hora da mensagem</strong>.</li>'
+        +'<li>Registro gravado no hist\\u00f3rico para auditoria.</li>'
+        +'</ol>'
+        +'<div style="margin-top:10px;padding:8px 12px;background:#dbeafe;border-radius:6px;font-size:12px;color:#1e40af;display:flex;gap:6px;align-items:flex-start">'
+        +'<i class="ti ti-alert-triangle" style="flex-shrink:0;margin-top:1px"></i>'
+        +'<span><strong>Aten\\u00e7\\u00e3o, operador '+_op3+':</strong> ao confirmar, voc\\u00ea assume responsabilidade por esta autoriza\\u00e7\\u00e3o. Registro gravado com seu nome.</span>'
+        +'</div></div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'
+        +'<div style="display:flex;flex-direction:column;gap:4px">'
+        +'<label style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase">Nome de quem autorizou *</label>'
+        +'<span style="font-size:11px;color:#64748b">Conforme resposta recebida via WhatsApp</span>'
+        +'<input id="m5divNome" type="text" placeholder="Nome completo" style="border:2px solid #fca5a5;border-radius:8px;padding:9px 12px;font-size:13px;background:#fff5f5;color:#0f172a;outline:none;margin-top:4px">'
+        +'</div>'
+        +'<div style="display:flex;flex-direction:column;gap:4px">'
+        +'<label style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase">Data e hora da mensagem *</label>'
+        +'<span style="font-size:11px;color:#64748b">Data/hora da autoriza\\u00e7\\u00e3o via WhatsApp</span>'
+        +'<input id="m5divData" type="datetime-local" style="border:2px solid #fca5a5;border-radius:8px;padding:9px 12px;font-size:13px;background:#fff5f5;color:#0f172a;outline:none;margin-top:4px">'
+        +'</div></div>'
+        +'<button id="m5btnDiv" style="background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;border:none;border-radius:8px;padding:12px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 8px rgba(220,38,38,0.3)">'
+        +'<i class="ti ti-shield-check"></i> Autorizado pelo respons\\u00e1vel \\u2014 prosseguir com diverg\\u00eancia'
+        +'</button></div>';
+      setTimeout(function(){
+        var btnDiv=q('#m5btnDiv');if(!btnDiv)return;
+        btnDiv.onclick=function(){
+          var nome=(q('#m5divNome').value||'').trim();
+          var data=(q('#m5divData').value||'').trim();
+          if(!nome){q('#m5divNome').style.borderColor='#dc2626';q('#m5divNome').focus();return;}
+          if(!data){q('#m5divData').style.borderColor='#dc2626';q('#m5divData').focus();return;}
+          var dtF=new Date(data).toLocaleDateString('pt-BR')+' '+new Date(data).toLocaleTimeString('pt-BR');
+          var dtR=new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR');
+          S.excecao_doc={autorizador:nome,dataHoraMsg:dtF,operador:_op3,dataHoraRegistro:dtR};
+          S.negado=false;
+          addCk('warn','ti-alert-triangle','Diverg\u00eancia autorizada por '+nome+' | Op.: '+_op3+' em '+dtR);
+          btnDiv.disabled=true;q('#m5divNome').disabled=true;q('#m5divData').disabled=true;
+          btnDiv.innerHTML='<i class="ti ti-check"></i> Autoriza\u00e7\u00e3o de '+nome+' registrada por '+_op3;
+          btnDiv.style.background='#16a34a';
+          if(S.endTerceiro) setTimeout(buildE4,400); else setTimeout(buildE5,400);
+        };
+      },300);
+      mostrarVeredito()
     } else if(warnCruz&&S.endTerceiro){
       re3.innerHTML=htmlCruz+resBox('warn','Etapa 3 \u2014 aten\u00e7\u00e3o','Endere\u00e7o em nome de terceiro. Etapa 4 obrigat\u00f3ria.');
       setTimeout(buildE4,400);
