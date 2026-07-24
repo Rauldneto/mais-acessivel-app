@@ -4850,6 +4850,7 @@ function renderModeloEmTeste(){
 
   function limpar(){
     S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},simLoc:0,mOk:false,lOk:false};
+    S_DOCS={contrato:null,comprovante:null,docSocio:null};
     D={nome:'',fantasia:'',cnpj:'',socio:'',capital:''};
     var cl=q('#m5cl');if(cl)cl.innerHTML='';
     var pb=q('#m5pb');if(pb)pb.textContent='Digite o CNPJ e clique em Consultar.';
@@ -5112,19 +5113,50 @@ function renderModeloEmTeste(){
     q('#m5btnDoc').onclick=concluirE3;
   }
 
-  function upDoc(n,inp){
+  // Armazena dados extraidos de cada documento para cruzamento posterior
+var S_DOCS = {
+  contrato:    null,  // Doc 1: {cnpj, socio, endereco, capital}
+  comprovante: null,  // Doc 2: {titular, tipo, endereco, dentro_90_dias, titular_confere}
+  docSocio:    null   // Doc 3: {nome, tipo_doc}
+};
+
+function upDoc(n,inp){
     var file=inp.files[0];if(!file)return;
     var b=q('#m5eb'+n);
     b.innerHTML='<i class="ti ti-loader"></i> Lendo...';
     b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#eff6ff;color:#1d4ed8;border:0.5px solid #93c5fd';
     var ei=q('#m5ei'+n);ei.style.display='block';
-    ei.innerHTML='<div style="font-size:12px;color:#94a3b8;font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-robot"></i> IA analisando o documento...</div>';
+    ei.innerHTML='<div style="font-size:12px;color:#94a3b8;font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-robot"></i> IA lendo e extraindo dados do documento...</div>';
     S.simDoc[n]=(S.simDoc[n]||0)+1;
 
     var basePrompt={
-      1:'Voce e um analisador de documentos para analise de credito comercial.\nEmpresa analisada: '+D.nome+' (CNPJ: '+D.cnpj+')\nSocio majoritario: '+D.socio+'\nCapital esperado: '+D.capital+'\n\nAnalise o documento (Contrato Social Alterado) e responda APENAS com JSON valido sem markdown:\n{"cnpj_encontrado":"cnpj no doc","cnpj_confere":true,"socio_encontrado":"nome","socio_confere":true,"capital_encontrado":"valor","resultado":"ok","resumo":"texto curto do que encontrou"}',
-      2:'Voce e um analisador de documentos para analise de credito comercial.\nEmpresa: '+D.nome+' CNPJ: '+D.cnpj+'\nSocio: '+D.socio+'\n\nAnalise o documento como comprovante de endereco. Tipos aceitos: conta agua, energia, telefone, cartao credito (ate 90 dias) ou contrato locacao. Qualquer outro tipo e invalido.\nResponda APENAS com JSON valido sem markdown:\n{"tipo_documento":"comprovante_endereco ou contrato_locacao ou invalido","tipo_especifico":"conta_agua ou conta_energia ou conta_telefone ou cartao_credito ou contrato_locacao ou outro","titular_encontrado":"nome","titular_confere":"empresa ou socio ou terceiro","dentro_90_dias":true,"resultado":"ok","resumo":"texto curto"}',
-      3:'Voce e um analisador de documentos para analise de credito comercial.\nSocio esperado: '+D.socio+'\n\nAnalise o documento de identificacao (RG, CNH ou carteira profissional) e responda APENAS com JSON valido sem markdown:\n{"nome_encontrado":"nome","confere":true,"tipo_doc":"RG ou CNH ou outro","resultado":"ok","resumo":"texto curto"}'
+      1:'Voce e um analisador de documentos para analise de credito empresarial.\n'
+       +'Dados do cadastro (Receita Federal / Cartao CNPJ):\n'
+       +'- Razao Social: '+D.nome+'\n'
+       +'- CNPJ: '+D.cnpj+'\n'
+       +'- Socio majoritario: '+D.socio+'\n'
+       +'- Capital Social: '+D.capital+'\n\n'
+       +'Analise o CONTRATO SOCIAL ALTERADO e extraia as informacoes. Verifique se cada dado confere com o cadastro acima.\n'
+       +'Responda APENAS com JSON valido sem markdown:\n'
+       +'{"cnpj_encontrado":"XX.XXX.XXX/XXXX-XX","cnpj_confere":true,"razao_social_encontrada":"nome","razao_social_confere":true,"socio_encontrado":"nome completo","socio_confere":true,"capital_encontrado":"valor","capital_confere":true,"endereco_encontrado":"endereco completo se houver","divergencias":["lista de divergencias encontradas ou array vazio"],"resultado":"ok ou neg","resumo":"descricao objetiva do que foi encontrado e se confere"}',
+
+      2:'Voce e um analisador de documentos para analise de credito empresarial.\n'
+       +'Dados do cadastro (Receita Federal / Cartao CNPJ):\n'
+       +'- Razao Social: '+D.nome+'\n'
+       +'- CNPJ: '+D.cnpj+'\n'
+       +'- Socio: '+D.socio+'\n\n'
+       +'Analise o COMPROVANTE DE ENDERECO ou CONTRATO DE LOCACAO.\n'
+       +'Tipos VALIDOS: conta agua, conta energia eletrica, conta telefone, fatura cartao credito (max 90 dias), contrato de locacao.\n'
+       +'Qualquer outro tipo de documento e INVALIDO como comprovante de endereco.\n'
+       +'Responda APENAS com JSON valido sem markdown:\n'
+       +'{"tipo_documento":"comprovante_endereco ou contrato_locacao ou invalido","tipo_especifico":"conta_agua ou conta_energia ou conta_telefone ou cartao_credito ou contrato_locacao ou outro","titular_encontrado":"nome no documento","titular_confere":"empresa ou socio ou terceiro","endereco_encontrado":"endereco completo","data_emissao":"DD/MM/AAAA ou nao_identificada","dentro_90_dias":true,"divergencias":["lista ou vazio"],"resultado":"ok ou warn ou neg","resumo":"descricao objetiva"}',
+
+      3:'Voce e um analisador de documentos para analise de credito empresarial.\n'
+       +'Dados do cadastro (Receita Federal / Cartao CNPJ):\n'
+       +'- Socio majoritario esperado: '+D.socio+'\n\n'
+       +'Analise o DOCUMENTO DE IDENTIFICACAO DO SOCIO (RG, CNH ou Carteira Profissional).\n'
+       +'Responda APENAS com JSON valido sem markdown:\n'
+       +'{"nome_encontrado":"nome completo no documento","nome_confere":true,"tipo_doc":"RG ou CNH ou Carteira Profissional ou outro","numero_doc":"numero se visivel","divergencias":["lista ou vazio"],"resultado":"ok ou neg","resumo":"descricao objetiva"}'
     };
 
     (async function(){
@@ -5161,39 +5193,64 @@ function renderModeloEmTeste(){
         var resp=await fetch('https://soft-limit-b3a1.rauldias.workers.dev',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:600,messages:msgs})
+          body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,messages:msgs})
         });
         var data=await resp.json();
         var txtResp=(data.content&&data.content[0])?data.content[0].text:'{}';
         var json=JSON.parse(txtResp.replace(/```json|```/g,'').trim());
+
+        // Armazenar dados extraidos para cruzamento posterior
+        if(n===1){
+          S_DOCS.contrato={
+            cnpj:json.cnpj_encontrado||'',
+            razao_social:json.razao_social_encontrada||'',
+            socio:json.socio_encontrado||'',
+            capital:json.capital_encontrado||'',
+            endereco:json.endereco_encontrado||'',
+            cnpj_confere:json.cnpj_confere,
+            socio_confere:json.socio_confere,
+            razao_social_confere:json.razao_social_confere
+          };
+        } else if(n===2){
+          S_DOCS.comprovante={
+            titular:json.titular_encontrado||'',
+            titular_confere:json.titular_confere||'',
+            endereco:json.endereco_encontrado||'',
+            tipo:json.tipo_especifico||'',
+            tipo_doc:json.tipo_documento||'',
+            dentro_90_dias:json.dentro_90_dias
+          };
+          S.endTerceiro=(json.titular_confere==='terceiro'||json.tipo_documento==='contrato_locacao');
+        } else if(n===3){
+          S_DOCS.docSocio={
+            nome:json.nome_encontrado||'',
+            nome_confere:json.nome_confere,
+            tipo:json.tipo_doc||''
+          };
+        }
 
         b.innerHTML='<i class="ti ti-check"></i> '+file.name.slice(0,18)+(file.name.length>18?'...':'');
         b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#dcfce7;color:#166534;border:0.5px solid #86efac';
 
         var cls=json.resultado==='ok'?'ok':json.resultado==='warn'?'warn':'neg';
         var ico=cls==='ok'?'ti-check':cls==='warn'?'ti-alert-triangle':'ti-x';
-        var lbl=n===1?'Contrato Social':n===2?'Comprovante endere\u00e7o':'Doc s\u00f3cio';
-        ei.innerHTML=it(cls,ico,'<strong>'+lbl+':</strong> '+json.resumo);
+        var lbl=n===1?'Contrato Social':n===2?'Comprovante de Endere\u00e7o':'Doc do S\u00f3cio';
+
+        // Mostrar dados extraidos + divergencias do proprio documento
+        var divs=(json.divergencias&&json.divergencias.length>0)?'<br><span style="color:#b91c1c">Diverg\u00eancias: '+json.divergencias.join('; ')+'</span>':'';
+        ei.innerHTML=it(cls,ico,'<strong>'+lbl+':</strong> '+json.resumo+divs);
         addCk(cls,ico,lbl+': '+json.resumo);
 
-        if(n===2){
-          S.endTerceiro=false;
-          if(json.tipo_documento==='contrato_locacao'||json.titular_confere==='terceiro'){
-            S.endTerceiro=true;
-          }
-          if(json.tipo_documento==='invalido'||json.dentro_90_dias===false){
-            cls='neg';
-            ei.innerHTML=it('neg','ti-x','<strong>'+lbl+':</strong> '+json.resumo);
-          }
+        if(json.tipo_documento==='invalido'||json.dentro_90_dias===false){
+          cls='neg';
+          ei.innerHTML=it('neg','ti-x','<strong>'+lbl+':</strong> '+json.resumo);
         }
-        if(n===1&&json.cnpj_confere===false){addCk('neg','ti-x','Contrato Social: CNPJ diverge');}
-        if(n===1&&json.socio_confere===false){addCk('neg','ti-x','Contrato Social: socio diverge');}
 
       }catch(err){
         b.innerHTML='<i class="ti ti-alert-triangle"></i> Erro';
         b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#fee2e2;color:#991b1b;border:0.5px solid #fca5a5';
-        ei.innerHTML=it('neg','ti-x','Erro ao processar: '+err.message);
-        addCk('neg','ti-x','Erro ao processar documento');
+        ei.innerHTML=it('neg','ti-x','Erro ao processar: '+err.message+'. Verifique sua conex\u00e3o.');
+        addCk('neg','ti-x','Erro ao processar documento '+n);
       }
 
       if(Object.values(S.simDoc).some(function(v){return v>0;})){
@@ -5207,25 +5264,148 @@ function renderModeloEmTeste(){
 
 
   function concluirE3(){
-    var neg=S.checks.some(function(k){
-      return k.cls==='neg'&&(
-        k.txt.indexOf('Contrato Social')>=0||k.txt.indexOf('Doc s\u00f3cio')>=0||
-        k.txt.indexOf('diverge')>=0||k.txt.indexOf('inv\u00e1lido')>=0||k.txt.indexOf('120 dias')>=0
-      );
-    });
     var re3=q('#m5re3');re3.style.display='block';
-    if(neg){
-      S.negado=true;
-      re3.innerHTML=negBox('Venda faturada negada \u2014 diverg\u00eancia documental','Informa\u00e7\u00f5es n\u00e3o conferem com a Receita Federal. Solicite documenta\u00e7\u00e3o correta.');
-      veredito();
-    } else if(S.endTerceiro){
-      re3.innerHTML=resBox('warn','Etapa 3 \u2014 aten\u00e7\u00e3o','Endere\u00e7o em nome de terceiro. Etapa 4 obrigat\u00f3ria.');
-      setTimeout(buildE4,400);
+
+    // --- VARREDURA CRUZADA ---
+    var divCruz=[];  // divergencias entre documentos
+    var negCruz=false;
+    var warnCruz=false;
+
+    var ct=S_DOCS.contrato;
+    var cp=S_DOCS.comprovante;
+    var ds=S_DOCS.docSocio;
+
+    // 1. CNPJ do contrato social bate com o cadastro?
+    if(ct){
+      if(ct.cnpj_confere===false){
+        negCruz=true;
+        divCruz.push({t:'neg',tx:'CNPJ no Contrato Social ('+ct.cnpj+') diverge do CNPJ consultado na Receita Federal ('+D.cnpj+')'});
+      }
+      if(ct.razao_social_confere===false){
+        negCruz=true;
+        divCruz.push({t:'neg',tx:'Raz\u00e3o Social no Contrato Social ('+ct.razao_social+') diverge do cadastro ('+D.nome+')'});
+      }
+    }
+
+    // 2. Socio bate entre: Receita Federal X Contrato Social X Doc do Socio
+    if(ct&&ds){
+      var socioRF=D.socio.toUpperCase().trim();
+      var socioCS=(ct.socio||'').toUpperCase().trim();
+      var socioDoc=(ds.nome||'').toUpperCase().trim();
+      // Comparacao parcial (pode ter abreviacoes)
+      var csOk=socioCS&&(socioRF.includes(socioCS.split(' ')[0])||socioCS.includes(socioRF.split(' ')[0]));
+      var dsOk=socioDoc&&(socioRF.includes(socioDoc.split(' ')[0])||socioDoc.includes(socioRF.split(' ')[0]));
+      if(!csOk&&socioCS){
+        negCruz=true;
+        divCruz.push({t:'neg',tx:'S\u00f3cio no Contrato Social ("'+ct.socio+'") n\u00e3o confere com o s\u00f3cio na Receita Federal ("'+D.socio+'")'});
+      }
+      if(!dsOk&&socioDoc){
+        negCruz=true;
+        divCruz.push({t:'neg',tx:'Nome no Documento do S\u00f3cio ("'+ds.nome+'") n\u00e3o confere com o s\u00f3cio na Receita Federal ("'+D.socio+'")'});
+      }
+      // Socio no contrato bate com doc do socio?
+      if(socioCS&&socioDoc){
+        var csDs=socioCS.includes(socioDoc.split(' ')[0])||socioDoc.includes(socioCS.split(' ')[0]);
+        if(!csDs){
+          negCruz=true;
+          divCruz.push({t:'neg',tx:'Nome no Documento do S\u00f3cio ("'+ds.nome+'") diverge do s\u00f3cio no Contrato Social ("'+ct.socio+'")'});
+        }
+      }
+    } else if(ct&&!ds){
+      if(ct.socio_confere===false){
+        negCruz=true;
+        divCruz.push({t:'neg',tx:'S\u00f3cio no Contrato Social diverge do cadastro da Receita Federal'});
+      }
+    } else if(ds&&!ct){
+      if(ds.nome_confere===false){
+        negCruz=true;
+        divCruz.push({t:'neg',tx:'Nome no Documento do S\u00f3cio diverge do s\u00f3cio cadastrado na Receita Federal'});
+      }
+    }
+
+    // 3. Comprovante de endereco
+    if(cp){
+      if(cp.tipo_doc==='invalido'){
+        negCruz=true;
+        divCruz.push({t:'neg',tx:'Comprovante de endere\u00e7o inv\u00e1lido (tipo: '+cp.tipo+'). Aceitos: conta \u00e1gua, energia, telefone, cart\u00e3o de cr\u00e9dito (at\u00e9 90 dias) ou contrato de loca\u00e7\u00e3o'});
+      } else if(cp.dentro_90_dias===false){
+        negCruz=true;
+        divCruz.push({t:'neg',tx:'Comprovante de endere\u00e7o fora do prazo m\u00e1ximo de 90 dias'});
+      } else if(cp.titular_confere==='terceiro'){
+        warnCruz=true;
+        divCruz.push({t:'warn',tx:'Comprovante de endere\u00e7o em nome de terceiro ("'+cp.titular+'") \u2014 Etapa 4 obrigat\u00f3ria'});
+      } else if(cp.titular_confere==='empresa'){
+        divCruz.push({t:'ok',tx:'Comprovante de endere\u00e7o em nome da empresa ("'+cp.titular+'") \u2014 confere'});
+      } else if(cp.titular_confere==='socio'){
+        divCruz.push({t:'ok',tx:'Comprovante de endere\u00e7o em nome do s\u00f3cio ("'+cp.titular+'") \u2014 confere'});
+      }
+      // Cruzar endereco do comprovante com o do contrato social
+      if(ct&&ct.endereco&&cp.endereco){
+        var endCS=ct.endereco.toUpperCase().replace(/\s+/g,' ').trim();
+        var endCP=cp.endereco.toUpperCase().replace(/\s+/g,' ').trim();
+        // Verificar se pelo menos a cidade ou CEP batem (comparacao parcial)
+        var endMatch=endCS.split(' ').some(function(w){return w.length>4&&endCP.includes(w);});
+        if(!endMatch&&endCS.length>10&&endCP.length>10){
+          warnCruz=true;
+          divCruz.push({t:'warn',tx:'Endere\u00e7o no Comprovante ("'+cp.endereco+'") pode divergir do endere\u00e7o no Contrato Social ("'+ct.endereco+'") \u2014 verificar manualmente'});
+        }
+      }
+    }
+
+    // Verificar se todos os docs foram enviados
+    var docsEnviados=Object.values(S.simDoc).filter(function(v){return v>0;}).length;
+    if(docsEnviados<3){
+      divCruz.push({t:'warn',tx:'Aten\u00e7\u00e3o: apenas '+docsEnviados+'/3 documentos foram enviados. Recomendamos enviar todos para an\u00e1lise completa.'});
+      warnCruz=true;
+    }
+
+    // Montar o HTML da varredura cruzada
+    var htmlCruz='<div style="background:#fff;border:2px solid '+(negCruz?'#dc2626':warnCruz?'#f59e0b':'#16a34a')+';border-radius:12px;padding:16px 18px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08)">'
+      +'<div style="font-size:14px;font-weight:700;color:'+(negCruz?'#b91c1c':warnCruz?'#92400e':'#166534')+';margin-bottom:12px;display:flex;align-items:center;gap:8px">'
+      +'<i class="ti '+(negCruz?'ti-x-circle':warnCruz?'ti-alert-triangle':'ti-check')+'" style="font-size:20px"></i>'
+      +(negCruz?'Diverg\u00eancias encontradas \u2014 an\u00e1lise bloqueada':warnCruz?'Pontos de aten\u00e7\u00e3o identificados':'Todos os documentos conferem entre si')
+      +'</div>';
+
+    // Linha do cartao CNPJ como referencia
+    htmlCruz+='<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;margin-bottom:10px">'
+      +'<div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;margin-bottom:6px"><i class="ti ti-id-badge-2"></i> Base de refer\u00eancia \u2014 Cart\u00e3o CNPJ / Receita Federal</div>'
+      +'<div style="font-size:12px;color:#166534;line-height:1.8">'
+      +'<strong>Raz\u00e3o Social:</strong> '+D.nome+' &nbsp;|&nbsp; <strong>CNPJ:</strong> '+D.cnpj+'<br>'
+      +'<strong>S\u00f3cio:</strong> '+D.socio+' &nbsp;|&nbsp; <strong>Capital:</strong> '+D.capital
+      +'</div></div>';
+
+    if(divCruz.length===0){
+      htmlCruz+='<div style="font-size:13px;color:#166534;line-height:1.8;padding:8px 12px;background:#dcfce7;border-radius:8px">N\u00e3o foram identificadas diverg\u00eancias. Todas as informa\u00e7\u00f5es batem entre o Cart\u00e3o CNPJ, Contrato Social, Comprovante de Endere\u00e7o e Documento do S\u00f3cio.</div>';
     } else {
-      re3.innerHTML=resBox('ok','Etapa 3 aprovada','Todos os documentos conferem com a Receita Federal.');
+      htmlCruz+='<div style="font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;margin-bottom:8px">Resultado da varredura cruzada:</div>';
+      divCruz.forEach(function(d){
+        var bg=d.t==='neg'?'#ffebee':d.t==='warn'?'#fff8e1':'#f0fdf4';
+        var co=d.t==='neg'?'#b91c1c':d.t==='warn'?'#92400e':'#166534';
+        var ic=d.t==='neg'?'ti-x':d.t==='warn'?'ti-alert-triangle':'ti-check';
+        htmlCruz+='<div style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-radius:8px;margin-bottom:6px;font-size:13px;line-height:1.6;background:'+bg+';color:'+co+'">'
+          +'<i class="ti '+ic+'" style="font-size:16px;flex-shrink:0;margin-top:1px"></i><span>'+d.tx+'</span></div>';
+      });
+    }
+    htmlCruz+='</div>';
+
+    // Definir resultado
+    if(negCruz){
+      S.negado=true;
+      re3.innerHTML=htmlCruz+'<div style="background:#ffebee;border:2px solid #c62828;border-radius:12px;padding:14px 18px;margin-bottom:12px;text-align:center"><div style="font-size:15px;font-weight:700;color:#b71c1c"><i class="ti ti-x-circle"></i> Venda faturada negada \u2014 diverg\u00eancia documental</div><div style="font-size:12px;color:#7f1d1d;margin-top:4px">Corrija os documentos e realize nova consulta.</div></div>';
+      mostrarVeredito();
+    } else if(warnCruz&&S.endTerceiro){
+      re3.innerHTML=htmlCruz+resBox('warn','Etapa 3 \u2014 aten\u00e7\u00e3o','Endere\u00e7o em nome de terceiro. Etapa 4 obrigat\u00f3ria.');
+      setTimeout(buildE4,400);
+    } else if(warnCruz){
+      re3.innerHTML=htmlCruz+resBox('warn','Etapa 3 \u2014 conclui com aten\u00e7\u00f5es','Pontos de aten\u00e7\u00e3o identificados. Avalie antes de prosseguir.');
+      setTimeout(buildE5,400);
+    } else {
+      re3.innerHTML=htmlCruz+resBox('ok','Etapa 3 aprovada','Todos os documentos conferem com o Cart\u00e3o CNPJ / Receita Federal.');
       setTimeout(buildE5,400);
     }
   }
+
+
 
   function buildE4(){
     S.simLoc=0;S.mOk=false;S.lOk=false;
