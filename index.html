@@ -4850,7 +4850,7 @@ function renderModeloEmTeste(){
   }
 
   function limpar(){
-    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justAtencao:null,justMaps:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},simLoc:0,mOk:false,lOk:false};
+    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},simLoc:0,mOk:false,lOk:false};
     S_DOCS={contrato:null,comprovante:null,docSocio:null};
     D={nome:'',fantasia:'',cnpj:'',socio:'',capital:''};
     var cl=q('#m5cl');if(cl)cl.innerHTML='';
@@ -5562,46 +5562,36 @@ function upDoc(n,inp){
         };
       },300);
       mostrarVeredito()
-    } else if(warnCruz&&S.endTerceiro){
-      re3.innerHTML=htmlCruz
-        +resBox('warn','Etapa 3 \\u2014 aten\\u00e7\\u00e3o','Endere\\u00e7o em nome de terceiro. Justifique antes de prosseguir.')
-        +'<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:14px;margin-top:10px">'
-        +'<div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-edit"></i> Justificativa obrigat\\u00f3ria \\u2014 Pontos de aten\\u00e7\\u00e3o</div>'
-        +'<p style="font-size:12px;color:#78350f;margin-bottom:8px;line-height:1.6">Os pontos de aten\\u00e7\\u00e3o acima requerem justificativa. O colaborador \\u00e9 respons\\u00e1vel pelas informa\\u00e7\\u00f5es registradas neste campo.</p>'
-        +'<textarea id="m5warnJust" rows="3" placeholder="Justifique os pontos de aten\\u00e7\\u00e3o identificados..." style="width:100%;border:1.5px solid #fbbf24;border-radius:8px;padding:9px 12px;font-size:13px;background:#fffbeb;color:#1e293b;outline:none;resize:vertical;box-sizing:border-box"></textarea>'
-        +'<button id="m5btnWarnJust" style="margin-top:10px;background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border:none;border-radius:8px;padding:10px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-arrow-right"></i> Confirmar justificativa e ir para Etapa 4</button>'
-        +'</div>';
-      setTimeout(function(){
-        var _ta=q('#m5warnJust'),_btn=q('#m5btnWarnJust');
-        if(_ta)_ta.addEventListener('input',function(){S.justAtencao=this.value;});
-        if(_btn)_btn.onclick=function(){
-          if(!S.justAtencao||S.justAtencao.trim().length<10){q('#m5warnJust').style.borderColor='#dc2626';q('#m5warnJust').focus();return;}
-          this.style.background='#16a34a';this.innerHTML='<i class="ti ti-check"></i> Justificativa registrada';this.disabled=true;
-          if(_ta)_ta.disabled=true;
-          addCk('warn','ti-edit','Justificativa E3: '+S.justAtencao.slice(0,60));
-          setTimeout(buildE4,400);
-        };
-      },200)
     } else if(warnCruz){
+      var _proxE=S.endTerceiro?buildE4:buildE5;
+      var _op=STATE.usuarioLogado||'desconhecido';
       re3.innerHTML=htmlCruz
-        +resBox('warn','Etapa 3 \\u2014 conclui com aten\\u00e7\\u00f5es','Pontos de aten\\u00e7\\u00e3o identificados. Justifique antes de prosseguir.')
-        +'<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:14px;margin-top:10px">'
-        +'<div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-edit"></i> Justificativa obrigat\\u00f3ria \\u2014 Pontos de aten\\u00e7\\u00e3o</div>'
-        +'<p style="font-size:12px;color:#78350f;margin-bottom:8px;line-height:1.6">Os pontos de aten\\u00e7\\u00e3o acima requerem justificativa. O colaborador \\u00e9 respons\\u00e1vel pelas informa\\u00e7\\u00f5es registradas neste campo.</p>'
-        +'<textarea id="m5warnJust" rows="3" placeholder="Justifique os pontos de aten\\u00e7\\u00e3o identificados..." style="width:100%;border:1.5px solid #fbbf24;border-radius:8px;padding:9px 12px;font-size:13px;background:#fffbeb;color:#1e293b;outline:none;resize:vertical;box-sizing:border-box"></textarea>'
-        +'<button id="m5btnWarnJust" style="margin-top:10px;background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border:none;border-radius:8px;padding:10px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-arrow-right"></i> Confirmar justificativa e ir para Refer\\u00eancias</button>'
+        +resBox('warn','Etapa 3 \u2014 pontos de aten\u00e7\u00e3o identificados','Verifique os pontos acima e justifique antes de prosseguir.')
+        +'<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;padding:16px;margin-bottom:12px">'
+        +'<div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-edit"></i> Justificativa obrigat\u00f3ria \u2014 Responsabilidade do colaborador</div>'
+        +'<p style="font-size:12px;color:#78350f;margin-bottom:10px;line-height:1.6">Foram identificados pontos de aten\u00e7\u00e3o nos documentos. Explique abaixo a situa\u00e7\u00e3o e o que o cliente apresentou como justificativa para cada ponto. <strong>As informa\u00e7\u00f5es inseridas aqui s\u00e3o de responsabilidade exclusiva do colaborador logado ('+_op+').</strong></p>'
+        +'<textarea id="m5justWarn" rows="4" placeholder="Descreva a justificativa para os pontos de aten\u00e7\u00e3o encontrados. Ex: O comprovante est\u00e1 no nome da m\u00e3e do s\u00f3cio, que \u00e9 propriet\u00e1ria do im\u00f3vel. Contrato de loca\u00e7\u00e3o ser\u00e1 apresentado. Demais documentos conferem." style="width:100%;border:1.5px solid #fbbf24;border-radius:8px;padding:9px 12px;font-size:13px;background:#fffbeb;color:#1e293b;outline:none;resize:vertical;box-sizing:border-box"></textarea>'
+        +'<div style="font-size:11px;color:#92400e;margin-top:8px;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-alert-triangle"></i> Esta justificativa ser\u00e1 inclu\u00edda no parecer inteligente e no relat\u00f3rio final. O colaborador '+_op+' responde pelas informa\u00e7\u00f5es inseridas.</div>'
+        +'<button id="m5btnWarn" style="background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border:none;border-radius:8px;padding:11px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-arrow-right"></i> Confirmar justificativa e prosseguir</button>'
         +'</div>';
       setTimeout(function(){
-        var _ta=q('#m5warnJust'),_btn=q('#m5btnWarnJust');
-        if(_ta)_ta.addEventListener('input',function(){S.justAtencao=this.value;});
+        var _ta=q('#m5justWarn');
+        if(_ta)_ta.addEventListener('input',function(){S.justWarn=this.value;});
+        var _btn=q('#m5btnWarn');
         if(_btn)_btn.onclick=function(){
-          if(!S.justAtencao||S.justAtencao.trim().length<10){q('#m5warnJust').style.borderColor='#dc2626';q('#m5warnJust').focus();return;}
-          this.style.background='#16a34a';this.innerHTML='<i class="ti ti-check"></i> Justificativa registrada';this.disabled=true;
-          if(_ta)_ta.disabled=true;
-          addCk('warn','ti-edit','Justificativa E3: '+S.justAtencao.slice(0,60));
-          setTimeout(buildE5,400);
+          if(!S.justWarn||S.justWarn.trim().length<10){
+            q('#m5justWarn').style.borderColor='#dc2626';
+            q('#m5justWarn').focus();
+            return;
+          }
+          this.style.background='#16a34a';
+          this.innerHTML='<i class="ti ti-check"></i> Justificativa registrada';
+          this.disabled=true;
+          q('#m5justWarn').disabled=true;
+          addCk('warn','ti-edit','Justificativa aten\u00e7\u00e3o E3: '+S.justWarn.slice(0,60));
+          setTimeout(_proxE,400);
         };
-      },200)
+      },200);
     } else {
       re3.innerHTML=htmlCruz+resBox('ok','Etapa 3 aprovada','Todos os documentos conferem com o Cart\u00e3o CNPJ / Receita Federal.');
       setTimeout(buildE5,400);
@@ -5668,9 +5658,7 @@ function upDoc(n,inp){
       // OPCAO 2 - Nome fantasia
       +'<div style="background:#f1f5f9;border:0.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:12px">'
       +'<div style="font-size:13px;font-weight:500;margin-bottom:4px"><i class="ti ti-building-store" style="color:#1d4ed8"></i> Op\u00e7\u00e3o 2 \u2014 Nome fantasia</div>'
-      +'<div style="font-size:11px;color:#64748b;margin-bottom:6px;padding:6px 10px;background:#f0f9ff;border-radius:6px;border-left:3px solid #3b82f6;line-height:1.6">'
-      +'<i class="ti ti-eye" style="font-size:12px"></i> <strong>Aten\u00e7\u00e3o:</strong> ao verificar no Maps, observe se o local \u00e9 <strong>comercial</strong> (n\u00e3o residencial), se h\u00e1 <strong>fachada com o nome da empresa</strong>, e se o estabelecimento est\u00e1 em atividade. Esses dados confirmam a exist\u00eancia f\u00edsica da empresa.'
-      +'</div>'
+      +'<div style="font-size:11px;color:#64748b;margin-bottom:8px;padding:6px 10px;background:#f0f9ff;border-radius:6px;border-left:3px solid #3b82f6"><i class="ti ti-info-circle"></i> <strong>Aten\u00e7\u00e3o:</strong> Verifique se o im\u00f3vel \u00e9 <strong>comercial</strong> (n\u00e3o residencial), se existe <strong>fachada com o nome da empresa</strong> e se o local aparenta atividade comercial. Esses s\u00e3o os crit\u00e9rios para marcar \"Empresa encontrada\".</div>'
       +'<div style="font-family:monospace;font-size:12px;background:#f8fafc;padding:6px 10px;border-radius:6px;border:0.5px solid #e2e8f0;margin-bottom:8px">'+qN+'</div>'
       +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
       +'<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(qN)+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#2563eb;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none"><i class="ti ti-building-store"></i> Buscar empresa</a>'
@@ -5680,6 +5668,12 @@ function upDoc(n,inp){
       +'<div id="m5mst2" style="display:none;font-size:12px;font-weight:600;margin-top:8px"></div>'
       +'</div>'
       +'<div id="m5av4" style="display:none">'
+      +'<div id="m5mapsDiv" style="display:none;background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:14px;margin-bottom:12px">'
+      +'<div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-edit"></i> Justificativa obrigat\u00f3ria \u2014 Diverg\u00eancia entre op\u00e7\u00f5es</div>'
+      +'<p style="font-size:12px;color:#78350f;margin-bottom:8px;line-height:1.6">Os resultados das Op\u00e7\u00f5es 1 e 2 divergem. Explique abaixo o que foi observado e o motivo da diverg\u00eancia.</p>'
+      +'<textarea id="m5justMaps" rows="3" placeholder="Ex: Na Op\u00e7\u00e3o 1 o endere\u00e7o n\u00e3o apareceu no Maps, mas na Op\u00e7\u00e3o 2 a empresa foi encontrada com fachada vis\u00edvel e im\u00f3vel comercial." style="width:100%;border:1.5px solid #fbbf24;border-radius:8px;padding:9px 12px;font-size:13px;background:#fffbeb;color:#1e293b;outline:none;resize:vertical;box-sizing:border-box"></textarea>'
+      +'<div style="font-size:11px;color:#92400e;margin-top:6px"><i class="ti ti-alert-triangle"></i> Justificativa obrigat\u00f3ria para prosseguir.</div>'
+      +'</div>'
       +'<button id="m5btnAv4" style="background:linear-gradient(135deg,#0f6e56,#16a34a);color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(22,163,74,0.25)"><i class="ti ti-arrow-right"></i> Prosseguir para refer\u00eancias comerciais</button>'
       +'<p style="font-size:12px;color:#94a3b8;margin-top:6px">Marque o resultado em ao menos uma das op\u00e7\u00f5es acima para prosseguir.</p></div>'
     )+'<div id="m5re4r" style="display:none"></div>';
@@ -5692,61 +5686,43 @@ function upDoc(n,inp){
       if(_inpL)_inpL.onchange=function(){upLoc(this);};
     }
 
-    // Bind botoes Maps - Opcao 1
-    // Armazena resultado de cada opcao do maps
+    // Rastrear resultados de cada opcao
     var _mapsRes={1:null,2:null};
+    // Bind botoes Maps
     function mapsRes(opt,ok){
+      _mapsRes[opt]=ok;
       var mst=q('#m5mst'+opt);
       var b1ok=q('#m5bMaps'+opt+'ok');
       var b1no=q('#m5bMaps'+opt+'no');
       b1ok.style.opacity=ok?'1':'0.35';
       b1no.style.opacity=ok?'0.35':'1';
       mst.style.display='block';
-      _mapsRes[opt]=ok;
       if(ok){
         mst.style.color='#166534';
-        mst.innerHTML='<i class="ti ti-check"></i> Empresa/endere\u00e7o confirmado no Maps.';
+        mst.innerHTML='<i class="ti ti-circle-check"></i> Empresa confirmada no endere\u00e7o.';
         addCk('ok','ti-check','Google Maps Op\u00e7\u00e3o '+opt+': empresa encontrada');
       } else {
         mst.style.color='#991b1b';
-        mst.innerHTML='<i class="ti ti-x"></i> N\u00e3o encontrada \u2014 avalia\u00e7\u00e3o manual necess\u00e1ria.';
-        addCk('warn','ti-alert-triangle','Google Maps Op\u00e7\u00e3o '+opt+': empresa n\u00e3o encontrada');
+        mst.innerHTML='<i class="ti ti-circle-x"></i> N\u00e3o encontrada.';
+        addCk('warn','ti-alert-triangle','Google Maps Op\u00e7\u00e3o '+opt+': n\u00e3o encontrada');
       }
       S.mOk=true;
-      // Verificar se ambas as opcoes foram respondidas
-      if(_mapsRes[1]!==null&&_mapsRes[2]!==null){
-        var _av4=q('#m5av4');
-        // Se ambas encontradas -> prosseguir diretamente
-        if(_mapsRes[1]===true&&_mapsRes[2]===true){
-          addCk('ok','ti-check','Google Maps: empresa confirmada em ambas as opcoes');
-          if(!S.endTerceiro||S.lOk) _av4.style.display='block';
-        } else {
-          // Divergencia entre op1 e op2 -> campo justificativa obrigatorio
-          var _justDiv=q('#m5mapsJustDiv');
-          if(!_justDiv){
-            var _jd=document.createElement('div');
-            _jd.id='m5mapsJustDiv';
-            _jd.style.cssText='background:#fffbeb;border:2px solid #f59e0b;border-radius:10px;padding:14px;margin-top:12px';
-            _jd.innerHTML='<div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-edit"></i> Justificativa obrigat\u00f3ria \u2014 Diverg\u00eancia no Maps</div>'
-              +'<p style="font-size:12px;color:#78350f;margin-bottom:8px;line-height:1.6">As duas op\u00e7\u00f5es retornaram resultados diferentes. Justifique abaixo o motivo. O colaborador \u00e9 respons\u00e1vel pelas informa\u00e7\u00f5es registradas.</p>'
-              +'<textarea id="m5mapsJustTa" rows="3" placeholder="Ex: Op\u00e7\u00e3o 1 n\u00e3o encontrou resultado pois o endere\u00e7o no cadastro est\u00e1 desatualizado. A empresa foi encontrada na Op\u00e7\u00e3o 2 com fachada comercial e nome da empresa vis\u00edveis." style="width:100%;border:1.5px solid #fbbf24;border-radius:8px;padding:9px 12px;font-size:13px;background:#fffbeb;color:#1e293b;outline:none;resize:vertical;box-sizing:border-box"></textarea>'
-              +'<button id="m5mapsJustBtn" style="margin-top:10px;background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border:none;border-radius:8px;padding:10px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-check"></i> Confirmar justificativa e prosseguir</button>';
-            // Inserir antes do m5av4
-            if(_av4&&_av4.parentNode)_av4.parentNode.insertBefore(_jd,_av4);
-            // Bind
-            var _ta4=_jd.querySelector('#m5mapsJustTa'),_btn4=_jd.querySelector('#m5mapsJustBtn');
-            if(_ta4)_ta4.addEventListener('input',function(){S.justMaps=this.value;});
-            if(_btn4)_btn4.onclick=function(){
-              if(!S.justMaps||S.justMaps.trim().length<10){_ta4.style.borderColor='#dc2626';_ta4.focus();return;}
-              this.style.background='#16a34a';this.innerHTML='<i class="ti ti-check"></i> Justificativa registrada';this.disabled=true;
-              _ta4.disabled=true;
-              addCk('warn','ti-edit','Justificativa Maps: '+S.justMaps.slice(0,60));
-              if(!S.endTerceiro||S.lOk) _av4.style.display='block';
-            };
+      // Mostrar av4 quando ao menos uma opcao respondida
+      if(!S.endTerceiro||S.lOk){
+        var av4=q('#m5av4');if(av4)av4.style.display='block';
+        // Se as duas opcoes respondidas e divergentes - mostrar campo justificativa
+        var mapsDiv=q('#m5mapsDiv');
+        if(mapsDiv&&_mapsRes[1]!==null&&_mapsRes[2]!==null){
+          if(_mapsRes[1]!==_mapsRes[2]){
+            // Divergencia entre op1 e op2 - mostrar campo justificativa
+            mapsDiv.style.display='block';
+            var _ta=q('#m5justMaps');
+            if(_ta)_ta.addEventListener('input',function(){S.justMaps=this.value;});
+          } else {
+            // Ambas iguais - sem divergencia, sem necessidade de justificativa
+            mapsDiv.style.display='none';
           }
         }
-      } else if(_mapsRes[1]!==null||_mapsRes[2]!==null){
-        // Apenas uma respondida - nao prosseguir ainda
       }
     }
 
@@ -5754,7 +5730,19 @@ function upDoc(n,inp){
     q('#m5bMaps1no').onclick=function(){mapsRes(1,false);};
     q('#m5bMaps2ok').onclick=function(){mapsRes(2,true);};
     q('#m5bMaps2no').onclick=function(){mapsRes(2,false);};
-    q('#m5btnAv4').onclick=buildE5;
+    q('#m5btnAv4').onclick=function(){
+      // Se ha divergencia entre op1 e op2, justificativa e obrigatoria
+      var mDiv=q('#m5mapsDiv');
+      if(mDiv&&mDiv.style.display!=='none'){
+        if(!S.justMaps||S.justMaps.trim().length<10){
+          var _ta=q('#m5justMaps');
+          if(_ta){_ta.style.borderColor='#dc2626';_ta.focus();}
+          return;
+        }
+        addCk('warn','ti-edit','Justificativa Maps: '+S.justMaps.slice(0,60));
+      }
+      buildE5();
+    };
   }
 
 
@@ -5913,6 +5901,8 @@ function upDoc(n,inp){
         excecao2:S.excecao2||null,
         excecao_doc:S.excecao_doc||null,
         justificativa_terceiro:S.justTerceiro||null,
+        justificativa_atencao:S.justWarn||null,
+        justificativa_maps:S.justMaps||null,
         protestoDiretor:S.protestoDiretor,
         negado:S.negado,
         modulo:'Modelo em Teste'
