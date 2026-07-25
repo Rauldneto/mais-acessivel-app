@@ -5170,10 +5170,14 @@ function upDoc(n,inp){
        +'- CNPJ: '+D.cnpj+'\n'
        +'- Socio: '+D.socio+'\n\n'
        +'Analise o COMPROVANTE DE ENDERECO ou CONTRATO DE LOCACAO.\n'
-       +'Tipos VALIDOS: conta agua, conta energia eletrica, conta telefone, fatura cartao credito (max 90 dias), contrato de locacao.\n'
-       +'Qualquer outro tipo de documento e INVALIDO como comprovante de endereco.\n'
+       +'REGRAS IMPORTANTES:\n'
+       +'1. tipo_documento = comprovante_endereco: conta agua, energia eletrica, telefone, fatura cartao credito (max 90 dias)\n'
+       +'2. tipo_documento = contrato_locacao: qualquer contrato de locacao/aluguel\n'
+       +'3. tipo_documento = invalido: SOMENTE se o documento NAO for nenhum dos acima (ex: nota fiscal, boleto bancario, RG, etc)\n'
+       +'ATENCAO: Uma conta de energia, agua ou telefone e SEMPRE valida como comprovante, mesmo que esteja em nome de terceiro. Nesse caso use tipo_documento=comprovante_endereco e titular_confere=terceiro.\n'
+       +'Para titular_confere: empresa = nome da empresa no documento, socio = nome do socio no documento, terceiro = qualquer outro nome.\n'
        +'Responda APENAS com JSON valido sem markdown:\n'
-       +'{"tipo_documento":"comprovante_endereco ou contrato_locacao ou invalido","tipo_especifico":"conta_agua ou conta_energia ou conta_telefone ou cartao_credito ou contrato_locacao ou outro","titular_encontrado":"nome no documento","titular_confere":"empresa ou socio ou terceiro","endereco_encontrado":"endereco completo","data_emissao":"DD/MM/AAAA ou nao_identificada","dentro_90_dias":true,"divergencias":["lista ou vazio"],"resultado":"ok ou warn ou neg","resumo":"descricao objetiva"}',
+       +'{"tipo_documento":"comprovante_endereco ou contrato_locacao ou invalido","tipo_especifico":"conta_agua ou conta_energia ou conta_telefone ou cartao_credito ou contrato_locacao ou outro","titular_encontrado":"nome no documento","titular_confere":"empresa ou socio ou terceiro","endereco_encontrado":"endereco completo","data_emissao":"DD/MM/AAAA ou nao_identificada","dentro_90_dias":true,"divergencias":["lista ou vazio"],"resultado":"ok ou warn ou neg","resumo":"tipo do documento, titular e se confere com empresa/socio"}',
 
       3:'Voce e um analisador de documentos para analise de credito empresarial.\n'
        +'Dados do cadastro (Receita Federal / Cartao CNPJ):\n'
@@ -5414,15 +5418,19 @@ function upDoc(n,inp){
 
     // 3. Comprovante de endereco
     if(cp){
-      if(cp.tipo_doc==='invalido'){
+      // Prioridade: terceiro vem antes de invalido
+      // Se esta em nome de terceiro o doc pode ser valido - apenas o titular diverge
+      if(cp.titular_confere==='terceiro'){
+        warnCruz=true;
+        var _tipoDesc={conta_agua:'Conta de \u00e1gua',conta_energia:'Conta de energia el\u00e9trica',conta_telefone:'Conta de telefone',cartao_credito:'Cart\u00e3o de cr\u00e9dito',contrato_locacao:'Contrato de loca\u00e7\u00e3o'};
+        var _tipoLabel=_tipoDesc[cp.tipo]||cp.tipo||'Comprovante';
+        divCruz.push({t:'warn',tx:_tipoLabel+' v\u00e1lido'+(cp.dentro_90_dias!==false?' e dentro do prazo':'')+', por\u00e9m em nome de terceiro ("'+cp.titular+'"). O titular n\u00e3o consta como s\u00f3cio nem como empresa no cart\u00e3o CNPJ. Etapa 4 (loca\u00e7\u00e3o) obrigat\u00f3ria.'});
+      } else if(cp.tipo_doc==='invalido'){
         negCruz=true;
-        divCruz.push({t:'neg',tx:'Comprovante de endere\u00e7o inv\u00e1lido (tipo: '+cp.tipo+'). Aceitos: conta \u00e1gua, energia, telefone, cart\u00e3o de cr\u00e9dito (at\u00e9 90 dias) ou contrato de loca\u00e7\u00e3o'});
+        divCruz.push({t:'neg',tx:'Tipo de documento inv\u00e1lido como comprovante de endere\u00e7o (tipo: '+cp.tipo+'). Aceitos: conta \u00e1gua, conta energia, conta telefone, cart\u00e3o de cr\u00e9dito (at\u00e9 90 dias) ou contrato de loca\u00e7\u00e3o.'});
       } else if(cp.dentro_90_dias===false){
         negCruz=true;
-        divCruz.push({t:'neg',tx:'Comprovante de endere\u00e7o fora do prazo m\u00e1ximo de 90 dias'});
-      } else if(cp.titular_confere==='terceiro'){
-        warnCruz=true;
-        divCruz.push({t:'warn',tx:'Comprovante de endere\u00e7o em nome de terceiro ("'+cp.titular+'") \u2014 Etapa 4 obrigat\u00f3ria'});
+        divCruz.push({t:'neg',tx:'Comprovante de endere\u00e7o fora do prazo m\u00e1ximo de 90 dias. Solicite um documento mais recente.'});
       } else if(cp.titular_confere==='empresa'){
         divCruz.push({t:'ok',tx:'Comprovante de endere\u00e7o em nome da empresa ("'+cp.titular+'") \u2014 confere'});
       } else if(cp.titular_confere==='socio'){
