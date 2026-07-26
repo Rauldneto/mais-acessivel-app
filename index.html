@@ -5292,7 +5292,7 @@ function upDoc(n,inp){
               if(_ta)_ta.addEventListener('input',function(){S.justTerceiro=this.value;});
               var _btnJ=q('#m5btnJust');
               if(_btnJ)_btnJ.onclick=function(){
-                if(!S.justTerceiro||S.justTerceiro.trim().length<10){
+                if(!S.justTerceiro||S.justTerceiro.trim().length<25){
                   q('#m5justTerceiro').style.borderColor='#dc2626';
                   q('#m5justTerceiro').focus();
                   return;
@@ -5556,7 +5556,7 @@ function upDoc(n,inp){
         // Botao confirmar justificativa -> mostrar bloco diretor
         var btnJD=q('#m5btnJustDiv');
         if(btnJD)btnJD.onclick=function(){
-          if(!S.decl_divergencia||S.decl_divergencia.trim().length<10){
+          if(!S.decl_divergencia||S.decl_divergencia.trim().length<25){
             q('#m5justDiv').style.borderColor='#dc2626';
             q('#m5justDiv').focus();
             return;
@@ -5605,7 +5605,7 @@ function upDoc(n,inp){
         if(_ta)_ta.addEventListener('input',function(){S.justWarn=this.value;});
         var _btn=q('#m5btnWarn');
         if(_btn)_btn.onclick=function(){
-          if(!S.justWarn||S.justWarn.trim().length<10){
+          if(!S.justWarn||S.justWarn.trim().length<25){
             q('#m5justWarn').style.borderColor='#dc2626';
             q('#m5justWarn').focus();
             return;
@@ -5735,7 +5735,7 @@ function upDoc(n,inp){
       }
       S.mOk=true;
       // Mostrar av4 quando ao menos uma opcao respondida
-      if(!S.endTerceiro||S.lOk){
+      if(!S.endTerceiro||S.lOk||S.mOk){
         var av4=q('#m5av4');if(av4)av4.style.display='block';
         // Se as duas opcoes respondidas e divergentes - mostrar campo justificativa
         var mapsDiv=q('#m5mapsDiv');
@@ -5761,7 +5761,7 @@ function upDoc(n,inp){
       // Se ha divergencia entre op1 e op2, justificativa e obrigatoria
       var mDiv=q('#m5mapsDiv');
       if(mDiv&&mDiv.style.display!=='none'){
-        if(!S.justMaps||S.justMaps.trim().length<10){
+        if(!S.justMaps||S.justMaps.trim().length<25){
           var _ta=q('#m5justMaps');
           if(_ta){_ta.style.borderColor='#dc2626';_ta.focus();}
           return;
@@ -5802,7 +5802,7 @@ function upDoc(n,inp){
     else{mst.style.color='#854d0e';mst.textContent='Sem fachada \u2014 avalia\u00e7\u00e3o manual necess\u00e1ria.';addCk('warn','ti-alert-triangle','Google Maps: sem fachada');}
     tryAv4();
   }
-  function tryAv4(){if(S.lOk&&S.mOk)q('#m5av4').style.display='block';}
+  function tryAv4(){if((S.lOk||!S.endTerceiro)&&S.mOk)q('#m5av4').style.display='block';}
 
   var RSIM=[
     {n:'DISTRIBUIDORA NORTE LTDA',r:'Carlos Mendes',t:'(62) 99812-4455',d:'03/2021',l:'R$ 25.000,00',dc:'11/2024',vc:'R$ 18.500,00',p:'\u2705 Sim',a:'\u2705 Nunca',da:'0',db:'\u2705 N\u00e3o',rc:'\u2705 Sim'},
