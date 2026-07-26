@@ -5261,15 +5261,22 @@ function upDoc(n,inp){
             razao_social_confere:json.razao_social_confere
           };
         } else if(n===2){
+          // Normalizar titular_confere: se nao e empresa nem socio, e terceiro
+          var _tc = json.titular_confere||'';
+          if(json.tipo_documento!=='invalido' && _tc!=='empresa' && _tc!=='socio') _tc='terceiro';
+          // Normalizar tipo_documento: contas de energia/agua/telefone NUNCA sao invalidas
+          var _tiposValidos=['conta_agua','conta_energia','conta_telefone','cartao_credito','contrato_locacao'];
+          var _te=json.tipo_especifico||'';
+          if(_tiposValidos.indexOf(_te)>=0) json.tipo_documento='comprovante_endereco';
           S_DOCS.comprovante={
             titular:json.titular_encontrado||'',
-            titular_confere:json.titular_confere||'',
+            titular_confere:_tc,
             endereco:json.endereco_encontrado||'',
-            tipo:json.tipo_especifico||'',
+            tipo:_te,
             tipo_doc:json.tipo_documento||'',
             dentro_90_dias:json.dentro_90_dias
           };
-          S.endTerceiro=(json.titular_confere==='terceiro'||json.tipo_documento==='contrato_locacao');
+          S.endTerceiro=(_tc==='terceiro'||json.tipo_documento==='contrato_locacao');
           // Se terceiro: mostrar campo de justificativa
           if(json.titular_confere==='terceiro'){
             var _ei2=q('#m5ei2');
@@ -5321,6 +5328,12 @@ function upDoc(n,inp){
         if(json.tipo_documento==='invalido'||json.dentro_90_dias===false){
           cls='neg';
           ei.innerHTML=it('neg','ti-x','<strong>'+lbl+':</strong> '+json.resumo);
+        } else if(n===2 && (S_DOCS.comprovante.titular_confere==='terceiro')){
+          // Doc valido mas em nome de terceiro: sempre warn, nunca neg
+          cls='warn';ico='ti-alert-triangle';
+          var _tDesc={conta_agua:'Conta de \u00e1gua',conta_energia:'Conta de energia el\u00e9trica',conta_telefone:'Conta de telefone',cartao_credito:'Cart\u00e3o de cr\u00e9dito',contrato_locacao:'Contrato de loca\u00e7\u00e3o'};
+          var _tL=_tDesc[S_DOCS.comprovante.tipo]||S_DOCS.comprovante.tipo||'Comprovante';
+          ei.innerHTML=it('warn','ti-alert-triangle','<strong>'+lbl+':</strong> '+_tL+' v\u00e1lido e dentro do prazo, por\u00e9m em nome de terceiro ("'+json.titular_encontrado+'"). N\u00e3o consta como s\u00f3cio nem como empresa no cart\u00e3o CNPJ. Etapa 4 ser\u00e1 obrigat\u00f3ria.');
         }
 
       }catch(err){
@@ -5418,6 +5431,11 @@ function upDoc(n,inp){
 
     // 3. Comprovante de endereco
     if(cp){
+      // Normalizar: contas de energia/agua/telefone nunca sao invalidas
+      var _tvCp=['conta_agua','conta_energia','conta_telefone','cartao_credito','contrato_locacao'];
+      if(_tvCp.indexOf(cp.tipo)>=0) cp.tipo_doc='comprovante_endereco';
+      // Normalizar titular: se doc valido e nao e empresa nem socio -> terceiro
+      if(cp.tipo_doc!=='invalido' && cp.titular_confere!=='empresa' && cp.titular_confere!=='socio' && cp.titular_confere!=='terceiro') cp.titular_confere='terceiro';
       // Prioridade: terceiro vem antes de invalido
       // Se esta em nome de terceiro o doc pode ser valido - apenas o titular diverge
       if(cp.titular_confere==='terceiro'){
