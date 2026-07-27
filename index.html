@@ -4718,6 +4718,7 @@ function renderModeloEmTeste(){
     mOk:false,lOk:false
   };
   var D={nome:'',fantasia:'',cnpj:'',socio:'',capital:'',endereco:'',cidade:'',estado:'',cep:''};
+  window._mod5D=D; // expor globalmente
 
   function tStr(m){
     var a=Math.floor(m/12),r=m%12;
@@ -4862,6 +4863,7 @@ function renderModeloEmTeste(){
 
   function limpar(){
     S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,precisaAprovDir:false,justEndTerceiro:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},simLoc:0,mOk:false,lOk:false};
+    window._mod5S=S;
     S_DOCS={contrato:null,comprovante:null,docSocio:null};
     D={nome:'',fantasia:'',cnpj:'',socio:'',capital:''};
     var cl=q('#m5cl');if(cl)cl.innerHTML='';
@@ -6101,6 +6103,9 @@ function upDoc(n,inp){
 async function gerarParecerIA(){
   var btn = q('#m5btnParecerIA');
   if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i> Gerando parecer...'; }
+  // Usar D e S do escopo local (via window._mod5D/_mod5S)
+  var D = window._mod5D || {};
+  var S = window._mod5S || {checks:[],negado:false};
 
   var checks_txt = S.checks.map(function(ck){
     return (ck.cls==='ok'?'[OK]':ck.cls==='neg'?'[NEG]':'[ATEN]') + ' ' + ck.txt;
@@ -6179,6 +6184,7 @@ async function gerarParecerIA(){
 
 // Salvar análise no Firebase e retornar ID
 function salvarAnaliseMod5(){
+  var D=window._mod5D||{}; var S=window._mod5S||{};
   var agora = new Date();
   var dtStr = agora.toLocaleDateString('pt-BR')+' '+agora.toLocaleTimeString('pt-BR');
   var registro = {
@@ -6205,6 +6211,7 @@ function salvarAnaliseMod5(){
 
 // Imprimir / gerar PDF
 function imprimirMod5(){
+  var D=window._mod5D||{}; var S=window._mod5S||{};
   var cond_txt = {
     '100':'Aprovado — 100% boleto sem entrada',
     '30':'Aprovado — 30% entrada + boleto',
