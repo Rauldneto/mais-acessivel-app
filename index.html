@@ -4730,6 +4730,7 @@ function renderModeloEmTeste(){
 
   function addCk(cls,ico,txt){
     S.checks.push({cls:cls,ico:ico,txt:txt});
+    window._mod5S=S;
     var cl=q('#m5cl');
     if(!cl)return;
     var CKC={ok:{bg:'#dcfce7',co:'#166534',bd:'#86efac'},neg:{bg:'#fee2e2',co:'#991b1b',bd:'#fca5a5'},warn:{bg:'#fef9c3',co:'#854d0e',bd:'#fde047'}};
@@ -4929,6 +4930,7 @@ function renderModeloEmTeste(){
         D.cidade=_cidNome;
         D.estado=_estSig;
         D.cep=est.cep||'';
+        window._mod5D=D; window._mod5S=S; // atualizar referencias globais
         processarE1();
       }catch(err){
         var pb2=q('#m5pb');
