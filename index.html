@@ -5159,7 +5159,10 @@ function upDoc(n,inp){
     var b=q('#m5eb'+n);
     b.innerHTML='<i class="ti ti-loader"></i> Lendo...';
     b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#eff6ff;color:#1d4ed8;border:0.5px solid #93c5fd';
-    var ei=q('#m5ei'+n);ei.style.display='block';
+    var ei=q('#m5ei'+n);
+    // Limpar resultado anterior ao reenviar
+    ei.innerHTML='';
+    ei.style.display='block';
     ei.innerHTML='<div style="font-size:12px;color:#94a3b8;font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-robot"></i> IA lendo e extraindo dados do documento...</div>';
     S.simDoc[n]=(S.simDoc[n]||0)+1;
 
@@ -5347,9 +5350,16 @@ function upDoc(n,inp){
         }
 
       }catch(err){
-        b.innerHTML='<i class="ti ti-alert-triangle"></i> Erro';
+        // Limpar resultado anterior para nao acumular
+        ei.innerHTML='';
+        S.simDoc[n]=0; // Resetar contador para permitir reenvio
+        // Limpar S_DOCS deste documento
+        if(n===1)S_DOCS.contrato=null;
+        else if(n===2)S_DOCS.comprovante=null;
+        else if(n===3)S_DOCS.docSocio=null;
+        b.innerHTML='<i class="ti ti-alert-triangle"></i> Erro - tente novamente';
         b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#fee2e2;color:#991b1b;border:0.5px solid #fca5a5';
-        ei.innerHTML=it('neg','ti-x','Erro ao processar: '+err.message+'. Verifique sua conex\u00e3o.');
+        ei.innerHTML=it('neg','ti-x','<strong>Falha ao processar o documento.</strong> Motivo: '+err.message+'<br>Selecione o arquivo novamente para reenviar.');
         addCk('neg','ti-x','Erro ao processar documento '+n);
       }
 
