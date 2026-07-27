@@ -4826,6 +4826,7 @@ function renderModeloEmTeste(){
     sv.style.display='block';
     sv.scrollIntoView({behavior:'smooth'});
     var c=calcCond();
+    setTimeout(function(){ gerarParecerIA(); }, 800);
     // Salvar no Firebase com responsavel
     try{
       var _agora=new Date();
@@ -5929,7 +5930,6 @@ function upDoc(n,inp){
     +'<button id="m5btnL" style="background:#f1f5f9;color:#64748b;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-x"></i> Limpar</button>'
     +'</div>'
     +'<div id="m5btnBar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:12px 16px;background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">'
-    +'<button id="m5btnParecerIA" style="background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-brain"></i> Gerar parecer</button>'
     +'<button onclick="salvarAnaliseMod5()" style="background:linear-gradient(135deg,#0f6e56,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-device-floppy"></i> Salvar</button>'
     +'<button onclick="imprimirMod5()" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-printer"></i> PDF</button>'
     +'<button onclick="limpar()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-refresh"></i> Nova consulta</button>'
@@ -6156,12 +6156,23 @@ async function gerarParecerIA(){
       }).join('');
 
       pb.innerHTML = '<div style="font-size:13px;color:#1e293b;line-height:1.7">'+html+'</div>';
-      // Rolar para o topo para ver o parecer
-      var modWrap = q('#m5s1');
-      var topo = modWrap ? modWrap.parentElement : null;
-      window.scrollTo({top: q('#m5pb').getBoundingClientRect().top + window.scrollY - 100, behavior:'smooth'});
     }
-    if(btn){ btn.innerHTML='<i class="ti ti-check"></i> Parecer gerado — ver no topo'; }
+    // Adicionar/atualizar parecer no final (dentro do sv)
+    var svEl = q('#m5sv');
+    if(svEl){
+      var pbF = q('#m5pb_final');
+      if(!pbF){
+        pbF = document.createElement('div');
+        pbF.id = 'm5pb_final';
+        pbF.style.cssText = 'background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1.5px solid #f59e0b;border-radius:14px;padding:18px 20px;margin-top:16px;box-shadow:0 2px 8px rgba(245,158,11,0.12)';
+        pbF.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><i class="ti ti-robot" style="font-size:22px;color:#d97706"></i><div style="font-size:15px;font-weight:700;color:#92400e">Parecer Inteligente \u2014 An\u00e1lise de Risco</div></div><div id="m5pb_ftxt"></div>';
+        svEl.appendChild(pbF);
+      }
+      var pbFt = q('#m5pb_ftxt');
+      if(pbFt) pbFt.innerHTML = '<div style="font-size:13px;color:#1e293b;line-height:1.7">'+html+'</div>';
+      pbF.scrollIntoView({behavior:'smooth', block:'start'});
+    }
+    if(btn){ btn.innerHTML='<i class="ti ti-check"></i> Parecer gerado'; }
   }catch(err){
     if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-brain"></i> Gerar parecer inteligente'; }
   }
