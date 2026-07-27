@@ -5259,7 +5259,24 @@ function upDoc(n,inp){
         });
         var data=await resp.json();
         var txtResp=(data.content&&data.content[0])?data.content[0].text:'{}';
-        var json=JSON.parse(txtResp.replace(/```json|```/g,'').trim());
+        // Parse robusto: extrair JSON mesmo quando a IA retorna texto extra
+        var json;
+        try{
+          var _clean=txtResp.replace(/```json|```/g,'').trim();
+          // Tentar parse direto
+          json=JSON.parse(_clean);
+        }catch(_pe){
+          // Tentar extrair o JSON do texto - buscar primeiro { ate ultimo }
+          var _m=txtResp.match(/\{[\s\S]*\}/);
+          if(_m){
+            try{ json=JSON.parse(_m[0]); }catch(_pe2){
+              // Fallback: criar JSON de erro com o resumo do texto
+              json={resultado:'neg',resumo:'Erro de formato na resposta da IA. Por favor, reenvie o documento.'};
+            }
+          } else {
+            json={resultado:'neg',resumo:'Resposta inesperada da IA. Por favor, reenvie o documento.'};
+          }
+        }
 
         // Armazenar dados extraidos para cruzamento posterior
         if(n===1){
