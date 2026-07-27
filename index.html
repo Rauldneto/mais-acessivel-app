@@ -6023,14 +6023,177 @@ function upDoc(n,inp){
       },300);
     }
     // Botao voltar ao topo
-    var topo='<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">'
-      +'<button onclick="window.scrollTo({top:0,behavior:\u0027smooth\u0027})" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-arrow-up"></i> Voltar ao topo</button>'
-      +'<button onclick="limpar()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-refresh"></i> Nova consulta</button>'
+    var topo='<div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap">'
+      +'<button id="m5btnParecerIA" style="background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-brain"></i> Gerar parecer inteligente</button>'
+      +'<button onclick="salvarAnaliseMod5()" style="background:linear-gradient(135deg,#0f6e56,#16a34a);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-device-floppy"></i> Salvar an\u00e1lise</button>'
+      +'<button onclick="imprimirMod5()" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-printer"></i> Imprimir / PDF</button>'
+      +'<button onclick="window.scrollTo({top:0,behavior:\u0027smooth\u0027})" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-arrow-up"></i> Voltar ao topo</button>'
+      +'<button onclick="limpar()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-refresh"></i> Nova consulta</button>'
+      +'<button onclick="STATE.modulo=\'mod2\';STATE.tabCredito=\'historico\';renderApp()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-history"></i> Ver hist\u00f3rico</button>'
       +'</div>';
     sv.innerHTML+=topo;
   }
 
 
+
+
+
+
+  // ============================================================
+// NOVAS FUNCIONALIDADES DO MODELO EM TESTE
+// ============================================================
+
+// Gerar parecer inteligente via IA
+async function gerarParecerIA(){
+  var btn = q('#m5btnParecerIA');
+  if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i> Gerando parecer...'; }
+
+  var checks_txt = S.checks.map(function(ck){
+    return (ck.cls==='ok'?'[OK]':ck.cls==='neg'?'[NEG]':'[ATEN]') + ' ' + ck.txt;
+  }).join('\n');
+
+  var cond_txt = {
+    '100':'Aprovado — 100% boleto sem entrada',
+    '30':'Aprovado — 30% entrada + boleto (protesto liberado pelo diretor)',
+    '50':'Atenção — 50% entrada + boleto (empresa 12-24 meses)',
+    '70':'Atenção — 70% entrada + 1 parcela',
+    'av':'Negado — somente à vista'
+  }[calcCond()] || 'Aguardando';
+
+  var prompt = 'Voce e um analista de credito empresarial experiente.\n'
+    + 'Gere um PARECER INTELIGENTE completo e profissional para a seguinte analise:\n\n'
+    + 'EMPRESA: '+D.nome+' ('+D.fantasia+')\n'
+    + 'CNPJ: '+D.cnpj+'\n'
+    + 'SITUACAO: '+S.sit+'\n'
+    + 'TEMPO DE EXISTENCIA: '+tStr(S.mE)+'\n'
+    + 'SOCIO: '+D.socio+' ha '+tStr(S.mS)+'\n'
+    + 'CAPITAL: '+D.capital+'\n'
+    + 'RESULTADO FINAL: '+cond_txt+'\n\n'
+    + 'PONTOS VERIFICADOS:\n'+checks_txt+'\n'
+    + (S.justWarn?'\nJUSTIFICATIVA DO COLABORADOR (endereço terceiro): '+S.justWarn:'')
+    + (S.justEndTerceiro?'\nJUSTIFICATIVA TERCEIRO: '+S.justEndTerceiro:'')
+    + (S.excecao1?'\nEXCECAO 1 (carta anuencia): verificada por '+S.excecao1.operador+' em '+S.excecao1.dataHora:'')
+    + (S.excecao2?'\nEXCECAO 2 (diretor): autorizado por '+S.excecao2.dirAutorizou+' em '+S.excecao2.dataHoraAutorizacao:'')
+    + (S.excecao_doc?'\nAUTORIZACAO DOC: '+S.excecao_doc.autorizador+' | Declaracao: '+(S.excecao_doc.declaracao_colaborador||''):'')
+    + '\n\nO parecer deve:\n'
+    + '1. Iniciar com o resultado final em destaque\n'
+    + '2. Pontuar CADA nivel de atencao encontrado com justificativa\n'
+    + '3. Descrever a condicao de pagamento recomendada\n'
+    + '4. Se houver endereço em nome de terceiro, destacar que APROVACAO DO DIRETOR e necessaria\n'
+    + '5. Ser objetivo, profissional e em portugues brasileiro\n'
+    + '6. Maximo 400 palavras';
+
+  try{
+    var resp = await fetch('https://soft-limit-b3a1.rauldias.workers.dev',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,messages:[{role:'user',content:prompt}]})
+    });
+    var data = await resp.json();
+    var texto = (data.content&&data.content[0])?data.content[0].text:'Não foi possível gerar o parecer.';
+
+    var pb = q('#m5pb');
+    if(pb){
+      // Formatar o texto preservando paragrafos
+      var html = texto.split('\n').map(function(linha){
+        if(!linha.trim()) return '<br>';
+        return '<p style="margin:0 0 8px;line-height:1.7">'+linha+'</p>';
+      }).join('');
+
+      pb.innerHTML = '<div style="font-size:13px;color:#1e293b;line-height:1.7">'+html+'</div>';
+      // Rolar para o topo para ver o parecer
+      var modWrap = q('#m5s1');
+      var topo = modWrap ? modWrap.parentElement : null;
+      window.scrollTo({top: q('#m5pb').getBoundingClientRect().top + window.scrollY - 100, behavior:'smooth'});
+    }
+    if(btn){ btn.innerHTML='<i class="ti ti-check"></i> Parecer gerado — ver no topo'; }
+  }catch(err){
+    if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-brain"></i> Gerar parecer inteligente'; }
+  }
+}
+
+// Salvar análise no Firebase e retornar ID
+function salvarAnaliseMod5(){
+  var agora = new Date();
+  var dtStr = agora.toLocaleDateString('pt-BR')+' '+agora.toLocaleTimeString('pt-BR');
+  var registro = {
+    cnpj:D.cnpj, empresa:D.nome, fantasia:D.fantasia, socio:D.socio, capital:D.capital,
+    situacao:S.sit, meses_empresa:S.mE, meses_socio:S.mS,
+    responsavel:STATE.usuarioLogado||'desconhecido',
+    dataHora:dtStr, timestamp:agora.toISOString(),
+    condicao_pagamento:calcCond(),
+    checks:S.checks,
+    excecao1:S.excecao1||null, excecao2:S.excecao2||null,
+    excecao_doc:S.excecao_doc||null,
+    justificativa_warn:S.justWarn||null,
+    justificativa_terceiro:S.justEndTerceiro||null,
+    justificativa_maps:S.justMaps||null,
+    aprovacao_dir_terceiro:S.aprovDir||null,
+    precisaAprovDir:S.precisaAprovDir||false,
+    protestoDiretor:S.protestoDiretor,
+    negado:S.negado,
+    modulo:'Modelo em Teste'
+  };
+  fbSaveHistoricoAnalise(D.cnpj.replace(/\D/g,''),registro);
+  return registro;
+}
+
+// Imprimir / gerar PDF
+function imprimirMod5(){
+  var cond_txt = {
+    '100':'Aprovado — 100% boleto sem entrada',
+    '30':'Aprovado — 30% entrada + boleto',
+    '50':'Atenção — 50% entrada + boleto',
+    '70':'Atenção — 70% entrada + 1 parcela',
+    'av':'Negado — somente à vista'
+  }[calcCond()] || '';
+
+  var checks_html = S.checks.map(function(ck){
+    var cor = ck.cls==='ok'?'#166534':ck.cls==='neg'?'#b71c1c':'#92400e';
+    var bg = ck.cls==='ok'?'#dcfce7':ck.cls==='neg'?'#fee2e2':'#fef9c3';
+    var ic = ck.cls==='ok'?'✅':ck.cls==='neg'?'❌':'⚠️';
+    return '<div style="padding:6px 10px;margin-bottom:4px;border-radius:6px;background:'+bg+';color:'+cor+';font-size:12px">'+ic+' '+ck.txt+'</div>';
+  }).join('');
+
+  var extras = '';
+  if(S.excecao1) extras += '<div style="background:#fff8e1;border:1px solid #fbbf24;border-radius:8px;padding:10px;margin-bottom:8px"><strong>⚠️ Exceção 1 - Carta de anuência:</strong> Verificada por '+S.excecao1.operador+' em '+S.excecao1.dataHora+'</div>';
+  if(S.excecao2) extras += '<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px;margin-bottom:8px"><strong>ℹ️ Exceção 2 - Diretor:</strong> Autorizado por '+S.excecao2.dirAutorizou+' em '+S.excecao2.dataHoraAutorizacao+' | Registrado por '+S.excecao2.operador+'</div>';
+  if(S.justEndTerceiro) extras += '<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:10px;margin-bottom:8px"><strong>📝 Justificativa endereço terceiro:</strong> '+S.justEndTerceiro+'</div>';
+  if(S.aprovDir) extras += '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px;margin-bottom:8px"><strong>✅ Aprovação diretor:</strong> '+S.aprovDir.diretor+' em '+S.aprovDir.dataHoraMsg+' | Registrado por '+S.aprovDir.operador+'</div>';
+  if(S.excecao_doc) extras += '<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px;margin-bottom:8px"><strong>📋 Declaração colaborador:</strong> '+(S.excecao_doc.declaracao_colaborador||'')+'<br><strong>Autorizado por:</strong> '+S.excecao_doc.autorizador+' | Registrado por '+S.excecao_doc.operador+'</div>';
+
+  var parecer_atual = (q('#m5pb')||{}).innerText||'';
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+    +'<title>Análise de Crédito — '+D.nome+'</title>'
+    +'<style>body{font-family:Arial,sans-serif;padding:30px;color:#1e293b;max-width:900px;margin:0 auto}'
+    +'h1{color:#0f6e56;font-size:20px;border-bottom:2px solid #0f6e56;padding-bottom:8px}'
+    +'h2{color:#374151;font-size:15px;margin-top:20px}'
+    +'@media print{body{padding:15px}}</style>'
+    +'</head><body>'
+    +'<h1>Análise de Crédito — Modelo em Teste</h1>'
+    +'<div style="background:#f0fdf4;border:2px solid #16a34a;border-radius:10px;padding:14px;margin-bottom:16px">'
+    +'<strong>Empresa:</strong> '+D.nome+' ('+D.fantasia+') — CNPJ: '+D.cnpj+'<br>'
+    +'<strong>Sócio:</strong> '+D.socio+' — Capital: '+D.capital+'<br>'
+    +'<strong>Situação:</strong> '+S.sit+' — '+tStr(S.mE)+' de existência — Sócio há '+tStr(S.mS)
+    +'</div>'
+    +'<div style="background:'+(S.negado?'#ffebee':calcCond()==='100'?'#e8f5e9':'#fff8e1')+';border:2px solid '+(S.negado?'#b71c1c':calcCond()==='100'?'#16a34a':'#f59e0b')+';border-radius:10px;padding:14px;margin-bottom:16px;font-size:16px;font-weight:700">'
+    +cond_txt+'</div>'
+    +'<h2>Checklist de verificação</h2>'+checks_html
+    +(extras?'<h2>Registros e exceções</h2>'+extras:'')
+    +'<h2>Parecer inteligente</h2>'
+    +'<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:14px;font-size:13px;line-height:1.7;white-space:pre-wrap">'+parecer_atual+'</div>'
+    +'<div style="margin-top:20px;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">'
+    +'Análise realizada por: '+( STATE.usuarioLogado||'desconhecido')+' — '+new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR')
+    +'</div>'
+    +'</body></html>';
+
+  var win = window.open('','_blank');
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(function(){ win.print(); },800);
+}
 
 
   setTimeout(function(){
@@ -6040,6 +6203,9 @@ function upDoc(n,inp){
     });
     var bc=q('#m5btnC');if(bc)bc.onclick=consultar;
     var bl=q('#m5btnL');if(bl)bl.onclick=limpar;
+    document.addEventListener('click',function(e){
+      if(e.target&&e.target.id==='m5btnParecerIA') gerarParecerIA();
+    });
   },50);
 
   return wrap;
