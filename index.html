@@ -6039,7 +6039,26 @@ function upDoc(n,inp){
 
 
 
-  // ============================================================
+  
+  setTimeout(function(){
+    var inp=q('#m5inp');
+    if(inp)inp.addEventListener('input',function(){
+      this.value=fmtC(this.value);
+    });
+    var bc=q('#m5btnC');if(bc)bc.onclick=consultar;
+    var bl=q('#m5btnL');if(bl)bl.onclick=limpar;
+    document.addEventListener('click',function(e){
+      if(e.target&&e.target.id==='m5btnParecerIA') gerarParecerIA();
+    });
+  },50);
+
+  return wrap;
+}
+
+
+
+// ============ FUNCOES GLOBAIS MOD5 ============
+// ============================================================
 // NOVAS FUNCIONALIDADES DO MODELO EM TESTE
 // ============================================================
 
@@ -6193,22 +6212,6 @@ function imprimirMod5(){
   win.document.close();
   win.focus();
   setTimeout(function(){ win.print(); },800);
-}
-
-
-  setTimeout(function(){
-    var inp=q('#m5inp');
-    if(inp)inp.addEventListener('input',function(){
-      this.value=fmtC(this.value);
-    });
-    var bc=q('#m5btnC');if(bc)bc.onclick=consultar;
-    var bl=q('#m5btnL');if(bl)bl.onclick=limpar;
-    document.addEventListener('click',function(e){
-      if(e.target&&e.target.id==='m5btnParecerIA') gerarParecerIA();
-    });
-  },50);
-
-  return wrap;
 }
 
 
