@@ -4823,9 +4823,18 @@ function renderModeloEmTeste(){
       +'<button onclick="window.scrollTo({top:0,behavior:\x27smooth\x27})" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-arrow-up"></i> Topo</button>'
       +'<button onclick="limpar()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-refresh"></i> Nova consulta</button>'
       +'<button onclick="mostrarHistoricoMod5()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-history"></i> Ver hist\u00f3rico</button>';
+    // Inserir barra de botoes antes do bloco dourado do Parecer
     var _pbEl=q('#m5pb');
-    if(_pbEl&&_pbEl.parentElement){
-      _pbEl.parentElement.insertBefore(_btnBar,_pbEl);
+    // Subir na arvore DOM ate encontrar o filho direto do container principal
+    var _targetEl=_pbEl;
+    if(_targetEl){
+      // Subir 2 niveis: #m5pb -> div interno -> div dourado (card)
+      var _p1=_targetEl.parentElement;
+      var _p2=_p1?_p1.parentElement:null;
+      var _insertBefore=_p2&&_p2.parentElement?_p2:_p1||_targetEl;
+      if(_insertBefore&&_insertBefore.parentElement){
+        _insertBefore.parentElement.insertBefore(_btnBar,_insertBefore);
+      }
     }
     sv.style.display='block';
     sv.scrollIntoView({behavior:'smooth'});
