@@ -6021,11 +6021,17 @@ function upDoc(n,inp){
     // Atualizar o parecer no topo com o veredito + resumo
     var pb=q('#m5pb');
     if(pb){
-      pb.innerHTML='<div style="margin-bottom:10px"><strong>'+D.nome+'</strong>'+(D.fantasia&&D.fantasia!==D.nome?' ('+D.fantasia+')':'')+', CNPJ '+D.cnpj+', <strong>'+S.sit+'</strong>, '+tStr(S.mE)+' de exist\u00eancia. S\u00f3cio: <strong>'+D.socio+'</strong> h\u00e1 '+tStr(S.mS)+'. Capital: <strong>'+D.capital+'</strong>.</div>'
-        +'<div style="padding:12px 14px;border-radius:10px;background:'+(cond==='av'?'#ffebee':cond==='100'?'#dcfce7':'#fff8e1')+';border:2px solid '+(cond==='av'?'#b71c1c':cond==='100'?'#16a34a':'#f59e0b')+';margin-bottom:8px">'
-        +'<div style="font-size:15px;font-weight:700;color:'+(cond==='av'?'#b71c1c':cond==='100'?'#166534':'#92400e')+'">'+v.ic+' '+v.t+'</div>'
-        +'<div style="font-size:12px;margin-top:4px;color:'+(cond==='av'?'#7f1d1d':cond==='100'?'#166534':'#78350f')+'">'+v.p+'</div>'
-        +'</div>';
+      pb.innerHTML=
+        '<div style="padding:14px 16px;border-radius:10px;background:'+(cond==='av'?'#ffebee':cond==='100'?'#dcfce7':'#fff8e1')+';border:2px solid '+(cond==='av'?'#b71c1c':cond==='100'?'#16a34a':'#f59e0b')+';margin-bottom:12px">'
+        +'<div style="font-size:17px;font-weight:800;color:'+(cond==='av'?'#b71c1c':cond==='100'?'#166534':'#92400e')+'">'+v.ic+' '+v.t+'</div>'
+        +'<div style="font-size:13px;font-weight:600;margin-top:6px;color:'+(cond==='av'?'#7f1d1d':cond==='100'?'#166534':'#78350f')+'">'+v.p+'</div>'
+        +'</div>'
+        +'<div style="font-size:12px;color:#475569;margin-bottom:8px"><strong>'+D.nome+'</strong>, CNPJ '+D.cnpj+', '+S.sit+', '+tStr(S.mE)+' exist\u00eancia.</div>'
+      var _card=document.querySelector('#m5card_resultado');
+      if(_card){
+        _card.style.background=cond==='av'?'linear-gradient(135deg,#ffebee,#fee2e2)':cond==='100'?'linear-gradient(135deg,#e8f5e9,#dcfce7)':'linear-gradient(135deg,#fffbeb,#fef3c7)';
+        _card.style.borderColor=cond==='av'?'#b71c1c':cond==='100'?'#16a34a':'#f59e0b';
+      }
       if(resumoEtapas){
         var cl=q('#m5cl');
         if(cl) cl.innerHTML=resumoEtapas;
