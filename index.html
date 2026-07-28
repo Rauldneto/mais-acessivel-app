@@ -4721,6 +4721,7 @@ function renderModeloEmTeste(){
   window._mod5D=D; // expor globalmente
 
   function tStr(m){
+    window._mod5tStr=tStr;
     var a=Math.floor(m/12),r=m%12;
     return(a?a+(a===1?' ano':' anos')+(r?' e ':''):''
       )+(r?r+(r===1?' m\xeas':' meses'):'');
@@ -4804,6 +4805,7 @@ function renderModeloEmTeste(){
   }
 
   function calcCond(){
+    window._mod5calcCond=calcCond;
     if(S.negado)return 'av';
     if(S.mE<12)return '70';
     if(S.mS<12&&S.nS===1&&S.mE>=12)return 'av';
@@ -6108,6 +6110,8 @@ async function gerarParecerIA(){
   // Usar D e S do escopo local (via window._mod5D/_mod5S)
   var D = window._mod5D || {};
   var S = window._mod5S || {checks:[],negado:false};
+  var calcCond = window._mod5calcCond || function(){return '100';};
+  var tStr = window._mod5tStr || function(m){return m+' meses';};
 
   var checks_txt = S.checks.map(function(ck){
     return (ck.cls==='ok'?'[OK]':ck.cls==='neg'?'[NEG]':'[ATEN]') + ' ' + ck.txt;
