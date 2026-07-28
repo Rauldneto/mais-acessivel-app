@@ -6010,13 +6010,8 @@ function upDoc(n,inp){
         +'<i class="ti '+ic+'" style="flex-shrink:0;margin-top:1px"></i><span>'+ck.txt+'</span></div>';
     });
 
-    // Veredito final
-    sv.innerHTML='<div style="border-radius:16px;padding:22px 24px;background:'+v.bg+';border:3px solid '+v.br+';box-shadow:0 4px 20px '+v.br+'33;margin-bottom:16px">'
-      +'<div style="font-size:20px;font-weight:700;color:'+v.co+';margin-bottom:6px">'+v.ic+' '+v.t+'</div>'
-      +'<div style="font-size:14px;color:'+v.co+';margin-bottom:12px;line-height:1.6">'+v.s+'</div>'
-      +'<div style="font-size:13px;padding:12px 16px;background:rgba(255,255,255,0.8);border-radius:10px;color:#1e293b;border-left:4px solid '+v.br+'">'
-      +'<strong>Condi\u00e7\u00e3o de pagamento:</strong> '+v.p+'</div>'
-      +'</div>';
+    // Veredito no topo - sv apenas ancora para os botoes
+    sv.innerHTML=''
 
     // Atualizar o parecer no topo com o veredito + resumo
     var pb=q('#m5pb');
@@ -6171,18 +6166,20 @@ async function gerarParecerIA(){
     var pb = q2('#m5pb');
     if(pb){
       // Formatar o texto preservando paragrafos
-      // Converter Markdown para HTML
+      // Formatar parecer profissionalmente
       var html = texto
+        .replace(/#{3}\s*(.+)/g,'<h4 style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;padding-bottom:4px;border-bottom:1.5px solid #f59e0b">$1</h4>')
+        .replace(/#{2}\s*(.+)/g,'<h3 style="font-size:14px;font-weight:700;color:#166534;margin:14px 0 8px">$1</h3>')
+        .replace(/#{1}\s*(.+)/g,'<h2 style="font-size:15px;font-weight:800;color:#0f172a;margin:0 0 10px">$1</h2>')
         .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
-        .replace(/#{3}\s*(.+)/g,'<div style="font-size:13px;font-weight:700;color:#92400e;margin:14px 0 6px;text-transform:uppercase;letter-spacing:.05em">$1</div>')
-        .replace(/#{2}\s*(.+)/g,'<div style="font-size:15px;font-weight:700;color:#1b5e20;margin:12px 0 8px">$1</div>')
-        .replace(/#{1}\s*(.+)/g,'<div style="font-size:16px;font-weight:800;color:#0f172a;margin:0 0 10px">$1</div>')
-        .replace(/^>\s*(.+)/gm,'<div style="border-left:3px solid #f59e0b;padding:6px 12px;background:#fffbeb;margin:6px 0;font-size:12px">$1</div>')
-        .replace(/^---+$/gm,'<hr style="border:0;border-top:1px solid #e2e8f0;margin:10px 0">')
-        .split('\n').map(function(linha){
-          if(!linha.trim()||linha.includes('<div')||linha.includes('<hr')) return linha;
-          return '<p style="margin:0 0 6px;line-height:1.7;font-size:13px;color:#1e293b">'+linha+'</p>';
-        }).join('\n');
+        .replace(/^---+$/gm,'<hr style="border:0;border-top:1px solid #e2e8f0;margin:12px 0">')
+        .replace(/^>\s*(.+)/gm,'<blockquote style="border-left:3px solid #f59e0b;padding:6px 12px;background:rgba(245,158,11,0.08);margin:8px 0;font-size:12px;color:#92400e">$1</blockquote>')
+        .replace(/^(\d+)\.\s+(.+)/gm,'<li style="margin:4px 0 4px 16px;font-size:13px;color:#1e293b;line-height:1.6">$2</li>')
+        .split('\n').map(function(l){
+          if(!l.trim()) return '<br>';
+          if(/^<(h[1-4]|hr|li|blockquote|br)/.test(l.trim())) return l;
+          return '<p style="margin:0 0 10px;line-height:1.75;font-size:13px;color:#374151">'+l+'</p>';
+        }).join('')
 
       pb.innerHTML = '<div style="font-size:13px;color:#1e293b;line-height:1.7">'+html+'</div>';
     }
