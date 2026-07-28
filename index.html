@@ -6175,14 +6175,14 @@ async function gerarParecerIA(){
     + (S.excecao1?'\nEXCECAO 1 (carta anuencia): verificada por '+S.excecao1.operador+' em '+S.excecao1.dataHora:'')
     + (S.excecao2?'\nEXCECAO 2 (diretor): autorizado por '+S.excecao2.dirAutorizou+' em '+S.excecao2.dataHoraAutorizacao:'')
     + (S.excecao_doc?'\nAUTORIZACAO DOC: '+S.excecao_doc.autorizador+' | Declaracao: '+(S.excecao_doc.declaracao_colaborador||''):'')
-    + '\n\nO parecer deve:\n'
-    + '1. Iniciar com o resultado final em destaque\n'
-    + '2. Pontuar CADA nivel de atencao encontrado com justificativa\n'
-    + '3. Descrever a condicao de pagamento recomendada\n'
-    + '4. Se houver endereço em nome de terceiro, destacar que APROVACAO DO DIRETOR e necessaria\n'
-    + '5. Ser objetivo, profissional e em portugues brasileiro\n'
-    + '6. Maximo 400 palavras'
-    + '\n7. NAO use Markdown (sem #, **, ---, >, etc). Use texto puro e bem estruturado em paragrafos.';  
+    + '\n\nESTRUTURA OBRIGATORIA (use EXATAMENTE estes marcadores em linhas separadas):\n'
+    + '##RESULTADO## <resultado em uma linha clara>\n'
+    + '##EMPRESA## <nome, CNPJ, situacao e tempo>\n'
+    + '##POSITIVOS## <item1 >> item2 >> item3>\n'
+    + '##ATENCAO## <item1 >> item2 ou NENHUM>\n'
+    + '##CONDICAO## <condicao de pagamento exata>\n'
+    + '##CONCLUSAO## <2-3 frases finais objetivas>\n'
+    + '\nIMPORTANTE: use APENAS esses marcadores, seja objetivo, max 350 palavras, em portugues brasileiro.';  
 
   try{
     var resp = await fetch('https://soft-limit-b3a1.rauldias.workers.dev',{
@@ -6196,26 +6196,110 @@ async function gerarParecerIA(){
     var pb = q2('#m5pb');
     if(pb){
       // Formatar o texto preservando paragrafos
-      // Formatar parecer profissionalmente
-      var html = texto
-        .replace(/#{3}\s*(.+)/g,'<h4 style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 6px;padding-bottom:4px;border-bottom:1.5px solid #f59e0b">$1</h4>')
-        .replace(/#{2}\s*(.+)/g,'<h3 style="font-size:14px;font-weight:700;color:#166534;margin:14px 0 8px">$1</h3>')
-        .replace(/#{1}\s*(.+)/g,'<h2 style="font-size:15px;font-weight:800;color:#0f172a;margin:0 0 10px">$1</h2>')
-        .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
-        .replace(/^---+$/gm,'<hr style="border:0;border-top:1px solid #e2e8f0;margin:12px 0">')
-        .replace(/^>\s*(.+)/gm,'<blockquote style="border-left:3px solid #f59e0b;padding:6px 12px;background:rgba(245,158,11,0.08);margin:8px 0;font-size:12px;color:#92400e">$1</blockquote>')
-        .replace(/^(\d+)\.\s+(.+)/gm,'<li style="margin:4px 0 4px 16px;font-size:13px;color:#1e293b;line-height:1.6">$2</li>')
-        .split('\n').map(function(l){
-          if(!l.trim()) return '<br>';
-          if(/^<(h[1-4]|hr|li|blockquote|br)/.test(l.trim())) return l;
-          return '<p style="margin:0 0 10px;line-height:1.75;font-size:13px;color:#374151">'+l+'</p>';
-        }).join('')
+      // Formatar parecer com marcadores
+      var html = '';
+      var linhas = texto.split('\n');
+      linhas.forEach(function(linha){
+        linha = linha.trim();
+        if(!linha) return;
+        if(linha.startsWith('##RESULTADO##')){
+          var txt = linha.replace('##RESULTADO##','').trim();
+          var isNeg = /negado|vista|nao aprovado/i.test(txt);
+          var isWarn = /aten/i.test(txt);
+          var bg = isNeg?'#fee2e2':isWarn?'#fef9c3':'#dcfce7';
+          var co = isNeg?'#b71c1c':isWarn?'#92400e':'#166534';
+          var bd = isNeg?'#dc2626':isWarn?'#f59e0b':'#16a34a';
+          var ic = isNeg?'\u274c':isWarn?'\u26a0\ufe0f':'\u2705';
+          html += '<div style="background:'+bg+';border:2px solid '+bd+';border-radius:10px;padding:14px 16px;margin-bottom:14px">'
+                + '<div style="font-size:16px;font-weight:800;color:'+co+'">'+ic+' '+txt+'</div>'
+                + '</div>';
+        } else if(linha.startsWith('##EMPRESA##')){
+          var txt = linha.replace('##EMPRESA##','').trim();
+          html += '<div style="font-size:12px;color:#475569;background:#f8fafc;padding:8px 12px;border-radius:8px;margin-bottom:12px;border-left:3px solid #0f6e56">'
+                + txt+'</div>';
+        } else if(linha.startsWith('##POSITIVOS##')){
+          var txt = linha.replace('##POSITIVOS##','').trim();
+          html += '<div style="margin-bottom:14px">'
+                + '<div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7">\u2705 Pontos Positivos</div>';
+          txt.split('>>').filter(Boolean).forEach(function(p){
+            html += '<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #f0fdf4">'
+                  + '<span style="color:#16a34a;font-weight:700;flex-shrink:0">+</span>'
+                  + '<span style="font-size:13px;color:#1e293b;line-height:1.6">'+p.trim()+'</span></div>';
+          });
+          html += '</div>';
+        } else if(linha.startsWith('##ATENCAO##')){
+          var txt = linha.replace('##ATENCAO##','').trim();
+          if(txt && txt.toUpperCase()!=='NENHUM'){
+            html += '<div style="margin-bottom:14px">'
+                  + '<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #fef9c3">\u26a0\ufe0f Pontos de Aten\u00e7\u00e3o</div>';
+            txt.split('>>').filter(Boolean).forEach(function(p){
+              html += '<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #fefce8">'
+                    + '<span style="color:#f59e0b;font-weight:700;flex-shrink:0">!</span>'
+                    + '<span style="font-size:13px;color:#1e293b;line-height:1.6">'+p.trim()+'</span></div>';
+            });
+            html += '</div>';
+          }
+        } else if(linha.startsWith('##CONDICAO##')){
+          var txt = linha.replace('##CONDICAO##','').trim();
+          var isNeg2 = /vista|negado/i.test(txt);
+          var bg2=isNeg2?'#fee2e2':'#eff6ff'; var co2=isNeg2?'#b71c1c':'#1565c0'; var bd2=isNeg2?'#dc2626':'#3b82f6';
+          html += '<div style="background:'+bg2+';border:2px solid '+bd2+';border-radius:10px;padding:14px 16px;margin-bottom:14px">'
+                + '<div style="font-size:11px;font-weight:700;color:'+co2+';text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">\ud83d\udcb3 Condi\u00e7\u00e3o de Pagamento</div>'
+                + '<div style="font-size:15px;font-weight:800;color:'+co2+'">'+txt+'</div></div>';
+        } else if(linha.startsWith('##CONCLUSAO##')){
+          var txt = linha.replace('##CONCLUSAO##','').trim();
+          html += '<div style="border-top:1.5px solid #e2e8f0;padding-top:12px;margin-top:4px">'
+                + '<div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Conclus\u00e3o</div>'
+                + '<p style="font-size:13px;color:#374151;line-height:1.75;margin:0">'+txt+'</p></div>';
+        } else {
+          html += '<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 8px">'+linha+'</p>';
+        }
+      })
 
       pb.innerHTML = '<div style="font-size:13px;color:#1e293b;line-height:1.7">'+html+'</div>';
     }
+    // Bloco aprovacao diretor abaixo do parecer (se houver warn)
+    var _temWarnP = S.checks.some(function(ck){return ck.cls==='warn';});
+    if(_temWarnP && !S.aprovDir && !document.querySelector('#m5aprov_dir_top')){
+      var _card = document.querySelector('#m5card_resultado');
+      var _opP = STATE.usuarioLogado||'desconhecido';
+      if(_card){
+        var _div = document.createElement('div');
+        _div.id='m5aprov_dir_top';
+        _div.style.cssText='background:#fff;border:3px solid #1565c0;border-radius:12px;padding:16px;margin-top:14px';
+        _div.innerHTML='<div style="font-size:14px;font-weight:700;color:#1565c0;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-shield-check"></i> Aprovacao do Diretor Obrigat\u00f3ria</div>'
+          +'<p style="font-size:12px;color:#1e3a5f;margin-bottom:12px">Pontos de atencao identificados. Encaminhe ao grupo financeiro e registre a aprovacao.</p>'
+          +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
+          +'<div><label style="font-size:11px;font-weight:700;color:#1565c0">DIRETOR *</label>'
+          +'<input id="m5apDirNome" type="text" placeholder="Nome" style="border:2px solid #93c5fd;border-radius:8px;padding:8px 12px;font-size:13px;background:#f0f9ff;outline:none;width:100%;box-sizing:border-box;margin-top:4px"></div>'
+          +'<div><label style="font-size:11px;font-weight:700;color:#1565c0">DATA E HORA *</label>'
+          +'<input id="m5apDirData" type="datetime-local" style="border:2px solid #93c5fd;border-radius:8px;padding:8px 12px;font-size:13px;background:#f0f9ff;outline:none;width:100%;box-sizing:border-box;margin-top:4px"></div></div>'
+          +'<button id="m5btnAprovDir" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:11px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-check"></i> Registrar aprovacao do diretor</button>';
+        _card.appendChild(_div);
+        setTimeout(function(){
+          var _b=document.querySelector('#m5btnAprovDir'); if(!_b)return;
+          _b.onclick=function(){
+            var nome=(document.querySelector('#m5apDirNome').value||'').trim();
+            var data=(document.querySelector('#m5apDirData').value||'').trim();
+            if(!nome){document.querySelector('#m5apDirNome').style.borderColor='#dc2626';document.querySelector('#m5apDirNome').focus();return;}
+            if(!data){document.querySelector('#m5apDirData').style.borderColor='#dc2626';document.querySelector('#m5apDirData').focus();return;}
+            var dtF=new Date(data).toLocaleDateString('pt-BR')+' '+new Date(data).toLocaleTimeString('pt-BR');
+            var dtR=new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR');
+            S.aprovDir={diretor:nome,dataHoraMsg:dtF,operador:_opP,dataHoraRegistro:dtR};
+            window._mod5S=S;
+            _b.disabled=true; _b.innerHTML='<i class="ti ti-check"></i> Aprovado por '+nome;
+            _b.style.background='#16a34a';
+            document.querySelector('#m5apDirNome').disabled=true;
+            document.querySelector('#m5apDirData').disabled=true;
+            addCk('ok','ti-check','Aprovacao diretor: '+nome+' em '+dtF);
+            try{fbSaveHistoricoAnalise(D.cnpj.replace(/\D/g,''),{cnpj:D.cnpj,empresa:D.nome,aprovacao_diretor:S.aprovDir,responsavel:_opP,dataHora:dtR,modulo:'Modelo em Teste'});}catch(e){}
+          };
+        },300);
+      }
+    }
     // Rolar para o topo para ver o parecer
     window.scrollTo({top:0, behavior:'smooth'});
-    if(btn){ btn.innerHTML='<i class="ti ti-check"></i> Parecer gerado \u2014 veja no topo'; }
+    if(btn){ btn.innerHTML='<i class="ti ti-check"></i> Parecer gerado'; }
   }catch(err){
     if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-brain"></i> Gerar parecer inteligente'; }
   }
