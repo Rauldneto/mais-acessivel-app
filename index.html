@@ -6107,7 +6107,8 @@ function upDoc(n,inp){
 
 // Gerar parecer inteligente via IA
 async function gerarParecerIA(){
-  var btn = q('#m5btnParecerIA');
+  var q2=function(s){return document.querySelector(s);};
+  var btn = q2('#m5btnParecerIA');
   if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i> Gerando parecer...'; }
   // Usar D e S do escopo local (via window._mod5D/_mod5S)
   var D = window._mod5D || {};
@@ -6159,7 +6160,7 @@ async function gerarParecerIA(){
     var data = await resp.json();
     var texto = (data.content&&data.content[0])?data.content[0].text:'Não foi possível gerar o parecer.';
 
-    var pb = q('#m5pb');
+    var pb = q2('#m5pb');
     if(pb){
       // Formatar o texto preservando paragrafos
       var html = texto.split('\n').map(function(linha){
@@ -6170,9 +6171,9 @@ async function gerarParecerIA(){
       pb.innerHTML = '<div style="font-size:13px;color:#1e293b;line-height:1.7">'+html+'</div>';
     }
     // Adicionar/atualizar parecer no final (dentro do sv)
-    var svEl = q('#m5sv');
+    var svEl = q2('#m5sv');
     if(svEl){
-      var pbF = q('#m5pb_final');
+      var pbF = q2('#m5pb_final');
       if(!pbF){
         pbF = document.createElement('div');
         pbF.id = 'm5pb_final';
@@ -6180,7 +6181,7 @@ async function gerarParecerIA(){
         pbF.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><i class="ti ti-robot" style="font-size:22px;color:#d97706"></i><div style="font-size:15px;font-weight:700;color:#92400e">Parecer Inteligente \u2014 An\u00e1lise de Risco</div></div><div id="m5pb_ftxt"></div>';
         svEl.appendChild(pbF);
       }
-      var pbFt = q('#m5pb_ftxt');
+      var pbFt = q2('#m5pb_ftxt');
       if(pbFt) pbFt.innerHTML = '<div style="font-size:13px;color:#1e293b;line-height:1.7">'+html+'</div>';
       pbF.scrollIntoView({behavior:'smooth', block:'start'});
     }
@@ -6219,6 +6220,7 @@ function salvarAnaliseMod5(){
 
 // Imprimir / gerar PDF
 function imprimirMod5(){
+  var q2=document.querySelector.bind(document);
   var D=window._mod5D||{}; var S=window._mod5S||{};
   var cond_txt = {
     '100':'Aprovado — 100% boleto sem entrada',
