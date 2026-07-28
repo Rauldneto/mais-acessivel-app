@@ -4932,7 +4932,9 @@ function renderModeloEmTeste(){
         D.cidade=_cidNome;
         D.estado=_estSig;
         D.cep=est.cep||'';
-        window._mod5D=D; window._mod5S=S; // atualizar referencias globais
+        window._mod5D=D; window._mod5S=S;
+        window._mod5calcCond=calcCond;
+        window._mod5tStr=tStr;
         processarE1();
       }catch(err){
         var pb2=q('#m5pb');
