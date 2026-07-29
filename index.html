@@ -208,6 +208,7 @@ const FIREBASE_USERS_PATH = "usuarios";
 const FIREBASE_LOGS_PATH  = "acessos";
 const FIREBASE_IA_CONFIG_PATH = "iaConfig";
 const FIREBASE_HISTORICO_PATH = "historicoAnaliseCredito";
+const FIREBASE_APROVACOES_PATH = "aprovacoesPendentes";
 
 function hashSimple(str){
   // Simple but consistent hash for passwords
@@ -276,7 +277,27 @@ async function fbSaveIAConfig(texto){
   });
 }
 
-// Histórico de Análises de Crédito por CNPJ (retenção mínima 3 anos)
+// ══ Fila de Aprovações Pendentes (aba Aprovação) ══
+async function fbSalvarAprovacaoPendente(id,data){
+  try{
+    await fetch(FIREBASE_DB+'/'+FIREBASE_APROVACOES_PATH+'/'+id+'.json',{
+      method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(data)
+    });
+  }catch(e){}
+}
+
+async function fbGetAprovacoesPendentes(){
+  try{
+    var r=await fetch(FIREBASE_DB+'/'+FIREBASE_APROVACOES_PATH+'.json');
+    return r.ok?await r.json():null;
+  }catch(e){return null;}
+}
+
+async function fbDeleteAprovacaoPendente(id){
+  try{ await fetch(FIREBASE_DB+'/'+FIREBASE_APROVACOES_PATH+'/'+id+'.json',{method:'DELETE'}); }catch(e){}
+}
+
 function fbHistChaveCnpj(cnpj){
   return (cnpj||'').replace(/\D/g,'');
 }
@@ -874,7 +895,7 @@ function renderAdmin(){
   var divAbas=document.createElement('div');
   divAbas.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap';
   divAbas.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso &agrave;s abas:</span>';
-  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Aba 4'},{id:'mod5',label:'Modelo em Teste'}].forEach(function(ab){
+  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Aba 4'},{id:'mod5',label:'Modelo em Teste'},{id:'mod6',label:'Aprovação'}].forEach(function(ab){
     var lbl=document.createElement('label');
     lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
     var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=false;
@@ -2626,10 +2647,11 @@ function renderModuloNav(){
     {id:'mod2',  icon:'📁', label:'Análise de Crédito'},
     {id:'mod3', icon:'🤖', label:'Ace IA'},
     {id:'mod4',  icon:'📁', label:'Aba 4'},
-    {id:'mod5',  icon:'🧪', label:'Modelo em Teste'}
+    {id:'mod5',  icon:'🧪', label:'Modelo em Teste'},
+    {id:'mod6',  icon:'✅', label:'Aprovação'}
   ];
   // Mapeamento id antigo -> novo
-  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5'};
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6'};
   // Admin ve tudo; outros so veem abas permitidas
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
@@ -2697,6 +2719,8 @@ function renderApp(){
     main.appendChild(renderModuloVazio(4));
   } else if(STATE.modulo==='mod5'){
     main.appendChild(renderModeloEmTeste());
+  } else if(STATE.modulo==='mod6'){
+    main.appendChild(renderAprovacoes());
   }
   wrap.appendChild(main);
   if(STATE.showConfigPanel && STATE.roleLogado==='admin'){
@@ -6142,6 +6166,160 @@ function upDoc(n,inp){
 // ============================================================
 
 // Gerar parecer inteligente via IA
+// ══ Aba Aprovação — fila de análises aguardando decisão do diretor ══
+function renderAprovacoes(){
+  var wrap=document.createElement('div');
+  wrap.style.cssText='padding:20px;max-width:900px;margin:0 auto';
+  wrap.innerHTML='<h2 style="font-size:18px;color:#1e293b;margin-bottom:4px;display:flex;align-items:center;gap:8px">\u2705 Aprova\u00e7\u00e3o de An\u00e1lises de Cr\u00e9dito</h2>'
+    +'<p style="font-size:12px;color:#64748b;margin-bottom:16px">An\u00e1lises com pontos de aten\u00e7\u00e3o enviadas pelos colaboradores, aguardando sua decis\u00e3o.</p>'
+    +'<div id="aprovLista"><p style="font-size:13px;color:#94a3b8">Carregando pend\u00eancias...</p></div>';
+
+  var condTxt={'100':'100% boleto sem entrada','30':'30% entrada + boleto','50':'50% entrada + boleto','70':'70% entrada + 1 parcela','av':'Somente \u00e0 vista','pend':'Aguardando defini\u00e7\u00e3o'};
+
+  async function carregar(){
+    var lista=document.getElementById('aprovLista');
+    var dados=await fbGetAprovacoesPendentes();
+    var itens=[];
+    if(dados) Object.entries(dados).forEach(function(e){ if(e[1]&&e[1].status==='pendente') itens.push({id:e[0],v:e[1]}); });
+    itens.sort(function(a,b){ return (a.v.timestamp||'')<(b.v.timestamp||'')?1:-1; });
+    if(!lista) return;
+    if(itens.length===0){
+      lista.innerHTML='<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:16px;font-size:13px;color:#166534">\u2705 Nenhuma an\u00e1lise aguardando aprova\u00e7\u00e3o no momento.</div>';
+      return;
+    }
+    lista.innerHTML='';
+    itens.forEach(function(item){
+      var v=item.v;
+      var card=document.createElement('div');
+      card.style.cssText='background:#fff;border:2px solid #fbbf24;border-radius:12px;margin-bottom:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06)';
+      var head=document.createElement('div');
+      head.style.cssText='padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;background:#fffbeb';
+      head.innerHTML='<div><div style="font-size:14px;font-weight:700;color:#1e293b">'+(v.empresa||'Empresa')+'</div>'
+        +'<div style="font-size:11px;color:#78350f;margin-top:2px">CNPJ '+(v.cnpj||'')+' &nbsp;\u2022&nbsp; Solicitado por '+(v.solicitante||'?')+' em '+(v.dataHoraSolicitacao||'')+'</div></div>'
+        +'<div style="text-align:right"><span style="font-size:11px;font-weight:700;color:#92400e;background:#fef9c3;border:1px solid #fde047;border-radius:20px;padding:4px 10px">\u26a0\ufe0f Aten\u00e7\u00e3o</span></div>';
+      var body=document.createElement('div');
+      body.style.cssText='display:none;padding:16px;border-top:1px solid #fde68a';
+
+      var checksHtml='';
+      (v.checks||[]).forEach(function(k){
+        var CKC={ok:{bg:'#dcfce7',co:'#166534',bd:'#86efac'},neg:{bg:'#fee2e2',co:'#991b1b',bd:'#fca5a5'},warn:{bg:'#fef9c3',co:'#854d0e',bd:'#fde047'}};
+        var cc=CKC[k.cls]||{bg:'#f1f5f9',co:'#334155',bd:'#cbd5e1'};
+        checksHtml+='<div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;padding:7px 11px;border-radius:8px;margin-bottom:4px;background:'+cc.bg+';color:'+cc.co+';border:1px solid '+cc.bd+'"><i class="ti '+(k.ico||'ti-info-circle')+'"></i><span>'+k.txt+'</span></div>';
+      });
+
+      body.innerHTML='<div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;margin-bottom:8px">Pontos verificados</div>'
+        +checksHtml
+        +'<div style="margin-top:10px;background:#f9fafb;border:2px solid #e2e8f0;border-radius:10px;padding:12px">'
+        +'<div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;margin-bottom:6px"><i class="ti ti-message-dots"></i> Justificativa do colaborador</div>'
+        +'<p style="font-size:13px;color:#1e293b;line-height:1.6;margin:0">'+(v.mensagem_colaborador||'\u2014')+'</p></div>'
+        +'<div style="margin-top:10px;font-size:12px;color:#475569"><strong>Condi\u00e7\u00e3o sugerida:</strong> '+(condTxt[v.condicao_sugerida]||v.condicao_sugerida||'\u2014')+'</div>'
+        +'<div id="parecerIni_'+item.id+'" style="margin-top:10px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px"></div>'
+        +'<div style="margin-top:14px;border-top:1.5px solid #e2e8f0;padding-top:14px">'
+        +'<label style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;display:block;margin-bottom:6px">Sua decis\u00e3o *</label>'
+        +'<textarea id="resp_'+item.id+'" rows="3" placeholder="Ex: Aprovado. Condi\u00e7\u00e3o: 30% entrada + boleto." style="width:100%;border:2px solid #cbd5e1;border-radius:8px;padding:9px 12px;font-size:13px;background:#fff;color:#0f172a;outline:none;resize:vertical;box-sizing:border-box"></textarea>'
+        +'<div style="display:flex;gap:8px;margin-top:10px">'
+        +'<button id="aprov_'+item.id+'" style="flex:1;background:linear-gradient(135deg,#0f6e56,#16a34a);color:#fff;border:none;border-radius:8px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">\u2705 Aprovar</button>'
+        +'<button id="recus_'+item.id+'" style="flex:1;background:linear-gradient(135deg,#b91c1c,#7f1d1d);color:#fff;border:none;border-radius:8px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">\u274c Recusar</button>'
+        +'</div><p id="msg_'+item.id+'" style="font-size:12px;margin-top:8px;min-height:14px"></p></div>';
+
+      head.onclick=function(){
+        var aberto=body.style.display==='block';
+        body.style.display=aberto?'none':'block';
+        if(!aberto){
+          var pI=document.getElementById('parecerIni_'+item.id);
+          if(pI&&!pI.dataset.render){ pI.innerHTML=formatParecerHTML(v.parecer_ia_texto||''); pI.dataset.render='1'; }
+        }
+      };
+      card.appendChild(head); card.appendChild(body);
+      lista.appendChild(card);
+
+      setTimeout(function(){
+        var btnA=document.getElementById('aprov_'+item.id);
+        var btnR=document.getElementById('recus_'+item.id);
+        if(btnA) btnA.onclick=function(){ processarAprovacao(item.id,v,'aprovado'); };
+        if(btnR) btnR.onclick=function(){ processarAprovacao(item.id,v,'recusado'); };
+      },100);
+    });
+  }
+
+  async function processarAprovacao(id,v,decisao){
+    var msgEl=document.getElementById('msg_'+id);
+    var resp=(document.getElementById('resp_'+id).value||'').trim();
+    if(!resp||resp.length<10){
+      document.getElementById('resp_'+id).style.borderColor='#dc2626';
+      if(msgEl){msgEl.style.color='#dc2626';msgEl.textContent='Escreva sua decis\u00e3o (m\u00ednimo 10 caracteres).';}
+      return;
+    }
+    var btnA=document.getElementById('aprov_'+id), btnR=document.getElementById('recus_'+id);
+    if(btnA)btnA.disabled=true; if(btnR)btnR.disabled=true;
+    if(msgEl){msgEl.style.color='#2563eb';msgEl.textContent='Atualizando parecer com sua decis\u00e3o...';}
+
+    var checks_txt=(v.checks||[]).map(function(ck){
+      return (ck.cls==='ok'?'[OK]':ck.cls==='neg'?'[NEG]':'[ATEN]')+' '+ck.txt;
+    }).join('\n');
+    var diretor=STATE.usuarioLogado||'diretor';
+    var dtR=new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR');
+
+    var prompt='Voce e um analista de credito empresarial experiente.\n'
+      +'Um parecer inicial ja foi gerado para esta analise, e o DIRETOR agora registrou sua decisao final ('+(decisao==='aprovado'?'APROVADO':'RECUSADO')+').\n'
+      +'Reescreva o PARECER INTELIGENTE completo, refletindo a decisao do diretor como definitiva.\n\n'
+      +'EMPRESA: '+(v.empresa||'')+' ('+(v.fantasia||'')+')\n'
+      +'CNPJ: '+(v.cnpj||'')+'\n'
+      +'SITUACAO: '+(v.situacao||'')+'\n'
+      +'SOCIO: '+(v.socio||'')+'\n\n'
+      +'PONTOS VERIFICADOS (com justificativas ja vinculadas):\n'+checks_txt+'\n\n'
+      +'MENSAGEM DO COLABORADOR AO SOLICITAR APROVACAO:\n'+(v.mensagem_colaborador||'')+'\n\n'
+      +'PARECER INICIAL GERADO ANTES DA DECISAO DO DIRETOR:\n'+(v.parecer_ia_texto||'')+'\n\n'
+      +'DECISAO / RESPOSTA DO DIRETOR ('+diretor+'): '+(decisao==='aprovado'?'APROVADO. ':'RECUSADO. ')+resp+'\n\n'
+      +'ESTRUTURA OBRIGATORIA (use EXATAMENTE estes marcadores em linhas separadas):\n'
+      +'##RESULTADO## <resultado final em uma linha clara, refletindo a decisao do diretor>\n'
+      +'##EMPRESA## <nome, CNPJ, situacao e tempo>\n'
+      +'##POSITIVOS## <item1 >> item2 >> item3>\n'
+      +'##ATENCAO## <ponto de atencao >> justificativa correspondente >> ... ou NENHUM>\n'
+      +'##CONDICAO## <condicao de pagamento definitiva aprovada pelo diretor, ou "Negado" se recusado>\n'
+      +'##CONCLUSAO## <2-3 frases finais objetivas, mencionando a decisao do diretor>\n'
+      +'\nIMPORTANTE: para cada item de ##ATENCAO##, junte sempre o motivo e sua justificativa correspondente no mesmo item (nunca separe). APENAS esses marcadores, max 350 palavras, portugues brasileiro.';
+
+    var textoFinal='';
+    try{
+      var resp2=await fetch('https://soft-limit-b3a1.rauldias.workers.dev',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,messages:[{role:'user',content:prompt}]})
+      });
+      var data=await resp2.json();
+      textoFinal=(data.content&&data.content[0])?data.content[0].text:'';
+    }catch(e){}
+
+    try{
+      await fbSaveHistoricoAnalise((v.cnpj||'').replace(/\D/g,''),{
+        cnpj:v.cnpj,empresa:v.empresa,fantasia:v.fantasia,socio:v.socio,capital:v.capital,
+        situacao:v.situacao,meses_empresa:v.meses_empresa,meses_socio:v.meses_socio,
+        checks:v.checks,
+        condicao_pagamento:v.condicao_sugerida,
+        mensagem_colaborador:v.mensagem_colaborador,
+        solicitante:v.solicitante,
+        decisao:decisao,
+        parecer_diretor:resp,
+        parecer_atualizado:textoFinal,
+        aprovacao_diretor:{diretor:diretor,decisao:decisao,parecerDiretor:resp,dataHoraRegistro:dtR},
+        responsavel:diretor,
+        dataHora:dtR,
+        timestamp:new Date().toISOString(),
+        modulo:'Modelo em Teste'
+      });
+    }catch(e){}
+
+    try{ await fbDeleteAprovacaoPendente(id); }catch(e){}
+
+    if(msgEl){msgEl.style.color='#16a34a';msgEl.textContent='\u2713 An\u00e1lise '+(decisao==='aprovado'?'aprovada':'recusada')+' e registrada no hist\u00f3rico.';}
+    setTimeout(carregar,1200);
+  }
+
+  carregar();
+  return wrap;
+}
+
+
 function formatParecerHTML(texto){
   var html = '';
   var linhas = texto.split('\n');
@@ -6314,50 +6492,55 @@ async function gerarParecerIA(){
     }
     var _mS=window._mod5S||{};
     var _twP=_mS.checks&&_mS.checks.some(function(ck){return ck.cls==='warn';});
-    if(_twP&&!_mS.aprovDir&&!document.querySelector('#m5aprov_dir_top')){
+    if(_twP&&!_mS.aprovDir&&!_mS.aprovacaoEnviada&&!document.querySelector('#m5aprov_dir_top')){
       var _cT=document.querySelector('#m5card_resultado'), _oP=STATE.usuarioLogado||'desconhecido';
       if(_cT){
         var _dA=document.createElement('div'); _dA.id='m5aprov_dir_top';
         _dA.style.cssText='background:#fff;border:3px solid #1565c0;border-radius:12px;padding:16px;margin-top:14px';
+        var _justPre=(_mS.justWarn||_mS.justEndTerceiro||_mS.justMaps||_mS.justTerceiro||_mS.decl_divergencia||'').toString();
         _dA.innerHTML='<div style="font-size:14px;font-weight:700;color:#1565c0;margin-bottom:10px">\uD83D\uDEE1 Aprovacao do Diretor Obrigatoria</div>'
-          +'<p style="font-size:12px;color:#1e3a5f;margin-bottom:12px">Pontos de atencao identificados. Encaminhe o parecer ao grupo financeiro via WhatsApp e registre a aprovacao abaixo.</p>'
-          +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
-          +'<div><label style="font-size:11px;font-weight:700;color:#1565c0">DIRETOR *</label><input id="m5apDirNome" type="text" placeholder="Nome" style="border:2px solid #93c5fd;border-radius:8px;padding:8px 12px;font-size:13px;background:#f0f9ff;outline:none;width:100%;box-sizing:border-box;margin-top:4px"></div>'
-          +'<div><label style="font-size:11px;font-weight:700;color:#1565c0">DATA E HORA *</label><input id="m5apDirData" type="datetime-local" style="border:2px solid #93c5fd;border-radius:8px;padding:8px 12px;font-size:13px;background:#f0f9ff;outline:none;width:100%;box-sizing:border-box;margin-top:4px"></div></div>'
-          +'<button id="m5btnAprovDir" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:11px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">\u2713 Registrar aprovacao do diretor</button>';
+          +'<p style="font-size:12px;color:#1e3a5f;margin-bottom:12px">Pontos de atencao identificados. Escreva a justificativa para o diretor e envie para aprovacao \u2014 ele ira analisar e decidir na aba <strong>Aprova\u00e7\u00e3o</strong> do app.</p>'
+          +'<label style="font-size:11px;font-weight:700;color:#1565c0;text-transform:uppercase;display:block;margin-bottom:6px">Justificativa para o diretor *</label>'
+          +'<textarea id="m5justEnvio" rows="4" placeholder="Descreva o motivo dos pontos de atencao e o que o cliente apresentou como justificativa." style="width:100%;border:2px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:13px;background:#f0f9ff;color:#0f172a;outline:none;resize:vertical;box-sizing:border-box">'+_justPre.replace(/</g,'&lt;')+'</textarea>'
+          +'<button id="m5btnEnviarAprov" style="margin-top:10px;background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:11px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-send"></i> Enviar para aprova\u00e7\u00e3o do diretor</button>';
         _cT.appendChild(_dA);
         setTimeout(function(){
-          var _bA=document.querySelector('#m5btnAprovDir'); if(!_bA)return;
-          _bA.onclick=function(){
-            var nome=(document.querySelector('#m5apDirNome').value||'').trim();
-            var data=(document.querySelector('#m5apDirData').value||'').trim();
-            if(!nome){document.querySelector('#m5apDirNome').style.borderColor='#dc2626';document.querySelector('#m5apDirNome').focus();return;}
-            if(!data){document.querySelector('#m5apDirData').style.borderColor='#dc2626';document.querySelector('#m5apDirData').focus();return;}
-            var dtF=new Date(data).toLocaleDateString('pt-BR')+' '+new Date(data).toLocaleTimeString('pt-BR');
+          var _bE=document.querySelector('#m5btnEnviarAprov'); if(!_bE)return;
+          _bE.onclick=async function(){
+            var msg=(document.querySelector('#m5justEnvio').value||'').trim();
+            if(!msg||msg.length<10){document.querySelector('#m5justEnvio').style.borderColor='#dc2626';document.querySelector('#m5justEnvio').focus();return;}
+            _bE.disabled=true; _bE.innerHTML='<i class="ti ti-loader"></i> Enviando...';
+            document.querySelector('#m5justEnvio').disabled=true;
+            var _D=window._mod5D||{}, _S2=window._mod5S||{};
             var dtR=new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR');
-            var _mS2=window._mod5S||{};
-            _mS2.aprovDir={diretor:nome,dataHoraMsg:dtF,operador:_oP,dataHoraRegistro:dtR};
-            window._mod5S=_mS2;
-            _bA.disabled=true; _bA.innerHTML='\u2713 Aprovado por '+nome+' em '+dtF; _bA.style.background='#16a34a';
-            document.querySelector('#m5apDirNome').disabled=true; document.querySelector('#m5apDirData').disabled=true;
-            var _dF=document.createElement('div'); _dF.style.cssText='margin-top:14px;padding-top:14px;border-top:1.5px solid #e2e8f0';
-            _dF.innerHTML='<label style="font-size:11px;font-weight:700;color:#1565c0;text-transform:uppercase;display:block;margin-bottom:6px">Resposta do Diretor sobre a analise *</label>'
-              +'<textarea id="m5parecerDir" rows="3" placeholder="Ex: Aprovado. Condicao: 30% entrada + boleto." style="width:100%;border:2px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:13px;background:#f0f9ff;outline:none;resize:vertical;box-sizing:border-box"></textarea>'
-              +'<button id="m5btnGerarParecerFinal" style="margin-top:10px;background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border:none;border-radius:8px;padding:12px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-brain"></i> Gerar parecer atualizado</button>';
-            _dA.appendChild(_dF);
-            setTimeout(function(){
-              var _bG=document.querySelector('#m5btnGerarParecerFinal'); if(!_bG)return;
-              _bG.onclick=function(){
-                var pD=(document.querySelector('#m5parecerDir').value||'').trim();
-                if(!pD||pD.length<10){document.querySelector('#m5parecerDir').style.borderColor='#dc2626';document.querySelector('#m5parecerDir').focus();return;}
-                document.querySelector('#m5parecerDir').disabled=true;
-                var _mS3=window._mod5S||{}; if(_mS3.aprovDir) _mS3.aprovDir.parecerDiretor=pD; window._mod5S=_mS3;
-                gerarParecerFinalDiretor(pD);
-              };
-            },200);
-            var _D2=window._mod5D||{}; try{fbSaveHistoricoAnalise((_D2.cnpj||'').replace(/\D/g,''),{cnpj:_D2.cnpj,empresa:_D2.nome,aprovacao_diretor:_mS2.aprovDir,responsavel:_oP,dataHora:dtR,modulo:'Modelo em Teste'});}catch(e){}
+            var id='ap_'+Date.now();
+            var registro={
+              cnpj:_D.cnpj,empresa:_D.nome,fantasia:_D.fantasia,socio:_D.socio,capital:_D.capital,
+              situacao:_S2.sit,meses_empresa:_S2.mE,meses_socio:_S2.mS,
+              checks:_S2.checks,
+              condicao_sugerida:(window._mod5calcCond?window._mod5calcCond():''),
+              parecer_ia_texto:texto,
+              mensagem_colaborador:msg,
+              solicitante:_oP,
+              dataHoraSolicitacao:dtR,
+              timestamp:new Date().toISOString(),
+              status:'pendente'
+            };
+            try{
+              await fbSalvarAprovacaoPendente(id,registro);
+              _S2.aprovacaoEnviada=true; _S2.aprovacaoPendenteId=id; window._mod5S=_S2;
+              _bE.innerHTML='\u2713 Enviado para aprova\u00e7\u00e3o em '+dtR;
+              _bE.style.background='#16a34a';
+              var _info=document.createElement('div');
+              _info.style.cssText='margin-top:10px;font-size:12px;color:#1565c0;background:#eff6ff;border:1px solid #93c5fd;border-radius:6px;padding:8px 10px';
+              _info.innerHTML='Aguardando an\u00e1lise do diretor na aba <strong>Aprova\u00e7\u00e3o</strong>.';
+              _dA.appendChild(_info);
+            }catch(e){
+              _bE.disabled=false; _bE.innerHTML='<i class="ti ti-send"></i> Enviar para aprova\u00e7\u00e3o do diretor';
+              document.querySelector('#m5justEnvio').disabled=false;
+            }
           };
-        },300);
+        },200);
       }
     }
     window.scrollTo({top:0, behavior:'smooth'});
