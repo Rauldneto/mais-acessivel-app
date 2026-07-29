@@ -4712,15 +4712,11 @@ function renderModeloEmTeste(){
 
   var S={
     checks:[],negado:false,protestoDiretor:false,
-    excecao1:null,excecao2:null,excecao_doc:null,
-    justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,
-    precisaAprovDir:false,justEndTerceiro:null,aprovDir:null,
     mE:0,mS:0,nS:1,sit:'',
     endTerceiro:false,
     simDoc:{1:0,2:0,3:0},simLoc:0,
     mOk:false,lOk:false
   };
-  window._mod5S=S;
   var D={nome:'',fantasia:'',cnpj:'',socio:'',capital:'',endereco:'',cidade:'',estado:'',cep:''};
   window._mod5D=D; // expor globalmente
 
@@ -4816,7 +4812,6 @@ function renderModeloEmTeste(){
     if(S.mS<12&&S.nS>1)return '70';
     if(S.protestoDiretor)return '30';
     if(S.mE>=12&&S.mE<24)return '50';
-    // Se houver warns e sem aprovacao do diretor, pendente
     if(S.checks.some(function(ck){return ck.cls==='warn';})&&!S.aprovDir) return 'pend';
     return '100';
   }
@@ -4857,13 +4852,12 @@ function renderModeloEmTeste(){
       fbSaveHistoricoAnalise(D.cnpj.replace(/\D/g,''),_reg);
     }catch(_esave){console.warn('Erro ao salvar historico:',_esave);}
     var M={
-      'pend':{bg:'#eff6ff',br:'#1565c0',co:'#1565c0',ic:'\u23f3',t:'Aguardando Aprova\u00e7\u00e3o do Diretor',s:'Pontos de aten\u00e7\u00e3o identificados. Aguarde aprova\u00e7\u00e3o.',p:'Pendente \u2014 n\u00e3o confirmar venda at\u00e9 aprovac\u00e3o do diretor.'},
       '100':{bg:'#E8F5E9',br:'#2E7D32',co:'#1B5E20',ic:'\u2705',t:'Aprovado \u2014 100% boleto sem entrada',s:'Todas as etapas positivas.',p:'Faturamento integral no boleto, sem entrada.'},
       '30': {bg:'#E3F2FD',br:'#1565C0',co:'#1565C0',ic:'\u2705',t:'Aprovado \u2014 30% entrada + boleto',s:'Protesto liberado pelo diretor.',p:'30% de entrada + restante no boleto.'},
       '50': {bg:'#FFF8E1',br:'#F9A825',co:'#7B4F00',ic:'\u26a0\ufe0f',t:'Aten\u00e7\u00e3o \u2014 50% entrada + boleto',s:'Empresa entre 12 e 24 meses.',p:'50% de entrada + restante no boleto.'},
       '70': {bg:'#FFF3E0',br:'#E65100',co:'#BF360C',ic:'\u26a0\ufe0f',t:'Aten\u00e7\u00e3o \u2014 70% entrada + 1 parcela',s:'Empresa ou s\u00f3cio com menos de 12 meses.',p:'70% de entrada + 1 parcela no boleto.'},
       'av': {bg:'#FFEBEE',br:'#B71C1C',co:'#B71C1C',ic:'\u274c',t:'Negado \u2014 somente \u00e0 vista',s:'Negativa identificada no processo.',p:'Venda somente \u00e0 vista. Faturamento: aprovacao da diretoria.'},
-      'pend':{bg:'#eff6ff',br:'#1565c0',co:'#1565c0',ic:'\u23f3',t:'Aguardando Aprova\u00e7\u00e3o do Diretor',s:'Pontos de aten\u00e7\u00e3o identificados.',p:'Condi\u00e7\u00e3o de pagamento ser\u00e1 definida ap\u00f3s aprova\u00e7\u00e3o.'}
+      'pend':{bg:'#eff6ff',br:'#1565c0',co:'#1565c0',ic:'\u23f3',t:'Aguardando Aprova\u00e7\u00e3o do Diretor',s:'Pontos de aten\u00e7\u00e3o. Condi\u00e7\u00e3o definida ap\u00f3s aprova\u00e7\u00e3o.',p:'N\u00e3o confirmar venda at\u00e9 aprova\u00e7\u00e3o do diretor.'}
     };
     var v=M[c];
     sv.innerHTML='';
@@ -4871,7 +4865,37 @@ function renderModeloEmTeste(){
     var _temWarn=S.checks.some(function(ck){return ck.cls==='warn';});
     if(_temWarn&&!S.aprovDir){
       var _opv=STATE.usuarioLogado||'desconhecido';
-      sv.innerHTML='';  }
+      sv.innerHTML='<div style="background:#fff;border:3px solid #1565c0;border-radius:14px;padding:18px 20px">'
+        +'<div style="font-size:15px;font-weight:700;color:#1565c0;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-shield-check" style="font-size:20px"></i> Aprova\u00e7\u00e3o do Diretor Obrigat\u00f3ria</div>'
+        +'<p style="font-size:13px;color:#1e3a5f;line-height:1.7;margin-bottom:14px">Esta an\u00e1lise possui <strong>pontos de aten\u00e7\u00e3o</strong>. A aprova\u00e7\u00e3o de um diretor \u00e9 obrigat\u00f3ria. Encaminhe o parecer ao grupo financeiro via WhatsApp e aguarde.</p>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'
+        +'<div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:700;color:#1565c0;text-transform:uppercase">Diretor que aprovou *</label>'
+        +'<input id="m5apDirNome" type="text" placeholder="Nome do diretor" style="border:2px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:13px;background:#f0f9ff;color:#0f172a;outline:none;margin-top:4px"></div>'
+        +'<div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:700;color:#1565c0;text-transform:uppercase">Data e hora *</label>'
+        +'<input id="m5apDirData" type="datetime-local" style="border:2px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:13px;background:#f0f9ff;color:#0f172a;outline:none;margin-top:4px"></div></div>'
+        +'<button id="m5btnAprovDir" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:12px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-check"></i> Registrar aprova\u00e7\u00e3o do diretor</button>'
+        +'</div>';
+      setTimeout(function(){
+        var _b=document.querySelector('#m5btnAprovDir'); if(!_b)return;
+        _b.onclick=function(){
+          var nome=(document.querySelector('#m5apDirNome').value||'').trim();
+          var data=(document.querySelector('#m5apDirData').value||'').trim();
+          if(!nome){document.querySelector('#m5apDirNome').style.borderColor='#dc2626';document.querySelector('#m5apDirNome').focus();return;}
+          if(!data){document.querySelector('#m5apDirData').style.borderColor='#dc2626';document.querySelector('#m5apDirData').focus();return;}
+          var dtF=new Date(data).toLocaleDateString('pt-BR')+' '+new Date(data).toLocaleTimeString('pt-BR');
+          var dtR=new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR');
+          S.aprovDir={diretor:nome,dataHoraMsg:dtF,operador:_opv,dataHoraRegistro:dtR};
+          window._mod5S=S;
+          _b.disabled=true; _b.innerHTML='<i class="ti ti-check"></i> Aprovado por '+nome;
+          _b.style.background='#16a34a';
+          document.querySelector('#m5apDirNome').disabled=true;
+          document.querySelector('#m5apDirData').disabled=true;
+          addCk('ok','ti-check','Aprova\u00e7\u00e3o diretor: '+nome+' em '+dtF);
+          try{fbSaveHistoricoAnalise(D.cnpj.replace(/\D/g,''),{cnpj:D.cnpj,empresa:D.nome,aprovacao_diretor:S.aprovDir,responsavel:_opv,dataHora:dtR,modulo:'Modelo em Teste'});}catch(e){}
+        };
+      },300);
+    }
+  }
 
   function limpar(){
     S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,precisaAprovDir:false,justEndTerceiro:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},simLoc:0,mOk:false,lOk:false};
@@ -6004,10 +6028,9 @@ function upDoc(n,inp){
       '30': {bg:'#e3f2fd',br:'#1565c0',co:'#1565c0',ic:'\u2705',t:'Aprovado \u2014 30% entrada + boleto',s:'Protesto em cart\u00f3rio liberado por diretor. Demais etapas positivas.',p:'30% de entrada no pedido + restante faturado no boleto.'},
       '50': {bg:'#fff8e1',br:'#f9a825',co:'#7b4f00',ic:'\u26a0\ufe0f',t:'Aprovado com aten\u00e7\u00e3o \u2014 50% entrada + boleto',s:'Empresa entre 12 e 24 meses de exist\u00eancia.',p:'50% de entrada na aprova\u00e7\u00e3o do pedido + restante no boleto.'},
       '70': {bg:'#fff3e0',br:'#e65100',co:'#bf360c',ic:'\u26a0\ufe0f',t:'Aprovado com aten\u00e7\u00e3o \u2014 70% entrada + 1 parcela',s:'Empresa ou s\u00f3cio com menos de 12 meses.',p:'70% de entrada + saldo em 1 parcela no boleto.'},
-      'av': {bg:'#ffebee',br:'#b71c1c',co:'#b71c1c',ic:'\u274c',t:'Negado \u2014 somente \u00e0 vista',s:'Negativa identificada no processo de an\u00e1lise.',p:'Venda somente \u00e0 vista. Faturamento: apenas com aprova\u00e7\u00e3o da diretoria.'},
-      'pend':{bg:'#eff6ff',br:'#1565c0',co:'#1565c0',ic:'\u23f3',t:'Aguardando Aprova\u00e7\u00e3o do Diretor',s:'Pontos de aten\u00e7\u00e3o. Aguardando aprova\u00e7\u00e3o.',p:'N\u00e3o confirmar venda at\u00e9 aprovac\u00e3o do diretor.'}
+      'av': {bg:'#ffebee',br:'#b71c1c',co:'#b71c1c',ic:'\u274c',t:'Negado \u2014 somente \u00e0 vista',s:'Negativa identificada no processo de an\u00e1lise.',p:'Venda somente \u00e0 vista. Faturamento: apenas com aprova\u00e7\u00e3o da diretoria.'}
     };
-    var v=M[cond]||M['pend']||M['av'];
+    var v=M[cond];
 
     // Montar resumo das etapas concluidas
     var resumoEtapas='';
@@ -6159,9 +6182,9 @@ async function gerarParecerIA(){
     + '##EMPRESA## <nome, CNPJ, situacao e tempo>\n'
     + '##POSITIVOS## <item1 >> item2 >> item3>\n'
     + '##ATENCAO## <item1 >> item2 ou NENHUM>\n'
-    + '##CONDICAO## <condicao de pagamento exata>\n'
+    + '##CONDICAO## <condicao de pagamento ou AGUARDANDO APROVACAO DO DIRETOR>\n'
     + '##CONCLUSAO## <2-3 frases finais objetivas>\n'
-    + '\nIMPORTANTE: use APENAS esses marcadores, seja objetivo, max 350 palavras, em portugues brasileiro.';  
+    + '\nIMPORTANTE: APENAS esses marcadores, max 350 palavras, portugues brasileiro.';  
 
   try{
     var resp = await fetch('https://soft-limit-b3a1.rauldias.workers.dev',{
@@ -6175,149 +6198,98 @@ async function gerarParecerIA(){
     var pb = q2('#m5pb');
     if(pb){
       // Formatar o texto preservando paragrafos
-      // Formatar parecer com marcadores
+      // Formatar parecer profissionalmente
       var html = '';
       var linhas = texto.split('\n');
       linhas.forEach(function(linha){
-        linha = linha.trim();
-        if(!linha) return;
+        linha = linha.trim(); if(!linha) return;
         if(linha.startsWith('##RESULTADO##')){
-          var txt = linha.replace('##RESULTADO##','').trim();
-          var isNeg = /negado|vista|nao aprovado/i.test(txt);
-          var isWarn = /aten/i.test(txt);
-          var bg = isNeg?'#fee2e2':isWarn?'#fef9c3':'#dcfce7';
-          var co = isNeg?'#b71c1c':isWarn?'#92400e':'#166534';
-          var bd = isNeg?'#dc2626':isWarn?'#f59e0b':'#16a34a';
-          var ic = isNeg?'\u274c':isWarn?'\u26a0\ufe0f':'\u2705';
-          html += '<div style="background:'+bg+';border:2px solid '+bd+';border-radius:10px;padding:14px 16px;margin-bottom:14px">'
-                + '<div style="font-size:16px;font-weight:800;color:'+co+'">'+ic+' '+txt+'</div>'
-                + '</div>';
+          var txt=linha.replace('##RESULTADO##','').trim();
+          var isNeg=/negado|vista/i.test(txt),isWarn=/aten|aguard/i.test(txt);
+          var bg=isNeg?'#fee2e2':isWarn?'#eff6ff':'#dcfce7',co=isNeg?'#b71c1c':isWarn?'#1565c0':'#166534',bd=isNeg?'#dc2626':isWarn?'#3b82f6':'#16a34a',ic=isNeg?'\u274c':isWarn?'\u23f3':'\u2705';
+          html+='<div style="background:'+bg+';border:2px solid '+bd+';border-radius:10px;padding:14px 16px;margin-bottom:14px"><div style="font-size:16px;font-weight:800;color:'+co+'">'+ic+' '+txt+'</div></div>';
         } else if(linha.startsWith('##EMPRESA##')){
-          var txt = linha.replace('##EMPRESA##','').trim();
-          html += '<div style="font-size:12px;color:#475569;background:#f8fafc;padding:8px 12px;border-radius:8px;margin-bottom:12px;border-left:3px solid #0f6e56">'
-                + txt+'</div>';
+          html+='<div style="font-size:12px;color:#475569;background:#f8fafc;padding:8px 12px;border-radius:8px;margin-bottom:12px;border-left:3px solid #0f6e56">'+linha.replace('##EMPRESA##','').trim()+'</div>';
         } else if(linha.startsWith('##POSITIVOS##')){
-          var txt = linha.replace('##POSITIVOS##','').trim();
-          html += '<div style="margin-bottom:14px">'
-                + '<div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7">\u2705 Pontos Positivos</div>';
-          txt.split('>>').filter(Boolean).forEach(function(p){
-            html += '<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #f0fdf4">'
-                  + '<span style="color:#16a34a;font-weight:700;flex-shrink:0">+</span>'
-                  + '<span style="font-size:13px;color:#1e293b;line-height:1.6">'+p.trim()+'</span></div>';
-          });
-          html += '</div>';
+          var txt=linha.replace('##POSITIVOS##','').trim();
+          html+='<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7">\u2705 Pontos Positivos</div>';
+          txt.split('>>').filter(Boolean).forEach(function(p){html+='<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #f0fdf4"><span style="color:#16a34a;font-weight:700">+</span><span style="font-size:13px;color:#1e293b;line-height:1.6">'+p.trim()+'</span></div>';});
+          html+='</div>';
         } else if(linha.startsWith('##ATENCAO##')){
-          var txt = linha.replace('##ATENCAO##','').trim();
-          if(txt && txt.toUpperCase()!=='NENHUM'){
-            html += '<div style="margin-bottom:14px">'
-                  + '<div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #fef9c3">\u26a0\ufe0f Pontos de Aten\u00e7\u00e3o</div>';
-            txt.split('>>').filter(Boolean).forEach(function(p){
-              html += '<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #fefce8">'
-                    + '<span style="color:#f59e0b;font-weight:700;flex-shrink:0">!</span>'
-                    + '<span style="font-size:13px;color:#1e293b;line-height:1.6">'+p.trim()+'</span></div>';
-            });
-            html += '</div>';
+          var txt=linha.replace('##ATENCAO##','').trim();
+          if(txt&&txt.toUpperCase()!=='NENHUM'){
+            html+='<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #fef9c3">\u26a0\ufe0f Pontos de Aten\u00e7\u00e3o</div>';
+            txt.split('>>').filter(Boolean).forEach(function(p){html+='<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #fefce8"><span style="color:#f59e0b;font-weight:700">!</span><span style="font-size:13px;color:#1e293b;line-height:1.6">'+p.trim()+'</span></div>';});
+            html+='</div>';
           }
         } else if(linha.startsWith('##CONDICAO##')){
-          var txt = linha.replace('##CONDICAO##','').trim();
-          var isNeg2 = /vista|negado/i.test(txt);
-          var bg2=isNeg2?'#fee2e2':'#eff6ff'; var co2=isNeg2?'#b71c1c':'#1565c0'; var bd2=isNeg2?'#dc2626':'#3b82f6';
-          html += '<div style="background:'+bg2+';border:2px solid '+bd2+';border-radius:10px;padding:14px 16px;margin-bottom:14px">'
-                + '<div style="font-size:11px;font-weight:700;color:'+co2+';text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">\ud83d\udcb3 Condi\u00e7\u00e3o de Pagamento</div>'
-                + '<div style="font-size:15px;font-weight:800;color:'+co2+'">'+txt+'</div></div>';
+          var txt=linha.replace('##CONDICAO##','').trim();
+          var isNeg2=/vista|negado|aguard/i.test(txt),bg2=isNeg2?'#eff6ff':'#f0fdf4',co2=isNeg2?'#1565c0':'#166534',bd2=isNeg2?'#3b82f6':'#16a34a';
+          html+='<div style="background:'+bg2+';border:2px solid '+bd2+';border-radius:10px;padding:14px 16px;margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:'+co2+';text-transform:uppercase;margin-bottom:6px">\ud83d\udcb3 Condi\u00e7\u00e3o de Pagamento</div><div style="font-size:15px;font-weight:800;color:'+co2+'">'+txt+'</div></div>';
         } else if(linha.startsWith('##CONCLUSAO##')){
-          var txt = linha.replace('##CONCLUSAO##','').trim();
-          html += '<div style="border-top:1.5px solid #e2e8f0;padding-top:12px;margin-top:4px">'
-                + '<div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Conclus\u00e3o</div>'
-                + '<p style="font-size:13px;color:#374151;line-height:1.75;margin:0">'+txt+'</p></div>';
+          var txt=linha.replace('##CONCLUSAO##','').trim();
+          html+='<div style="border-top:1.5px solid #e2e8f0;padding-top:12px;margin-top:4px"><div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;margin-bottom:6px">Conclus\u00e3o</div><p style="font-size:13px;color:#374151;line-height:1.75;margin:0">'+txt+'</p></div>';
         } else {
-          html += '<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 8px">'+linha+'</p>';
+          html+='<p style="font-size:13px;color:#475569;line-height:1.7;margin:0 0 8px">'+linha+'</p>';
         }
       })
 
       pb.innerHTML = '<div style="font-size:13px;color:#1e293b;line-height:1.7">'+html+'</div>';
     }
-    // Bloco aprovacao diretor abaixo do parecer (se houver warn)
-    var _temWarnP = S.checks.some(function(ck){return ck.cls==='warn';});
-    if(_temWarnP && !S.aprovDir && !document.querySelector('#m5aprov_dir_top')){
-      var _card = document.querySelector('#m5card_resultado');
-      var _opP = STATE.usuarioLogado||'desconhecido';
-      if(_card){
-        var _div = document.createElement('div');
-        _div.id='m5aprov_dir_top';
-        _div.style.cssText='background:#fff;border:3px solid #1565c0;border-radius:12px;padding:16px;margin-top:14px';
-        _div.innerHTML='<div style="font-size:14px;font-weight:700;color:#1565c0;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-shield-check"></i> Aprovacao do Diretor Obrigat\u00f3ria</div>'
-          +'<p style="font-size:12px;color:#1e3a5f;margin-bottom:12px">Pontos de atencao identificados. Encaminhe ao grupo financeiro e registre a aprovacao.</p>'
+    var _mS=window._mod5S||{};
+    var _twP=_mS.checks&&_mS.checks.some(function(ck){return ck.cls==='warn';});
+    if(_twP&&!_mS.aprovDir&&!document.querySelector('#m5aprov_dir_top')){
+      var _cT=document.querySelector('#m5card_resultado'), _oP=STATE.usuarioLogado||'desconhecido';
+      if(_cT){
+        var _dA=document.createElement('div'); _dA.id='m5aprov_dir_top';
+        _dA.style.cssText='background:#fff;border:3px solid #1565c0;border-radius:12px;padding:16px;margin-top:14px';
+        _dA.innerHTML='<div style="font-size:14px;font-weight:700;color:#1565c0;margin-bottom:10px">\uD83D\uDEE1 Aprovacao do Diretor Obrigatoria</div>'
+          +'<p style="font-size:12px;color:#1e3a5f;margin-bottom:12px">Pontos de atencao identificados. Encaminhe o parecer ao grupo financeiro via WhatsApp e registre a aprovacao abaixo.</p>'
           +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
-          +'<div><label style="font-size:11px;font-weight:700;color:#1565c0">DIRETOR *</label>'
-          +'<input id="m5apDirNome" type="text" placeholder="Nome" style="border:2px solid #93c5fd;border-radius:8px;padding:8px 12px;font-size:13px;background:#f0f9ff;outline:none;width:100%;box-sizing:border-box;margin-top:4px"></div>'
-          +'<div><label style="font-size:11px;font-weight:700;color:#1565c0">DATA E HORA *</label>'
-          +'<input id="m5apDirData" type="datetime-local" style="border:2px solid #93c5fd;border-radius:8px;padding:8px 12px;font-size:13px;background:#f0f9ff;outline:none;width:100%;box-sizing:border-box;margin-top:4px"></div></div>'
-          +'<button id="m5btnAprovDir" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:11px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-check"></i> Registrar aprovacao do diretor</button>';
-        _card.appendChild(_div);
+          +'<div><label style="font-size:11px;font-weight:700;color:#1565c0">DIRETOR *</label><input id="m5apDirNome" type="text" placeholder="Nome" style="border:2px solid #93c5fd;border-radius:8px;padding:8px 12px;font-size:13px;background:#f0f9ff;outline:none;width:100%;box-sizing:border-box;margin-top:4px"></div>'
+          +'<div><label style="font-size:11px;font-weight:700;color:#1565c0">DATA E HORA *</label><input id="m5apDirData" type="datetime-local" style="border:2px solid #93c5fd;border-radius:8px;padding:8px 12px;font-size:13px;background:#f0f9ff;outline:none;width:100%;box-sizing:border-box;margin-top:4px"></div></div>'
+          +'<button id="m5btnAprovDir" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:11px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">\u2713 Registrar aprovacao do diretor</button>';
+        _cT.appendChild(_dA);
         setTimeout(function(){
-          var _b=document.querySelector('#m5btnAprovDir'); if(!_b)return;
-          _b.onclick=function(){
+          var _bA=document.querySelector('#m5btnAprovDir'); if(!_bA)return;
+          _bA.onclick=function(){
             var nome=(document.querySelector('#m5apDirNome').value||'').trim();
             var data=(document.querySelector('#m5apDirData').value||'').trim();
             if(!nome){document.querySelector('#m5apDirNome').style.borderColor='#dc2626';document.querySelector('#m5apDirNome').focus();return;}
             if(!data){document.querySelector('#m5apDirData').style.borderColor='#dc2626';document.querySelector('#m5apDirData').focus();return;}
             var dtF=new Date(data).toLocaleDateString('pt-BR')+' '+new Date(data).toLocaleTimeString('pt-BR');
             var dtR=new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR');
-            S.aprovDir={diretor:nome,dataHoraMsg:dtF,operador:_opP,dataHoraRegistro:dtR};
-            window._mod5S=S;
-            _b.disabled=true; _b.innerHTML='<i class="ti ti-check"></i> Aprovado por '+nome+' em '+dtF;
-            _b.style.background='#16a34a';
-            document.querySelector('#m5apDirNome').disabled=true;
-            document.querySelector('#m5apDirData').disabled=true;
-            addCk('ok','ti-check','Aprovacao diretor: '+nome+' em '+dtF);
-            // Mostrar campo parecer do diretor + botao finalizar
-            var _divFinal=document.createElement('div');
-            _divFinal.style.cssText='margin-top:14px;padding-top:14px;border-top:1.5px solid #e2e8f0';
-            _divFinal.innerHTML='<label style="font-size:11px;font-weight:700;color:#1565c0;text-transform:uppercase;display:block;margin-bottom:6px">Parecer do Diretor / Condicao de Pagamento Aprovada *</label>'
-              +'<textarea id="m5parecerDir" rows="3" placeholder="Ex: Aprovado. Condicao: 30% entrada + boleto em 3x. Cliente pode prosseguir." style="width:100%;border:2px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:13px;background:#f0f9ff;color:#0f172a;outline:none;resize:vertical;box-sizing:border-box"></textarea>'
-              +'<button id="m5btnFinalizar" style="margin-top:10px;background:linear-gradient(135deg,#0f6e56,#16a34a);color:#fff;border:none;border-radius:8px;padding:12px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-check-circle"></i> Finalizar e salvar analise</button>';
-            _div.appendChild(_divFinal);
+            var _mS2=window._mod5S||{};
+            _mS2.aprovDir={diretor:nome,dataHoraMsg:dtF,operador:_oP,dataHoraRegistro:dtR};
+            window._mod5S=_mS2;
+            _bA.disabled=true; _bA.innerHTML='\u2713 Aprovado por '+nome+' em '+dtF; _bA.style.background='#16a34a';
+            document.querySelector('#m5apDirNome').disabled=true; document.querySelector('#m5apDirData').disabled=true;
+            var _dF=document.createElement('div'); _dF.style.cssText='margin-top:14px;padding-top:14px;border-top:1.5px solid #e2e8f0';
+            _dF.innerHTML='<label style="font-size:11px;font-weight:700;color:#1565c0;text-transform:uppercase;display:block;margin-bottom:6px">Parecer do Diretor / Condicao Aprovada *</label>'
+              +'<textarea id="m5parecerDir" rows="3" placeholder="Ex: Aprovado. Condicao: 30% entrada + boleto." style="width:100%;border:2px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:13px;background:#f0f9ff;outline:none;resize:vertical;box-sizing:border-box"></textarea>'
+              +'<button id="m5btnFinalizar" style="margin-top:10px;background:linear-gradient(135deg,#0f6e56,#16a34a);color:#fff;border:none;border-radius:8px;padding:12px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">\u2713 Finalizar e salvar analise</button>';
+            _dA.appendChild(_dF);
             setTimeout(function(){
-              var _btnF=document.querySelector('#m5btnFinalizar'); if(!_btnF)return;
-              _btnF.onclick=function(){
-                var parecerDir=(document.querySelector('#m5parecerDir').value||'').trim();
-                if(!parecerDir||parecerDir.length<10){document.querySelector('#m5parecerDir').style.borderColor='#dc2626';document.querySelector('#m5parecerDir').focus();return;}
-                S.aprovDir.parecerDiretor=parecerDir;
-                window._mod5S=S;
-                // Atualizar pb com parecer do diretor
-                var _pb2=document.querySelector('#m5pb');
-                if(_pb2){
-                  var _divDir=document.createElement('div');
-                  _divDir.style.cssText='background:#f0fdf4;border:2px solid #16a34a;border-radius:10px;padding:14px;margin-top:12px';
-                  _divDir.innerHTML='<div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:6px">\u2705 Parecer do Diretor \u2014 '+nome+'</div>'
-                    +'<p style="font-size:13px;color:#1e293b;line-height:1.7;margin:0">'+parecerDir+'</p>';
-                  _pb2.appendChild(_divDir);
-                }
-                // Salvar no Firebase
-                var dtRF=new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR');
-                try{fbSaveHistoricoAnalise(D.cnpj.replace(/\D/g,''),{
-                  cnpj:D.cnpj,empresa:D.nome,aprovacao_diretor:S.aprovDir,
-                  parecer_diretor:parecerDir,responsavel:_opP,dataHora:dtRF,
-                  checks:S.checks,condicao:S.aprovDir.parecerDiretor,
-                  modulo:'Modelo em Teste'
-                });}catch(e){}
-                _btnF.disabled=true; _btnF.innerHTML='<i class="ti ti-check"></i> Analise finalizada e salva';
-                _btnF.style.background='#16a34a';
+              var _bF=document.querySelector('#m5btnFinalizar'); if(!_bF)return;
+              _bF.onclick=function(){
+                var pD=(document.querySelector('#m5parecerDir').value||'').trim();
+                if(!pD||pD.length<10){document.querySelector('#m5parecerDir').style.borderColor='#dc2626';document.querySelector('#m5parecerDir').focus();return;}
+                var _mS3=window._mod5S||{}; _mS3.aprovDir.parecerDiretor=pD; window._mod5S=_mS3;
+                var _pb3=document.querySelector('#m5pb');
+                if(_pb3){var _dD=document.createElement('div');_dD.style.cssText='background:#f0fdf4;border:2px solid #16a34a;border-radius:10px;padding:14px;margin-top:12px';_dD.innerHTML='<div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:6px">\u2705 Parecer do Diretor \u2014 '+nome+'</div><p style="font-size:13px;color:#1e293b;line-height:1.7;margin:0">'+pD+'</p>';_pb3.appendChild(_dD);}
+                var _D=window._mod5D||{},dtRF=new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR');
+                try{fbSaveHistoricoAnalise((_D.cnpj||'').replace(/\D/g,''),{cnpj:_D.cnpj,empresa:_D.nome,aprovacao_diretor:_mS3.aprovDir,parecer_diretor:pD,responsavel:_oP,dataHora:dtRF,checks:_mS3.checks,modulo:'Modelo em Teste'});}catch(e){}
+                _bF.disabled=true;_bF.innerHTML='\u2713 Analise finalizada e salva';_bF.style.background='#16a34a';
                 document.querySelector('#m5parecerDir').disabled=true;
-                // Habilitar PDF com dados finais
-                var _btnPDF=document.querySelector('button[onclick="imprimirMod5()"]');
-                if(_btnPDF){ _btnPDF.style.background='linear-gradient(135deg,#0f6e56,#16a34a)'; _btnPDF.title='PDF com aprovacao do diretor'; }
               };
             },200);
-            try{fbSaveHistoricoAnalise(D.cnpj.replace(/\D/g,''),{cnpj:D.cnpj,empresa:D.nome,aprovacao_diretor:S.aprovDir,responsavel:_opP,dataHora:dtR,modulo:'Modelo em Teste - Aprovacao'});}catch(e){}
+            var _D2=window._mod5D||{}; try{fbSaveHistoricoAnalise((_D2.cnpj||'').replace(/\D/g,''),{cnpj:_D2.cnpj,empresa:_D2.nome,aprovacao_diretor:_mS2.aprovDir,responsavel:_oP,dataHora:dtR,modulo:'Modelo em Teste'});}catch(e){}
           };
         },300);
       }
     }
-    // Rolar para o topo para ver o parecer
     window.scrollTo({top:0, behavior:'smooth'});
-    if(btn){ btn.innerHTML='<i class="ti ti-check"></i> Parecer gerado'; }
+    if(btn){ btn.innerHTML='\u2713 Parecer gerado - veja no topo'; }
   }catch(err){
     if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-brain"></i> Gerar parecer inteligente'; }
   }
@@ -6354,7 +6326,6 @@ function salvarAnaliseMod5(){
 function imprimirMod5(){
   var q2=document.querySelector.bind(document);
   var D=window._mod5D||{}; var S=window._mod5S||{};
-  var parecerContent = (document.querySelector('#m5pb')||{}).innerHTML||'';
   var cond_txt = {
     '100':'Aprovado — 100% boleto sem entrada',
     '30':'Aprovado — 30% entrada + boleto',
@@ -6397,9 +6368,9 @@ function imprimirMod5(){
     +'<h2>Checklist de verificação</h2>'+checks_html
     +(extras?'<h2>Registros e exceções</h2>'+extras:'')
     +'<h2>Parecer inteligente</h2>'
-    +'<div style="padding:14px;font-size:13px;line-height:1.7">'+parecerContent+'</div>'
+    +'<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:14px;font-size:13px;line-height:1.7;white-space:pre-wrap">'+parecer_atual+'</div>'
     +'<div style="margin-top:20px;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">'
-    +'Análise realizada por: '+( STATE.usuarioLogado||'desconhecido')+' \u2014 '+new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR')
+    +'Análise realizada por: '+( STATE.usuarioLogado||'desconhecido')+' — '+new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR')
     +'</div>'
     +'</body></html>';
 
@@ -6418,7 +6389,6 @@ function mostrarHistoricoMod5(){
   renderApp();
 }
 
-}
 </script>
 </body>
 </html>
