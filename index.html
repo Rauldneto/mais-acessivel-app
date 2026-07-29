@@ -5213,6 +5213,16 @@ var S_DOCS = {
   docSocio:    null   // Doc 3: {nome, tipo_doc}
 };
 
+// Detecta texto extraido de PDF com codificacao de fonte corrompida (comum em PDFs da JUCEG/gov
+// com fontes customizadas sem ToUnicode CMap): o pdf.js extrai uma string longa, mas cheia de
+// caracteres fora do padrao portugues, tornando o texto ilegivel mesmo nao sendo um "scan".
+function textoPareceCorrompido(texto){
+  var limpo=(texto||'').replace(/\s+/g,'');
+  if(!limpo.length) return true;
+  var validos=(limpo.match(/[A-Za-zÀ-ÖØ-öø-ÿ0-9.,;:!?()\-\/%$'"@#&_+=°ºª]/g)||[]).length;
+  return (validos/limpo.length)<0.85;
+}
+
 function upDoc(n,inp){
     var file=inp.files[0];if(!file)return;
     var b=q('#m5eb'+n);
@@ -5278,21 +5288,27 @@ function upDoc(n,inp){
               }
             }
           }catch(epdf){console.warn('pdfjs:',epdf);}
-          // Se texto muito curto (scan/imagem dentro do PDF), renderizar pagina e enviar como imagem
-          if(texto.trim().length<50){
-            ei.innerHTML='<div style="font-size:12px;color:#94a3b8;font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-scan"></i> Documento digitalizado detectado. Enviando imagem para a IA...</div>';
+          var _muitoCurto=texto.trim().length<50;
+          var _corrompido=!_muitoCurto&&textoPareceCorrompido(texto);
+          // Se texto muito curto (scan/imagem dentro do PDF) OU com codificacao corrompida
+          // (fonte customizada sem ToUnicode - texto longo porem ilegivel), renderizar a
+          // pagina como imagem e enviar para a IA ler visualmente, contornando o problema.
+          if(_muitoCurto||_corrompido){
+            ei.innerHTML='<div style="font-size:12px;color:#94a3b8;font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-scan"></i> '
+              +(_corrompido?'Texto do PDF com codifica\u00e7\u00e3o ilegível (fonte n\u00e3o padr\u00e3o). Convertendo p\u00e1gina em imagem para a IA ler visualmente...':'Documento digitalizado detectado. Enviando imagem para a IA...')
+              +'</div>';
             try{
               var buf2=await file.arrayBuffer();
               var pdf2=await pdfjsLib.getDocument({data:buf2}).promise;
               var pg1=await pdf2.getPage(1);
-              var vp=pg1.getViewport({scale:2.0});
+              var vp=pg1.getViewport({scale:3.0});
               var cv=document.createElement('canvas');
               cv.width=vp.width;cv.height=vp.height;
               await pg1.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
-              var imgB64=cv.toDataURL('image/jpeg',0.85).split(',')[1];
+              var imgB64=cv.toDataURL('image/png').split(',')[1];
               msgs=[{role:'user',content:[
-                {type:'text',text:basePrompt[n]+'\n\nATENCAO: Este documento foi digitalizado (scan). Leia a imagem com cuidado, mesmo que seja preto e branco ou baixa qualidade.'},
-                {type:'image',source:{type:'base64',media_type:'image/jpeg',data:imgB64}}
+                {type:'text',text:basePrompt[n]+(_corrompido?'\n\nATENCAO: A extracao de texto deste PDF falhou (fonte com codificacao nao padrao) e foi DESCARTADA - nao mencione essa extracao de texto na sua resposta. Voce esta recebendo apenas a imagem renderizada da pagina, em alta resolucao. Leia-a visualmente com atencao e responda com base SOMENTE no que voce consegue ver na imagem. Se a imagem estiver legivel (o que e o caso na maioria dos documentos deste tipo), preencha os campos normalmente com resultado ok/neg conforme os dados encontrados. So classifique como neg/ilegivel se a IMAGEM em si estiver realmente ilegivel (borrada, cortada ou incompleta).':'\n\nATENCAO: Este documento foi digitalizado (scan). Leia a imagem com cuidado, mesmo que seja preto e branco ou baixa qualidade.')},
+                {type:'image',source:{type:'base64',media_type:'image/png',data:imgB64}}
               ]}];
             }catch(escan){
               msgs=[{role:'user',content:basePrompt[n]+'\n\nDocumento escaneado - nao foi possivel renderizar a imagem. Informe que o documento nao pude ser lido e solicite nova versao.'}];
