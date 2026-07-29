@@ -4712,11 +4712,15 @@ function renderModeloEmTeste(){
 
   var S={
     checks:[],negado:false,protestoDiretor:false,
+    excecao1:null,excecao2:null,excecao_doc:null,
+    justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,
+    precisaAprovDir:false,justEndTerceiro:null,aprovDir:null,
     mE:0,mS:0,nS:1,sit:'',
     endTerceiro:false,
     simDoc:{1:0,2:0,3:0},simLoc:0,
     mOk:false,lOk:false
   };
+  window._mod5S=S;
   var D={nome:'',fantasia:'',cnpj:'',socio:'',capital:'',endereco:'',cidade:'',estado:'',cep:''};
   window._mod5D=D; // expor globalmente
 
