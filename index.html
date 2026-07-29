@@ -4862,7 +4862,8 @@ function renderModeloEmTeste(){
       '30': {bg:'#E3F2FD',br:'#1565C0',co:'#1565C0',ic:'\u2705',t:'Aprovado \u2014 30% entrada + boleto',s:'Protesto liberado pelo diretor.',p:'30% de entrada + restante no boleto.'},
       '50': {bg:'#FFF8E1',br:'#F9A825',co:'#7B4F00',ic:'\u26a0\ufe0f',t:'Aten\u00e7\u00e3o \u2014 50% entrada + boleto',s:'Empresa entre 12 e 24 meses.',p:'50% de entrada + restante no boleto.'},
       '70': {bg:'#FFF3E0',br:'#E65100',co:'#BF360C',ic:'\u26a0\ufe0f',t:'Aten\u00e7\u00e3o \u2014 70% entrada + 1 parcela',s:'Empresa ou s\u00f3cio com menos de 12 meses.',p:'70% de entrada + 1 parcela no boleto.'},
-      'av': {bg:'#FFEBEE',br:'#B71C1C',co:'#B71C1C',ic:'\u274c',t:'Negado \u2014 somente \u00e0 vista',s:'Negativa identificada no processo.',p:'Venda somente \u00e0 vista. Faturamento: aprovacao da diretoria.'}
+      'av': {bg:'#FFEBEE',br:'#B71C1C',co:'#B71C1C',ic:'\u274c',t:'Negado \u2014 somente \u00e0 vista',s:'Negativa identificada no processo.',p:'Venda somente \u00e0 vista. Faturamento: aprovacao da diretoria.'},
+      'pend':{bg:'#eff6ff',br:'#1565c0',co:'#1565c0',ic:'\u23f3',t:'Aguardando Aprova\u00e7\u00e3o do Diretor',s:'Pontos de aten\u00e7\u00e3o identificados.',p:'Condi\u00e7\u00e3o de pagamento ser\u00e1 definida ap\u00f3s aprova\u00e7\u00e3o.'}
     };
     var v=M[c];
     sv.innerHTML='';
@@ -6003,9 +6004,10 @@ function upDoc(n,inp){
       '30': {bg:'#e3f2fd',br:'#1565c0',co:'#1565c0',ic:'\u2705',t:'Aprovado \u2014 30% entrada + boleto',s:'Protesto em cart\u00f3rio liberado por diretor. Demais etapas positivas.',p:'30% de entrada no pedido + restante faturado no boleto.'},
       '50': {bg:'#fff8e1',br:'#f9a825',co:'#7b4f00',ic:'\u26a0\ufe0f',t:'Aprovado com aten\u00e7\u00e3o \u2014 50% entrada + boleto',s:'Empresa entre 12 e 24 meses de exist\u00eancia.',p:'50% de entrada na aprova\u00e7\u00e3o do pedido + restante no boleto.'},
       '70': {bg:'#fff3e0',br:'#e65100',co:'#bf360c',ic:'\u26a0\ufe0f',t:'Aprovado com aten\u00e7\u00e3o \u2014 70% entrada + 1 parcela',s:'Empresa ou s\u00f3cio com menos de 12 meses.',p:'70% de entrada + saldo em 1 parcela no boleto.'},
-      'av': {bg:'#ffebee',br:'#b71c1c',co:'#b71c1c',ic:'\u274c',t:'Negado \u2014 somente \u00e0 vista',s:'Negativa identificada no processo de an\u00e1lise.',p:'Venda somente \u00e0 vista. Faturamento: apenas com aprova\u00e7\u00e3o da diretoria.'}
+      'av': {bg:'#ffebee',br:'#b71c1c',co:'#b71c1c',ic:'\u274c',t:'Negado \u2014 somente \u00e0 vista',s:'Negativa identificada no processo de an\u00e1lise.',p:'Venda somente \u00e0 vista. Faturamento: apenas com aprova\u00e7\u00e3o da diretoria.'},
+      'pend':{bg:'#eff6ff',br:'#1565c0',co:'#1565c0',ic:'\u23f3',t:'Aguardando Aprova\u00e7\u00e3o do Diretor',s:'Pontos de aten\u00e7\u00e3o. Aguardando aprova\u00e7\u00e3o.',p:'N\u00e3o confirmar venda at\u00e9 aprovac\u00e3o do diretor.'}
     };
-    var v=M[cond];
+    var v=M[cond]||M['pend']||M['av'];
 
     // Montar resumo das etapas concluidas
     var resumoEtapas='';
