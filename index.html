@@ -4861,40 +4861,6 @@ function renderModeloEmTeste(){
     };
     var v=M[c];
     sv.innerHTML='';
-    // Se houver warns: exigir aprovacao do diretor
-    var _temWarn=S.checks.some(function(ck){return ck.cls==='warn';});
-    if(_temWarn&&!S.aprovDir){
-      var _opv=STATE.usuarioLogado||'desconhecido';
-      sv.innerHTML='<div style="background:#fff;border:3px solid #1565c0;border-radius:14px;padding:18px 20px">'
-        +'<div style="font-size:15px;font-weight:700;color:#1565c0;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-shield-check" style="font-size:20px"></i> Aprova\u00e7\u00e3o do Diretor Obrigat\u00f3ria</div>'
-        +'<p style="font-size:13px;color:#1e3a5f;line-height:1.7;margin-bottom:14px">Esta an\u00e1lise possui <strong>pontos de aten\u00e7\u00e3o</strong>. A aprova\u00e7\u00e3o de um diretor \u00e9 obrigat\u00f3ria. Encaminhe o parecer ao grupo financeiro via WhatsApp e aguarde.</p>'
-        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'
-        +'<div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:700;color:#1565c0;text-transform:uppercase">Diretor que aprovou *</label>'
-        +'<input id="m5apDirNome" type="text" placeholder="Nome do diretor" style="border:2px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:13px;background:#f0f9ff;color:#0f172a;outline:none;margin-top:4px"></div>'
-        +'<div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:700;color:#1565c0;text-transform:uppercase">Data e hora *</label>'
-        +'<input id="m5apDirData" type="datetime-local" style="border:2px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:13px;background:#f0f9ff;color:#0f172a;outline:none;margin-top:4px"></div></div>'
-        +'<button id="m5btnAprovDir" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:12px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-check"></i> Registrar aprova\u00e7\u00e3o do diretor</button>'
-        +'</div>';
-      setTimeout(function(){
-        var _b=document.querySelector('#m5btnAprovDir'); if(!_b)return;
-        _b.onclick=function(){
-          var nome=(document.querySelector('#m5apDirNome').value||'').trim();
-          var data=(document.querySelector('#m5apDirData').value||'').trim();
-          if(!nome){document.querySelector('#m5apDirNome').style.borderColor='#dc2626';document.querySelector('#m5apDirNome').focus();return;}
-          if(!data){document.querySelector('#m5apDirData').style.borderColor='#dc2626';document.querySelector('#m5apDirData').focus();return;}
-          var dtF=new Date(data).toLocaleDateString('pt-BR')+' '+new Date(data).toLocaleTimeString('pt-BR');
-          var dtR=new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR');
-          S.aprovDir={diretor:nome,dataHoraMsg:dtF,operador:_opv,dataHoraRegistro:dtR};
-          window._mod5S=S;
-          _b.disabled=true; _b.innerHTML='<i class="ti ti-check"></i> Aprovado por '+nome;
-          _b.style.background='#16a34a';
-          document.querySelector('#m5apDirNome').disabled=true;
-          document.querySelector('#m5apDirData').disabled=true;
-          addCk('ok','ti-check','Aprova\u00e7\u00e3o diretor: '+nome+' em '+dtF);
-          try{fbSaveHistoricoAnalise(D.cnpj.replace(/\D/g,''),{cnpj:D.cnpj,empresa:D.nome,aprovacao_diretor:S.aprovDir,responsavel:_opv,dataHora:dtR,modulo:'Modelo em Teste'});}catch(e){}
-        };
-      },300);
-    }
   }
 
   function limpar(){
