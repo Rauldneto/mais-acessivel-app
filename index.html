@@ -5237,8 +5237,11 @@ function upDoc(n,inp){
     S.docsOk[n]=false;
     updateBtnDocState();
 
+    var _hojeStr=new Date().toLocaleDateString('pt-BR');
+    var _prefixoData='DATA DE HOJE (use esta data real como referencia para qualquer calculo de prazo, validade ou data futura/passada - NAO use sua propria nocao de data atual): '+_hojeStr+'\n\n';
+
     var basePrompt={
-      1:'Voce e um analisador de documentos para analise de credito empresarial.\n'
+      1:_prefixoData+'Voce e um analisador de documentos para analise de credito empresarial.\n'
        +'Dados do cadastro (Receita Federal / Cartao CNPJ):\n'
        +'- Razao Social: '+D.nome+'\n'
        +'- CNPJ: '+D.cnpj+'\n'
@@ -5248,7 +5251,7 @@ function upDoc(n,inp){
        +'Responda APENAS com JSON valido sem markdown:\n'
        +'{"cnpj_encontrado":"XX.XXX.XXX/XXXX-XX","cnpj_confere":true,"razao_social_encontrada":"nome","razao_social_confere":true,"socio_encontrado":"nome completo","socio_confere":true,"capital_encontrado":"valor","capital_confere":true,"endereco_encontrado":"endereco completo se houver","divergencias":["lista de divergencias encontradas ou array vazio"],"resultado":"ok ou neg","resumo":"descricao objetiva do que foi encontrado e se confere"}',
 
-      2:'Voce e um analisador de documentos para analise de credito empresarial.\n'
+      2:_prefixoData+'Voce e um analisador de documentos para analise de credito empresarial.\n'
        +'Dados do cadastro (Receita Federal / Cartao CNPJ):\n'
        +'- Razao Social: '+D.nome+'\n'
        +'- CNPJ: '+D.cnpj+'\n'
@@ -5260,10 +5263,11 @@ function upDoc(n,inp){
        +'3. tipo_documento = invalido: SOMENTE se o documento NAO for nenhum dos acima (ex: nota fiscal, boleto bancario, RG, etc)\n'
        +'ATENCAO: Uma conta de energia, agua ou telefone e SEMPRE valida como comprovante, mesmo que esteja em nome de terceiro. Nesse caso use tipo_documento=comprovante_endereco e titular_confere=terceiro.\n'
        +'Para titular_confere: empresa = nome da empresa no documento, socio = nome do socio no documento, terceiro = qualquer outro nome.\n'
+       +'IMPORTANTE SOBRE DIVERGENCIAS: titular_confere=empresa OU titular_confere=socio sao AMBOS totalmente validos e NAO devem ser listados em divergencias (so titular_confere=terceiro gera observacao, e mesmo assim nao invalida o documento). Para dentro_90_dias, calcule a diferenca entre a data_emissao do documento e a DATA DE HOJE informada no topo deste prompt (nunca use sua propria nocao de data atual) - se a data_emissao for ANTERIOR a hoje e dentro de 90 dias, o documento esta valido e NAO e uma divergencia; so liste divergencia de data se a data_emissao for realmente posterior a mais de 90 dias, ou se for uma data impossivel/futura em relacao a DATA DE HOJE informada.\n'
        +'Responda APENAS com JSON valido sem markdown:\n'
        +'{"tipo_documento":"comprovante_endereco ou contrato_locacao ou invalido","tipo_especifico":"conta_agua ou conta_energia ou conta_telefone ou cartao_credito ou contrato_locacao ou outro","titular_encontrado":"nome no documento","titular_confere":"empresa ou socio ou terceiro","endereco_encontrado":"endereco completo","data_emissao":"DD/MM/AAAA ou nao_identificada","dentro_90_dias":true,"divergencias":["lista ou vazio"],"resultado":"ok ou warn ou neg","resumo":"tipo do documento, titular e se confere com empresa/socio"}',
 
-      3:'Voce e um analisador de documentos para analise de credito empresarial.\n'
+      3:_prefixoData+'Voce e um analisador de documentos para analise de credito empresarial.\n'
        +'Dados do cadastro (Receita Federal / Cartao CNPJ):\n'
        +'- Socio majoritario esperado: '+D.socio+'\n\n'
        +'Analise o DOCUMENTO DE IDENTIFICACAO DO SOCIO (RG, CNH ou Carteira Profissional).\n'
