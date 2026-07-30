@@ -6648,7 +6648,7 @@ function salvarAnaliseMod5(){
     situacao:S.sit, meses_empresa:S.mE, meses_socio:S.mS,
     responsavel:STATE.usuarioLogado||'desconhecido',
     dataHora:dtStr, timestamp:agora.toISOString(),
-    condicao_pagamento:calcCond(),
+    condicao_pagamento:(window._mod5calcCond?window._mod5calcCond():''),
     checks:S.checks,
     excecao1:S.excecao1||null, excecao2:S.excecao2||null,
     excecao_doc:S.excecao_doc||null,
@@ -6661,7 +6661,9 @@ function salvarAnaliseMod5(){
     negado:S.negado,
     modulo:'Modelo em Teste'
   };
+  if(!D.cnpj){ alert('Fa\u00e7a uma consulta de CNPJ antes de salvar.'); return; }
   fbSaveHistoricoAnalise(D.cnpj.replace(/\D/g,''),registro);
+  alert('An\u00e1lise salva no hist\u00f3rico com sucesso.');
   return registro;
 }
 
@@ -6669,15 +6671,18 @@ function salvarAnaliseMod5(){
 function imprimirMod5(){
   var q2=document.querySelector.bind(document);
   var D=window._mod5D||{}; var S=window._mod5S||{};
+  if(!D.cnpj){ alert('Fa\u00e7a uma consulta de CNPJ antes de gerar o PDF.'); return; }
+  var _calcCond=window._mod5calcCond||function(){return '';};
+  var _tStr=window._mod5tStr||function(){return '';};
   var cond_txt = {
     '100':'Aprovado — 100% boleto sem entrada',
     '30':'Aprovado — 30% entrada + boleto',
     '50':'Atenção — 50% entrada + boleto',
     '70':'Atenção — 70% entrada + 1 parcela',
     'av':'Negado — somente à vista'
-  }[calcCond()] || '';
+  }[_calcCond()] || '';
 
-  var checks_html = S.checks.map(function(ck){
+  var checks_html = (S.checks||[]).map(function(ck){
     var cor = ck.cls==='ok'?'#166534':ck.cls==='neg'?'#b71c1c':'#92400e';
     var bg = ck.cls==='ok'?'#dcfce7':ck.cls==='neg'?'#fee2e2':'#fef9c3';
     var ic = ck.cls==='ok'?'✅':ck.cls==='neg'?'❌':'⚠️';
@@ -6691,7 +6696,7 @@ function imprimirMod5(){
   if(S.aprovDir) extras += '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px;margin-bottom:8px"><strong>✅ Aprovação diretor:</strong> '+S.aprovDir.diretor+' em '+S.aprovDir.dataHoraMsg+' | Registrado por '+S.aprovDir.operador+'</div>';
   if(S.excecao_doc) extras += '<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px;margin-bottom:8px"><strong>📋 Declaração colaborador:</strong> '+(S.excecao_doc.declaracao_colaborador||'')+'<br><strong>Autorizado por:</strong> '+S.excecao_doc.autorizador+' | Registrado por '+S.excecao_doc.operador+'</div>';
 
-  var parecer_atual = (q('#m5pb')||{}).innerText||'';
+  var parecer_atual = (q2('#m5pb')||{}).innerText||'';
 
   var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
     +'<title>Análise de Crédito — '+D.nome+'</title>'
@@ -6704,9 +6709,9 @@ function imprimirMod5(){
     +'<div style="background:#f0fdf4;border:2px solid #16a34a;border-radius:10px;padding:14px;margin-bottom:16px">'
     +'<strong>Empresa:</strong> '+D.nome+' ('+D.fantasia+') — CNPJ: '+D.cnpj+'<br>'
     +'<strong>Sócio:</strong> '+D.socio+' — Capital: '+D.capital+'<br>'
-    +'<strong>Situação:</strong> '+S.sit+' — '+tStr(S.mE)+' de existência — Sócio há '+tStr(S.mS)
+    +'<strong>Situação:</strong> '+S.sit+' — '+_tStr(S.mE)+' de existência — Sócio há '+_tStr(S.mS)
     +'</div>'
-    +'<div style="background:'+(S.negado?'#ffebee':calcCond()==='100'?'#e8f5e9':'#fff8e1')+';border:2px solid '+(S.negado?'#b71c1c':calcCond()==='100'?'#16a34a':'#f59e0b')+';border-radius:10px;padding:14px;margin-bottom:16px;font-size:16px;font-weight:700">'
+    +'<div style="background:'+(S.negado?'#ffebee':_calcCond()==='100'?'#e8f5e9':'#fff8e1')+';border:2px solid '+(S.negado?'#b71c1c':_calcCond()==='100'?'#16a34a':'#f59e0b')+';border-radius:10px;padding:14px;margin-bottom:16px;font-size:16px;font-weight:700">'
     +cond_txt+'</div>'
     +'<h2>Checklist de verificação</h2>'+checks_html
     +(extras?'<h2>Registros e exceções</h2>'+extras:'')
