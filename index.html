@@ -3736,7 +3736,10 @@ function renderSalvas(){
   var srch=document.createElement('input'); srch.className='inp'; srch.style.cssText='max-width:260px;font-size:13px';
   srch.placeholder='🔍 Buscar pelo Nº da Cotação...';
   var srchBtn=document.createElement('button'); srchBtn.className='btn-main'; srchBtn.textContent='Buscar';
-  var btnPdfRec=document.createElement('button'); btnPdfRec.className='btn-sec'; btnPdfRec.textContent='📄 Recuperar de PDF';
+  var btnPdfRec=document.createElement('button'); btnPdfRec.textContent='📄 Recuperar de PDF';
+  btnPdfRec.style.cssText='background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff;border:none;padding:7px 15px;border-radius:7px;cursor:pointer;font-weight:700;font-size:11px;font-family:inherit;box-shadow:0 2px 5px rgba(124,58,237,.25);white-space:nowrap;transition:filter .15s';
+  btnPdfRec.onmouseover=function(){ btnPdfRec.style.filter='brightness(1.08)'; };
+  btnPdfRec.onmouseout=function(){ btnPdfRec.style.filter='none'; };
   btnPdfRec.title='Recupere uma cotacao a partir do PDF impresso, caso ela tenha sido perdida ou salva incompleta';
   var inputPdfRec=document.createElement('input'); inputPdfRec.type='file'; inputPdfRec.accept='application/pdf'; inputPdfRec.style.display='none';
   var pdfRecStatus=document.createElement('span'); pdfRecStatus.style.cssText='font-size:12px;color:#888;';
