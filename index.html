@@ -592,6 +592,14 @@ function fbInit() {
         raw.forEach(function(s){
           if(s&&s.id) map[String(s.id)]=s;
         });
+        // Protege cotacoes salvas localmente ha pouco tempo (evita sobrescrever
+        // com uma versao antiga do Firebase antes da gravacao propagar)
+        var agora=Date.now();
+        SAVED.forEach(function(s){
+          if(s&&s.id&&s._savedAt&&(agora-s._savedAt)<20000){
+            map[String(s.id)]=s;
+          }
+        });
         var arr=Object.values(map);
         if(arr.length>0){
           SAVED.length=0;
@@ -2762,7 +2770,13 @@ function salvarCotacao(){
     solicitante:STATE.form.solicitante,
     dataHora:new Date().toLocaleString('pt-BR'),
     produtos:STATE.prods.filter(function(p){return p.nome;}),
-    transportadoras:STATE.manRows.filter(function(r){return parseFloat(r.valor)>0;})
+    transportadoras:STATE.manRows.filter(function(r){
+      // Mantem a linha se houver QUALQUER informacao preenchida, nao so o valor final
+      return (parseFloat(r.valor)>0) || (r.cotacao&&String(r.cotacao).trim()!=='') ||
+        (r.prazo&&String(r.prazo).trim()!=='') || (parseFloat(r.outros)>0) ||
+        (parseFloat(r.credito)>0) || (parseFloat(r.lucro)>0);
+    }),
+    _savedAt: Date.now()
   };
   var idx=SAVED.findIndex(function(s){return s.id===num;});
   if(idx>=0){SAVED[idx]=nova;} else {SAVED.unshift(nova);}
@@ -2802,7 +2816,11 @@ function imprimirCotacao(){
   var num=STATE.form.numeroCotacao||'';
   if(!num){alert('Nenhuma cotação carregada para imprimir!'); return;}
   var resumoTxt=calcResumo();
-  var transLines=STATE.manRows.filter(function(r){return parseFloat(r.valor)>0;}).map(function(r){
+  var transLines=STATE.manRows.filter(function(r){
+    return (parseFloat(r.valor)>0) || (r.cotacao&&String(r.cotacao).trim()!=='') ||
+      (r.prazo&&String(r.prazo).trim()!=='') || (parseFloat(r.outros)>0) ||
+      (parseFloat(r.credito)>0) || (parseFloat(r.lucro)>0);
+  }).map(function(r){
     var v=parseFloat(r.valor)||0,o=parseFloat(r.outros)||0,cr=parseFloat(r.credito)||0,l=parseFloat(r.lucro)||0;
     var vc=(v+o)*(1+cr/100)*(1+l/100);
     return '<tr><td>'+r.nome+'</td><td>'+r.tel+'</td><td>'+r.cotacao+'</td><td>'+r.prazo+' d.u.</td><td>'+fmtBRL(v)+'</td><td>'+fmtBRL(vc)+'</td></tr>';
