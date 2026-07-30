@@ -702,7 +702,8 @@ var STATE={
   prods:[{nome:'',vol:0,dim:'',cabe:''}],
   manRows:[],
   embSrch:'', trSrch:'', trUF:'',
-  showConfigPanel:false
+  showConfigPanel:false,
+  _loadedCotacaoId:null
 };
 
 // ── AUTO-LOGIN: verifica sessão salva ──
@@ -2755,6 +2756,18 @@ function renderApp(){
 function salvarCotacao(){
   var num=STATE.form.numeroCotacao||'';
   if(!num){alert('Informe o Nº da Cotação antes de salvar!'); return;}
+  var idxExistente=SAVED.findIndex(function(s){return s.id===num;});
+  if(idxExistente>=0 && STATE._loadedCotacaoId!==num){
+    var ex=SAVED[idxExistente];
+    var abrirExistente=confirm(
+      'Já existe uma cotação salva com o Nº '+num+' ('+(ex.destCity||'—')+' - '+(ex.destUF||'—')+
+      ', salva em '+(ex.dataHora||'—')+').\n\n'+
+      'OK = Abrir essa cotação existente e continuar preenchendo ela (recomendado).\n'+
+      'Cancelar = Voltar e revisar o número antes de salvar.'
+    );
+    if(abrirExistente){ carregarCotacaoSalva(ex); }
+    return;
+  }
   var nova={
     id:num,
     destCity:STATE.form.cidadeDest||'—',
@@ -2888,6 +2901,7 @@ function renderNav(){
       STATE.form=Object.assign({},INIT);
       STATE.prods=[{nome:'',vol:0,dim:'',cabe:''}];
       STATE.manRows=[];
+      STATE._loadedCotacaoId=null;
       STATE.tab='cotacao';
       STATE.modulo='frete';
       render();
@@ -3485,6 +3499,31 @@ function rebuildManRow(i){
 }
 
 // ── SALVAS ──────────────────────────────
+// Carrega os dados de uma cotação salva (histórico) de volta no formulário,
+// mesclando as transportadoras já cotadas. Usada tanto pelo botão "Carregar"
+// quanto pelo alerta de cotação duplicada em salvarCotacao().
+function carregarCotacaoSalva(c){
+  STATE._loadedCotacaoId=c.id;
+  STATE.form=Object.assign({},INIT,{cnpjDest:c.cnpjDest,cepDest:c.cepDest,cidadeDest:c.destCity,ufDest:c.destUF,endDest:c.endDest,valorNF:String(c.valorNF),pesoTotal:String(c.peso),nfEmitida:c.nfEmitida,solicitante:c.solicitante,numeroCotacao:c.id,frete:c.frete||'CIF'});
+  STATE.prods=(c.produtos||[]).map(function(p){return{nome:p.nome||'',vol:p.vol||1,dim:p.dim||'',cabe:p.cabe||''};});
+  if(!STATE.prods.length) STATE.prods=[{nome:'',vol:0,dim:'',cabe:''}];
+  var uf=c.destUF||'';
+  var todasDoEstado=getManRows(uf);
+  var savedMap={};
+  (c.transportadoras||[]).forEach(function(t){savedMap[(t.nome||'').toUpperCase()]=t;});
+  STATE.manRows=todasDoEstado.map(function(r){
+    var saved=savedMap[(r.nome||'').toUpperCase()];
+    if(saved){
+      return Object.assign({},r,{
+        cotacao:saved.cotacao||'',prazo:saved.prazo||'',valor:saved.valor||'',
+        outros:saved.outros||'',credito:saved.credito||'',lucro:saved.lucro||''
+      });
+    }
+    return r;
+  });
+  STATE.tab='cotacao'; STATE.modulo='frete'; render();
+}
+
 function renderSalvas(){
   var wrap=document.createElement('div');
   // Barra de busca
@@ -3526,25 +3565,7 @@ function renderSalvas(){
       var btnCarregar=document.createElement('button'); btnCarregar.className='btn-ok'; btnCarregar.textContent='↩ Carregar';
       btnCarregar.onclick=function(e){
         e.stopPropagation();
-        STATE.form=Object.assign({},INIT,{cnpjDest:c.cnpjDest,cepDest:c.cepDest,cidadeDest:c.destCity,ufDest:c.destUF,endDest:c.endDest,valorNF:String(c.valorNF),pesoTotal:String(c.peso),nfEmitida:c.nfEmitida,solicitante:c.solicitante,numeroCotacao:c.id,frete:c.frete||'CIF'});
-        STATE.prods=(c.produtos||[]).map(function(p){return{nome:p.nome||'',vol:p.vol||1,dim:p.dim||'',cabe:p.cabe||''};});
-        if(!STATE.prods.length) STATE.prods=[{nome:'',vol:0,dim:'',cabe:''}];
-        // Carregar TODAS as transportadoras do estado, mesclando valores já salvos
-        var uf=c.destUF||'';
-        var todasDoEstado=getManRows(uf);
-        var savedMap={};
-        (c.transportadoras||[]).forEach(function(t){savedMap[(t.nome||'').toUpperCase()]=t;});
-        STATE.manRows=todasDoEstado.map(function(r){
-          var saved=savedMap[(r.nome||'').toUpperCase()];
-          if(saved){
-            return Object.assign({},r,{
-              cotacao:saved.cotacao||'',prazo:saved.prazo||'',valor:saved.valor||'',
-              outros:saved.outros||'',credito:saved.credito||'',lucro:saved.lucro||''
-            });
-          }
-          return r;
-        });
-        STATE.tab='cotacao'; STATE.modulo='frete'; render();
+        carregarCotacaoSalva(c);
       };
       hdr.appendChild(arrow); hdr.appendChild(badge); hdr.appendChild(title); hdr.appendChild(sub); hdr.appendChild(btnCarregar);
       item.appendChild(hdr);
