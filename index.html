@@ -4861,8 +4861,8 @@ function renderModeloEmTeste(){
     _btnBar.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:12px 16px;background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06)';
     _btnBar.innerHTML='<button id="m5btnParecerIA" style="background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-brain"></i> Gerar parecer</button>'
       +'<button id="m5btnParecerIA" style="background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-brain"></i> Gerar parecer</button>'
-      +'<button onclick="salvarAnaliseMod5()" style="background:linear-gradient(135deg,#0f6e56,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-device-floppy"></i> Salvar</button>'
-      +'<button onclick="imprimirMod5()" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-printer"></i> PDF</button>'
+      +'<button onclick="salvarAnaliseMod5(this)" style="background:linear-gradient(135deg,#0f6e56,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-device-floppy"></i> Salvar</button>'
+      +'<button onclick="imprimirMod5(this)" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-printer"></i> PDF</button>'
       +'<button onclick="window.scrollTo({top:0,behavior:\x27smooth\x27})" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-arrow-up"></i> Topo</button>'
       +'<button onclick="limpar()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-refresh"></i> Nova consulta</button>'
       +'<button onclick="mostrarHistoricoMod5()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-history"></i> Ver hist\u00f3rico</button>';
@@ -6038,8 +6038,8 @@ function upDoc(n,inp){
     +'<button id="m5btnL" style="background:#f1f5f9;color:#64748b;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-x"></i> Limpar</button>'
     +'</div>'
     +'<div id="m5btnBar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:12px 16px;background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">'
-    +'<button onclick="salvarAnaliseMod5()" style="background:linear-gradient(135deg,#0f6e56,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-device-floppy"></i> Salvar</button>'
-    +'<button onclick="imprimirMod5()" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-printer"></i> PDF</button>'
+    +'<button onclick="salvarAnaliseMod5(this)" style="background:linear-gradient(135deg,#0f6e56,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-device-floppy"></i> Salvar</button>'
+    +'<button onclick="imprimirMod5(this)" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-printer"></i> PDF</button>'
     +'<button onclick="limpar()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-refresh"></i> Nova consulta</button>'
     +'<button onclick="mostrarHistoricoMod5()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-history"></i> Ver hist\u00f3rico</button>'
     +'</div>'
@@ -6639,8 +6639,16 @@ async function gerarParecerIA(){
 }
 
 // Salvar análise no Firebase e retornar ID
-function salvarAnaliseMod5(){
+function salvarAnaliseMod5(btn){
   var D=window._mod5D||{}; var S=window._mod5S||{};
+  function feedback(ok,msg){
+    if(!btn) return;
+    var _orig=btn.innerHTML, _origBg=btn.style.background;
+    btn.innerHTML=(ok?'\u2713 ':'\u26a0\ufe0f ')+msg;
+    btn.style.background=ok?'#16a34a':'#dc2626';
+    setTimeout(function(){ btn.innerHTML=_orig; btn.style.background=_origBg; },2200);
+  }
+  if(!D.cnpj){ feedback(false,'Fa\u00e7a uma consulta antes'); return; }
   var agora = new Date();
   var dtStr = agora.toLocaleDateString('pt-BR')+' '+agora.toLocaleTimeString('pt-BR');
   var registro = {
@@ -6661,17 +6669,23 @@ function salvarAnaliseMod5(){
     negado:S.negado,
     modulo:'Modelo em Teste'
   };
-  if(!D.cnpj){ alert('Fa\u00e7a uma consulta de CNPJ antes de salvar.'); return; }
-  fbSaveHistoricoAnalise(D.cnpj.replace(/\D/g,''),registro);
-  alert('An\u00e1lise salva no hist\u00f3rico com sucesso.');
+  try{
+    fbSaveHistoricoAnalise(D.cnpj.replace(/\D/g,''),registro);
+    feedback(true,'Salvo');
+  }catch(e){
+    feedback(false,'Erro ao salvar');
+  }
   return registro;
 }
 
 // Imprimir / gerar PDF
-function imprimirMod5(){
+function imprimirMod5(btn){
   var q2=document.querySelector.bind(document);
   var D=window._mod5D||{}; var S=window._mod5S||{};
-  if(!D.cnpj){ alert('Fa\u00e7a uma consulta de CNPJ antes de gerar o PDF.'); return; }
+  if(!D.cnpj){
+    if(btn){ var _o=btn.innerHTML; btn.innerHTML='\u26a0\ufe0f Fa\u00e7a uma consulta antes'; setTimeout(function(){btn.innerHTML=_o;},2200); }
+    return;
+  }
   var _calcCond=window._mod5calcCond||function(){return '';};
   var _tStr=window._mod5tStr||function(){return '';};
   var cond_txt = {
