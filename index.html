@@ -5985,19 +5985,38 @@ function upDoc(n,inp){
   }
 
   function gerarParecer(){
-    var prec=[0,1,2].map(function(i){return (q('#m5r'+i+'n')||{}).value||'';}).filter(Boolean);
-    if(!prec.length){alert('Preencha ao menos uma refer\u00eancia.');return;}
+    var refs=[0,1,2].map(function(i){
+      return {
+        nome:(q('#m5r'+i+'n')||{}).value||'',
+        rc:(q('#m5r'+i+'rc')||{}).value||'',
+        atraso:(q('#m5r'+i+'a')||{}).value||'',
+        pagaEmDia:(q('#m5r'+i+'p')||{}).value||'',
+        debito:(q('#m5r'+i+'db')||{}).value||''
+      };
+    }).filter(function(r){return r.nome;});
+    if(!refs.length){alert('Preencha ao menos uma refer\u00eancia.');return;}
     var btn=q('#m5bPar');btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Analisando...';
     setTimeout(function(){
-      var neg=[0,1,2].some(function(i){var v=(q('#m5r'+i+'rc')||{}).value||'';return v.indexOf('N\u00e3o')>=0;});
+      var neg=refs.some(function(r){return r.rc.indexOf('N\u00e3o')>=0;});
+      // Atencao: atraso frequente, nao paga em dia, debito em aberto ou recomendacao com ressalvas
+      var comAtraso=refs.filter(function(r){
+        return r.atraso.indexOf('frequ\u00eancia')>=0
+          || r.pagaEmDia.indexOf('N\u00e3o')>=0
+          || r.debito.indexOf('Sim')>=0
+          || r.rc.indexOf('ressalvas')>=0;
+      });
       var re5=q('#m5re5');re5.style.display='block';
       if(neg){
         S.negado=true;
         addCk('neg','ti-x','Refer\u00eancias: hist\u00f3rico negativo');
         re5.innerHTML=negBox('Refer\u00eancias negativas \u2014 negado','Fornecedor(es) n\u00e3o recomendam cr\u00e9dito. Venda faturada negada.');
+      } else if(comAtraso.length){
+        var _nomes=comAtraso.map(function(r){return r.nome;}).join(', ');
+        addCk('warn','ti-alert-triangle','Refer\u00eancias: '+comAtraso.length+' de '+refs.length+' com atraso/d\u00e9bito/ressalva ('+_nomes+') \u2014 requer aten\u00e7\u00e3o do diretor');
+        re5.innerHTML=card('#E65100',it('warn','ti-alert-triangle','<strong>'+refs.length+' refer\u00eancias</strong> consultadas. '+comAtraso.length+' fornecedor(es) relataram atraso, d\u00e9bito em aberto ou ressalva no pagamento: <strong>'+_nomes+'</strong>. Recomenda-se aprova\u00e7\u00e3o do diretor antes de faturar.'));
       } else {
-        addCk('ok','ti-check','Refer\u00eancias: '+prec.length+' consultadas \u2014 hist\u00f3rico favor\u00e1vel');
-        re5.innerHTML=card('#1B5E20',it('ok','ti-check','<strong>'+prec.length+' refer\u00eancias</strong> consultadas. Hist\u00f3rico favor\u00e1vel. Todos recomendam cr\u00e9dito.'));
+        addCk('ok','ti-check','Refer\u00eancias: '+refs.length+' consultadas \u2014 hist\u00f3rico favor\u00e1vel');
+        re5.innerHTML=card('#1B5E20',it('ok','ti-check','<strong>'+refs.length+' refer\u00eancias</strong> consultadas. Hist\u00f3rico favor\u00e1vel. Todos recomendam cr\u00e9dito.'));
       }
       veredito();
       btn.disabled=false;btn.innerHTML='<i class="ti ti-brain"></i> Gerar parecer';
