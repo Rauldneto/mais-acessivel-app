@@ -4738,7 +4738,7 @@ function renderModeloEmTeste(){
     checks:[],negado:false,protestoDiretor:false,
     mE:0,mS:0,nS:1,sit:'',
     endTerceiro:false,
-    simDoc:{1:0,2:0,3:0},simLoc:0,
+    simDoc:{1:0,2:0,3:0},simLoc:0,orcamento:0,
     mOk:false,lOk:false
   };
   var D={nome:'',fantasia:'',cnpj:'',socio:'',capital:'',endereco:'',cidade:'',estado:'',cep:''};
@@ -4864,7 +4864,7 @@ function renderModeloEmTeste(){
       +'<button onclick="salvarAnaliseMod5(this)" style="background:linear-gradient(135deg,#0f6e56,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-device-floppy"></i> Salvar</button>'
       +'<button onclick="imprimirMod5(this)" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-printer"></i> PDF</button>'
       +'<button onclick="window.scrollTo({top:0,behavior:\x27smooth\x27})" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-arrow-up"></i> Topo</button>'
-      +'<button onclick="limpar()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-refresh"></i> Nova consulta</button>'
+      +'<button onclick="novaConsultaMod5()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-refresh"></i> Nova consulta</button>'
       +'<button onclick="mostrarHistoricoMod5()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-history"></i> Ver hist\u00f3rico</button>';
     sv.style.display='block';
     sv.scrollIntoView({behavior:'smooth'});
@@ -4901,7 +4901,7 @@ function renderModeloEmTeste(){
   }
 
   function limpar(){
-    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,precisaAprovDir:false,justEndTerceiro:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},docsOk:{1:false,2:false,3:false},simLoc:0,mOk:false,lOk:false};
+    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,precisaAprovDir:false,justEndTerceiro:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},docsOk:{1:false,2:false,3:false},simLoc:0,orcamento:0,mOk:false,lOk:false};
     window._mod5S=S;
     S_DOCS={contrato:null,comprovante:null,docSocio:null};
     D={nome:'',fantasia:'',cnpj:'',socio:'',capital:''};
@@ -4922,6 +4922,32 @@ function renderModeloEmTeste(){
       r+=d[i];
     }
     return r;
+  }
+
+  // Mascara de moeda: digita so numeros, formata como R$ 1.234,56
+  function maskMoeda(v){
+    var d=v.replace(/\D/g,'');
+    if(!d) return '';
+    d=d.replace(/^0+(?=\d)/,'');
+    while(d.length<3) d='0'+d;
+    var cent=d.slice(-2), intPart=d.slice(0,-2);
+    intPart=intPart.replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+    return 'R$ '+intPart+','+cent;
+  }
+  function parseMoeda(str){
+    if(!str) return 0;
+    var v=(''+str).replace(/[R$\s]/g,'').replace(/\./g,'').replace(',','.');
+    var n=parseFloat(v);
+    return isNaN(n)?0:n;
+  }
+  // Parse de data no formato MM/AAAA -> numero de meses desde ano 0 (pra comparar recencia)
+  function parseMesAno(str){
+    if(!str) return null;
+    var m=(''+str).match(/(\d{1,2})\s*\/\s*(\d{4})/);
+    if(!m) return null;
+    var mes=parseInt(m[1],10), ano=parseInt(m[2],10);
+    if(mes<1||mes>12) return null;
+    return ano*12+(mes-1);
   }
 
   function consultar(){
@@ -5932,15 +5958,19 @@ function upDoc(n,inp){
   function tryAv4(){if((S.lOk||!S.endTerceiro)&&S.mOk)q('#m5av4').style.display='block';}
 
   var RSIM=[
-    {n:'DISTRIBUIDORA NORTE LTDA',r:'Carlos Mendes',t:'(62) 99812-4455',d:'03/2021',l:'R$ 25.000,00',dc:'11/2024',vc:'R$ 18.500,00',p:'\u2705 Sim',a:'\u2705 Nunca',da:'0',db:'\u2705 N\u00e3o',rc:'\u2705 Sim'},
-    {n:'ATACADO CENTRAL BRASIL LTDA',r:'Fernanda Rocha',t:'(62) 3254-8800',d:'07/2020',l:'R$ 40.000,00',dc:'09/2024',vc:'R$ 32.000,00',p:'\u2705 Sim',a:'\u2705 Nunca',da:'0',db:'\u2705 N\u00e3o',rc:'\u2705 Sim'},
-    {n:'COMERCIAL GOIAS DISTRIBUIDORA',r:'Paulo Henrique',t:'(62) 98745-3322',d:'01/2022',l:'R$ 15.000,00',dc:'12/2024',vc:'R$ 12.800,00',p:'\u2705 Sim',a:'\u26a0\ufe0f Raramente',da:'7',db:'\u2705 N\u00e3o',rc:'\u2705 Sim'}
+    {n:'DISTRIBUIDORA NORTE LTDA',r:'Carlos Mendes',t:'(62) 99812-4455',d:'03/2021',l:'R$ 25.000,00',dc:'11/2024',vc:'R$ 18.500,00',dl:'07/2026',vl:'R$ 4.200,00',p:'\u2705 Sim',a:'\u2705 Nunca',da:'0',db:'\u2705 N\u00e3o',rc:'\u2705 Sim'},
+    {n:'ATACADO CENTRAL BRASIL LTDA',r:'Fernanda Rocha',t:'(62) 3254-8800',d:'07/2020',l:'R$ 40.000,00',dc:'09/2024',vc:'R$ 32.000,00',dl:'06/2026',vl:'R$ 9.000,00',p:'\u2705 Sim',a:'\u2705 Nunca',da:'0',db:'\u2705 N\u00e3o',rc:'\u2705 Sim'},
+    {n:'COMERCIAL GOIAS DISTRIBUIDORA',r:'Paulo Henrique',t:'(62) 98745-3322',d:'01/2022',l:'R$ 15.000,00',dc:'12/2024',vc:'R$ 12.800,00',dl:'07/2026',vl:'R$ 2.100,00',p:'\u2705 Sim',a:'\u26a0\ufe0f Raramente',da:'7',db:'\u2705 N\u00e3o',rc:'\u2705 Sim'}
   ];
 
   function buildE5(){
     q('#m5s5').innerHTML=card('#1B5E20',
       sec(5,'#1B5E20','Refer\u00eancias Comerciais \u2014 Hist\u00f3rico de Pagamento')
       +'<p style="font-size:13px;color:#475569;margin-bottom:14px">M\u00ednimo 3 refer\u00eancias \u00b7 at\u00e9 8 \u00b7 Preencha os dados de cada fornecedor</p>'
+      +'<div style="background:#fff;border:1.5px solid #1B5E20;border-radius:10px;padding:12px 14px;margin-bottom:14px">'
+      +'<label style="font-size:11px;font-weight:700;color:#1B5E20;text-transform:uppercase;display:block;margin-bottom:6px">Valor do Or\u00e7amento (compra pretendida)</label>'
+      +'<input type="text" id="m5orc" placeholder="R$ 0,00" style="border:0.5px solid #94a3b8;border-radius:6px;padding:8px 12px;font-size:14px;font-weight:600;background:#ffffff;color:#0f172a;outline:none;width:220px">'
+      +'</div>'
       +'<div id="m5rC">'
       +[0,1,2].map(rfC).join('')
       +'</div>'
@@ -5950,10 +5980,15 @@ function upDoc(n,inp){
       +'</div>'
     )+'<div id="m5re5" style="display:none"></div>';
     show('m5s5');
+    var _orc=q('#m5orc');
+    if(_orc){
+      _orc.value=S.orcamento?maskMoeda(String(Math.round(S.orcamento*100))):'';
+      _orc.oninput=function(){ this.value=maskMoeda(this.value); S.orcamento=parseMoeda(this.value); };
+    }
     q('#m5bSim').onclick=function(){
       RSIM.forEach(function(r,i){
         var set=function(id,v){var el=q('#m5r'+i+id);if(el)el.value=v;};
-        set('n',r.n);set('r',r.r);set('t',r.t);set('d',r.d);set('l',r.l);set('dc',r.dc);set('vc',r.vc);set('p',r.p);set('a',r.a);set('da',r.da);set('db',r.db);set('rc',r.rc);
+        set('n',r.n);set('r',r.r);set('t',r.t);set('d',r.d);set('l',r.l);set('dc',r.dc);set('vc',r.vc);set('dl',r.dl);set('vl',r.vl);set('p',r.p);set('a',r.a);set('da',r.da);set('db',r.db);set('rc',r.rc);
       });
     };
     q('#m5bPar').onclick=gerarParecer;
@@ -5978,9 +6013,10 @@ function upDoc(n,inp){
       +'<div style="'+g2+'">'+fd('Telefone',fi('t','(00) 00000-0000'))+fd('Cliente desde',fi('d','MM/AAAA'))+'</div>'
       +'<div style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;margin:8px 0">Relacionamento</div>'
       +'<div style="'+g3+'">'+fd('Limite (R$)',fi('l','10.000,00'))+fd('Data maior compra',fi('dc','MM/AAAA'))+fd('Valor maior compra',fi('vc','3.000,00'))+'</div>'
+      +'<div style="'+g2+'">'+fd('Data \u00faltima compra',fi('dl','MM/AAAA'))+fd('Valor \u00faltima compra',fi('vl','1.000,00'))+'</div>'
       +'<div style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;margin:8px 0">Pagamento</div>'
       +'<div style="'+g3+'">'+fd('Paga em dia?',fs('p',['\u2705 Sim','\u26a0\ufe0f Quase sempre','\u274c N\u00e3o']))+fd('J\u00e1 teve atraso?',fs('a',['\u2705 Nunca','\u26a0\ufe0f Raramente','\u274c Com frequ\u00eancia']))+fd('Maior atraso (dias)',fi('da','0'))+'</div>'
-      +'<div style="'+g2+'">'+fd('D\u00e9bito em aberto?',fs('db',['\u2705 N\u00e3o','\u274c Sim']))+fd('Recomenda cr\u00e9dito?',fs('rc',['\u2705 Sim','\u26a0\ufe0f Com ressalvas','\u274c N\u00e3o']))+'</div>'
+      +'<div style="'+g2+'">'+fd('D\u00e9bito em aberto?',fs('db',['\u2705 N\u00e3o','\u274c Sim','\u26a0\ufe0f Sim, em atraso']))+fd('Recomenda cr\u00e9dito?',fs('rc',['\u2705 Sim','\u26a0\ufe0f Com ressalvas','\u274c N\u00e3o']))+'</div>'
       +'</div>';
   }
 
@@ -5991,32 +6027,60 @@ function upDoc(n,inp){
         rc:(q('#m5r'+i+'rc')||{}).value||'',
         atraso:(q('#m5r'+i+'a')||{}).value||'',
         pagaEmDia:(q('#m5r'+i+'p')||{}).value||'',
-        debito:(q('#m5r'+i+'db')||{}).value||''
+        debito:(q('#m5r'+i+'db')||{}).value||'',
+        limite:parseMoeda((q('#m5r'+i+'l')||{}).value||''),
+        dataUltimaCompra:(q('#m5r'+i+'dl')||{}).value||''
       };
     }).filter(function(r){return r.nome;});
     if(!refs.length){alert('Preencha ao menos uma refer\u00eancia.');return;}
     var btn=q('#m5bPar');btn.disabled=true;btn.innerHTML='<i class="ti ti-loader"></i> Analisando...';
     setTimeout(function(){
       var neg=refs.some(function(r){return r.rc.indexOf('N\u00e3o')>=0;});
-      // Atencao: atraso frequente, nao paga em dia, debito em aberto ou recomendacao com ressalvas
+      // Atencao: atraso frequente, nao paga em dia, debito em aberto (ou em atraso) ou recomendacao com ressalvas
       var comAtraso=refs.filter(function(r){
         return r.atraso.indexOf('frequ\u00eancia')>=0
           || r.pagaEmDia.indexOf('N\u00e3o')>=0
           || r.debito.indexOf('Sim')>=0
           || r.rc.indexOf('ressalvas')>=0;
       });
+
+      // Orcamento vs limites disponibilizados pelas referencias
+      var limitesInformados=refs.map(function(r){return r.limite;}).filter(function(v){return v>0;});
+      var mediaLimite=limitesInformados.length?(limitesInformados.reduce(function(a,b){return a+b;},0)/limitesInformados.length):0;
+      var orcamentoAbaixoLimite=S.orcamento>0 && limitesInformados.length>0 && mediaLimite<S.orcamento;
+
+      // Referencias sem compra ha mais de 3 meses
+      var hojeM=(new Date().getFullYear())*12+(new Date().getMonth());
+      var semCompraRecente=refs.filter(function(r){
+        var m=parseMesAno(r.dataUltimaCompra);
+        return m!==null && (hojeM-m)>3;
+      });
+
       var re5=q('#m5re5');re5.style.display='block';
       if(neg){
         S.negado=true;
         addCk('neg','ti-x','Refer\u00eancias: hist\u00f3rico negativo');
         re5.innerHTML=negBox('Refer\u00eancias negativas \u2014 negado','Fornecedor(es) n\u00e3o recomendam cr\u00e9dito. Venda faturada negada.');
-      } else if(comAtraso.length){
-        var _nomes=comAtraso.map(function(r){return r.nome;}).join(', ');
-        addCk('warn','ti-alert-triangle','Refer\u00eancias: '+comAtraso.length+' de '+refs.length+' com atraso/d\u00e9bito/ressalva ('+_nomes+') \u2014 requer aten\u00e7\u00e3o do diretor');
-        re5.innerHTML=card('#E65100',it('warn','ti-alert-triangle','<strong>'+refs.length+' refer\u00eancias</strong> consultadas. '+comAtraso.length+' fornecedor(es) relataram atraso, d\u00e9bito em aberto ou ressalva no pagamento: <strong>'+_nomes+'</strong>. Recomenda-se aprova\u00e7\u00e3o do diretor antes de faturar.'));
       } else {
-        addCk('ok','ti-check','Refer\u00eancias: '+refs.length+' consultadas \u2014 hist\u00f3rico favor\u00e1vel');
-        re5.innerHTML=card('#1B5E20',it('ok','ti-check','<strong>'+refs.length+' refer\u00eancias</strong> consultadas. Hist\u00f3rico favor\u00e1vel. Todos recomendam cr\u00e9dito.'));
+        var motivosAtencao=[];
+        if(comAtraso.length){
+          var _nomes=comAtraso.map(function(r){return r.nome;}).join(', ');
+          motivosAtencao.push(comAtraso.length+' de '+refs.length+' com atraso/d\u00e9bito/ressalva ('+_nomes+')');
+        }
+        if(orcamentoAbaixoLimite){
+          motivosAtencao.push('limite m\u00e9dio das refer\u00eancias (R$ '+mediaLimite.toLocaleString('pt-BR',{minimumFractionDigits:2})+') \u00e9 menor que o or\u00e7amento pretendido (R$ '+S.orcamento.toLocaleString('pt-BR',{minimumFractionDigits:2})+')');
+        }
+        if(semCompraRecente.length){
+          var _nomes2=semCompraRecente.map(function(r){return r.nome;}).join(', ');
+          motivosAtencao.push(semCompraRecente.length+' refer\u00eancia(s) sem compra h\u00e1 mais de 3 meses ('+_nomes2+')');
+        }
+        if(motivosAtencao.length){
+          addCk('warn','ti-alert-triangle','Refer\u00eancias: '+motivosAtencao.join('; ')+' \u2014 requer aten\u00e7\u00e3o do diretor');
+          re5.innerHTML=card('#E65100',it('warn','ti-alert-triangle','<strong>'+refs.length+' refer\u00eancias</strong> consultadas. Pontos de aten\u00e7\u00e3o: '+motivosAtencao.join('; ')+'. Recomenda-se aprova\u00e7\u00e3o do diretor antes de faturar.'));
+        } else {
+          addCk('ok','ti-check','Refer\u00eancias: '+refs.length+' consultadas \u2014 hist\u00f3rico favor\u00e1vel');
+          re5.innerHTML=card('#1B5E20',it('ok','ti-check','<strong>'+refs.length+' refer\u00eancias</strong> consultadas. Hist\u00f3rico favor\u00e1vel. Todos recomendam cr\u00e9dito.'));
+        }
       }
       veredito();
       btn.disabled=false;btn.innerHTML='<i class="ti ti-brain"></i> Gerar parecer';
@@ -6040,7 +6104,7 @@ function upDoc(n,inp){
     +'<div id="m5btnBar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:12px 16px;background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">'
     +'<button onclick="salvarAnaliseMod5(this)" style="background:linear-gradient(135deg,#0f6e56,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-device-floppy"></i> Salvar</button>'
     +'<button onclick="imprimirMod5(this)" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-printer"></i> PDF</button>'
-    +'<button onclick="limpar()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-refresh"></i> Nova consulta</button>'
+    +'<button onclick="novaConsultaMod5()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-refresh"></i> Nova consulta</button>'
     +'<button onclick="mostrarHistoricoMod5()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-history"></i> Ver hist\u00f3rico</button>'
     +'</div>'
     +'<div id="m5card_resultado" style="position:sticky;top:0;z-index:100;background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1.5px solid #f59e0b;border-radius:0 0 12px 12px;padding:12px 18px;margin-bottom:16px;box-shadow:0 4px 12px rgba(245,158,11,0.2)">'
@@ -6257,19 +6321,23 @@ function renderAprovacoes(){
       });
 
       var refsHtml='';
+      if(v.orcamento){
+        refsHtml+='<div style="margin-top:14px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:8px 12px;font-size:12px;color:#1e3a5f"><strong>Valor do Or\u00e7amento (compra pretendida):</strong> R$ '+Number(v.orcamento).toLocaleString('pt-BR',{minimumFractionDigits:2})+'</div>';
+      }
       if(v.referencias&&v.referencias.length){
-        refsHtml='<div style="margin-top:14px"><div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;margin-bottom:8px"><i class="ti ti-truck-delivery"></i> Avalia\u00e7\u00f5es de Fornecedores (Refer\u00eancias)</div>';
+        refsHtml+='<div style="margin-top:14px"><div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;margin-bottom:8px"><i class="ti ti-truck-delivery"></i> Avalia\u00e7\u00f5es de Fornecedores (Refer\u00eancias)</div>';
         v.referencias.forEach(function(r,ri){
           refsHtml+='<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:6px;font-size:12px;color:#334155;line-height:1.7">'
             +'<strong>'+(ri+1)+'. '+(r.nome||'')+'</strong>'+(r.responsavel?' \u2014 '+r.responsavel:'')+(r.telefone?' \u00b7 '+r.telefone:'')+'<br>'
             +'Cliente desde: '+(r.clienteDesde||'\u2014')+' &nbsp;|&nbsp; Limite: R$ '+(r.limite||'\u2014')+' &nbsp;|&nbsp; Maior compra: '+(r.valorMaiorCompra||'\u2014')+' em '+(r.dataMaiorCompra||'\u2014')+'<br>'
+            +'\u00daltima compra: '+(r.valorUltimaCompra||'\u2014')+' em '+(r.dataUltimaCompra||'\u2014')+'<br>'
             +'Paga em dia: '+(r.pagaEmDia||'\u2014')+' &nbsp;|&nbsp; Atraso: '+(r.atraso||'\u2014')+' ('+(r.maiorAtrasoDias||'0')+' dias) &nbsp;|&nbsp; D\u00e9bito em aberto: '+(r.debitoAberto||'\u2014')+'<br>'
             +'<strong>Recomenda cr\u00e9dito:</strong> '+(r.recomendaCredito||'\u2014')
             +'</div>';
         });
         refsHtml+='</div>';
       } else {
-        refsHtml='<div style="margin-top:14px;font-size:12px;color:#94a3b8">Nenhuma refer\u00eancia comercial registrada nesta an\u00e1lise.</div>';
+        refsHtml+='<div style="margin-top:14px;font-size:12px;color:#94a3b8">Nenhuma refer\u00eancia comercial registrada nesta an\u00e1lise.</div>';
       }
 
       var decisaoOptions=DECISOES.map(function(d){return '<option value="'+d.v+'">'+d.label+'</option>';}).join('');
@@ -6405,6 +6473,7 @@ function coletarReferenciasM5(){
       arr.push({
         nome:nome, responsavel:val('r'), telefone:val('t'), clienteDesde:val('d'),
         limite:val('l'), dataMaiorCompra:val('dc'), valorMaiorCompra:val('vc'),
+        dataUltimaCompra:val('dl'), valorUltimaCompra:val('vl'),
         pagaEmDia:val('p'), atraso:val('a'), maiorAtrasoDias:val('da'),
         debitoAberto:val('db'), recomendaCredito:val('rc')
       });
@@ -6605,6 +6674,7 @@ async function gerarParecerIA(){
             var registro={
               cnpj:_D.cnpj,empresa:_D.nome,fantasia:_D.fantasia,socio:_D.socio,capital:_D.capital,
               situacao:_S2.sit,meses_empresa:_S2.mE,meses_socio:_S2.mS,
+              orcamento:_S2.orcamento||0,
               checks:_S2.checks,
               referencias:(typeof coletarReferenciasM5==='function')?coletarReferenciasM5():[],
               condicao_sugerida:(window._mod5calcCond?window._mod5calcCond():''),
@@ -6654,6 +6724,8 @@ function salvarAnaliseMod5(btn){
   var registro = {
     cnpj:D.cnpj, empresa:D.nome, fantasia:D.fantasia, socio:D.socio, capital:D.capital,
     situacao:S.sit, meses_empresa:S.mE, meses_socio:S.mS,
+    orcamento:S.orcamento||0,
+    referencias:(typeof coletarReferenciasM5==='function')?coletarReferenciasM5():[],
     responsavel:STATE.usuarioLogado||'desconhecido',
     dataHora:dtStr, timestamp:agora.toISOString(),
     condicao_pagamento:(window._mod5calcCond?window._mod5calcCond():''),
@@ -6748,7 +6820,13 @@ function imprimirMod5(btn){
 function mostrarHistoricoMod5(){
   STATE.modulo='mod2';
   STATE.tabCredito='historico';
-  renderApp();
+  render();
+}
+
+// Nova consulta do mod5: re-renderiza a tela do zero (limpa D/S automaticamente)
+function novaConsultaMod5(){
+  STATE.modulo='mod5';
+  render();
 }
 
 </script>
