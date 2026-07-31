@@ -3712,7 +3712,11 @@ function extrairCotacaoDeItensPdf(itensGlobais, textoTotal){
       valor:(cols[4]||'').replace(/[^\d,.-]/g,'').replace(/\.(?=\d{3}(\D|$))/g,'').replace(',','.'),
       outros:'', credito:'', lucro:''
     };
-  }).filter(function(t){ return t.nome; });
+  }).filter(function(t){
+    // Descarta linhas de rodape de impressao do navegador (URL da pagina,
+    // "about:blank", numero de pagina tipo "1/1"), que nao sao transportadoras.
+    return t.nome && !/about:blank|^https?:\/\/|^\d+\s*\/\s*\d+$/i.test(t.nome);
+  });
 
   return {
     id: mId?mId[1]:'',
@@ -3798,35 +3802,49 @@ function mostrarRevisaoPdfCotacao(dados, confiavel){
   btnConfirmar.onclick=function(){
     var id=inpId.value.trim();
     if(!id){ alert('Informe o numero da cotacao.'); return; }
+    var idx=SAVED.findIndex(function(s){return s.id===id;});
+    var existente=idx>=0?SAVED[idx]:{};
+    // So sobrescreve um campo se a revisao trouxe algo de fato preenchido;
+    // caso contrario mantem o que ja existia no historico (evita apagar
+    // dados bons com os tracinhos "-" de campo nao encontrado no PDF).
+    function preencheOuMantem(novoValor, valorExistente, padrao){
+      var v=(novoValor===undefined||novoValor===null)?'':String(novoValor).trim();
+      if(v && v!=='\u2014') return v;
+      return (valorExistente!==undefined && valorExistente!==null && valorExistente!=='') ? valorExistente : (padrao||'\u2014');
+    }
+    var valorNFNovo=parseFloat(String(inpValor.value).replace(',','.'))||0;
+    var pesoNovo=parseFloat(String(inpPeso.value).replace(',','.'))||0;
+    var volNovo=parseInt(inpVol.value,10)||0;
     var atualizado={
       id:id,
-      destCity:inpCidade.value||'\u2014',
-      destUF:inpUF.value||'\u2014',
-      cnpjDest:inpCnpj.value||'\u2014',
-      cepDest:inpCep.value||'\u2014',
-      endDest:dados.endDest||'\u2014',
-      valorNF:parseFloat(String(inpValor.value).replace(',','.'))||0,
-      volumes:parseInt(inpVol.value,10)||0,
-      peso:parseFloat(String(inpPeso.value).replace(',','.'))||0,
-      nfEmitida:dados.nfEmitida||'',
+      destCity:preencheOuMantem(inpCidade.value, existente.destCity),
+      destUF:preencheOuMantem(inpUF.value, existente.destUF),
+      cnpjDest:preencheOuMantem(inpCnpj.value, existente.cnpjDest),
+      cepDest:preencheOuMantem(inpCep.value, existente.cepDest),
+      endDest:preencheOuMantem(dados.endDest, existente.endDest),
+      valorNF: valorNFNovo>0 ? valorNFNovo : (existente.valorNF||0),
+      volumes: volNovo>0 ? volNovo : (existente.volumes||0),
+      peso: pesoNovo>0 ? pesoNovo : (existente.peso||0),
+      nfEmitida:dados.nfEmitida||existente.nfEmitida||'',
       frete:(String(inpFrete.value||'CIF')).toUpperCase().indexOf('FOB')>=0?'FOB':'CIF',
-      solicitante:inpSolic.value||'',
+      solicitante:inpSolic.value||existente.solicitante||'',
       dataHora:dados.dataHora||new Date().toLocaleString('pt-BR'),
-      produtos:dados.produtos||[],
-      transportadoras:dados.transportadoras||[],
+      produtos:(dados.produtos&&dados.produtos.length)?dados.produtos:(existente.produtos||[]),
+      transportadoras:(dados.transportadoras&&dados.transportadoras.length)?dados.transportadoras:(existente.transportadoras||[]),
       _savedAt:Date.now()
     };
-    var idx=SAVED.findIndex(function(s){return s.id===id;});
     if(idx>=0){
-      SAVED[idx]=Object.assign({},SAVED[idx],atualizado);
+      SAVED[idx]=atualizado;
     } else {
       SAVED.unshift(atualizado);
     }
     if(SAVED.length>30) SAVED.splice(30);
     persistSaved();
     document.body.removeChild(overlay);
-    alert('Cota\u00e7\u00e3o N\u00ba '+id+' recuperada e salva no hist\u00f3rico!');
-    render();
+    alert('Cota\u00e7\u00e3o N\u00ba '+id+' recuperada! Os dados j\u00e1 foram carregados na tela de cota\u00e7\u00e3o.');
+    // Carrega a cotacao recem-atualizada diretamente na tela, para o
+    // usuario ja ver o resultado sem precisar clicar em "Carregar" de novo.
+    carregarCotacaoSalva(atualizado);
   };
   btns.appendChild(btnConfirmar); btns.appendChild(btnCancelar);
   panel.appendChild(btns);
