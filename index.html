@@ -539,7 +539,6 @@ var TRANS_DATA = TRANS.map(function(t){return Object.assign({},t,{triangulacao:f
         SAVED.length = 0;
         loaded.forEach(function(s){SAVED.push(s);});
         base.forEach(function(s){SAVED.push(s);});
-        if(SAVED.length>30) SAVED.splice(30);
       }
     }
   } catch(e){}
@@ -2811,8 +2810,6 @@ function salvarCotacao(){
   nova._savedAt=Date.now();
   var idx=SAVED.findIndex(function(s){return s.id===num;});
   if(idx>=0){SAVED[idx]=nova;} else {SAVED.unshift(nova);}
-  // Mantém máximo 30 cotações
-  if(SAVED.length>30) SAVED.splice(30);
   persistSaved(num);
   alert('Cotação Nº '+num+' salva com sucesso!');
   STATE._lastSavedCotacao=nova;
@@ -3865,7 +3862,6 @@ function mostrarRevisaoPdfCotacao(dados, confiavel){
     } else {
       SAVED.unshift(atualizado);
     }
-    if(SAVED.length>30) SAVED.splice(30);
     persistSaved(id);
     document.body.removeChild(overlay);
     alert('Cota\u00e7\u00e3o N\u00ba '+id+' recuperada! Os dados j\u00e1 foram carregados na tela de cota\u00e7\u00e3o.');
