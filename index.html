@@ -675,9 +675,20 @@ setInterval(function() {
 }, 30000);
 
 // ── Funções para salvar no localStorage + Firebase ──
-function persistSaved(){
+function persistSaved(idAlvo){
   try { localStorage.setItem('maisacessivel_saved', JSON.stringify(SAVED)); } catch(e){}
-  // Salva cada cotacao individualmente no Firebase para evitar conflito entre usuarios
+  if(idAlvo!==undefined && idAlvo!==null){
+    // Grava so a cotacao que realmente mudou. Antes isto disparava uma
+    // gravacao para TODAS as cotacoes do historico a cada salvamento
+    // (dezenas de requisicoes simultaneas), o que podia fazer a gravacao
+    // da cotacao atual se perder na fila.
+    var alvo=SAVED.find(function(s){ return s && String(s.id)===String(idAlvo); });
+    if(alvo){
+      fbPut('saved/'+String(alvo.id).replace(/[^a-zA-Z0-9_-]/g,'_'), alvo);
+    }
+    return;
+  }
+  // Sem id especifico (uso legado): grava tudo.
   SAVED.forEach(function(s){
     if(s && s.id){
       fbPut('saved/'+String(s.id).replace(/[^a-zA-Z0-9_-]/g,'_'), s);
@@ -2802,7 +2813,7 @@ function salvarCotacao(){
   if(idx>=0){SAVED[idx]=nova;} else {SAVED.unshift(nova);}
   // Mantém máximo 30 cotações
   if(SAVED.length>30) SAVED.splice(30);
-  persistSaved();
+  persistSaved(num);
   alert('Cotação Nº '+num+' salva com sucesso!');
   STATE._lastSavedCotacao=nova;
   // Atualiza botão imprimir no header
@@ -3520,15 +3531,31 @@ function carregarCotacaoSalva(c){
   var todasDoEstado=getManRows(uf);
   var savedMap={};
   (c.transportadoras||[]).forEach(function(t){savedMap[(t.nome||'').toUpperCase()]=t;});
+  var usados={};
   STATE.manRows=todasDoEstado.map(function(r){
     var saved=savedMap[(r.nome||'').toUpperCase()];
     if(saved){
+      usados[(r.nome||'').toUpperCase()]=true;
       return Object.assign({},r,{
         cotacao:saved.cotacao||'',prazo:saved.prazo||'',valor:saved.valor||'',
         outros:saved.outros||'',credito:saved.credito||'',lucro:saved.lucro||''
       });
     }
     return r;
+  });
+  // Transportadoras salvas que nao estao cadastradas na lista padrao do
+  // estado (ex: recuperadas de um PDF) nao podem ser descartadas - entram
+  // como linhas extras no fim da tabela.
+  var proxNr=STATE.manRows.length;
+  (c.transportadoras||[]).forEach(function(t){
+    var chave=(t.nome||'').toUpperCase();
+    if(!chave || usados[chave]) return;
+    proxNr++;
+    STATE.manRows.push({
+      nome:t.nome||'', tel:t.tel||'', tipo:'TRANSP', uf:uf, triangulacao:false, nr:proxNr,
+      cotacao:t.cotacao||'', prazo:t.prazo||'', valor:t.valor||'',
+      outros:t.outros||'', credito:t.credito||'', lucro:t.lucro||''
+    });
   });
   STATE.tab='cotacao'; STATE.modulo='frete'; render();
 }
@@ -3839,7 +3866,7 @@ function mostrarRevisaoPdfCotacao(dados, confiavel){
       SAVED.unshift(atualizado);
     }
     if(SAVED.length>30) SAVED.splice(30);
-    persistSaved();
+    persistSaved(id);
     document.body.removeChild(overlay);
     alert('Cota\u00e7\u00e3o N\u00ba '+id+' recuperada! Os dados j\u00e1 foram carregados na tela de cota\u00e7\u00e3o.');
     // Carrega a cotacao recem-atualizada diretamente na tela, para o
