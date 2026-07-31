@@ -3552,12 +3552,23 @@ function recuperarCotacaoDePdf(file, statusEl){
         return Promise.all(paginas.map(function(p){
           return pdf.getPage(p).then(function(pg){
             return pg.getTextContent().then(function(ct){
-              return ct.items.map(function(it){return it.str;}).join(' ');
+              return ct.items.map(function(it){
+                return {str:it.str, x:it.transform[4], y:it.transform[5], width:it.width||0};
+              });
             });
           });
         }));
-      }).then(function(partes){
-        var textoTotal=partes.join(' ');
+      }).then(function(paginasItens){
+        // Junta os itens de todas as paginas, deslocando o Y de cada pagina
+        // para manter a ordem de leitura (pagina 2 vem "depois" da pagina 1).
+        var itensGlobais=[];
+        paginasItens.forEach(function(itensPag,pIdx){
+          itensPag.forEach(function(it){
+            itensGlobais.push({str:it.str, x:it.x, y:it.y-(pIdx*100000), width:it.width});
+          });
+        });
+        var textoTotal=itensGlobais.map(function(it){return it.str;}).join(' ');
+
         var dados=null, confiavel=false;
         var m=textoTotal.match(/COTDATA:([A-Za-z0-9+\/=]+):COTDATA/);
         if(m&&m[1]){
@@ -3567,7 +3578,7 @@ function recuperarCotacaoDePdf(file, statusEl){
           }catch(errParse){ dados=null; }
         }
         if(!dados){
-          dados=extrairCotacaoDeTextoPdf(textoTotal);
+          dados=extrairCotacaoDeItensPdf(itensGlobais, textoTotal);
         }
         if(!dados||!dados.id){
           throw new Error('Nao foi possivel identificar o numero da cotacao neste PDF.');
@@ -3584,17 +3595,94 @@ function recuperarCotacaoDePdf(file, statusEl){
   fr.readAsArrayBuffer(file);
 }
 
-// Extracao best-effort para PDFs antigos (sem o marcador COTDATA).
-// So recupera o bloco de Resumo (texto visivel); transportadoras e
-// produtos precisam ser conferidos/preenchidos manualmente nesse caso.
-function extrairCotacaoDeTextoPdf(texto){
-  var mId=texto.match(/N[ºoO°]\s*(\d{3,7})/);
-  var partes=texto.split('*');
+// ===== Extracao best-effort para PDFs antigos (sem o marcador COTDATA) =====
+// Usa a posicao (x,y) de cada trecho de texto no PDF para reconstruir as
+// linhas e colunas das tabelas de Produtos e Transportadoras, alem do
+// bloco de Resumo. Os resultados sempre passam pela tela de revisao antes
+// de serem gravados, entao um erro de leitura aqui nao corrompe o historico.
+
+function agruparLinhasPorPosicao(itens){
+  var linhas=[];
+  itens.forEach(function(it){
+    if(!it.str || !it.str.trim()) return;
+    var y=Math.round(it.y);
+    var linha=null;
+    for(var i=0;i<linhas.length;i++){
+      if(Math.abs(linhas[i].y-y)<=3){ linha=linhas[i]; break; }
+    }
+    if(!linha){ linha={y:y, itens:[]}; linhas.push(linha); }
+    linha.itens.push(it);
+  });
+  linhas.sort(function(a,b){ return b.y-a.y; }); // topo do documento primeiro
+  linhas.forEach(function(l){ l.itens.sort(function(a,b){ return a.x-b.x; }); });
+  return linhas;
+}
+
+function textoDaLinha(linha){
+  return linha.itens.map(function(it){return it.str;}).join(' ').replace(/\s+/g,' ').trim();
+}
+
+// Divide os itens de uma linha em colunas, usando como referencia a posicao
+// x de cada coluna no cabecalho da tabela.
+function celulasPorColunasReferencia(itens, colunasX){
+  var colunas=colunasX.map(function(){return [];});
+  itens.forEach(function(it){
+    var melhorIdx=0;
+    for(var k=0;k<colunasX.length;k++){
+      if(it.x >= colunasX[k]-6) melhorIdx=k;
+    }
+    colunas[melhorIdx].push(it.str);
+  });
+  return colunas.map(function(c){ return c.join('').replace(/\s+/g,' ').trim(); });
+}
+
+// Localiza uma tabela pelo cabecalho (linha que contem todas as palavras
+// indicadas) e extrai as linhas seguintes ate o proximo cabecalho de secao
+// (ou ate o fim do documento). Retorna uma lista de objetos ja mapeados.
+function extrairTabelaPorCabecalho(linhas, palavrasCabecalho, pararEm, mapeador){
+  var idxCabecalho=-1;
+  for(var i=0;i<linhas.length;i++){
+    var t=textoDaLinha(linhas[i]);
+    var contemTodas=palavrasCabecalho.every(function(p){ return t.indexOf(p)>=0; });
+    if(contemTodas){ idxCabecalho=i; break; }
+  }
+  if(idxCabecalho<0) return [];
+  var colunasX=linhas[idxCabecalho].itens.map(function(it){ return it.x; });
+  var resultado=[];
+  for(var j=idxCabecalho+1;j<linhas.length;j++){
+    var t=textoDaLinha(linhas[j]);
+    if(!t) continue;
+    if(pararEm && pararEm.some(function(p){ return t.indexOf(p)>=0; })) break;
+    var celulas=celulasPorColunasReferencia(linhas[j].itens, colunasX);
+    if(celulas.every(function(c){ return c===''; })) continue;
+    resultado.push(mapeador(celulas));
+  }
+  return resultado;
+}
+
+function extrairCotacaoDeItensPdf(itensGlobais, textoTotal){
+  var linhas=agruparLinhasPorPosicao(itensGlobais);
+
+  // ID: procura no contexto logo apos a palavra "Cota" (robusto a
+  // corrupcao de acentos tipo "NÂº" e a espacos extras entre caracteres)
+  var idxCota=textoTotal.search(/Cota/i);
+  var contextoId=idxCota>=0?textoTotal.slice(idxCota,idxCota+60):textoTotal.slice(0,200);
+  var mId=contextoId.match(/N[^\d]{0,4}(\d{3,7})/);
+
+  // Isola o texto do Resumo (para antes das tabelas de Produtos/Transportadoras),
+  // evitando que o valor do ultimo campo "vaze" e absorva o resto do documento.
+  var textoResumo=textoTotal;
+  var candidatosFim=[textoTotal.search(/Produtos/), textoTotal.search(/Transportadoras/)]
+    .filter(function(i){ return i>0; });
+  if(candidatosFim.length) textoResumo=textoTotal.slice(0, Math.min.apply(null,candidatosFim));
+
+  var partes=textoResumo.split('*');
   var campos={};
   partes.forEach(function(seg){
+    seg=seg.replace(/\s+/g,' ');
     var i=seg.indexOf(':');
     if(i<0) return;
-    campos[seg.slice(0,i)]=seg.slice(i+1);
+    campos[seg.slice(0,i).trim()]=seg.slice(i+1).trim();
   });
   function acharCampo(chave){
     for(var k in campos){ if(k.indexOf(chave)>=0) return campos[k]; }
@@ -3607,6 +3695,25 @@ function extrairCotacaoDeTextoPdf(texto){
   var volRaw=acharCampo('Quantidade de volumes');
   var freteRaw=acharCampo('Frete');
   var mFrete=(freteRaw||'').match(/CIF|FOB/i);
+
+  // Tabela de produtos: cabecalho precisa ter "Produto" E "Vol" juntos,
+  // para nao confundir com o titulo da secao "Produtos".
+  var produtos=extrairTabelaPorCabecalho(linhas, ['Produto','Vol'], ['Transportadora'], function(cols){
+    return { nome:cols[0]||'', vol:parseInt((cols[1]||'').replace(/\D/g,''),10)||1, dim:cols[2]||'', cabe:'' };
+  });
+
+  // Tabela de transportadoras: cabecalho "Transportadora" + "Telefone"
+  var transportadoras=extrairTabelaPorCabecalho(linhas, ['Transportadora','Telefone'], null, function(cols){
+    return {
+      nome:cols[0]||'',
+      tel:cols[1]||'',
+      cotacao:cols[2]||'',
+      prazo:(cols[3]||'').replace(/d\.?u\.?/i,'').trim(),
+      valor:(cols[4]||'').replace(/[^\d,.-]/g,'').replace(/\.(?=\d{3}(\D|$))/g,'').replace(',','.'),
+      outros:'', credito:'', lucro:''
+    };
+  }).filter(function(t){ return t.nome; });
+
   return {
     id: mId?mId[1]:'',
     destCity:'',
@@ -3614,15 +3721,15 @@ function extrairCotacaoDeTextoPdf(texto){
     cnpjDest:(cnpjDestRaw||'').replace(/[^\d]/g,'').slice(0,20)||'\u2014',
     cepDest:(cepDestRaw||'').replace(/[^\d-]/g,'').slice(0,12)||'\u2014',
     endDest:'\u2014',
-    valorNF:parseFloat((valorNFRaw||'').replace(/[^\d,.]/g,'').replace(',','.'))||0,
+    valorNF:parseFloat((valorNFRaw||'').replace(/[^\d,.]/g,'').replace(/\.(?=\d{3}(\D|$))/g,'').replace(',','.'))||0,
     volumes:parseInt(volRaw,10)||0,
     peso:parseFloat((pesoRaw||'').replace(/[^\d,.]/g,'').replace(',','.'))||0,
     nfEmitida:'',
     frete:mFrete?mFrete[0].toUpperCase():'CIF',
     solicitante:'',
     dataHora:new Date().toLocaleString('pt-BR'),
-    produtos:[],
-    transportadoras:[]
+    produtos:produtos,
+    transportadoras:transportadoras
   };
 }
 
