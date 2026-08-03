@@ -539,6 +539,7 @@ var TRANS_DATA = TRANS.map(function(t){return Object.assign({},t,{triangulacao:f
         SAVED.length = 0;
         loaded.forEach(function(s){SAVED.push(s);});
         base.forEach(function(s){SAVED.push(s);});
+        if(SAVED.length>30) SAVED.splice(30);
       }
     }
   } catch(e){}
@@ -590,14 +591,6 @@ function fbInit() {
         var map={};
         raw.forEach(function(s){
           if(s&&s.id) map[String(s.id)]=s;
-        });
-        // Protege cotacoes salvas localmente ha pouco tempo (evita sobrescrever
-        // com uma versao antiga do Firebase antes da gravacao propagar)
-        var agora=Date.now();
-        SAVED.forEach(function(s){
-          if(s&&s.id&&s._savedAt&&(agora-s._savedAt)<20000){
-            map[String(s.id)]=s;
-          }
         });
         var arr=Object.values(map);
         if(arr.length>0){
@@ -674,20 +667,9 @@ setInterval(function() {
 }, 30000);
 
 // ── Funções para salvar no localStorage + Firebase ──
-function persistSaved(idAlvo){
+function persistSaved(){
   try { localStorage.setItem('maisacessivel_saved', JSON.stringify(SAVED)); } catch(e){}
-  if(idAlvo!==undefined && idAlvo!==null){
-    // Grava so a cotacao que realmente mudou. Antes isto disparava uma
-    // gravacao para TODAS as cotacoes do historico a cada salvamento
-    // (dezenas de requisicoes simultaneas), o que podia fazer a gravacao
-    // da cotacao atual se perder na fila.
-    var alvo=SAVED.find(function(s){ return s && String(s.id)===String(idAlvo); });
-    if(alvo){
-      fbPut('saved/'+String(alvo.id).replace(/[^a-zA-Z0-9_-]/g,'_'), alvo);
-    }
-    return;
-  }
-  // Sem id especifico (uso legado): grava tudo.
+  // Salva cada cotacao individualmente no Firebase para evitar conflito entre usuarios
   SAVED.forEach(function(s){
     if(s && s.id){
       fbPut('saved/'+String(s.id).replace(/[^a-zA-Z0-9_-]/g,'_'), s);
@@ -712,8 +694,7 @@ var STATE={
   prods:[{nome:'',vol:0,dim:'',cabe:''}],
   manRows:[],
   embSrch:'', trSrch:'', trUF:'',
-  showConfigPanel:false,
-  _loadedCotacaoId:null
+  showConfigPanel:false
 };
 
 // ── AUTO-LOGIN: verifica sessão salva ──
@@ -2763,11 +2744,10 @@ function renderApp(){
   return wrap;
 }
 
-// Monta o objeto de cotacao a partir do STATE atual (usado ao salvar e ao
-// embutir os dados ocultos no PDF impresso, para permitir recuperacao exata).
-function construirObjetoCotacaoAtual(){
+function salvarCotacao(){
   var num=STATE.form.numeroCotacao||'';
-  return {
+  if(!num){alert('Informe o Nº da Cotação antes de salvar!'); return;}
+  var nova={
     id:num,
     destCity:STATE.form.cidadeDest||'—',
     destUF:STATE.form.ufDest||'—',
@@ -2782,35 +2762,13 @@ function construirObjetoCotacaoAtual(){
     solicitante:STATE.form.solicitante,
     dataHora:new Date().toLocaleString('pt-BR'),
     produtos:STATE.prods.filter(function(p){return p.nome;}),
-    transportadoras:STATE.manRows.filter(function(r){
-      // Mantem a linha se houver QUALQUER informacao preenchida, nao so o valor final
-      return (parseFloat(r.valor)>0) || (r.cotacao&&String(r.cotacao).trim()!=='') ||
-        (r.prazo&&String(r.prazo).trim()!=='') || (parseFloat(r.outros)>0) ||
-        (parseFloat(r.credito)>0) || (parseFloat(r.lucro)>0);
-    })
+    transportadoras:STATE.manRows.filter(function(r){return parseFloat(r.valor)>0;})
   };
-}
-
-function salvarCotacao(){
-  var num=STATE.form.numeroCotacao||'';
-  if(!num){alert('Informe o Nº da Cotação antes de salvar!'); return;}
-  var idxExistente=SAVED.findIndex(function(s){return s.id===num;});
-  if(idxExistente>=0 && STATE._loadedCotacaoId!==num){
-    var ex=SAVED[idxExistente];
-    var abrirExistente=confirm(
-      'Já existe uma cotação salva com o Nº '+num+' ('+(ex.destCity||'—')+' - '+(ex.destUF||'—')+
-      ', salva em '+(ex.dataHora||'—')+').\n\n'+
-      'OK = Abrir essa cotação existente e continuar preenchendo ela (recomendado).\n'+
-      'Cancelar = Voltar e revisar o número antes de salvar.'
-    );
-    if(abrirExistente){ carregarCotacaoSalva(ex); }
-    return;
-  }
-  var nova=construirObjetoCotacaoAtual();
-  nova._savedAt=Date.now();
   var idx=SAVED.findIndex(function(s){return s.id===num;});
   if(idx>=0){SAVED[idx]=nova;} else {SAVED.unshift(nova);}
-  persistSaved(num);
+  // Mantém máximo 30 cotações
+  if(SAVED.length>30) SAVED.splice(30);
+  persistSaved();
   alert('Cotação Nº '+num+' salva com sucesso!');
   STATE._lastSavedCotacao=nova;
   // Atualiza botão imprimir no header
@@ -2844,11 +2802,7 @@ function imprimirCotacao(){
   var num=STATE.form.numeroCotacao||'';
   if(!num){alert('Nenhuma cotação carregada para imprimir!'); return;}
   var resumoTxt=calcResumo();
-  var transLines=STATE.manRows.filter(function(r){
-    return (parseFloat(r.valor)>0) || (r.cotacao&&String(r.cotacao).trim()!=='') ||
-      (r.prazo&&String(r.prazo).trim()!=='') || (parseFloat(r.outros)>0) ||
-      (parseFloat(r.credito)>0) || (parseFloat(r.lucro)>0);
-  }).map(function(r){
+  var transLines=STATE.manRows.filter(function(r){return parseFloat(r.valor)>0;}).map(function(r){
     var v=parseFloat(r.valor)||0,o=parseFloat(r.outros)||0,cr=parseFloat(r.credito)||0,l=parseFloat(r.lucro)||0;
     var vc=(v+o)*(1+cr/100)*(1+l/100);
     return '<tr><td>'+r.nome+'</td><td>'+r.tel+'</td><td>'+r.cotacao+'</td><td>'+r.prazo+' d.u.</td><td>'+fmtBRL(v)+'</td><td>'+fmtBRL(vc)+'</td></tr>';
@@ -2858,14 +2812,12 @@ function imprimirCotacao(){
   }).join('');
   var win=window.open('','_blank');
   var dt=new Date().toLocaleString('pt-BR');
-  win.document.write('<html><head><title>Cotação Nº '+num+'</title><style>body{font-family:Arial,sans-serif;font-size:12px;padding:20px;color:#1a1a1a}h1{color:#d97706;font-size:18px;margin-bottom:4px}h2{font-size:13px;color:#444;border-bottom:1px solid #ddd;padding-bottom:4px;margin-top:16px}table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#f3f3f1;padding:6px 8px;text-align:left;font-size:11px;border-bottom:2px solid #ddd}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:11px}pre{background:#f9f9f7;padding:12px;border-radius:6px;font-size:11px;line-height:1.8;white-space:pre-wrap}.badge{background:#fff8eb;border:1px solid #fde68a;padding:2px 8px;border-radius:4px;font-size:11px;color:#92400e;font-weight:700}@media print{body{padding:10px}}.hidden-data{font-size:1px;color:white;line-height:0;overflow:hidden;height:1px;}</style></head><body>');
+  win.document.write('<html><head><title>Cotação Nº '+num+'</title><style>body{font-family:Arial,sans-serif;font-size:12px;padding:20px;color:#1a1a1a}h1{color:#d97706;font-size:18px;margin-bottom:4px}h2{font-size:13px;color:#444;border-bottom:1px solid #ddd;padding-bottom:4px;margin-top:16px}table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#f3f3f1;padding:6px 8px;text-align:left;font-size:11px;border-bottom:2px solid #ddd}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:11px}pre{background:#f9f9f7;padding:12px;border-radius:6px;font-size:11px;line-height:1.8;white-space:pre-wrap}.badge{background:#fff8eb;border:1px solid #fde68a;padding:2px 8px;border-radius:4px;font-size:11px;color:#92400e;font-weight:700}@media print{body{padding:10px}}</style></head><body>');
   win.document.write('<h2 style="color:#d97706">MAIS ACESSÍVEL — Sistema de Cotação de Frete</h2>');
   win.document.write('<span class="badge">Cotação Nº '+num+'</span> &nbsp; <span style="color:#888;font-size:11px">'+dt+'</span>');
   win.document.write('<h2>📤 Resumo</h2><pre>'+resumoTxt+'</pre>');
   win.document.write('<h2>📦 Produtos</h2><table><thead><tr><th>Produto</th><th>Vol.</th><th>Dimensão</th></tr></thead><tbody>'+prodLines+'</tbody></table>');
   if(transLines) win.document.write('<h2>🚛 Transportadoras Cotadas</h2><table><thead><tr><th>Transportadora</th><th>Telefone</th><th>Cotação</th><th>Prazo</th><th>Valor</th><th>Valor Cobrar</th></tr></thead><tbody>'+transLines+'</tbody></table>');
-  var _cotDataB64=btoa(unescape(encodeURIComponent(JSON.stringify(construirObjetoCotacaoAtual()))));
-  win.document.write('<div class="hidden-data" id="cot-export-data">COTDATA:'+_cotDataB64+':COTDATA</div>');
   win.document.write('</body></html>');
   win.document.close();
   setTimeout(function(){win.print();},500);
@@ -2918,7 +2870,6 @@ function renderNav(){
       STATE.form=Object.assign({},INIT);
       STATE.prods=[{nome:'',vol:0,dim:'',cabe:''}];
       STATE.manRows=[];
-      STATE._loadedCotacaoId=null;
       STATE.tab='cotacao';
       STATE.modulo='frete';
       render();
@@ -3516,367 +3467,6 @@ function rebuildManRow(i){
 }
 
 // ── SALVAS ──────────────────────────────
-// Carrega os dados de uma cotação salva (histórico) de volta no formulário,
-// mesclando as transportadoras já cotadas. Usada tanto pelo botão "Carregar"
-// quanto pelo alerta de cotação duplicada em salvarCotacao().
-function carregarCotacaoSalva(c){
-  STATE._loadedCotacaoId=c.id;
-  STATE.form=Object.assign({},INIT,{cnpjDest:c.cnpjDest,cepDest:c.cepDest,cidadeDest:c.destCity,ufDest:c.destUF,endDest:c.endDest,valorNF:String(c.valorNF),pesoTotal:String(c.peso),nfEmitida:c.nfEmitida,solicitante:c.solicitante,numeroCotacao:c.id,frete:c.frete||'CIF'});
-  STATE.prods=(c.produtos||[]).map(function(p){return{nome:p.nome||'',vol:p.vol||1,dim:p.dim||'',cabe:p.cabe||''};});
-  if(!STATE.prods.length) STATE.prods=[{nome:'',vol:0,dim:'',cabe:''}];
-  var uf=c.destUF||'';
-  var todasDoEstado=getManRows(uf);
-  var savedMap={};
-  (c.transportadoras||[]).forEach(function(t){savedMap[(t.nome||'').toUpperCase()]=t;});
-  var usados={};
-  STATE.manRows=todasDoEstado.map(function(r){
-    var saved=savedMap[(r.nome||'').toUpperCase()];
-    if(saved){
-      usados[(r.nome||'').toUpperCase()]=true;
-      return Object.assign({},r,{
-        cotacao:saved.cotacao||'',prazo:saved.prazo||'',valor:saved.valor||'',
-        outros:saved.outros||'',credito:saved.credito||'',lucro:saved.lucro||''
-      });
-    }
-    return r;
-  });
-  // Transportadoras salvas que nao estao cadastradas na lista padrao do
-  // estado (ex: recuperadas de um PDF) nao podem ser descartadas - entram
-  // como linhas extras no fim da tabela.
-  var proxNr=STATE.manRows.length;
-  (c.transportadoras||[]).forEach(function(t){
-    var chave=(t.nome||'').toUpperCase();
-    if(!chave || usados[chave]) return;
-    proxNr++;
-    STATE.manRows.push({
-      nome:t.nome||'', tel:t.tel||'', tipo:'TRANSP', uf:uf, triangulacao:false, nr:proxNr,
-      cotacao:t.cotacao||'', prazo:t.prazo||'', valor:t.valor||'',
-      outros:t.outros||'', credito:t.credito||'', lucro:t.lucro||''
-    });
-  });
-  STATE.tab='cotacao'; STATE.modulo='frete'; render();
-}
-
-// ===== RECUPERAR COTACAO A PARTIR DO PDF IMPRESSO =====
-// PDFs impressos a partir desta versao trazem um bloco de dados oculto
-// (marcador COTDATA) com o snapshot completo da cotacao, permitindo
-// recuperacao exata. PDFs impressos antes disso nao tem esse marcador;
-// nesse caso tentamos extrair pelo menos o resumo (texto visivel).
-function recuperarCotacaoDePdf(file, statusEl){
-  if(!file) return;
-  if(statusEl){ statusEl.textContent='Lendo PDF...'; statusEl.style.color='#92400e'; }
-  var fr=new FileReader();
-  fr.onload=function(e){
-    try{
-      if(typeof pdfjsLib==='undefined') throw new Error('Biblioteca PDF nao carregou');
-      pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      pdfjsLib.getDocument({data:e.target.result}).promise.then(function(pdf){
-        var paginas=[];
-        for(var p=1;p<=pdf.numPages;p++) paginas.push(p);
-        return Promise.all(paginas.map(function(p){
-          return pdf.getPage(p).then(function(pg){
-            return pg.getTextContent().then(function(ct){
-              return ct.items.map(function(it){
-                return {str:it.str, x:it.transform[4], y:it.transform[5], width:it.width||0};
-              });
-            });
-          });
-        }));
-      }).then(function(paginasItens){
-        // Junta os itens de todas as paginas, deslocando o Y de cada pagina
-        // para manter a ordem de leitura (pagina 2 vem "depois" da pagina 1).
-        var itensGlobais=[];
-        paginasItens.forEach(function(itensPag,pIdx){
-          itensPag.forEach(function(it){
-            itensGlobais.push({str:it.str, x:it.x, y:it.y-(pIdx*100000), width:it.width});
-          });
-        });
-        var textoTotal=itensGlobais.map(function(it){return it.str;}).join(' ');
-
-        var dados=null, confiavel=false;
-        var m=textoTotal.match(/COTDATA:([A-Za-z0-9+\/=]+):COTDATA/);
-        if(m&&m[1]){
-          try{
-            dados=JSON.parse(decodeURIComponent(escape(atob(m[1]))));
-            confiavel=true;
-          }catch(errParse){ dados=null; }
-        }
-        if(!dados){
-          dados=extrairCotacaoDeItensPdf(itensGlobais, textoTotal);
-        }
-        if(!dados||!dados.id){
-          throw new Error('Nao foi possivel identificar o numero da cotacao neste PDF.');
-        }
-        if(statusEl){ statusEl.textContent=''; }
-        mostrarRevisaoPdfCotacao(dados, confiavel);
-      }).catch(function(err){
-        if(statusEl){ statusEl.textContent='Erro: '+err.message; statusEl.style.color='#991b1b'; }
-      });
-    }catch(err){
-      if(statusEl){ statusEl.textContent='Erro: '+err.message; statusEl.style.color='#991b1b'; }
-    }
-  };
-  fr.readAsArrayBuffer(file);
-}
-
-// ===== Extracao best-effort para PDFs antigos (sem o marcador COTDATA) =====
-// Usa a posicao (x,y) de cada trecho de texto no PDF para reconstruir as
-// linhas e colunas das tabelas de Produtos e Transportadoras, alem do
-// bloco de Resumo. Os resultados sempre passam pela tela de revisao antes
-// de serem gravados, entao um erro de leitura aqui nao corrompe o historico.
-
-function agruparLinhasPorPosicao(itens){
-  var linhas=[];
-  itens.forEach(function(it){
-    if(!it.str || !it.str.trim()) return;
-    var y=Math.round(it.y);
-    var linha=null;
-    for(var i=0;i<linhas.length;i++){
-      if(Math.abs(linhas[i].y-y)<=3){ linha=linhas[i]; break; }
-    }
-    if(!linha){ linha={y:y, itens:[]}; linhas.push(linha); }
-    linha.itens.push(it);
-  });
-  linhas.sort(function(a,b){ return b.y-a.y; }); // topo do documento primeiro
-  linhas.forEach(function(l){ l.itens.sort(function(a,b){ return a.x-b.x; }); });
-  return linhas;
-}
-
-function textoDaLinha(linha){
-  return linha.itens.map(function(it){return it.str;}).join(' ').replace(/\s+/g,' ').trim();
-}
-
-// Divide os itens de uma linha em colunas, usando como referencia a posicao
-// x de cada coluna no cabecalho da tabela.
-function celulasPorColunasReferencia(itens, colunasX){
-  var colunas=colunasX.map(function(){return [];});
-  itens.forEach(function(it){
-    var melhorIdx=0;
-    for(var k=0;k<colunasX.length;k++){
-      if(it.x >= colunasX[k]-6) melhorIdx=k;
-    }
-    colunas[melhorIdx].push(it.str);
-  });
-  return colunas.map(function(c){ return c.join('').replace(/\s+/g,' ').trim(); });
-}
-
-// Localiza uma tabela pelo cabecalho (linha que contem todas as palavras
-// indicadas) e extrai as linhas seguintes ate o proximo cabecalho de secao
-// (ou ate o fim do documento). Retorna uma lista de objetos ja mapeados.
-function extrairTabelaPorCabecalho(linhas, palavrasCabecalho, pararEm, mapeador){
-  var idxCabecalho=-1;
-  for(var i=0;i<linhas.length;i++){
-    var t=textoDaLinha(linhas[i]);
-    var contemTodas=palavrasCabecalho.every(function(p){ return t.indexOf(p)>=0; });
-    if(contemTodas){ idxCabecalho=i; break; }
-  }
-  if(idxCabecalho<0) return [];
-  var colunasX=linhas[idxCabecalho].itens.map(function(it){ return it.x; });
-  var resultado=[];
-  for(var j=idxCabecalho+1;j<linhas.length;j++){
-    var t=textoDaLinha(linhas[j]);
-    if(!t) continue;
-    if(pararEm && pararEm.some(function(p){ return t.indexOf(p)>=0; })) break;
-    var celulas=celulasPorColunasReferencia(linhas[j].itens, colunasX);
-    if(celulas.every(function(c){ return c===''; })) continue;
-    resultado.push(mapeador(celulas));
-  }
-  return resultado;
-}
-
-function extrairCotacaoDeItensPdf(itensGlobais, textoTotal){
-  var linhas=agruparLinhasPorPosicao(itensGlobais);
-
-  // ID: procura no contexto logo apos a palavra "Cota" (robusto a
-  // corrupcao de acentos tipo "NÂº" e a espacos extras entre caracteres)
-  var idxCota=textoTotal.search(/Cota/i);
-  var contextoId=idxCota>=0?textoTotal.slice(idxCota,idxCota+60):textoTotal.slice(0,200);
-  var mId=contextoId.match(/N[^\d]{0,4}(\d{3,7})/);
-
-  // Isola o texto do Resumo (para antes das tabelas de Produtos/Transportadoras),
-  // evitando que o valor do ultimo campo "vaze" e absorva o resto do documento.
-  var textoResumo=textoTotal;
-  var candidatosFim=[textoTotal.search(/Produtos/), textoTotal.search(/Transportadoras/)]
-    .filter(function(i){ return i>0; });
-  if(candidatosFim.length) textoResumo=textoTotal.slice(0, Math.min.apply(null,candidatosFim));
-
-  var partes=textoResumo.split('*');
-  var campos={};
-  partes.forEach(function(seg){
-    seg=seg.replace(/\s+/g,' ');
-    var i=seg.indexOf(':');
-    if(i<0) return;
-    campos[seg.slice(0,i).trim()]=seg.slice(i+1).trim();
-  });
-  function acharCampo(chave){
-    for(var k in campos){ if(k.indexOf(chave)>=0) return campos[k]; }
-    return '';
-  }
-  var cnpjDestRaw=acharCampo('CNPJ do destinat');
-  var cepDestRaw=acharCampo('CEP de destino');
-  var valorNFRaw=acharCampo('Valor da nota fiscal');
-  var pesoRaw=acharCampo('Peso total');
-  var volRaw=acharCampo('Quantidade de volumes');
-  var freteRaw=acharCampo('Frete');
-  var mFrete=(freteRaw||'').match(/CIF|FOB/i);
-
-  // Tabela de produtos: cabecalho precisa ter "Produto" E "Vol" juntos,
-  // para nao confundir com o titulo da secao "Produtos".
-  var produtos=extrairTabelaPorCabecalho(linhas, ['Produto','Vol'], ['Transportadora'], function(cols){
-    return { nome:cols[0]||'', vol:parseInt((cols[1]||'').replace(/\D/g,''),10)||1, dim:cols[2]||'', cabe:'' };
-  });
-
-  // Tabela de transportadoras: cabecalho "Transportadora" + "Telefone"
-  var transportadoras=extrairTabelaPorCabecalho(linhas, ['Transportadora','Telefone'], null, function(cols){
-    return {
-      nome:cols[0]||'',
-      tel:cols[1]||'',
-      cotacao:cols[2]||'',
-      prazo:(cols[3]||'').replace(/d\.?u\.?/i,'').trim(),
-      valor:(cols[4]||'').replace(/[^\d,.-]/g,'').replace(/\.(?=\d{3}(\D|$))/g,'').replace(',','.'),
-      outros:'', credito:'', lucro:''
-    };
-  }).filter(function(t){
-    // Descarta linhas de rodape de impressao do navegador (URL da pagina,
-    // "about:blank", numero de pagina tipo "1/1"), que nao sao transportadoras.
-    return t.nome && !/about:blank|^https?:\/\/|^\d+\s*\/\s*\d+$/i.test(t.nome);
-  });
-
-  return {
-    id: mId?mId[1]:'',
-    destCity:'',
-    destUF:'',
-    cnpjDest:(cnpjDestRaw||'').replace(/[^\d]/g,'').slice(0,20)||'\u2014',
-    cepDest:(cepDestRaw||'').replace(/[^\d-]/g,'').slice(0,12)||'\u2014',
-    endDest:'\u2014',
-    valorNF:parseFloat((valorNFRaw||'').replace(/[^\d,.]/g,'').replace(/\.(?=\d{3}(\D|$))/g,'').replace(',','.'))||0,
-    volumes:parseInt(volRaw,10)||0,
-    peso:parseFloat((pesoRaw||'').replace(/[^\d,.]/g,'').replace(',','.'))||0,
-    nfEmitida:'',
-    frete:mFrete?mFrete[0].toUpperCase():'CIF',
-    solicitante:'',
-    dataHora:new Date().toLocaleString('pt-BR'),
-    produtos:produtos,
-    transportadoras:transportadoras
-  };
-}
-
-// Tela de revisao antes de gravar os dados recuperados do PDF no historico.
-function mostrarRevisaoPdfCotacao(dados, confiavel){
-  var overlay=document.createElement('div');
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px';
-  var panel=document.createElement('div');
-  panel.style.cssText='background:#fff;border-radius:14px;max-width:640px;width:100%;padding:22px 24px;box-shadow:0 8px 40px rgba(0,0,0,.3)';
-
-  var aviso = confiavel
-    ? '<div style="background:#dcfce7;border:1px solid #86efac;color:#166534;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:14px;">\u2705 Dados completos recuperados diretamente do PDF (inclusive transportadoras e produtos).</div>'
-    : '<div style="background:#fef9c3;border:1px solid #fde047;color:#854d0e;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:14px;">\u26a0\ufe0f Este PDF e de uma versao antiga: so foi possivel recuperar o resumo (valores, CNPJ, CEP, peso, frete). Transportadoras/produtos podem precisar ser digitados novamente.</div>';
-
-  panel.innerHTML = '<h2 style="margin:0 0 4px;font-size:16px;color:#1a1a1a">\ud83d\udcc4 Revisar dados recuperados do PDF</h2>'+
-    '<p style="margin:0 0 14px;font-size:12px;color:#888;">Confira os campos antes de salvar no historico.</p>'+
-    aviso;
-
-  var grid=document.createElement('div'); grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:0 14px;';
-  panel.appendChild(grid);
-  function campoInputGrid(label, valor){
-    var wrap=document.createElement('div'); wrap.style.cssText='margin-bottom:10px;';
-    var lbl=document.createElement('div'); lbl.textContent=label; lbl.style.cssText='font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:700;margin-bottom:3px;';
-    var inp=document.createElement('input'); inp.className='inp'; inp.style.width='100%'; inp.value=(valor===undefined||valor===null)?'':valor;
-    wrap.appendChild(lbl); wrap.appendChild(inp);
-    grid.appendChild(wrap);
-    return inp;
-  }
-
-  var inpId=campoInputGrid('N\u00ba da Cota\u00e7\u00e3o', dados.id);
-  var inpCidade=campoInputGrid('Cidade destino', dados.destCity);
-  var inpUF=campoInputGrid('UF destino', dados.destUF);
-  var inpCnpj=campoInputGrid('CNPJ destinat\u00e1rio', dados.cnpjDest);
-  var inpCep=campoInputGrid('CEP destino', dados.cepDest);
-  var inpValor=campoInputGrid('Valor da NF (R$)', dados.valorNF);
-  var inpPeso=campoInputGrid('Peso (kg)', dados.peso);
-  var inpVol=campoInputGrid('Volumes', dados.volumes);
-  var inpFrete=campoInputGrid('Frete (CIF/FOB)', dados.frete);
-  var inpSolic=campoInputGrid('Solicitante', dados.solicitante);
-
-  if(dados.transportadoras && dados.transportadoras.length){
-    var tTitle=document.createElement('div'); tTitle.style.cssText='font-size:11px;font-weight:700;text-transform:uppercase;color:#888;margin:10px 0 4px;';
-    tTitle.textContent='Transportadoras recuperadas ('+dados.transportadoras.length+')';
-    panel.appendChild(tTitle);
-    dados.transportadoras.forEach(function(t){
-      var d=document.createElement('div'); d.style.cssText='font-size:12px;font-family:monospace;padding:3px 0;border-bottom:1px solid #eee;';
-      d.textContent=(t.nome||'\u2014')+' \u00b7 Cota\u00e7\u00e3o '+(t.cotacao||'\u2014')+' \u00b7 '+(t.prazo||'\u2014')+' d.u. \u00b7 R$ '+(t.valor||0);
-      panel.appendChild(d);
-    });
-  }
-  if(dados.produtos && dados.produtos.length){
-    var pTitle=document.createElement('div'); pTitle.style.cssText='font-size:11px;font-weight:700;text-transform:uppercase;color:#888;margin:10px 0 4px;';
-    pTitle.textContent='Produtos recuperados ('+dados.produtos.length+')';
-    panel.appendChild(pTitle);
-    dados.produtos.forEach(function(p){
-      var d=document.createElement('div'); d.style.cssText='font-size:12px;font-family:monospace;padding:3px 0;border-bottom:1px solid #eee;';
-      d.textContent=(p.vol||0)+' vol \u00b7 '+(p.nome||'\u2014')+' \u00b7 '+(p.dim||'\u2014');
-      panel.appendChild(d);
-    });
-  }
-
-  var btns=document.createElement('div'); btns.style.cssText='display:flex;gap:10px;margin-top:16px;';
-  var btnConfirmar=document.createElement('button'); btnConfirmar.className='btn-ok'; btnConfirmar.textContent='\u2705 Confirmar e salvar no hist\u00f3rico';
-  var btnCancelar=document.createElement('button'); btnCancelar.className='btn-sec'; btnCancelar.textContent='Cancelar';
-  btnCancelar.onclick=function(){ document.body.removeChild(overlay); };
-  btnConfirmar.onclick=function(){
-    var id=inpId.value.trim();
-    if(!id){ alert('Informe o numero da cotacao.'); return; }
-    var idx=SAVED.findIndex(function(s){return s.id===id;});
-    var existente=idx>=0?SAVED[idx]:{};
-    // So sobrescreve um campo se a revisao trouxe algo de fato preenchido;
-    // caso contrario mantem o que ja existia no historico (evita apagar
-    // dados bons com os tracinhos "-" de campo nao encontrado no PDF).
-    function preencheOuMantem(novoValor, valorExistente, padrao){
-      var v=(novoValor===undefined||novoValor===null)?'':String(novoValor).trim();
-      if(v && v!=='\u2014') return v;
-      return (valorExistente!==undefined && valorExistente!==null && valorExistente!=='') ? valorExistente : (padrao||'\u2014');
-    }
-    var valorNFNovo=parseFloat(String(inpValor.value).replace(',','.'))||0;
-    var pesoNovo=parseFloat(String(inpPeso.value).replace(',','.'))||0;
-    var volNovo=parseInt(inpVol.value,10)||0;
-    var atualizado={
-      id:id,
-      destCity:preencheOuMantem(inpCidade.value, existente.destCity),
-      destUF:preencheOuMantem(inpUF.value, existente.destUF),
-      cnpjDest:preencheOuMantem(inpCnpj.value, existente.cnpjDest),
-      cepDest:preencheOuMantem(inpCep.value, existente.cepDest),
-      endDest:preencheOuMantem(dados.endDest, existente.endDest),
-      valorNF: valorNFNovo>0 ? valorNFNovo : (existente.valorNF||0),
-      volumes: volNovo>0 ? volNovo : (existente.volumes||0),
-      peso: pesoNovo>0 ? pesoNovo : (existente.peso||0),
-      nfEmitida:dados.nfEmitida||existente.nfEmitida||'',
-      frete:(String(inpFrete.value||'CIF')).toUpperCase().indexOf('FOB')>=0?'FOB':'CIF',
-      solicitante:inpSolic.value||existente.solicitante||'',
-      dataHora:dados.dataHora||new Date().toLocaleString('pt-BR'),
-      produtos:(dados.produtos&&dados.produtos.length)?dados.produtos:(existente.produtos||[]),
-      transportadoras:(dados.transportadoras&&dados.transportadoras.length)?dados.transportadoras:(existente.transportadoras||[]),
-      _savedAt:Date.now()
-    };
-    if(idx>=0){
-      SAVED[idx]=atualizado;
-    } else {
-      SAVED.unshift(atualizado);
-    }
-    persistSaved(id);
-    document.body.removeChild(overlay);
-    alert('Cota\u00e7\u00e3o N\u00ba '+id+' recuperada! Os dados j\u00e1 foram carregados na tela de cota\u00e7\u00e3o.');
-    // Carrega a cotacao recem-atualizada diretamente na tela, para o
-    // usuario ja ver o resultado sem precisar clicar em "Carregar" de novo.
-    carregarCotacaoSalva(atualizado);
-  };
-  btns.appendChild(btnConfirmar); btns.appendChild(btnCancelar);
-  panel.appendChild(btns);
-
-  overlay.appendChild(panel);
-  document.body.appendChild(overlay);
-}
-
-
 function renderSalvas(){
   var wrap=document.createElement('div');
   // Barra de busca
@@ -3884,24 +3474,10 @@ function renderSalvas(){
   var srch=document.createElement('input'); srch.className='inp'; srch.style.cssText='max-width:260px;font-size:13px';
   srch.placeholder='🔍 Buscar pelo Nº da Cotação...';
   var srchBtn=document.createElement('button'); srchBtn.className='btn-main'; srchBtn.textContent='Buscar';
-  var btnPdfRec=document.createElement('button'); btnPdfRec.textContent='📄 Recuperar de PDF';
-  btnPdfRec.style.cssText='background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff;border:none;padding:7px 15px;border-radius:7px;cursor:pointer;font-weight:700;font-size:11px;font-family:inherit;box-shadow:0 2px 5px rgba(124,58,237,.25);white-space:nowrap;transition:filter .15s';
-  btnPdfRec.onmouseover=function(){ btnPdfRec.style.filter='brightness(1.08)'; };
-  btnPdfRec.onmouseout=function(){ btnPdfRec.style.filter='none'; };
-  btnPdfRec.title='Recupere uma cotacao a partir do PDF impresso, caso ela tenha sido perdida ou salva incompleta';
-  var inputPdfRec=document.createElement('input'); inputPdfRec.type='file'; inputPdfRec.accept='application/pdf'; inputPdfRec.style.display='none';
-  var pdfRecStatus=document.createElement('span'); pdfRecStatus.style.cssText='font-size:12px;color:#888;';
-  btnPdfRec.onclick=function(){ inputPdfRec.click(); };
-  inputPdfRec.onchange=function(){
-    var file=inputPdfRec.files&&inputPdfRec.files[0];
-    inputPdfRec.value='';
-    if(file) recuperarCotacaoDePdf(file,pdfRecStatus);
-  };
   var cnt=document.createElement('span'); cnt.style.cssText='color:#888;font-size:12px';
   cnt.textContent=SAVED.length+' cotação(ões) salva(s) — máx. 30';
-  searchBar.appendChild(srch); searchBar.appendChild(srchBtn); searchBar.appendChild(btnPdfRec); searchBar.appendChild(inputPdfRec); searchBar.appendChild(cnt);
+  searchBar.appendChild(srch); searchBar.appendChild(srchBtn); searchBar.appendChild(cnt);
   wrap.appendChild(searchBar);
-  wrap.appendChild(pdfRecStatus);
 
   var listEl=document.createElement('div'); listEl.id='salvasList';
   wrap.appendChild(listEl);
@@ -3932,7 +3508,25 @@ function renderSalvas(){
       var btnCarregar=document.createElement('button'); btnCarregar.className='btn-ok'; btnCarregar.textContent='↩ Carregar';
       btnCarregar.onclick=function(e){
         e.stopPropagation();
-        carregarCotacaoSalva(c);
+        STATE.form=Object.assign({},INIT,{cnpjDest:c.cnpjDest,cepDest:c.cepDest,cidadeDest:c.destCity,ufDest:c.destUF,endDest:c.endDest,valorNF:String(c.valorNF),pesoTotal:String(c.peso),nfEmitida:c.nfEmitida,solicitante:c.solicitante,numeroCotacao:c.id,frete:c.frete||'CIF'});
+        STATE.prods=(c.produtos||[]).map(function(p){return{nome:p.nome||'',vol:p.vol||1,dim:p.dim||'',cabe:p.cabe||''};});
+        if(!STATE.prods.length) STATE.prods=[{nome:'',vol:0,dim:'',cabe:''}];
+        // Carregar TODAS as transportadoras do estado, mesclando valores já salvos
+        var uf=c.destUF||'';
+        var todasDoEstado=getManRows(uf);
+        var savedMap={};
+        (c.transportadoras||[]).forEach(function(t){savedMap[(t.nome||'').toUpperCase()]=t;});
+        STATE.manRows=todasDoEstado.map(function(r){
+          var saved=savedMap[(r.nome||'').toUpperCase()];
+          if(saved){
+            return Object.assign({},r,{
+              cotacao:saved.cotacao||'',prazo:saved.prazo||'',valor:saved.valor||'',
+              outros:saved.outros||'',credito:saved.credito||'',lucro:saved.lucro||''
+            });
+          }
+          return r;
+        });
+        STATE.tab='cotacao'; STATE.modulo='frete'; render();
       };
       hdr.appendChild(arrow); hdr.appendChild(badge); hdr.appendChild(title); hdr.appendChild(sub); hdr.appendChild(btnCarregar);
       item.appendChild(hdr);
@@ -6475,8 +6069,8 @@ function upDoc(n,inp){
 
       // ===== REGRAS DE NEGADO (checadas primeiro) =====
       var motivosNeg=[];
-      if(cadastroRecente.length>=2){
-        motivosNeg.push(cadastroRecente.length+' de '+total+' refer\u00eancias com cadastro h\u00e1 menos de 6 meses ('+cadastroRecente.map(function(r){return r.nome;}).join(', ')+')');
+      if(total>0 && cadastroRecente.length===total){
+        motivosNeg.push('todas as '+total+' refer\u00eancias com cadastro h\u00e1 menos de 6 meses');
       }
       if(total>0 && semCompraRecente.length===total){
         motivosNeg.push('todas as refer\u00eancias sem compra h\u00e1 mais de 3 meses');
@@ -6504,22 +6098,41 @@ function upDoc(n,inp){
         addCk('neg','ti-x','Refer\u00eancias: negado \u2014 '+motivosNeg.join('; '));
         re5.innerHTML=negBox('Refer\u00eancias reprovadas \u2014 negado para venda faturada',motivosNeg.join('; ')+'. Solicite nova refer\u00eancia comercial para continuar a an\u00e1lise.');
       } else {
+        // "Demais respostas positivas": nenhum problema de atraso, debito ou recomendacao
+        var algumRessalvaOuNao=refs.some(function(r){return r.rc.indexOf('ressalvas')>=0||r.rc.indexOf('N\u00e3o')>=0;});
+        var algumAtrasoRaro=refs.some(function(r){return r.atraso.indexOf('Raramente')>=0;});
+        var algumDebito=refs.some(function(r){return r.debito.indexOf('Sim')>=0;}) && !todasComDebito;
+        var demaisPositivas = !algumRessalvaOuNao && !algumAtrasoRaro && !algumDebito;
+
         var motivosAtencao=[];
-        if(cadastroRecente.length===1){
-          motivosAtencao.push('1 refer\u00eancia com cadastro h\u00e1 menos de 6 meses ('+cadastroRecente[0].nome+') \u2014 solicite nova refer\u00eancia para continuar');
+        if(cadastroRecente.length===2){
+          if(demaisPositivas){
+            motivosAtencao.push('2 de '+total+' refer\u00eancias com cadastro h\u00e1 menos de 6 meses ('+cadastroRecente.map(function(r){return r.nome;}).join(', ')+'), demais informa\u00e7\u00f5es positivas \u2014 sugest\u00e3o: solicitar mais 2 novas refer\u00eancias com mais de 6 meses de cadastro, ou liberar a venda com 50% de entrada e restante no boleto');
+          } else {
+            motivosAtencao.push('2 de '+total+' refer\u00eancias com cadastro h\u00e1 menos de 6 meses ('+cadastroRecente.map(function(r){return r.nome;}).join(', ')+')');
+          }
+        } else if(cadastroRecente.length===1){
+          if(demaisPositivas){
+            motivosAtencao.push('1 refer\u00eancia com cadastro h\u00e1 menos de 6 meses ('+cadastroRecente[0].nome+'), demais informa\u00e7\u00f5es positivas \u2014 sugest\u00e3o: solicitar mais 2 novas refer\u00eancias com mais de 6 meses de cadastro, ou liberar a venda com 40% de entrada e restante no boleto');
+          } else {
+            motivosAtencao.push('1 refer\u00eancia com cadastro h\u00e1 menos de 6 meses ('+cadastroRecente[0].nome+')');
+          }
         }
-        if(semCompraRecente.length>0 && semCompraRecente.length<total){
+        if(semCompraRecente.length===1 && cadastroRecente.length===0){
+          if(demaisPositivas){
+            motivosAtencao.push('1 refer\u00eancia sem compra h\u00e1 mais de 3 meses ('+semCompraRecente[0].nome+'), demais informa\u00e7\u00f5es positivas \u2014 sugest\u00e3o: solicitar novo fornecedor, ou liberar a venda com 40% de entrada e restante no boleto');
+          } else {
+            motivosAtencao.push('1 refer\u00eancia sem compra h\u00e1 mais de 3 meses ('+semCompraRecente[0].nome+')');
+          }
+        } else if(semCompraRecente.length>0 && semCompraRecente.length<total && cadastroRecente.length===0){
           motivosAtencao.push(semCompraRecente.length+' de '+total+' refer\u00eancia(s) sem compra h\u00e1 mais de 3 meses ('+semCompraRecente.map(function(r){return r.nome;}).join(', ')+')');
         }
-        var algumRessalvaOuNao=refs.some(function(r){return r.rc.indexOf('ressalvas')>=0||r.rc.indexOf('N\u00e3o')>=0;});
         if(algumRessalvaOuNao){
           motivosAtencao.push('pelo menos uma refer\u00eancia recomenda com ressalvas ou n\u00e3o recomenda');
         }
-        var algumAtrasoRaro=refs.some(function(r){return r.atraso.indexOf('Raramente')>=0;});
         if(algumAtrasoRaro){
           motivosAtencao.push('pelo menos uma refer\u00eancia j\u00e1 teve atraso ocasional');
         }
-        var algumDebito=refs.some(function(r){return r.debito.indexOf('Sim')>=0;}) && !todasComDebito;
         if(algumDebito){
           motivosAtencao.push('pelo menos uma refer\u00eancia com d\u00e9bito em aberto');
         }
