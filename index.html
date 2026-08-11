@@ -895,7 +895,7 @@ function renderAdmin(){
   var divAbas=document.createElement('div');
   divAbas.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap';
   divAbas.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso &agrave;s abas:</span>';
-  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Aba 4'},{id:'mod5',label:'Modelo em Teste'},{id:'mod6',label:'Aprovação'}].forEach(function(ab){
+  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Aba 4'},{id:'mod5',label:'Modelo em Teste'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
     var lbl=document.createElement('label');
     lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
     var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=false;
@@ -1148,6 +1148,8 @@ function renderAdmin(){
 
 function renderNavCredito(){
   var tabs=[{id:'analise',icon:'🔎',l:'Análise'},{id:'historico',icon:'🕓',l:'Histórico'}];
+  var podeAprovar = STATE.roleLogado==='admin' || (STATE.abasPermitidas && STATE.abasPermitidas.indexOf('mod6')>=0);
+  if(podeAprovar) tabs.push({id:'aprovacao',icon:'✅',l:'Aprovação'});
   var nav=document.createElement('nav');
   tabs.forEach(function(t){
     var btn=document.createElement('button');
@@ -2527,11 +2529,15 @@ function renderHistoricoCredito(){
       var head=el('div','');
       head.style.cssText='padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;flex-wrap:wrap;';
       var cor = reg.situacao==='ATIVA' ? '#166534' : '#9a3412';
+      var _operadorExibe = reg.operador || reg.responsavel || '—';
+      var _dataExibe = reg.dataExibicao || reg.dataHora || '—';
+      var _origemBadge = reg.modulo ? '<span style="font-size:.75em;color:#6b7280;background:#f1f5f9;border-radius:10px;padding:2px 8px">'+reg.modulo+'</span>' : '';
       head.innerHTML =
         '<span style="font-family:monospace;font-weight:700;color:#1a1a1a;">'+fmtCnpjExibe(reg.cnpjChave)+'</span>'+
         '<span style="font-size:.85em;color:'+cor+';font-weight:600;">'+(reg.situacao||'—')+'</span>'+
-        '<span style="font-size:.85em;color:#6b7280;">📅 '+(reg.dataExibicao||'—')+'</span>'+
-        '<span style="font-size:.85em;color:#6b7280;">👤 '+(reg.operador||'—')+'</span>';
+        '<span style="font-size:.85em;color:#6b7280;">📅 '+_dataExibe+'</span>'+
+        '<span style="font-size:.85em;color:#6b7280;">👤 '+_operadorExibe+'</span>'+
+        _origemBadge;
       var btnCarregar=document.createElement('button');
       btnCarregar.textContent='↩ Carregar';
       btnCarregar.style.cssText='margin-left:auto;background:#2563eb;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:.82em;cursor:pointer;';
@@ -2617,10 +2623,27 @@ function renderHistoricoCredito(){
       head.appendChild(arrowSpan);
       var body=el('div','');
       body.style.cssText='display:none;padding:0 16px 16px;border-top:1px solid #f3f4f6;';
+      function _fmtMeses(m){
+        if(m===undefined||m===null||m==='') return null;
+        m=parseInt(m,10); if(isNaN(m)) return null;
+        var a=Math.floor(m/12),r=m%12;
+        return (a?a+(a===1?' ano':' anos')+(r?' e ':''):'')+(r||!a?r+(r===1?' m\u00eas':' meses'):'');
+      }
+      var _socioExibe = reg.socioNome || reg.socio || '—';
+      var _capitalExibe = reg.capitalSocial || reg.capital || '—';
+      var _tempoExibe = reg.tempoEmpresa || _fmtMeses(reg.meses_empresa) || '—';
+      var _parecerExibe = reg.parecerResumo || reg.parecer_atualizado || reg.parecer_ia_texto || 'Parecer não registrado.';
+      var _refsExibe = '';
+      if(reg.referencias && reg.referencias.length){
+        _refsExibe = '<div style="margin-top:10px"><strong style="font-size:.85em">Refer\u00eancias comerciais:</strong>'
+          + reg.referencias.map(function(r){return '<div style="font-size:.82em;color:#374151;margin-top:4px">\u2022 '+(r.nome||'')+(r.limite?' \u2014 limite R$ '+r.limite:'')+'</div>';}).join('')
+          + '</div>';
+      }
       body.innerHTML =
-        '<p style="font-size:.85em;color:#374151;margin:12px 0;"><strong>Sócio:</strong> '+(reg.socioNome||'—')+' | <strong>Capital:</strong> R$ '+(reg.capitalSocial||'—')+' | <strong>Tempo de empresa:</strong> '+(reg.tempoEmpresa||'—')+'</p>'+
+        '<p style="font-size:.85em;color:#374151;margin:12px 0;"><strong>Sócio:</strong> '+_socioExibe+' | <strong>Capital:</strong> R$ '+_capitalExibe+' | <strong>Tempo de empresa:</strong> '+_tempoExibe+'</p>'+
         (reg.contratoSocialResumo?'<p style="font-size:.85em;color:#166534;margin:8px 0;">📎 '+reg.contratoSocialResumo+'</p>':'')+
-        '<div style="background:#fff8eb;border:1px solid #fde68a;border-radius:8px;padding:12px;font-size:.85em;color:#1a1a1a;line-height:1.6;">'+(reg.parecerResumo||'Parecer não registrado.').replace(/\n/g,'<br>')+'</div>';
+        '<div style="background:#fff8eb;border:1px solid #fde68a;border-radius:8px;padding:12px;font-size:.85em;color:#1a1a1a;line-height:1.6;">'+_parecerExibe.replace(/\n/g,'<br>')+'</div>'
+        +_refsExibe;
       head.onclick=function(){
         var aberto = body.style.display==='block';
         body.style.display = aberto?'none':'block';
@@ -2647,8 +2670,7 @@ function renderModuloNav(){
     {id:'mod2',  icon:'📁', label:'Análise de Crédito'},
     {id:'mod3', icon:'🤖', label:'Ace IA'},
     {id:'mod4',  icon:'📁', label:'Aba 4'},
-    {id:'mod5',  icon:'🧪', label:'Modelo em Teste'},
-    {id:'mod6',  icon:'✅', label:'Aprovação'}
+    {id:'mod5',  icon:'🧪', label:'Modelo em Teste'}
   ];
   // Mapeamento id antigo -> novo
   var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6'};
@@ -2712,6 +2734,7 @@ function renderApp(){
   else if(STATE.tab==='admin') main.appendChild(renderAdmin());
   } else if(STATE.modulo==='mod2'){
     if(STATE.tabCredito==='historico') main.appendChild(renderHistoricoCredito());
+    else if(STATE.tabCredito==='aprovacao') main.appendChild(renderAprovacoes());
     else main.appendChild(renderAnaliseCredito());
   } else if(STATE.modulo==='mod3'){
     main.appendChild(renderAceIA());
@@ -2719,8 +2742,6 @@ function renderApp(){
     main.appendChild(renderModuloVazio(4));
   } else if(STATE.modulo==='mod5'){
     main.appendChild(renderModeloEmTeste());
-  } else if(STATE.modulo==='mod6'){
-    main.appendChild(renderAprovacoes());
   }
   wrap.appendChild(main);
   if(STATE.showConfigPanel && STATE.roleLogado==='admin'){
