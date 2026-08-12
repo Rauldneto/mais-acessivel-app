@@ -2541,57 +2541,13 @@ function renderHistoricoCredito(){
       var btnCarregar=document.createElement('button');
       btnCarregar.textContent='↩ Carregar';
       btnCarregar.style.cssText='margin-left:auto;background:#2563eb;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:.82em;cursor:pointer;';
-      if(!reg.snapshotCliente){
-        btnCarregar.disabled=true;btnCarregar.style.opacity='.4';btnCarregar.title='Esta análise é antiga e não possui dados completos para recarregar.';
-      } else {
-        btnCarregar.onclick=function(e){
-          e.stopPropagation();
-          // Restaura textos extraídos dos PDFs (salvo no snapshot desde esta versão)
-          window._AC_contratoTexto = reg.snapshotContratoTexto || '';
-          window._AC_imovelTexto = reg.snapshotImovelTexto || '';
-          window._AC_socioDocTexto = reg.snapshotSocioDocTexto || '';
-          var _cli = reg.snapshotCliente || {};
-          _cli._nomeVerif = _cli._nomeVerif || _cli.fantasia || _cli.nome || '';
-          _cli._endVerif  = _cli._endVerif  || _cli.endereco || '';
-          var _confBase = reg.confirmacoesManuais || {};
-          var _cnpjLimpo2 = (reg.cnpjChave||'').replace(/\D/g,'');
-          var _confRestaurado = {};
-          Object.keys(_confBase).forEach(function(k){
-            _confRestaurado[k] = _confBase[k];
-            if(k.indexOf(_cnpjLimpo2)<0 && _cnpjLimpo2) _confRestaurado[_cnpjLimpo2+'_'+k]=_confBase[k];
-          });
-          window._AC_contratoTexto = reg.snapshotContratoTexto || '';
-          window._AC_imovelTexto   = reg.snapshotImovelTexto   || '';
-          window._AC_socioDocTexto = reg.snapshotSocioDocTexto || '';
-          window._AC = {
-            cliente: _cli,
-            fornecedores: reg.snapshotFornecedores || [{},{},{}],
-            limitesolicitado: reg.snapshotLimiteSolicitado || '',
-            exibirResumo: false,
-            confirmacoesManuais: reg.confirmacoesManuais || {},
-            ultimoResultado: {
-              cnpj: reg.cnpjChave,
-              registro: reg,
-              iaBodyHTML: reg.snapshotIaBodyHTML || '',
-              iaLinksHTML: reg.snapshotIaLinksHTML || '',
-              socioLinksHTML: reg.snapshotSocioLinksHTML || '',
-              stickyStatusHTML: reg.snapshotStickyStatusHTML || '',
-              stickyStatusColor: reg.snapshotStickyStatusColor || ''
-            }
-          };
-          STATE.tabCredito='analise';
-          render();
-          [150,450,1000].forEach(function(t){
-            setTimeout(function(){
-              var nomeV=(_cli._nomeVerif||'');
-              var cnpjL=_cnpjLimpo2||'';
-              var endV=(_cli._endVerif||'');
-              if(typeof window._montarVerificacoes==='function' && nomeV && cnpjL)
-                window._montarVerificacoes(nomeV, cnpjL, endV);
-            }, t);
-          });
-        };
-      }
+      btnCarregar.onclick=function(e){
+        e.stopPropagation();
+        window._mod5CarregarHistorico = reg;
+        STATE.modulo='mod2';
+        STATE.tabCredito='analise';
+        render();
+      };
       var arrowSpan=document.createElement('span');
       arrowSpan.style.cssText='font-size:.8em;color:#9ca3af;';
       arrowSpan.textContent='▼ ver parecer';
@@ -4759,6 +4715,59 @@ function renderHistoricoConfig(){
 function renderModeloEmTeste(){
   var wrap=document.createElement('div');
   wrap.style.cssText='padding:0 0 60px 0';
+
+  // Se uma analise do historico foi carregada via botao "Carregar", mostra um resumo
+  // (somente leitura) no topo. Funciona tanto pra registros antigos (Analise de Credito)
+  // quanto novos (Modelo em Teste), usando os nomes de campo que existirem no registro.
+  if(window._mod5CarregarHistorico){
+    var _reg=window._mod5CarregarHistorico;
+    window._mod5CarregarHistorico=null; // mostra uma vez; "Nova consulta" limpa normalmente
+    var _fmtMesesRec=function(m){
+      if(m===undefined||m===null||m==='') return null;
+      m=parseInt(m,10); if(isNaN(m)) return null;
+      var a=Math.floor(m/12),r=m%12;
+      return (a?a+(a===1?' ano':' anos')+(r?' e ':''):'')+(r||!a?r+(r===1?' m\u00eas':' meses'):'');
+    };
+    var _empresa=_reg.empresa||(_reg.snapshotCliente&&(_reg.snapshotCliente.nome||_reg.snapshotCliente.fantasia))||'\u2014';
+    var _cnpjRec=_reg.cnpj||_reg.cnpjChave||'\u2014';
+    var _socioRec=_reg.socioNome||_reg.socio||'\u2014';
+    var _capitalRec=_reg.capitalSocial||_reg.capital||'\u2014';
+    var _tempoRec=_reg.tempoEmpresa||_fmtMesesRec(_reg.meses_empresa)||'\u2014';
+    var _dataRec=_reg.dataExibicao||_reg.dataHora||'\u2014';
+    var _operRec=_reg.operador||_reg.responsavel||'\u2014';
+    var _parecerRec=_reg.parecerResumo||_reg.parecer_atualizado||_reg.parecer_ia_texto||'';
+    var _checksHtml='';
+    if(_reg.checks&&_reg.checks.length){
+      var _CKC={ok:{bg:'#dcfce7',co:'#166534',bd:'#86efac'},neg:{bg:'#fee2e2',co:'#991b1b',bd:'#fca5a5'},warn:{bg:'#fef9c3',co:'#854d0e',bd:'#fde047'}};
+      _checksHtml=_reg.checks.map(function(k){
+        var cc=_CKC[k.cls]||{bg:'#f1f5f9',co:'#334155',bd:'#cbd5e1'};
+        return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;margin-bottom:4px;background:'+cc.bg+';color:'+cc.co+';border:1px solid '+cc.bd+'"><i class="ti '+(k.ico||'ti-info-circle')+'"></i><span>'+k.txt+'</span></div>';
+      }).join('');
+    }
+    var _refsHtml='';
+    if(_reg.referencias&&_reg.referencias.length){
+      _refsHtml='<div style="margin-top:10px"><strong style="font-size:12px">Refer\u00eancias comerciais:</strong>'
+        +_reg.referencias.map(function(r){return '<div style="font-size:12px;color:#374151;margin-top:3px">\u2022 '+(r.nome||'')+(r.limite?' \u2014 limite R$ '+r.limite:'')+'</div>';}).join('')
+        +'</div>';
+    }
+    var _recap=document.createElement('div');
+    _recap.style.cssText='background:#fff;border:3px solid #2563eb;border-radius:12px;padding:16px 18px;margin:16px;';
+    _recap.innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
+      +'<div style="font-size:14px;font-weight:700;color:#1d4ed8">\ud83d\udcc2 An\u00e1lise carregada do hist\u00f3rico (somente leitura)</div>'
+      +'<button id="m5btnFecharRecap" style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">Fechar</button></div>'
+      +'<p style="font-size:12px;color:#475569;margin-bottom:10px">Para editar ou refazer, use <strong>"Nova consulta"</strong> abaixo.</p>'
+      +'<p style="font-size:13px;color:#1e293b;margin:6px 0"><strong>'+_empresa+'</strong> \u2014 CNPJ '+_cnpjRec+'</p>'
+      +'<p style="font-size:12px;color:#374151;margin:4px 0">S\u00f3cio: '+_socioRec+' | Capital: R$ '+_capitalRec+' | Tempo de empresa: '+_tempoRec+'</p>'
+      +'<p style="font-size:12px;color:#94a3b8;margin:4px 0 10px">\ud83d\udcc5 '+_dataRec+' \u00b7 \ud83d\udc64 '+_operRec+'</p>'
+      +_checksHtml
+      +_refsHtml
+      +(_parecerRec?'<div style="margin-top:10px;background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:12px;font-size:12px;color:#1e293b;line-height:1.6;white-space:pre-wrap">'+_parecerRec+'</div>':'');
+    wrap.appendChild(_recap);
+    setTimeout(function(){
+      var _bF=document.querySelector('#m5btnFecharRecap');
+      if(_bF) _bF.onclick=function(){ _recap.remove(); };
+    },100);
+  }
 
   var S={
     checks:[],negado:false,protestoDiretor:false,
