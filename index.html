@@ -5363,7 +5363,7 @@ function upDoc(n,inp){
        +'Analise o CONTRATO SOCIAL ALTERADO e extraia as informacoes. Verifique se cada dado confere com o cadastro acima.\n'
        +'IMPORTANTE: este documento pode ter varias paginas e voce pode estar vendo apenas uma pagina. Se o CAPITAL SOCIAL nao aparecer na pagina analisada, isso NAO e uma divergencia nem deve rebaixar o resultado para neg - apenas informe isso separadamente no campo observacoes (ex: "capital social nao localizado nesta pagina, verificar demais paginas"), mantendo resultado=ok se CNPJ, razao social e socio conferirem normalmente. So use o campo divergencias para problemas REAIS (dados que conferem errado, socio que nao bate, CNPJ diferente).\n'
        +'Responda APENAS com JSON valido sem markdown:\n'
-       +'{"cnpj_encontrado":"XX.XXX.XXX/XXXX-XX","cnpj_confere":true,"razao_social_encontrada":"nome","razao_social_confere":true,"socio_encontrado":"nome completo","socio_confere":true,"capital_encontrado":"valor ou nao_localizado_nesta_pagina","capital_confere":true,"endereco_encontrado":"endereco completo se houver","resumo":"descricao objetiva do que foi encontrado e se confere","divergencias":["lista APENAS de problemas reais ou array vazio"],"observacoes":["lista de notas informativas que nao afetam o resultado, ex capital nao localizado na pagina, alteracao societaria relevante, ou array vazio"],"resultado":"ok ou neg"}',
+       +'{"cnpj_encontrado":"XX.XXX.XXX/XXXX-XX","cnpj_confere":true,"razao_social_encontrada":"nome","razao_social_confere":true,"socio_encontrado":"nome completo","socio_confere":true,"capital_encontrado":"valor ou nao_localizado_nesta_pagina","capital_confere":true,"endereco_encontrado":"endereco completo se houver","divergencias":["lista APENAS de problemas reais ou array vazio"],"observacoes":["lista de notas informativas que nao afetam o resultado, ex capital nao localizado na pagina, alteracao societaria relevante, ou array vazio"],"resultado":"ok ou neg","resumo":"descricao objetiva do que foi encontrado e se confere"}',
 
       2:_prefixoData+'Voce e um analisador de documentos para analise de credito empresarial.\n'
        +'Dados do cadastro (Receita Federal / Cartao CNPJ):\n'
@@ -5450,7 +5450,7 @@ function upDoc(n,inp){
         var resp=await fetch('https://soft-limit-b3a1.rauldias.workers.dev',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1200,messages:msgs})
+          body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,messages:msgs})
         });
         var data=await resp.json();
         var txtResp=(data.content&&data.content[0])?data.content[0].text:'{}';
@@ -5473,33 +5473,6 @@ function upDoc(n,inp){
           }
         }
 
-        
-        // Gerar resumo a partir dos campos retornados (caso a IA nao retorne resumo)
-        if(!json.resumo){
-          if(n===1){
-            var _div=(json.divergencias&&json.divergencias.length>0)?json.divergencias.join('. ')+'.':'';
-            var _ok=[];
-            if(json.cnpj_confere===true)_ok.push('CNPJ '+json.cnpj_encontrado+' confere');
-            if(json.socio_confere===true)_ok.push('socio '+json.socio_encontrado+' confere');
-            if(json.razao_social_confere===true)_ok.push('razao social confere');
-            var _nok=[];
-            if(json.cnpj_confere===false)_nok.push('CNPJ divergente (encontrado: '+json.cnpj_encontrado+')');
-            if(json.socio_confere===false)_nok.push('socio divergente (encontrado: '+json.socio_encontrado+')');
-            if(json.razao_social_confere===false)_nok.push('razao social divergente');
-            if(_nok.length>0)json.resumo=_nok.join('. ')+'.';
-            else if(_div)json.resumo=_div;
-            else if(_ok.length>0)json.resumo='Contrato valido: '+_ok.join(', ')+'.';
-            else json.resumo=json.resultado==='ok'?'Contrato analisado sem divergencias.':'Contrato com pendencias - verifique.';
-          } else if(n===3){
-            var _nome=json.nome_encontrado||'';
-            var _tipo=json.tipo_doc||'Documento';
-            var _div3=(json.divergencias&&json.divergencias.length>0)?json.divergencias.join('. ')+'.':'';
-            if(json.nome_confere===false)json.resumo=_tipo+(_nome?' de '+_nome:'')+'. Nome NAO confere com a Receita Federal.';
-            else if(json.nome_confere===true)json.resumo=_tipo+(_nome?' de '+_nome:'')+'. Nome confere com a Receita Federal.';
-            else if(_div3)json.resumo=_div3;
-            else json.resumo=_tipo+(_nome?' de '+_nome:'')+(_tipo||_nome?'.':' analisado.');
-          }
-        }
         // Armazenar dados extraidos para cruzamento posterior
         if(n===1){
           S_DOCS.contrato={
@@ -5535,7 +5508,7 @@ function upDoc(n,inp){
             if(_ei2){
               _ei2.innerHTML+=('<div style="margin-top:10px;background:#fff;border:2px solid #f59e0b;border-radius:10px;padding:14px">')
                 +('<div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-info-circle"></i> Justificativa obrigat\u00f3ria</div>')
-                +('<p style="font-size:12px;color:#78350f;margin-bottom:10px;line-height:1.6">O comprovante est\u00e1 em nome de terceiro (\''+(json.titular_encontrado||"")+'\').<br>Informe abaixo o motivo pelo qual o endere\u00e7o n\u00e3o est\u00e1 em nome da empresa ou do s\u00f3cio.</p>')
+                +('<p style="font-size:12px;color:#78350f;margin-bottom:10px;line-height:1.6">O comprovante est\u00e1 em nome de terceiro (\''+json.titular_encontrado+'\').<br>Informe abaixo o motivo pelo qual o endere\u00e7o n\u00e3o est\u00e1 em nome da empresa ou do s\u00f3cio.</p>')
                 +('<textarea id="m5justTerceiro" rows="3" placeholder="Ex: Im\u00f3vel alugado de familiar do s\u00f3cio. Contrato de loca\u00e7\u00e3o a ser enviado na Etapa 4." style="width:100%;border:1.5px solid #fbbf24;border-radius:8px;padding:9px 12px;font-size:13px;background:#fffbeb;color:#1e293b;outline:none;resize:vertical;box-sizing:border-box"></textarea>')
                 +('<button id="m5btnJust" style="margin-top:10px;background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-check"></i> Confirmar justificativa</button><div style="font-size:11px;color:#92400e;margin-top:8px"><i class="ti ti-alert-triangle"></i> Essa justificativa ser\u00e1 inclu\u00edda no parecer final e no hist\u00f3rico.</div>')
                 +'</div>';
@@ -5575,18 +5548,18 @@ function upDoc(n,inp){
         // Mostrar dados extraidos + divergencias (reais, vermelho) e observacoes (informativas, neutro) do proprio documento
         var divs=(json.divergencias&&json.divergencias.length>0)?'<br><span style="color:#b91c1c">Diverg\u00eancias: '+json.divergencias.join('; ')+'</span>':'';
         var obs=(json.observacoes&&json.observacoes.length>0)?'<br><span style="color:#475569">\u2139\ufe0f Observa\u00e7\u00f5es: '+json.observacoes.join('; ')+'</span>':'';
-        ei.innerHTML=it(cls,ico,'<strong>'+lbl+':</strong> '+(json.resumo||'--')+divs+obs);
-        addCk(cls,ico,lbl+': '+(json.resumo||'--'));
+        ei.innerHTML=it(cls,ico,'<strong>'+lbl+':</strong> '+json.resumo+divs+obs);
+        addCk(cls,ico,lbl+': '+json.resumo);
 
         if(json.tipo_documento==='invalido'||json.dentro_90_dias===false){
           cls='neg';
-          ei.innerHTML=it('neg','ti-x','<strong>'+lbl+':</strong> '+(json.resumo||'--'));
+          ei.innerHTML=it('neg','ti-x','<strong>'+lbl+':</strong> '+json.resumo);
         } else if(n===2 && (S_DOCS.comprovante.titular_confere==='terceiro')){
           // Doc valido mas em nome de terceiro: sempre warn, nunca neg
           cls='warn';ico='ti-alert-triangle';
           var _tDesc={conta_agua:'Conta de \u00e1gua',conta_energia:'Conta de energia el\u00e9trica',conta_telefone:'Conta de telefone',cartao_credito:'Cart\u00e3o de cr\u00e9dito',contrato_locacao:'Contrato de loca\u00e7\u00e3o'};
           var _tL=_tDesc[S_DOCS.comprovante.tipo]||S_DOCS.comprovante.tipo||'Comprovante';
-          ei.innerHTML=it('warn','ti-alert-triangle','<strong>'+lbl+':</strong> '+_tL+' v\u00e1lido e dentro do prazo, por\u00e9m em nome de terceiro ("'+(json.titular_encontrado||"")+'"). N\u00e3o consta como s\u00f3cio nem como empresa no cart\u00e3o CNPJ. Etapa 4 ser\u00e1 obrigat\u00f3ria.');
+          ei.innerHTML=it('warn','ti-alert-triangle','<strong>'+lbl+':</strong> '+_tL+' v\u00e1lido e dentro do prazo, por\u00e9m em nome de terceiro ("'+json.titular_encontrado+'"). N\u00e3o consta como s\u00f3cio nem como empresa no cart\u00e3o CNPJ. Etapa 4 ser\u00e1 obrigat\u00f3ria.');
         }
 
         // So marca como pronto depois que a IA terminou de analisar de fato este documento
