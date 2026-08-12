@@ -5310,7 +5310,8 @@ function renderModeloEmTeste(){
   function updateBtnDocState(){
     var btn=q('#m5btnDoc');
     if(!btn)return;
-    var pronto = S.docsOk[1]===true && S.docsOk[2]===true && S.docsOk[3]===true;
+    // Permitir avançar sem análise (ela é feita em "Gerar Análise")
+    var pronto = true; // S.docsOk[1]===true && S.docsOk[2]===true && S.docsOk[3]===true;
     btn.disabled=!pronto;
     if(pronto){
       btn.style.cssText='background:#2563eb;color:#ffffff;border:0.5px solid #2563eb;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;opacity:1';
@@ -5447,12 +5448,14 @@ function upDoc(n,inp){
           ]}];
         }
 
-        var resp=await fetch('https://soft-limit-b3a1.rauldias.workers.dev',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,messages:msgs})
-        });
-        var data=await resp.json();
+        // SUSPENDIDO: análise ao clicar em Gerar Análise
+        // var resp=await fetch('https://soft-limit-b3a1.rauldias.workers.dev',{
+        //   method:'POST',
+        //   headers:{'Content-Type':'application/json'},
+        //   body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,messages:msgs})
+        // });
+        // var data=await resp.json();
+        var data={content:[{text:'{}'}]}; // placeholder para evitar erro
         var txtResp=(data.content&&data.content[0])?data.content[0].text:'{}';
         // Parse robusto: extrair JSON mesmo quando a IA retorna texto extra
         var json;
@@ -5562,9 +5565,9 @@ function upDoc(n,inp){
           ei.innerHTML=it('warn','ti-alert-triangle','<strong>'+lbl+':</strong> '+_tL+' v\u00e1lido e dentro do prazo, por\u00e9m em nome de terceiro ("'+json.titular_encontrado+'"). N\u00e3o consta como s\u00f3cio nem como empresa no cart\u00e3o CNPJ. Etapa 4 ser\u00e1 obrigat\u00f3ria.');
         }
 
-        // So marca como pronto depois que a IA terminou de analisar de fato este documento
-        S.docsOk[n]=true;
-        updateBtnDocState();
+        // SUSPENDIDO: já não marca como pronto (análise sob demanda)
+        // S.docsOk[n]=true;
+        // updateBtnDocState();
 
       }catch(err){
         // Limpar resultado anterior para nao acumular
