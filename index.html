@@ -5548,12 +5548,12 @@ function upDoc(n,inp){
         // Mostrar dados extraidos + divergencias (reais, vermelho) e observacoes (informativas, neutro) do proprio documento
         var divs=(json.divergencias&&json.divergencias.length>0)?'<br><span style="color:#b91c1c">Diverg\u00eancias: '+json.divergencias.join('; ')+'</span>':'';
         var obs=(json.observacoes&&json.observacoes.length>0)?'<br><span style="color:#475569">\u2139\ufe0f Observa\u00e7\u00f5es: '+json.observacoes.join('; ')+'</span>':'';
-        ei.innerHTML=it(cls,ico,'<strong>'+lbl+':</strong> '+json.resumo+divs+obs);
-        addCk(cls,ico,lbl+': '+json.resumo);
+        ei.innerHTML=it(cls,ico,'<strong>'+lbl+':</strong> '+(json.resumo||'--')+divs+obs);
+        addCk(cls,ico,lbl+': '+(json.resumo||'--'));
 
         if(json.tipo_documento==='invalido'||json.dentro_90_dias===false){
           cls='neg';
-          ei.innerHTML=it('neg','ti-x','<strong>'+lbl+':</strong> '+json.resumo);
+          ei.innerHTML=it('neg','ti-x','<strong>'+lbl+':</strong> '+(json.resumo||'--'));
         } else if(n===2 && (S_DOCS.comprovante.titular_confere==='terceiro')){
           // Doc valido mas em nome de terceiro: sempre warn, nunca neg
           cls='warn';ico='ti-alert-triangle';
