@@ -4716,9 +4716,10 @@ function renderModeloEmTeste(){
   var wrap=document.createElement('div');
   wrap.style.cssText='padding:0 0 60px 0';
 
-  // Se uma analise do historico foi carregada via botao "Carregar", mostra um resumo
-  // (somente leitura) no topo. Funciona tanto pra registros antigos (Analise de Credito)
-  // quanto novos (Modelo em Teste), usando os nomes de campo que existirem no registro.
+  // Se uma analise do historico foi carregada via botao "Carregar", monta um resumo
+  // (somente leitura) pra ser inserido no topo DEPOIS do HTML principal ser montado
+  // (guardamos como string aqui porque wrap.innerHTML e reatribuido mais abaixo).
+  var _recapHtml='';
   if(window._mod5CarregarHistorico){
     var _reg=window._mod5CarregarHistorico;
     window._mod5CarregarHistorico=null; // mostra uma vez; "Nova consulta" limpa normalmente
@@ -4750,9 +4751,8 @@ function renderModeloEmTeste(){
         +_reg.referencias.map(function(r){return '<div style="font-size:12px;color:#374151;margin-top:3px">\u2022 '+(r.nome||'')+(r.limite?' \u2014 limite R$ '+r.limite:'')+'</div>';}).join('')
         +'</div>';
     }
-    var _recap=document.createElement('div');
-    _recap.style.cssText='background:#fff;border:3px solid #2563eb;border-radius:12px;padding:16px 18px;margin:16px;';
-    _recap.innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
+    _recapHtml='<div id="m5recapHist" style="background:#fff;border:3px solid #2563eb;border-radius:12px;padding:16px 18px;margin:16px 4px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
       +'<div style="font-size:14px;font-weight:700;color:#1d4ed8">\ud83d\udcc2 An\u00e1lise carregada do hist\u00f3rico (somente leitura)</div>'
       +'<button id="m5btnFecharRecap" style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">Fechar</button></div>'
       +'<p style="font-size:12px;color:#475569;margin-bottom:10px">Para editar ou refazer, use <strong>"Nova consulta"</strong> abaixo.</p>'
@@ -4762,11 +4762,6 @@ function renderModeloEmTeste(){
       +_checksHtml
       +_refsHtml
       +(_parecerRec?'<div style="margin-top:10px;background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:12px;font-size:12px;color:#1e293b;line-height:1.6;white-space:pre-wrap">'+_parecerRec+'</div>':'');
-    wrap.appendChild(_recap);
-    setTimeout(function(){
-      var _bF=document.querySelector('#m5btnFecharRecap');
-      if(_bF) _bF.onclick=function(){ _recap.remove(); };
-    },100);
   }
 
   var S={
@@ -6224,6 +6219,12 @@ function upDoc(n,inp){
     +'<div id="m5s5" style="display:none"></div>'
     +'<div id="m5sv" style="display:none"></div>'
     +'</div>';
+
+  if(_recapHtml){
+    wrap.insertAdjacentHTML('afterbegin', _recapHtml);
+    var _bF=wrap.querySelector('#m5btnFecharRecap');
+    if(_bF) _bF.onclick=function(){ var _r=wrap.querySelector('#m5recapHist'); if(_r) _r.remove(); };
+  }
 
 
 
