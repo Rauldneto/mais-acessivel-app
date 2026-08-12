@@ -4751,6 +4751,31 @@ function renderModeloEmTeste(){
         +_reg.referencias.map(function(r){return '<div style="font-size:12px;color:#374151;margin-top:3px">\u2022 '+(r.nome||'')+(r.limite?' \u2014 limite R$ '+r.limite:'')+'</div>';}).join('')
         +'</div>';
     }
+    // Campos ricos exclusivos do formato antigo (aba Analise de Credito) - mostrar tudo que existir
+    var _oldFieldsHtml='';
+    var _oldRows=[
+      ['Veredito', _reg.veredito?(_reg.veredito+(_reg.veredictoMotivo?' \u2014 '+_reg.veredictoMotivo:'')):''],
+      ['CENPROT', _reg.cenprotStatus],
+      ['Documento do s\u00f3cio', _reg.sociodocStatus],
+      ['Im\u00f3vel', _reg.imovelStatus?(_reg.imovelStatus+(_reg.imovelPeriodo?' ('+_reg.imovelPeriodo+')':'')):''],
+      ['Endere\u00e7o', _reg.enderecoStatus],
+      ['Google', _reg.empresaGoogleStatus],
+      ['Instagram', _reg.empresaInstaStatus],
+      ['Refer\u00eancias comerciais', _reg.refcomStatus?(_reg.refcomStatus+((_reg.refcomNota!==''&&_reg.refcomNota!==undefined&&_reg.refcomNota!==null)?' (nota '+_reg.refcomNota+')':'')):''],
+      ['S\u00f3cio (entrada)', _reg.socioEntrada],
+      ['Contrato Social', _reg.contratoSocialResumo]
+    ].filter(function(r){return r[1];});
+    if(_oldRows.length){
+      _oldFieldsHtml='<div style="margin-top:10px;font-size:12px;color:#374151;line-height:1.8">'
+        +_oldRows.map(function(r){return '<strong>'+r[0]+':</strong> '+r[1];}).join('<br>')
+        +'</div>';
+    }
+    // Se existir o bloco visual completo que a IA gerou na epoca (positivos/negativos/atencao/veredito
+    // formatados), mostra ele tambem - e mais completo que o resumo em texto quando este falhou
+    var _iaBodyHtml='';
+    if(_reg.snapshotIaBodyHTML){
+      _iaBodyHtml='<div style="margin-top:10px;border:1px solid #e2e8f0;border-radius:8px;padding:12px;font-size:12px;background:#fafafa">'+_reg.snapshotIaBodyHTML+'</div>';
+    }
     _recapHtml='<div id="m5recapHist" style="background:#fff;border:3px solid #2563eb;border-radius:12px;padding:16px 18px;margin:16px 4px">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
       +'<div style="font-size:14px;font-weight:700;color:#1d4ed8">\ud83d\udcc2 An\u00e1lise carregada do hist\u00f3rico (somente leitura)</div>'
@@ -4761,7 +4786,9 @@ function renderModeloEmTeste(){
       +'<p style="font-size:12px;color:#94a3b8;margin:4px 0 10px">\ud83d\udcc5 '+_dataRec+' \u00b7 \ud83d\udc64 '+_operRec+'</p>'
       +_checksHtml
       +_refsHtml
-      +(_parecerRec?'<div style="margin-top:10px;background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:12px;font-size:12px;color:#1e293b;line-height:1.6;white-space:pre-wrap">'+_parecerRec+'</div>':'');
+      +_oldFieldsHtml
+      +(_parecerRec?'<div style="margin-top:10px;background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:12px;font-size:12px;color:#1e293b;line-height:1.6;white-space:pre-wrap">'+_parecerRec+'</div>':'')
+      +_iaBodyHtml;
   }
 
   var S={
