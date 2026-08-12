@@ -4990,7 +4990,7 @@ function renderModeloEmTeste(){
   function limpar(){
     S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,precisaAprovDir:false,justEndTerceiro:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},docsOk:{1:false,2:false,3:false},simLoc:0,orcamento:0,mOk:false,lOk:false};
     window._mod5S=S;
-    S_DOCS={contrato:null,comprovante:null,docSocio:null};
+    S_DOCS={contrato:null,comprovante:null,docSocio:null,rawFiles:{1:null,2:null,3:null}};
     D={nome:'',fantasia:'',cnpj:'',socio:'',capital:''};
     var cl=q('#m5cl');if(cl)cl.innerHTML='';
     var pb=q('#m5pb');if(pb)pb.textContent='Digite o CNPJ e clique em Consultar.';
@@ -5323,7 +5323,8 @@ function renderModeloEmTeste(){
 var S_DOCS = {
   contrato:    null,  // Doc 1: {cnpj, socio, endereco, capital}
   comprovante: null,  // Doc 2: {titular, tipo, endereco, dentro_90_dias, titular_confere}
-  docSocio:    null   // Doc 3: {nome, tipo_doc}
+  docSocio:    null,  // Doc 3: {nome, tipo_doc}
+  rawFiles:    {1:null,2:null,3:null} // arquivos carregados, aguardando analise em lote
 };
 
 // Detecta texto extraido de PDF com codificacao de fonte corrompida (comum em PDFs da JUCEG/gov
@@ -5338,6 +5339,30 @@ function textoPareceCorrompido(texto){
 
 function upDoc(n,inp){
     var file=inp.files[0];if(!file)return;
+    S_DOCS.rawFiles[n]=file;
+    var b=q('#m5eb'+n);
+    b.innerHTML='<i class="ti ti-check"></i> '+file.name.slice(0,18)+(file.name.length>18?'...':'');
+    b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#dcfce7;color:#166534;border:0.5px solid #86efac';
+    var ei=q('#m5ei'+n);
+    ei.style.display='block';
+    ei.innerHTML='<div style="font-size:12px;color:#94a3b8;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-file-check"></i> Arquivo carregado. A analise sera feita ao clicar em "Concluir analise documental".</div>';
+    // Habilita o botao assim que os 3 arquivos estiverem selecionados (analise ocorre depois, em lote)
+    var pronto = !!(S_DOCS.rawFiles[1] && S_DOCS.rawFiles[2] && S_DOCS.rawFiles[3]);
+    var btn=q('#m5btnDoc');
+    if(btn){
+      btn.disabled=!pronto;
+      q('#m5bdoc').style.display='block';
+      q('#m5dcnt').textContent=pronto?'3/3 arquivos carregados':(Object.values(S_DOCS.rawFiles).filter(Boolean).length)+'/3 arquivos carregados';
+      if(pronto){
+        btn.style.cssText='background:#2563eb;color:#ffffff;border:0.5px solid #2563eb;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;opacity:1';
+      } else {
+        btn.style.cssText='background:#cbd5e1;color:#64748b;border:0.5px solid #cbd5e1;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:not-allowed;display:inline-flex;align-items:center;gap:6px;opacity:0.7';
+      }
+    }
+  }
+
+function analisarDoc(n,file){
+  return new Promise(function(resolveDoc){
     var b=q('#m5eb'+n);
     b.innerHTML='<i class="ti ti-loader"></i> Lendo...';
     b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#eff6ff;color:#1d4ed8;border:0.5px solid #93c5fd';
@@ -5348,7 +5373,6 @@ function upDoc(n,inp){
     ei.innerHTML='<div style="font-size:12px;color:#94a3b8;font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-robot"></i> IA lendo e extraindo dados do documento...</div>';
     S.simDoc[n]=(S.simDoc[n]||0)+1;
     S.docsOk[n]=false;
-    updateBtnDocState();
 
     var _hojeStr=new Date().toLocaleDateString('pt-BR');
     var _prefixoData='DATA DE HOJE (use esta data real como referencia para qualquer calculo de prazo, validade ou data futura/passada - NAO use sua propria nocao de data atual): '+_hojeStr+'\n\n';
@@ -5564,7 +5588,6 @@ function upDoc(n,inp){
 
         // So marca como pronto depois que a IA terminou de analisar de fato este documento
         S.docsOk[n]=true;
-        updateBtnDocState();
 
       }catch(err){
         // Limpar resultado anterior para nao acumular
@@ -5579,21 +5602,43 @@ function upDoc(n,inp){
         b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#fee2e2;color:#991b1b;border:0.5px solid #fca5a5';
         ei.innerHTML=it('neg','ti-x','<strong>Falha ao processar o documento.</strong> Motivo: '+err.message+'<br>Selecione o arquivo novamente para reenviar.');
         addCk('neg','ti-x','Erro ao processar documento '+n);
-        updateBtnDocState();
       }
-
-      if(Object.values(S.simDoc).some(function(v){return v>0;})){
-        q('#m5bdoc').style.display='block';
-        var tot=Object.values(S.docsOk).filter(function(v){return v===true;}).length;
-        q('#m5dcnt').textContent=tot+'/3 documentos analisados'+(tot<3?' \u2014 aguarde a IA concluir todos':'');
-        updateBtnDocState();
-      }
+      resolveDoc();
     })();
+  });
+}
+
+
+
+  async function concluirE3(){
+    var btn=q('#m5btnDoc');
+    var todosCarregados = !!(S_DOCS.rawFiles[1] && S_DOCS.rawFiles[2] && S_DOCS.rawFiles[3]);
+    if(!todosCarregados){
+      alert('Selecione os 3 documentos antes de concluir a analise.');
+      return;
+    }
+    if(btn){
+      btn.disabled=true;
+      btn.innerHTML='<i class="ti ti-loader"></i> Analisando documentos...';
+      btn.style.cssText='background:#94a3b8;color:#fff;border:0.5px solid #94a3b8;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:not-allowed;display:inline-flex;align-items:center;gap:6px;opacity:0.85';
+    }
+    q('#m5dcnt').textContent='Enviando os 3 documentos para a IA... aguarde.';
+
+    await Promise.all([
+      analisarDoc(1,S_DOCS.rawFiles[1]),
+      analisarDoc(2,S_DOCS.rawFiles[2]),
+      analisarDoc(3,S_DOCS.rawFiles[3])
+    ]);
+
+    if(btn){
+      btn.innerHTML='<i class="ti ti-flag"></i> Concluir an\u00e1lise documental';
+    }
+    q('#m5dcnt').textContent='3/3 documentos analisados';
+
+    concluirE3Miolo();
   }
 
-
-
-  function concluirE3(){
+  function concluirE3Miolo(){
     var re3=q('#m5re3');re3.style.display='block';
 
     // --- VARREDURA CRUZADA ---
