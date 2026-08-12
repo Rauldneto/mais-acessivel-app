@@ -4751,6 +4751,36 @@ function renderModeloEmTeste(){
         +_reg.referencias.map(function(r){return '<div style="font-size:12px;color:#374151;margin-top:3px">\u2022 '+(r.nome||'')+(r.limite?' \u2014 limite R$ '+r.limite:'')+'</div>';}).join('')
         +'</div>';
     }
+    // Formato antigo (aba Analise de Credito) guarda os fornecedores em snapshotFornecedores,
+    // com campos codificados - traduz pra texto legivel
+    if(_reg.snapshotFornecedores && _reg.snapshotFornecedores.length){
+      var _fornM={
+        pagaemdia:{sim:'\u2705 Sim',quase:'\u26a0\ufe0f Quase',nao:'\u274c N\u00e3o'},
+        atrasou:{nao:'\u2705 Nunca','sim-raro':'\u26a0\ufe0f Raramente','sim-freq':'\u274c Frequente'},
+        debitoaberto:{nao:'\u2705 N\u00e3o',sim:'\u274c Sim'},
+        protestou:{nao:'\u2705 N\u00e3o',sim:'\u274c Sim'},
+        aindavende:{sim:'\u2705 Sim',nao:'\u274c Parou'},
+        recomenda:{sim:'\u2705 Sim','sim-ressalvas':'\u26a0\ufe0f Com ressalvas',nao:'\u274c N\u00e3o'}
+      };
+      var _fornsPreench=_reg.snapshotFornecedores.filter(function(f){return f&&f.nome&&(''+f.nome).trim();});
+      if(_fornsPreench.length){
+        _refsHtml+='<div style="margin-top:10px"><strong style="font-size:12px">Fornecedores (refer\u00eancias comerciais):</strong>'
+          +_fornsPreench.map(function(f,fi){
+            var linhas=[];
+            if(f.tempocliente) linhas.push('cliente h\u00e1 '+f.tempocliente);
+            if(f.limite) linhas.push('limite R$ '+f.limite);
+            if(f.maiorcompra) linhas.push('maior compra R$ '+f.maiorcompra);
+            if(f.pagaemdia) linhas.push('paga em dia: '+(_fornM.pagaemdia[f.pagaemdia]||f.pagaemdia));
+            if(f.atrasou) linhas.push('atraso: '+(_fornM.atrasou[f.atrasou]||f.atrasou)+(f.diasatraso?' ('+f.diasatraso+' dias)':''));
+            if(f.debitoaberto) linhas.push('d\u00e9bito: '+(_fornM.debitoaberto[f.debitoaberto]||f.debitoaberto));
+            if(f.protestou) linhas.push('protestou: '+(_fornM.protestou[f.protestou]||f.protestou));
+            if(f.aindavende) linhas.push('ainda vende: '+(_fornM.aindavende[f.aindavende]||f.aindavende));
+            if(f.recomenda) linhas.push('recomenda: '+(_fornM.recomenda[f.recomenda]||f.recomenda));
+            return '<div style="font-size:12px;color:#374151;margin-top:6px;padding:8px 10px;background:#f8fafc;border-radius:6px"><strong>'+(fi+1)+'. '+f.nome+'</strong><br>'+linhas.join(' \u00b7 ')+'</div>';
+          }).join('')
+          +'</div>';
+      }
+    }
     // Campos ricos exclusivos do formato antigo (aba Analise de Credito) - mostrar tudo que existir
     var _oldFieldsHtml='';
     var _oldRows=[
