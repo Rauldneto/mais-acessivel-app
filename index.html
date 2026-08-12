@@ -5475,7 +5475,7 @@ function upDoc(n,inp){
 
         // Armazenar dados extraidos para cruzamento posterior
         if(n===1){
-          if(!json.resumo){var _rp=[];if(json.cnpj_confere===false)_rp.push('CNPJ divergente (encontrado: '+(json.cnpj_encontrado||'?')+')');if(json.socio_confere===false)_rp.push('Sócio divergente (encontrado: '+(json.socio_encontrado||'?')+')');if(json.razao_social_confere===false)_rp.push('Razão social divergente (encontrada: '+(json.razao_social_encontrada||'?')+')');if(_rp.length>0){json.resumo='Divergências: '+_rp.join('; ')+'.';}else{var _ok=[];if(json.cnpj_confere===true)_ok.push('CNPJ confere');if(json.socio_confere===true)_ok.push('sócio confere');if(json.razao_social_confere===true)_ok.push('razão social confere');json.resumo=_ok.length>0?'Contrato válido. '+_ok.join(', ')+'.':'Contrato analisado.';}}
+          if(!json.resumo){var _rp=[];if(json.cnpj_confere===false)_rp.push('CNPJ divergente (encontrado: '+(json.cnpj_encontrado||'?')+')');if(json.socio_confere===false)_rp.push('Sócio divergente (encontrado: '+(json.socio_encontrado||'?')+')');if(json.razao_social_confere===false)_rp.push('Razão social divergente (encontrada: '+(json.razao_social_encontrada||'?')+')');if(_rp.length>0){json.resumo='Divergências: '+_rp.join('; ')+'.';}else if(json.divergencias&&json.divergencias.length>0){json.resumo='Pendências: '+json.divergencias.join('; ')+'.';}else{var _ok=[];if(json.cnpj_confere===true)_ok.push('CNPJ');if(json.socio_confere===true)_ok.push('sócio');if(json.razao_social_confere===true)_ok.push('razão social');if(_ok.length>0)json.resumo=_ok.join(', ')+' confere'+(_ok.length>1?'m':'')+'. Contrato válido.';else if(json.resultado==='neg')json.resumo='Documento com pendências. Verifique as divergências.';else json.resumo='Contrato analisado com sucesso.';}}
           S_DOCS.contrato={
             cnpj:json.cnpj_encontrado||'',
             razao_social:json.razao_social_encontrada||'',
@@ -5532,7 +5532,7 @@ function upDoc(n,inp){
             }
           }
         } else if(n===3){
-          if(!json.resumo){var _nome=json.nome_encontrado||'';var _tipo=json.tipo_doc||'';if(json.nome_confere===false){json.resumo='Nome divergente: documento em nome de "'+_nome+'"'+(_tipo?' ('+_tipo+')')+'). Não confere com a Receita Federal.';}else if(json.nome_confere===true){json.resumo='Documento de '+(_nome?'"'+_nome+'" ':'')+(_tipo?'('+_tipo+') ':'')+'conferido com a Receita Federal.';}else{json.resumo=(_nome?'Documento em nome de "'+_nome+'"'+(_tipo?' ('+_tipo+')')+'.'  :'Documento analisado.');}}
+          if(!json.resumo){var _nome=json.nome_encontrado||'';var _tipo=json.tipo_doc||'';if(json.nome_confere===false){json.resumo='Nome divergente: documento em nome de "'+(_nome||'?')+'"'+(_tipo?' ('+_tipo+')')+'). Não confere com a Receita Federal.';}else if(json.nome_confere===true){json.resumo=(_nome?'"'+_nome+'" ':'')+(_tipo?'('+_tipo+') ':'')+'conferido com a Receita Federal.';}else if(json.divergencias&&json.divergencias.length>0){json.resumo='Pendências: '+json.divergencias.join('; ')+'.';}else if(json.resultado==='neg'){json.resumo='Documento com pendências. '+(_nome?'Nome encontrado: '+_nome+'.':'');}else{json.resumo=(_nome?(_tipo?_tipo+' de ':'')+'"'+_nome+'" analisado.':'Documento analisado.');}}
           S_DOCS.docSocio={
             nome:json.nome_encontrado||'',
             nome_confere:json.nome_confere,
