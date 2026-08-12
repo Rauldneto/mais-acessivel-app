@@ -5473,6 +5473,33 @@ function upDoc(n,inp){
           }
         }
 
+        
+        // Gerar resumo a partir dos campos retornados (caso a IA nao retorne resumo)
+        if(!json.resumo){
+          if(n===1){
+            var _div=(json.divergencias&&json.divergencias.length>0)?json.divergencias.join('. ')+'.':'';
+            var _ok=[];
+            if(json.cnpj_confere===true)_ok.push('CNPJ '+json.cnpj_encontrado+' confere');
+            if(json.socio_confere===true)_ok.push('socio '+json.socio_encontrado+' confere');
+            if(json.razao_social_confere===true)_ok.push('razao social confere');
+            var _nok=[];
+            if(json.cnpj_confere===false)_nok.push('CNPJ divergente (encontrado: '+json.cnpj_encontrado+')');
+            if(json.socio_confere===false)_nok.push('socio divergente (encontrado: '+json.socio_encontrado+')');
+            if(json.razao_social_confere===false)_nok.push('razao social divergente');
+            if(_nok.length>0)json.resumo=_nok.join('. ')+'.';
+            else if(_div)json.resumo=_div;
+            else if(_ok.length>0)json.resumo='Contrato valido: '+_ok.join(', ')+'.';
+            else json.resumo=json.resultado==='ok'?'Contrato analisado sem divergencias.':'Contrato com pendencias - verifique.';
+          } else if(n===3){
+            var _nome=json.nome_encontrado||'';
+            var _tipo=json.tipo_doc||'Documento';
+            var _div3=(json.divergencias&&json.divergencias.length>0)?json.divergencias.join('. ')+'.':'';
+            if(json.nome_confere===false)json.resumo=_tipo+(_nome?' de '+_nome:'')+'. Nome NAO confere com a Receita Federal.';
+            else if(json.nome_confere===true)json.resumo=_tipo+(_nome?' de '+_nome:'')+'. Nome confere com a Receita Federal.';
+            else if(_div3)json.resumo=_div3;
+            else json.resumo=_tipo+(_nome?' de '+_nome:'')+(_tipo||_nome?'.':' analisado.');
+          }
+        }
         // Armazenar dados extraidos para cruzamento posterior
         if(n===1){
           S_DOCS.contrato={
