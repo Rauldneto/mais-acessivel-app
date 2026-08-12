@@ -5363,7 +5363,7 @@ function upDoc(n,inp){
        +'Analise o CONTRATO SOCIAL ALTERADO e extraia as informacoes. Verifique se cada dado confere com o cadastro acima.\n'
        +'IMPORTANTE: este documento pode ter varias paginas e voce pode estar vendo apenas uma pagina. Se o CAPITAL SOCIAL nao aparecer na pagina analisada, isso NAO e uma divergencia nem deve rebaixar o resultado para neg - apenas informe isso separadamente no campo observacoes (ex: "capital social nao localizado nesta pagina, verificar demais paginas"), mantendo resultado=ok se CNPJ, razao social e socio conferirem normalmente. So use o campo divergencias para problemas REAIS (dados que conferem errado, socio que nao bate, CNPJ diferente).\n'
        +'Responda APENAS com JSON valido sem markdown:\n'
-       +'{"cnpj_encontrado":"XX.XXX.XXX/XXXX-XX","cnpj_confere":true,"razao_social_encontrada":"nome","razao_social_confere":true,"socio_encontrado":"nome completo","socio_confere":true,"capital_encontrado":"valor ou nao_localizado_nesta_pagina","capital_confere":true,"endereco_encontrado":"endereco completo se houver","divergencias":["lista APENAS de problemas reais ou array vazio"],"observacoes":["lista de notas informativas que nao afetam o resultado, ex capital nao localizado na pagina, alteracao societaria relevante, ou array vazio"],"resultado":"ok ou neg","resumo":"descricao objetiva do que foi encontrado e se confere"}',
+       +'{"cnpj_encontrado":"XX.XXX.XXX/XXXX-XX","cnpj_confere":true,"razao_social_encontrada":"nome","razao_social_confere":true,"socio_encontrado":"nome completo","socio_confere":true,"capital_encontrado":"valor ou nao_localizado_nesta_pagina","capital_confere":true,"endereco_encontrado":"endereco completo se houver","resumo":"descricao objetiva do que foi encontrado e se confere","divergencias":["lista APENAS de problemas reais ou array vazio"],"observacoes":["lista de notas informativas que nao afetam o resultado, ex capital nao localizado na pagina, alteracao societaria relevante, ou array vazio"],"resultado":"ok ou neg"}',
 
       2:_prefixoData+'Voce e um analisador de documentos para analise de credito empresarial.\n'
        +'Dados do cadastro (Receita Federal / Cartao CNPJ):\n'
@@ -5450,7 +5450,7 @@ function upDoc(n,inp){
         var resp=await fetch('https://soft-limit-b3a1.rauldias.workers.dev',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,messages:msgs})
+          body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1200,messages:msgs})
         });
         var data=await resp.json();
         var txtResp=(data.content&&data.content[0])?data.content[0].text:'{}';
