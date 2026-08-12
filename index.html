@@ -5508,7 +5508,7 @@ function upDoc(n,inp){
             if(_ei2){
               _ei2.innerHTML+=('<div style="margin-top:10px;background:#fff;border:2px solid #f59e0b;border-radius:10px;padding:14px">')
                 +('<div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-info-circle"></i> Justificativa obrigat\u00f3ria</div>')
-                +('<p style="font-size:12px;color:#78350f;margin-bottom:10px;line-height:1.6">O comprovante est\u00e1 em nome de terceiro (\''+json.titular_encontrado+'\').<br>Informe abaixo o motivo pelo qual o endere\u00e7o n\u00e3o est\u00e1 em nome da empresa ou do s\u00f3cio.</p>')
+                +('<p style="font-size:12px;color:#78350f;margin-bottom:10px;line-height:1.6">O comprovante est\u00e1 em nome de terceiro (\''+(json.titular_encontrado||"")+'\').<br>Informe abaixo o motivo pelo qual o endere\u00e7o n\u00e3o est\u00e1 em nome da empresa ou do s\u00f3cio.</p>')
                 +('<textarea id="m5justTerceiro" rows="3" placeholder="Ex: Im\u00f3vel alugado de familiar do s\u00f3cio. Contrato de loca\u00e7\u00e3o a ser enviado na Etapa 4." style="width:100%;border:1.5px solid #fbbf24;border-radius:8px;padding:9px 12px;font-size:13px;background:#fffbeb;color:#1e293b;outline:none;resize:vertical;box-sizing:border-box"></textarea>')
                 +('<button id="m5btnJust" style="margin-top:10px;background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-check"></i> Confirmar justificativa</button><div style="font-size:11px;color:#92400e;margin-top:8px"><i class="ti ti-alert-triangle"></i> Essa justificativa ser\u00e1 inclu\u00edda no parecer final e no hist\u00f3rico.</div>')
                 +'</div>';
@@ -5559,7 +5559,7 @@ function upDoc(n,inp){
           cls='warn';ico='ti-alert-triangle';
           var _tDesc={conta_agua:'Conta de \u00e1gua',conta_energia:'Conta de energia el\u00e9trica',conta_telefone:'Conta de telefone',cartao_credito:'Cart\u00e3o de cr\u00e9dito',contrato_locacao:'Contrato de loca\u00e7\u00e3o'};
           var _tL=_tDesc[S_DOCS.comprovante.tipo]||S_DOCS.comprovante.tipo||'Comprovante';
-          ei.innerHTML=it('warn','ti-alert-triangle','<strong>'+lbl+':</strong> '+_tL+' v\u00e1lido e dentro do prazo, por\u00e9m em nome de terceiro ("'+json.titular_encontrado+'"). N\u00e3o consta como s\u00f3cio nem como empresa no cart\u00e3o CNPJ. Etapa 4 ser\u00e1 obrigat\u00f3ria.');
+          ei.innerHTML=it('warn','ti-alert-triangle','<strong>'+lbl+':</strong> '+_tL+' v\u00e1lido e dentro do prazo, por\u00e9m em nome de terceiro ("'+(json.titular_encontrado||"")+'"). N\u00e3o consta como s\u00f3cio nem como empresa no cart\u00e3o CNPJ. Etapa 4 ser\u00e1 obrigat\u00f3ria.');
         }
 
         // So marca como pronto depois que a IA terminou de analisar de fato este documento
