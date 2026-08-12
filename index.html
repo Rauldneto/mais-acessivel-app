@@ -895,7 +895,7 @@ function renderAdmin(){
   var divAbas=document.createElement('div');
   divAbas.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap';
   divAbas.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso &agrave;s abas:</span>';
-  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Aba 4'},{id:'mod5',label:'Modelo em Teste'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
+  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito (inclui Modelo em Teste)'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Aba 4'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
     var lbl=document.createElement('label');
     lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
     var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=false;
@@ -988,7 +988,7 @@ function renderAdmin(){
     selRole.value=u.role||'user';
 
     // Marcar checkboxes de abas com os dados do usuario
-    var abasAtivas=u.abas||['mod1','mod2','mod3','mod4','mod5'];
+    var abasAtivas=u.abas||['mod1','mod2','mod3','mod4'];
     divAbas.querySelectorAll('input[name=abaAcesso]').forEach(function(cb){
       cb.checked=abasAtivas.indexOf(cb.value)>-1;
     });
@@ -2669,11 +2669,10 @@ function renderModuloNav(){
     {id:'frete', icon:'🚛', label:'Frete'},
     {id:'mod2',  icon:'📁', label:'Análise de Crédito'},
     {id:'mod3', icon:'🤖', label:'Ace IA'},
-    {id:'mod4',  icon:'📁', label:'Aba 4'},
-    {id:'mod5',  icon:'🧪', label:'Modelo em Teste'}
+    {id:'mod4',  icon:'📁', label:'Aba 4'}
   ];
   // Mapeamento id antigo -> novo
-  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6'};
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod2','mod6':'mod6'};
   // Admin ve tudo; outros so veem abas permitidas
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
@@ -2714,6 +2713,12 @@ function renderModuloVazio(num){
 }
 
 function renderApp(){
+  // Modelo em Teste (mod5) foi unificado dentro de Analise de Credito (mod2).
+  // Normaliza qualquer estado antigo/persistido que ainda aponte pra mod5.
+  if(STATE.modulo==='mod5'){
+    STATE.modulo='mod2';
+    if(['analise','historico','aprovacao'].indexOf(STATE.tabCredito)<0) STATE.tabCredito='analise';
+  }
   var wrap=document.createElement('div');
   // header
   wrap.appendChild(renderHeader());
@@ -2735,7 +2740,7 @@ function renderApp(){
   } else if(STATE.modulo==='mod2'){
     if(STATE.tabCredito==='historico') main.appendChild(renderHistoricoCredito());
     else if(STATE.tabCredito==='aprovacao') main.appendChild(renderAprovacoes());
-    else main.appendChild(renderAnaliseCredito());
+    else main.appendChild(renderModeloEmTeste());
   } else if(STATE.modulo==='mod3'){
     main.appendChild(renderAceIA());
   } else if(STATE.modulo==='mod4'){
@@ -6915,7 +6920,8 @@ function mostrarHistoricoMod5(){
 
 // Nova consulta do mod5: re-renderiza a tela do zero (limpa D/S automaticamente)
 function novaConsultaMod5(){
-  STATE.modulo='mod5';
+  STATE.modulo='mod2';
+  STATE.tabCredito='analise';
   render();
 }
 
