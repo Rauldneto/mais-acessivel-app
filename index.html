@@ -895,7 +895,7 @@ function renderAdmin(){
   var divAbas=document.createElement('div');
   divAbas.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap';
   divAbas.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso &agrave;s abas:</span>';
-  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito (inclui Modelo em Teste)'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Aba 4'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
+  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Aba 4'},{id:'mod5',label:'Modelo em Teste'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
     var lbl=document.createElement('label');
     lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
     var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=false;
@@ -988,7 +988,7 @@ function renderAdmin(){
     selRole.value=u.role||'user';
 
     // Marcar checkboxes de abas com os dados do usuario
-    var abasAtivas=u.abas||['mod1','mod2','mod3','mod4'];
+    var abasAtivas=u.abas||['mod1','mod2','mod3','mod4','mod5'];
     divAbas.querySelectorAll('input[name=abaAcesso]').forEach(function(cb){
       cb.checked=abasAtivas.indexOf(cb.value)>-1;
     });
@@ -2541,13 +2541,57 @@ function renderHistoricoCredito(){
       var btnCarregar=document.createElement('button');
       btnCarregar.textContent='↩ Carregar';
       btnCarregar.style.cssText='margin-left:auto;background:#2563eb;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:.82em;cursor:pointer;';
-      btnCarregar.onclick=function(e){
-        e.stopPropagation();
-        window._mod5CarregarHistorico = reg;
-        STATE.modulo='mod2';
-        STATE.tabCredito='analise';
-        render();
-      };
+      if(!reg.snapshotCliente){
+        btnCarregar.disabled=true;btnCarregar.style.opacity='.4';btnCarregar.title='Esta análise é antiga e não possui dados completos para recarregar.';
+      } else {
+        btnCarregar.onclick=function(e){
+          e.stopPropagation();
+          // Restaura textos extraídos dos PDFs (salvo no snapshot desde esta versão)
+          window._AC_contratoTexto = reg.snapshotContratoTexto || '';
+          window._AC_imovelTexto = reg.snapshotImovelTexto || '';
+          window._AC_socioDocTexto = reg.snapshotSocioDocTexto || '';
+          var _cli = reg.snapshotCliente || {};
+          _cli._nomeVerif = _cli._nomeVerif || _cli.fantasia || _cli.nome || '';
+          _cli._endVerif  = _cli._endVerif  || _cli.endereco || '';
+          var _confBase = reg.confirmacoesManuais || {};
+          var _cnpjLimpo2 = (reg.cnpjChave||'').replace(/\D/g,'');
+          var _confRestaurado = {};
+          Object.keys(_confBase).forEach(function(k){
+            _confRestaurado[k] = _confBase[k];
+            if(k.indexOf(_cnpjLimpo2)<0 && _cnpjLimpo2) _confRestaurado[_cnpjLimpo2+'_'+k]=_confBase[k];
+          });
+          window._AC_contratoTexto = reg.snapshotContratoTexto || '';
+          window._AC_imovelTexto   = reg.snapshotImovelTexto   || '';
+          window._AC_socioDocTexto = reg.snapshotSocioDocTexto || '';
+          window._AC = {
+            cliente: _cli,
+            fornecedores: reg.snapshotFornecedores || [{},{},{}],
+            limitesolicitado: reg.snapshotLimiteSolicitado || '',
+            exibirResumo: false,
+            confirmacoesManuais: reg.confirmacoesManuais || {},
+            ultimoResultado: {
+              cnpj: reg.cnpjChave,
+              registro: reg,
+              iaBodyHTML: reg.snapshotIaBodyHTML || '',
+              iaLinksHTML: reg.snapshotIaLinksHTML || '',
+              socioLinksHTML: reg.snapshotSocioLinksHTML || '',
+              stickyStatusHTML: reg.snapshotStickyStatusHTML || '',
+              stickyStatusColor: reg.snapshotStickyStatusColor || ''
+            }
+          };
+          STATE.tabCredito='analise';
+          render();
+          [150,450,1000].forEach(function(t){
+            setTimeout(function(){
+              var nomeV=(_cli._nomeVerif||'');
+              var cnpjL=_cnpjLimpo2||'';
+              var endV=(_cli._endVerif||'');
+              if(typeof window._montarVerificacoes==='function' && nomeV && cnpjL)
+                window._montarVerificacoes(nomeV, cnpjL, endV);
+            }, t);
+          });
+        };
+      }
       var arrowSpan=document.createElement('span');
       arrowSpan.style.cssText='font-size:.8em;color:#9ca3af;';
       arrowSpan.textContent='▼ ver parecer';
@@ -2625,10 +2669,11 @@ function renderModuloNav(){
     {id:'frete', icon:'🚛', label:'Frete'},
     {id:'mod2',  icon:'📁', label:'Análise de Crédito'},
     {id:'mod3', icon:'🤖', label:'Ace IA'},
-    {id:'mod4',  icon:'📁', label:'Aba 4'}
+    {id:'mod4',  icon:'📁', label:'Aba 4'},
+    {id:'mod5',  icon:'🧪', label:'Modelo em Teste'}
   ];
   // Mapeamento id antigo -> novo
-  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod2','mod6':'mod6'};
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6'};
   // Admin ve tudo; outros so veem abas permitidas
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
@@ -2669,12 +2714,6 @@ function renderModuloVazio(num){
 }
 
 function renderApp(){
-  // Modelo em Teste (mod5) foi unificado dentro de Analise de Credito (mod2).
-  // Normaliza qualquer estado antigo/persistido que ainda aponte pra mod5.
-  if(STATE.modulo==='mod5'){
-    STATE.modulo='mod2';
-    if(['analise','historico','aprovacao'].indexOf(STATE.tabCredito)<0) STATE.tabCredito='analise';
-  }
   var wrap=document.createElement('div');
   // header
   wrap.appendChild(renderHeader());
@@ -2696,7 +2735,7 @@ function renderApp(){
   } else if(STATE.modulo==='mod2'){
     if(STATE.tabCredito==='historico') main.appendChild(renderHistoricoCredito());
     else if(STATE.tabCredito==='aprovacao') main.appendChild(renderAprovacoes());
-    else main.appendChild(renderModeloEmTeste());
+    else main.appendChild(renderAnaliseCredito());
   } else if(STATE.modulo==='mod3'){
     main.appendChild(renderAceIA());
   } else if(STATE.modulo==='mod4'){
@@ -4716,111 +4755,6 @@ function renderModeloEmTeste(){
   var wrap=document.createElement('div');
   wrap.style.cssText='padding:0 0 60px 0';
 
-  // Se uma analise do historico foi carregada via botao "Carregar", monta um resumo
-  // (somente leitura) pra ser inserido no topo DEPOIS do HTML principal ser montado
-  // (guardamos como string aqui porque wrap.innerHTML e reatribuido mais abaixo).
-  var _recapHtml='';
-  if(window._mod5CarregarHistorico){
-    var _reg=window._mod5CarregarHistorico;
-    window._mod5CarregarHistorico=null; // mostra uma vez; "Nova consulta" limpa normalmente
-    var _fmtMesesRec=function(m){
-      if(m===undefined||m===null||m==='') return null;
-      m=parseInt(m,10); if(isNaN(m)) return null;
-      var a=Math.floor(m/12),r=m%12;
-      return (a?a+(a===1?' ano':' anos')+(r?' e ':''):'')+(r||!a?r+(r===1?' m\u00eas':' meses'):'');
-    };
-    var _empresa=_reg.empresa||(_reg.snapshotCliente&&(_reg.snapshotCliente.nome||_reg.snapshotCliente.fantasia))||'\u2014';
-    var _cnpjRec=_reg.cnpj||_reg.cnpjChave||'\u2014';
-    var _socioRec=_reg.socioNome||_reg.socio||'\u2014';
-    var _capitalRec=_reg.capitalSocial||_reg.capital||'\u2014';
-    var _tempoRec=_reg.tempoEmpresa||_fmtMesesRec(_reg.meses_empresa)||'\u2014';
-    var _dataRec=_reg.dataExibicao||_reg.dataHora||'\u2014';
-    var _operRec=_reg.operador||_reg.responsavel||'\u2014';
-    var _parecerRec=_reg.parecerResumo||_reg.parecer_atualizado||_reg.parecer_ia_texto||'';
-    var _checksHtml='';
-    if(_reg.checks&&_reg.checks.length){
-      var _CKC={ok:{bg:'#dcfce7',co:'#166534',bd:'#86efac'},neg:{bg:'#fee2e2',co:'#991b1b',bd:'#fca5a5'},warn:{bg:'#fef9c3',co:'#854d0e',bd:'#fde047'}};
-      _checksHtml=_reg.checks.map(function(k){
-        var cc=_CKC[k.cls]||{bg:'#f1f5f9',co:'#334155',bd:'#cbd5e1'};
-        return '<div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;padding:6px 10px;border-radius:8px;margin-bottom:4px;background:'+cc.bg+';color:'+cc.co+';border:1px solid '+cc.bd+'"><i class="ti '+(k.ico||'ti-info-circle')+'"></i><span>'+k.txt+'</span></div>';
-      }).join('');
-    }
-    var _refsHtml='';
-    if(_reg.referencias&&_reg.referencias.length){
-      _refsHtml='<div style="margin-top:10px"><strong style="font-size:12px">Refer\u00eancias comerciais:</strong>'
-        +_reg.referencias.map(function(r){return '<div style="font-size:12px;color:#374151;margin-top:3px">\u2022 '+(r.nome||'')+(r.limite?' \u2014 limite R$ '+r.limite:'')+'</div>';}).join('')
-        +'</div>';
-    }
-    // Formato antigo (aba Analise de Credito) guarda os fornecedores em snapshotFornecedores,
-    // com campos codificados - traduz pra texto legivel
-    if(_reg.snapshotFornecedores && _reg.snapshotFornecedores.length){
-      var _fornM={
-        pagaemdia:{sim:'\u2705 Sim',quase:'\u26a0\ufe0f Quase',nao:'\u274c N\u00e3o'},
-        atrasou:{nao:'\u2705 Nunca','sim-raro':'\u26a0\ufe0f Raramente','sim-freq':'\u274c Frequente'},
-        debitoaberto:{nao:'\u2705 N\u00e3o',sim:'\u274c Sim'},
-        protestou:{nao:'\u2705 N\u00e3o',sim:'\u274c Sim'},
-        aindavende:{sim:'\u2705 Sim',nao:'\u274c Parou'},
-        recomenda:{sim:'\u2705 Sim','sim-ressalvas':'\u26a0\ufe0f Com ressalvas',nao:'\u274c N\u00e3o'}
-      };
-      var _fornsPreench=_reg.snapshotFornecedores.filter(function(f){return f&&f.nome&&(''+f.nome).trim();});
-      if(_fornsPreench.length){
-        _refsHtml+='<div style="margin-top:10px"><strong style="font-size:12px">Fornecedores (refer\u00eancias comerciais):</strong>'
-          +_fornsPreench.map(function(f,fi){
-            var linhas=[];
-            if(f.tempocliente) linhas.push('cliente h\u00e1 '+f.tempocliente);
-            if(f.limite) linhas.push('limite R$ '+f.limite);
-            if(f.maiorcompra) linhas.push('maior compra R$ '+f.maiorcompra);
-            if(f.pagaemdia) linhas.push('paga em dia: '+(_fornM.pagaemdia[f.pagaemdia]||f.pagaemdia));
-            if(f.atrasou) linhas.push('atraso: '+(_fornM.atrasou[f.atrasou]||f.atrasou)+(f.diasatraso?' ('+f.diasatraso+' dias)':''));
-            if(f.debitoaberto) linhas.push('d\u00e9bito: '+(_fornM.debitoaberto[f.debitoaberto]||f.debitoaberto));
-            if(f.protestou) linhas.push('protestou: '+(_fornM.protestou[f.protestou]||f.protestou));
-            if(f.aindavende) linhas.push('ainda vende: '+(_fornM.aindavende[f.aindavende]||f.aindavende));
-            if(f.recomenda) linhas.push('recomenda: '+(_fornM.recomenda[f.recomenda]||f.recomenda));
-            return '<div style="font-size:12px;color:#374151;margin-top:6px;padding:8px 10px;background:#f8fafc;border-radius:6px"><strong>'+(fi+1)+'. '+f.nome+'</strong><br>'+linhas.join(' \u00b7 ')+'</div>';
-          }).join('')
-          +'</div>';
-      }
-    }
-    // Campos ricos exclusivos do formato antigo (aba Analise de Credito) - mostrar tudo que existir
-    var _oldFieldsHtml='';
-    var _oldRows=[
-      ['Veredito', _reg.veredito?(_reg.veredito+(_reg.veredictoMotivo?' \u2014 '+_reg.veredictoMotivo:'')):''],
-      ['CENPROT', _reg.cenprotStatus],
-      ['Documento do s\u00f3cio', _reg.sociodocStatus],
-      ['Im\u00f3vel', _reg.imovelStatus?(_reg.imovelStatus+(_reg.imovelPeriodo?' ('+_reg.imovelPeriodo+')':'')):''],
-      ['Endere\u00e7o', _reg.enderecoStatus],
-      ['Google', _reg.empresaGoogleStatus],
-      ['Instagram', _reg.empresaInstaStatus],
-      ['Refer\u00eancias comerciais', _reg.refcomStatus?(_reg.refcomStatus+((_reg.refcomNota!==''&&_reg.refcomNota!==undefined&&_reg.refcomNota!==null)?' (nota '+_reg.refcomNota+')':'')):''],
-      ['S\u00f3cio (entrada)', _reg.socioEntrada],
-      ['Contrato Social', _reg.contratoSocialResumo]
-    ].filter(function(r){return r[1];});
-    if(_oldRows.length){
-      _oldFieldsHtml='<div style="margin-top:10px;font-size:12px;color:#374151;line-height:1.8">'
-        +_oldRows.map(function(r){return '<strong>'+r[0]+':</strong> '+r[1];}).join('<br>')
-        +'</div>';
-    }
-    // Se existir o bloco visual completo que a IA gerou na epoca (positivos/negativos/atencao/veredito
-    // formatados), mostra ele tambem - e mais completo que o resumo em texto quando este falhou
-    var _iaBodyHtml='';
-    if(_reg.snapshotIaBodyHTML){
-      _iaBodyHtml='<div style="margin-top:10px;border:1px solid #e2e8f0;border-radius:8px;padding:12px;font-size:12px;background:#fafafa">'+_reg.snapshotIaBodyHTML+'</div>';
-    }
-    _recapHtml='<div id="m5recapHist" style="background:#fff;border:3px solid #2563eb;border-radius:12px;padding:16px 18px;margin:16px 4px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
-      +'<div style="font-size:14px;font-weight:700;color:#1d4ed8">\ud83d\udcc2 An\u00e1lise carregada do hist\u00f3rico (somente leitura)</div>'
-      +'<button id="m5btnFecharRecap" style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">Fechar</button></div>'
-      +'<p style="font-size:12px;color:#475569;margin-bottom:10px">Para editar ou refazer, use <strong>"Nova consulta"</strong> abaixo.</p>'
-      +'<p style="font-size:13px;color:#1e293b;margin:6px 0"><strong>'+_empresa+'</strong> \u2014 CNPJ '+_cnpjRec+'</p>'
-      +'<p style="font-size:12px;color:#374151;margin:4px 0">S\u00f3cio: '+_socioRec+' | Capital: R$ '+_capitalRec+' | Tempo de empresa: '+_tempoRec+'</p>'
-      +'<p style="font-size:12px;color:#94a3b8;margin:4px 0 10px">\ud83d\udcc5 '+_dataRec+' \u00b7 \ud83d\udc64 '+_operRec+'</p>'
-      +_checksHtml
-      +_refsHtml
-      +_oldFieldsHtml
-      +(_parecerRec?'<div style="margin-top:10px;background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:12px;font-size:12px;color:#1e293b;line-height:1.6;white-space:pre-wrap">'+_parecerRec+'</div>':'')
-      +_iaBodyHtml;
-  }
-
   var S={
     checks:[],negado:false,protestoDiretor:false,
     mE:0,mS:0,nS:1,sit:'',
@@ -4990,7 +4924,7 @@ function renderModeloEmTeste(){
   function limpar(){
     S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,precisaAprovDir:false,justEndTerceiro:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},docsOk:{1:false,2:false,3:false},simLoc:0,orcamento:0,mOk:false,lOk:false};
     window._mod5S=S;
-    S_DOCS={contrato:null,comprovante:null,docSocio:null,rawFiles:{1:null,2:null,3:null}};
+    S_DOCS={contrato:null,comprovante:null,docSocio:null};
     D={nome:'',fantasia:'',cnpj:'',socio:'',capital:''};
     var cl=q('#m5cl');if(cl)cl.innerHTML='';
     var pb=q('#m5pb');if(pb)pb.textContent='Digite o CNPJ e clique em Consultar.';
@@ -5323,8 +5257,7 @@ function renderModeloEmTeste(){
 var S_DOCS = {
   contrato:    null,  // Doc 1: {cnpj, socio, endereco, capital}
   comprovante: null,  // Doc 2: {titular, tipo, endereco, dentro_90_dias, titular_confere}
-  docSocio:    null,  // Doc 3: {nome, tipo_doc}
-  rawFiles:    {1:null,2:null,3:null} // arquivos carregados, aguardando analise em lote
+  docSocio:    null   // Doc 3: {nome, tipo_doc}
 };
 
 // Detecta texto extraido de PDF com codificacao de fonte corrompida (comum em PDFs da JUCEG/gov
@@ -5339,30 +5272,6 @@ function textoPareceCorrompido(texto){
 
 function upDoc(n,inp){
     var file=inp.files[0];if(!file)return;
-    S_DOCS.rawFiles[n]=file;
-    var b=q('#m5eb'+n);
-    b.innerHTML='<i class="ti ti-check"></i> '+file.name.slice(0,18)+(file.name.length>18?'...':'');
-    b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#dcfce7;color:#166534;border:0.5px solid #86efac';
-    var ei=q('#m5ei'+n);
-    ei.style.display='block';
-    ei.innerHTML='<div style="font-size:12px;color:#94a3b8;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-file-check"></i> Arquivo carregado. A analise sera feita ao clicar em "Concluir analise documental".</div>';
-    // Habilita o botao assim que os 3 arquivos estiverem selecionados (analise ocorre depois, em lote)
-    var pronto = !!(S_DOCS.rawFiles[1] && S_DOCS.rawFiles[2] && S_DOCS.rawFiles[3]);
-    var btn=q('#m5btnDoc');
-    if(btn){
-      btn.disabled=!pronto;
-      q('#m5bdoc').style.display='block';
-      q('#m5dcnt').textContent=pronto?'3/3 arquivos carregados':(Object.values(S_DOCS.rawFiles).filter(Boolean).length)+'/3 arquivos carregados';
-      if(pronto){
-        btn.style.cssText='background:#2563eb;color:#ffffff;border:0.5px solid #2563eb;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;opacity:1';
-      } else {
-        btn.style.cssText='background:#cbd5e1;color:#64748b;border:0.5px solid #cbd5e1;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:not-allowed;display:inline-flex;align-items:center;gap:6px;opacity:0.7';
-      }
-    }
-  }
-
-function analisarDoc(n,file){
-  return new Promise(function(resolveDoc){
     var b=q('#m5eb'+n);
     b.innerHTML='<i class="ti ti-loader"></i> Lendo...';
     b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#eff6ff;color:#1d4ed8;border:0.5px solid #93c5fd';
@@ -5373,6 +5282,7 @@ function analisarDoc(n,file){
     ei.innerHTML='<div style="font-size:12px;color:#94a3b8;font-style:italic;padding:6px 0;display:flex;align-items:center;gap:6px"><i class="ti ti-robot"></i> IA lendo e extraindo dados do documento...</div>';
     S.simDoc[n]=(S.simDoc[n]||0)+1;
     S.docsOk[n]=false;
+    updateBtnDocState();
 
     var _hojeStr=new Date().toLocaleDateString('pt-BR');
     var _prefixoData='DATA DE HOJE (use esta data real como referencia para qualquer calculo de prazo, validade ou data futura/passada - NAO use sua propria nocao de data atual): '+_hojeStr+'\n\n';
@@ -5572,12 +5482,12 @@ function analisarDoc(n,file){
         // Mostrar dados extraidos + divergencias (reais, vermelho) e observacoes (informativas, neutro) do proprio documento
         var divs=(json.divergencias&&json.divergencias.length>0)?'<br><span style="color:#b91c1c">Diverg\u00eancias: '+json.divergencias.join('; ')+'</span>':'';
         var obs=(json.observacoes&&json.observacoes.length>0)?'<br><span style="color:#475569">\u2139\ufe0f Observa\u00e7\u00f5es: '+json.observacoes.join('; ')+'</span>':'';
-        ei.innerHTML=it(cls,ico,'<strong>'+lbl+':</strong> '+(json.resumo||'--')+divs+obs);
-        addCk(cls,ico,lbl+': '+(json.resumo||'--'));
+        ei.innerHTML=it(cls,ico,'<strong>'+lbl+':</strong> '+json.resumo+divs+obs);
+        addCk(cls,ico,lbl+': '+json.resumo);
 
         if(json.tipo_documento==='invalido'||json.dentro_90_dias===false){
           cls='neg';
-          ei.innerHTML=it('neg','ti-x','<strong>'+lbl+':</strong> '+(json.resumo||'--'));
+          ei.innerHTML=it('neg','ti-x','<strong>'+lbl+':</strong> '+json.resumo);
         } else if(n===2 && (S_DOCS.comprovante.titular_confere==='terceiro')){
           // Doc valido mas em nome de terceiro: sempre warn, nunca neg
           cls='warn';ico='ti-alert-triangle';
@@ -5588,6 +5498,7 @@ function analisarDoc(n,file){
 
         // So marca como pronto depois que a IA terminou de analisar de fato este documento
         S.docsOk[n]=true;
+        updateBtnDocState();
 
       }catch(err){
         // Limpar resultado anterior para nao acumular
@@ -5602,43 +5513,21 @@ function analisarDoc(n,file){
         b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#fee2e2;color:#991b1b;border:0.5px solid #fca5a5';
         ei.innerHTML=it('neg','ti-x','<strong>Falha ao processar o documento.</strong> Motivo: '+err.message+'<br>Selecione o arquivo novamente para reenviar.');
         addCk('neg','ti-x','Erro ao processar documento '+n);
+        updateBtnDocState();
       }
-      resolveDoc();
+
+      if(Object.values(S.simDoc).some(function(v){return v>0;})){
+        q('#m5bdoc').style.display='block';
+        var tot=Object.values(S.docsOk).filter(function(v){return v===true;}).length;
+        q('#m5dcnt').textContent=tot+'/3 documentos analisados'+(tot<3?' \u2014 aguarde a IA concluir todos':'');
+        updateBtnDocState();
+      }
     })();
-  });
-}
-
-
-
-  async function concluirE3(){
-    var btn=q('#m5btnDoc');
-    var todosCarregados = !!(S_DOCS.rawFiles[1] && S_DOCS.rawFiles[2] && S_DOCS.rawFiles[3]);
-    if(!todosCarregados){
-      alert('Selecione os 3 documentos antes de concluir a analise.');
-      return;
-    }
-    if(btn){
-      btn.disabled=true;
-      btn.innerHTML='<i class="ti ti-loader"></i> Analisando documentos...';
-      btn.style.cssText='background:#94a3b8;color:#fff;border:0.5px solid #94a3b8;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:not-allowed;display:inline-flex;align-items:center;gap:6px;opacity:0.85';
-    }
-    q('#m5dcnt').textContent='Enviando os 3 documentos para a IA... aguarde.';
-
-    await Promise.all([
-      analisarDoc(1,S_DOCS.rawFiles[1]),
-      analisarDoc(2,S_DOCS.rawFiles[2]),
-      analisarDoc(3,S_DOCS.rawFiles[3])
-    ]);
-
-    if(btn){
-      btn.innerHTML='<i class="ti ti-flag"></i> Concluir an\u00e1lise documental';
-    }
-    q('#m5dcnt').textContent='3/3 documentos analisados';
-
-    concluirE3Miolo();
   }
 
-  function concluirE3Miolo(){
+
+
+  function concluirE3(){
     var re3=q('#m5re3');re3.style.display='block';
 
     // --- VARREDURA CRUZADA ---
@@ -6321,12 +6210,6 @@ function analisarDoc(n,file){
     +'<div id="m5s5" style="display:none"></div>'
     +'<div id="m5sv" style="display:none"></div>'
     +'</div>';
-
-  if(_recapHtml){
-    wrap.insertAdjacentHTML('afterbegin', _recapHtml);
-    var _bF=wrap.querySelector('#m5btnFecharRecap');
-    if(_bF) _bF.onclick=function(){ var _r=wrap.querySelector('#m5recapHist'); if(_r) _r.remove(); };
-  }
 
 
 
@@ -7032,8 +6915,7 @@ function mostrarHistoricoMod5(){
 
 // Nova consulta do mod5: re-renderiza a tela do zero (limpa D/S automaticamente)
 function novaConsultaMod5(){
-  STATE.modulo='mod2';
-  STATE.tabCredito='analise';
+  STATE.modulo='mod5';
   render();
 }
 
