@@ -1225,9 +1225,9 @@ function gerarImpressaoAC(){
     +'<div class="check-row"><span>CENPROT (Protestos)</span><span>'+st(ck('cenprot'))+'</span></div>'
     +'</div>'
     +'<h2>Documentos</h2><div>'
-    +'<div class="check-row"><span>Contrato Social</span><span>'+(window._AC_contratoTexto?'Enviado':'Nao enviado')+'</span></div>'
-    +'<div class="check-row"><span>Comprovante Endereco / Contrato Locacao</span><span>'+(window._AC_imovelTexto?'Enviado (imovel: '+esc(reg.imovelStatus||'?')+')':'Nao enviado')+'</span></div>'
-    +'<div class="check-row"><span>Documento do Socio</span><span>'+(window._AC_socioDocTexto?'Enviado':'Nao enviado')+'</span></div>'
+    +'<div class="check-row"><span>Contrato Social</span><span>'+((window._AC_contratoTexto||window._AC_contratoTexto_isImg)?'Enviado':'Nao enviado')+'</span></div>'
+    +'<div class="check-row"><span>Comprovante Endereco / Contrato Locacao</span><span>'+((window._AC_imovelTexto||window._AC_imovelTexto_isImg)?'Enviado (imovel: '+esc(reg.imovelStatus||'?')+')':'Nao enviado')+'</span></div>'
+    +'<div class="check-row"><span>Documento do Socio</span><span>'+((window._AC_socioDocTexto||window._AC_socioDocTexto_isImg)?'Enviado':'Nao enviado')+'</span></div>'
     +'</div>'
     +'<h2>Parecer Inteligente</h2><div class="parecer">'+parecer+'</div>'
     +'<h2>Referencias Comerciais</h2>'+refHtml
@@ -1492,6 +1492,8 @@ function renderAnaliseCredito(){
       if(!file) return;
       uploadStatus.textContent='⏳ Lendo PDF...';
       uploadStatus.className='ac-upload-status';
+      window[varName+'_isImg']=false;
+      window[varName+'_img']='';
       try{
         var buf=await file.arrayBuffer();
         if(typeof pdfjsLib==='undefined'){throw new Error('Biblioteca de PDF não carregou.');}
@@ -1504,15 +1506,33 @@ function renderAnaliseCredito(){
           textoCompleto+=content.items.map(function(it){return it.str;}).join(' ')+'\n';
         }
         textoCompleto=textoCompleto.trim();
-        if(!textoCompleto){throw new Error('Não foi possível extrair texto do PDF (pode ser um PDF escaneado/imagem).');}
-        window[varName] = textoCompleto.substring(0,8000);
-        uploadCard.classList.add('has-file');
-        uploadStatus.textContent='✅ '+file.name+' — texto extraído ('+textoCompleto.length+' caracteres).';
-        uploadStatus.className='ac-upload-status ok';
+        var _muitoCurto=textoCompleto.length<50;
+        var _corrompido=!_muitoCurto&&(typeof textoPareceCorrompido==='function'&&textoPareceCorrompido(textoCompleto));
+        if(_muitoCurto||_corrompido){
+          // Fallback: renderizar pagina 1 como imagem PNG e enviar para a IA ler visualmente
+          uploadStatus.textContent='⏳ Texto ilegível/ausente — convertendo página em imagem para a IA...';
+          var pg1=await pdf.getPage(1);
+          var vp=pg1.getViewport({scale:3.0});
+          var cv=document.createElement('canvas');
+          cv.width=vp.width;cv.height=vp.height;
+          await pg1.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+          window[varName+'_img']=cv.toDataURL('image/png').split(',')[1];
+          window[varName+'_isImg']=true;
+          window[varName]='';
+          uploadCard.classList.add('has-file');
+          uploadStatus.textContent='✅ '+file.name+' — enviado como imagem para leitura da IA (texto do PDF era ilegível).';
+          uploadStatus.className='ac-upload-status ok';
+        } else {
+          window[varName] = textoCompleto.substring(0,8000);
+          uploadCard.classList.add('has-file');
+          uploadStatus.textContent='✅ '+file.name+' — texto extraído ('+textoCompleto.length+' caracteres).';
+          uploadStatus.className='ac-upload-status ok';
+        }
         var btnRemove=document.createElement('button');
         btnRemove.className='ac-upload-remove';btnRemove.textContent='Remover';btnRemove.type='button';
         btnRemove.onclick=function(){
           window[varName]='';fileInp.value='';
+          window[varName+'_isImg']=false;window[varName+'_img']='';
           uploadCard.classList.remove('has-file');
           uploadStatus.textContent='Nenhum arquivo selecionado.';uploadStatus.className='ac-upload-status';
           btnRemove.remove();
@@ -1520,6 +1540,7 @@ function renderAnaliseCredito(){
         uploadRow.appendChild(btnRemove);
       }catch(err){
         window[varName]='';
+        window[varName+'_isImg']=false;window[varName+'_img']='';
         uploadStatus.textContent='❌ '+err.message;
         uploadStatus.className='ac-upload-status err';
       }
@@ -1968,18 +1989,30 @@ function renderAnaliseCredito(){
         prompt += '\n\nANÁLISE ANTERIOR DESTE CNPJ (para comparação): em '+(ultimoRegistro.dataExibicao||'data desconhecida')+', a situação era '+(ultimoRegistro.situacao||'não registrada')+', capital social R$ '+(ultimoRegistro.capitalSocial||'não registrado')+', sócio principal '+(ultimoRegistro.socioNome||'não registrado')+'. Compare com os dados atuais e, no parágrafo, mencione brevemente o que mudou desde então (ex: troca de sócio, mudança de situação, mudança de capital) ou diga que não houve mudança relevante, se for o caso.';
       }
 
+      // Lista de blocos de imagem (documentos cujo texto nao pode ser extraido) para anexar na mensagem multimodal
+      var _imgBlocks=[];
+
       if(window._AC_contratoTexto){
         prompt += '\n\nTEXTO EXTRAÍDO DO CONTRATO SOCIAL ALTERADO ENVIADO PELO CLIENTE (pode conter ruído de formatação do PDF):\n"""\n'+window._AC_contratoTexto+'\n"""\nCom base nesse texto, identifique e resuma BREVEMENTE no parágrafo (1-2 frases) quais alterações contratuais foram feitas em relação ao contrato anterior (ex: mudança de sócio, de endereço, de capital social, de administração), conforme descrito no próprio documento. Se não conseguir identificar alterações claras no texto, diga isso brevemente.';
+      } else if(window._AC_contratoTexto_isImg && window._AC_contratoTexto_img){
+        prompt += '\n\nO CLIENTE ENVIOU O CONTRATO SOCIAL ALTERADO COMO IMAGEM (em anexo a esta mensagem, pois o texto do PDF nao pode ser extraido). Observe a imagem anexada com o rotulo "IMAGEM: Contrato Social Alterado" e resuma BREVEMENTE no parágrafo (1-2 frases) quais alterações contratuais foram feitas em relação ao contrato anterior, conforme visível na imagem. Se não conseguir identificar alterações claras, diga isso brevemente.';
+        _imgBlocks.push({label:'IMAGEM: Contrato Social Alterado',b64:window._AC_contratoTexto_img});
       }
 
       if(window._AC_imovelTexto){
         prompt += '\n\nTEXTO EXTRAÍDO DO COMPROVANTE DE ENDEREÇO / DOCUMENTO DO IMÓVEL ENVIADO PELO CLIENTE (pode ser escritura, matrícula, IPTU, ou contrato de locação; pode conter ruído de formatação do PDF):\n"""\n'+window._AC_imovelTexto+'\n"""\nCom base nesse texto, determine se o imóvel da sede é PRÓPRIO (da empresa ou do sócio) ou ALUGADO (contrato de locação). Mencione brevemente isso no parágrafo do parecer. Se for locação, informe também a data de início e a data de término/validade do contrato, se constarem no texto.\nAo final da sua resposta, em uma linha separada, adicione um marcador técnico EXATAMENTE neste formato (sem nada além disso na linha): [IMOVEL:PROPRIO] se o documento comprova que é próprio, ou [IMOVEL:ALUGADO|inicio=DD/MM/AAAA|fim=DD/MM/AAAA] se for locação (preencha as datas se identificadas, ou deixe "não identificado" se não constarem), ou [IMOVEL:INDEFINIDO] se o texto não permitir concluir com segurança.';
+      } else if(window._AC_imovelTexto_isImg && window._AC_imovelTexto_img){
+        prompt += '\n\nO CLIENTE ENVIOU O COMPROVANTE DE ENDEREÇO / DOCUMENTO DO IMÓVEL COMO IMAGEM (em anexo a esta mensagem, pois o texto do PDF nao pode ser extraido). Observe a imagem anexada com o rotulo "IMAGEM: Comprovante de Endereco / Imovel" e determine se o imóvel da sede é PRÓPRIO ou ALUGADO, conforme visível na imagem. Mencione brevemente isso no parágrafo do parecer. Se for locação, informe também a data de início e término se visíveis.\nAo final da sua resposta, em uma linha separada, adicione um marcador técnico EXATAMENTE neste formato: [IMOVEL:PROPRIO], [IMOVEL:ALUGADO|inicio=DD/MM/AAAA|fim=DD/MM/AAAA] ou [IMOVEL:INDEFINIDO] se a imagem não permitir concluir com segurança.';
+        _imgBlocks.push({label:'IMAGEM: Comprovante de Endereco / Imovel',b64:window._AC_imovelTexto_img});
       } else {
         prompt += '\n\nNenhum comprovante de endereço ou contrato de locação foi enviado para esta análise. Mencione brevemente isso no parágrafo como uma lacuna na análise (não foi possível confirmar se o imóvel da sede é próprio ou alugado).\nAo final da sua resposta, em uma linha separada, adicione exatamente: [IMOVEL:NAO_ENVIADO]';
       }
 
       if(window._AC_socioDocTexto){
         prompt += '\n\nTEXTO EXTRAÍDO DO DOCUMENTO DE IDENTIFICAÇÃO DO SÓCIO ENVIADO PELO CLIENTE (pode ser RG, CNH, CREA, OAB, CRM ou outro documento oficial; pode conter ruído de formatação do PDF):\n"""\n'+window._AC_socioDocTexto+'\n"""\nConfirme brevemente no parágrafo que o documento de identificação do sócio majoritário foi apresentado, mencionando o tipo de documento identificado e se o nome confere com o sócio constante na Receita Federal, se for possível verificar.\nAo final da sua resposta, em uma linha separada, adicione exatamente: [SOCIODOC:ENVIADO]';
+      } else if(window._AC_socioDocTexto_isImg && window._AC_socioDocTexto_img){
+        prompt += '\n\nO CLIENTE ENVIOU O DOCUMENTO DE IDENTIFICAÇÃO DO SÓCIO COMO IMAGEM (em anexo a esta mensagem, pois o texto do PDF nao pode ser extraido). Observe a imagem anexada com o rotulo "IMAGEM: Documento do Socio" e confirme brevemente no parágrafo que o documento foi apresentado, mencionando o tipo identificado e se o nome confere com o sócio da Receita Federal, se possível verificar.\nAo final da sua resposta, em uma linha separada, adicione exatamente: [SOCIODOC:ENVIADO]';
+        _imgBlocks.push({label:'IMAGEM: Documento do Socio',b64:window._AC_socioDocTexto_img});
       } else {
         prompt += '\n\nNenhum documento de identificação do sócio (RG/CNH) foi enviado para esta análise. Trate isso como um PONTO NEGATIVO relevante no parágrafo do parecer — a ausência de documento de identificação do sócio majoritário é desfavorável para a concessão de crédito, pois impede confirmar a identidade do responsável pela empresa.\nAo final da sua resposta, em uma linha separada, adicione exatamente: [SOCIODOC:NAO_ENVIADO]';
       }
@@ -2058,7 +2091,15 @@ function renderAnaliseCredito(){
         if(instrucoesExtra && instrucoesExtra.trim()){
           promptFinal += '\n\nALÉM DA ANÁLISE PADRÃO ACIMA, considere também estes critérios adicionais definidos pelo administrador (some-os à sua avaliação, não substitua a análise padrão):\n'+instrucoesExtra.trim();
         }
-        return fetch('https://soft-limit-b3a1.rauldias.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:promptFinal}]})});
+        var _msgContent = promptFinal;
+        if(_imgBlocks.length>0){
+          _msgContent=[{type:'text',text:promptFinal}];
+          _imgBlocks.forEach(function(ib){
+            _msgContent.push({type:'text',text:ib.label+':'});
+            _msgContent.push({type:'image',source:{type:'base64',media_type:'image/png',data:ib.b64}});
+          });
+        }
+        return fetch('https://soft-limit-b3a1.rauldias.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:_msgContent}]})});
       })
       .then(function(rr){return rr.json();})
       .then(function(rr){
@@ -2408,7 +2449,7 @@ function renderAnaliseCredito(){
           socioEntrada: socioEntrada||'',
           tempoEmpresa: tempo||'',
           parecerResumo: txt.substring(0,1500),
-          contratoSocialResumo: window._AC_contratoTexto ? 'PDF de contrato social alterado foi anexado nesta consulta.' : '',
+          contratoSocialResumo: (window._AC_contratoTexto||window._AC_contratoTexto_isImg) ? 'PDF de contrato social alterado foi anexado nesta consulta.' : '',
           imovelStatus: imovelInfo.status,
           imovelPeriodo: imovelInfo.status==='ALUGADO' ? ((imovelInfo.inicio||'?')+' até '+(imovelInfo.fim||'?')) : '',
           sociodocStatus: sociodocInfo.status||'',
