@@ -3519,7 +3519,6 @@ function buildManTable(){
     };
   },100);
   var tbody=document.createElement('tbody');
-  var focusSeq=[]; // sequência de campos para navegação via Tab: Contato → Cotação → Prazo → Valor → Outros → Crédito% → Lucro% → (próxima linha)
   STATE.manRows.forEach(function(r,i){
     var val=parseFloat(r.valor)||0;
     var out=parseFloat(r.outros)||0;
@@ -3541,16 +3540,16 @@ function buildManTable(){
       '<td style="text-align:center">'+(rIsTri?'<span style="color:#059669;font-weight:700;font-size:14px">✓</span>':'')+'</td>';
     var tdPhone=buildPhoneCell(r.tel, r.nome);
     var phoneEl=tdPhone.querySelector('a');
-    if(phoneEl) focusSeq.push(phoneEl);
+    if(phoneEl){ phoneEl.dataset.rowIdx=String(i); phoneEl.dataset.field='contato'; }
     tr.appendChild(tdPhone);
     function mkTdInp(val,w,type,field){
       var td=document.createElement('td');
       var el=document.createElement('input'); el.className='inp'; el.value=val||''; el.style.width=w+'px'; el.style.fontSize='11px';
       if(type) el.type=type;
+      el.dataset.rowIdx=String(i); el.dataset.field=field;
       el.oninput=function(){STATE.manRows[i][field]=this.value;};
       el.onblur=function(){STATE.manRows[i][field]=this.value; rebuildManRow(i);};
       td.appendChild(el);
-      focusSeq.push(el);
       return td;
     }
     tr.appendChild(mkTdInp(r.cotacao,82,'text','cotacao'));
@@ -3564,16 +3563,40 @@ function buildManTable(){
     tbody.appendChild(tr);
   });
   // Navegação por Tab: Contato → Cotação → Prazo → Valor → Outros → Crédito% → Lucro% → próxima linha (Contato)...
-  focusSeq.forEach(function(el,idx){
-    el.addEventListener('keydown',function(ev){
-      if(ev.key!=='Tab') return;
-      var next=ev.shiftKey?focusSeq[idx-1]:focusSeq[idx+1];
-      if(next){
-        ev.preventDefault();
-        next.focus();
-        if(typeof next.select==='function'){ try{ next.select(); }catch(e){} }
-      }
-    });
+  // Reconsulta o DOM a cada Tab (em vez de guardar referências), porque o onblur dos campos
+  // de input já reconstrói a tabela inteira (rebuildManRow) para recalcular o Valor Cobrar,
+  // o que invalidaria referências antigas guardadas de antemão.
+  var TAB_ORDER=['contato','cotacao','prazo','valor','outros','credito','lucro'];
+  function focarCampoTransportadora(rowIdx, field){
+    var wrap=document.getElementById('manTableWrap');
+    if(!wrap) return;
+    var rows=wrap.querySelectorAll('tbody tr');
+    var targetTr=rows[rowIdx];
+    if(!targetTr) return;
+    var targetEl = field==='contato' ? targetTr.querySelector('a') : targetTr.querySelector('input[data-field="'+field+'"]');
+    if(targetEl){
+      targetEl.focus();
+      if(typeof targetEl.select==='function'){ try{ targetEl.select(); }catch(e){} }
+    }
+  }
+  tbody.addEventListener('keydown',function(ev){
+    if(ev.key!=='Tab') return;
+    var el=ev.target;
+    var field=el.dataset&&el.dataset.field;
+    if(!field) return; // não é um campo navegável (ex: checkbox) — mantém comportamento padrão do navegador
+    ev.preventDefault();
+    var rowIdx=parseInt(el.dataset.rowIdx,10);
+    var dir=ev.shiftKey?-1:1;
+    var fi=TAB_ORDER.indexOf(field)+dir;
+    var targetRow=rowIdx;
+    if(fi<0){ targetRow-=1; fi=TAB_ORDER.length-1; }
+    else if(fi>=TAB_ORDER.length){ targetRow+=1; fi=0; }
+    if(targetRow<0 || targetRow>=STATE.manRows.length) return; // início/fim da tabela — não faz nada
+    var targetField=TAB_ORDER[fi];
+    // Se estamos saindo de um <input>, dispara o blur agora (que já reconstrói a tabela
+    // via rebuildManRow) ANTES de tentar focar o próximo campo, para focar o elemento já atualizado.
+    if(el.tagName==='INPUT'){ el.blur(); }
+    focarCampoTransportadora(targetRow, targetField);
   });
   tbl.appendChild(tbody);
   return tbl;
