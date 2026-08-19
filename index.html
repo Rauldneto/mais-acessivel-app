@@ -539,7 +539,6 @@ var TRANS_DATA = TRANS.map(function(t){return Object.assign({},t,{triangulacao:f
         SAVED.length = 0;
         loaded.forEach(function(s){SAVED.push(s);});
         base.forEach(function(s){SAVED.push(s);});
-        if(SAVED.length>30) SAVED.splice(30);
       }
     }
   } catch(e){}
@@ -578,6 +577,12 @@ function fbPut(key, data) {
   }).catch(function(e){ console.warn('[Firebase] Erro ao salvar '+key+':', e); });
 }
 
+function fbDelete(key) {
+  return fetch(FIREBASE_DB + '/' + key + '.json', { method: 'DELETE' })
+    .then(function(){ return true; })
+    .catch(function(e){ console.warn('[Firebase] Erro ao excluir '+key+':', e); return false; });
+}
+
 // Inicializa: busca dados do Firebase e mescla
 function fbInit() {
   // Carrega cotacoes salvas do Firebase (compartilhado entre todos os usuarios)
@@ -591,6 +596,14 @@ function fbInit() {
         var map={};
         raw.forEach(function(s){
           if(s&&s.id) map[String(s.id)]=s;
+        });
+        // Protege cotações salvas localmente há pouco tempo (evita sobrescrever
+        // com uma versão antiga do Firebase antes da gravação propagar)
+        var agora=Date.now();
+        SAVED.forEach(function(s){
+          if(s&&s.id&&s._savedAt&&(agora-s._savedAt)<20000){
+            map[String(s.id)]=s;
+          }
         });
         var arr=Object.values(map);
         if(arr.length>0){
@@ -667,9 +680,29 @@ setInterval(function() {
 }, 30000);
 
 // ── Funções para salvar no localStorage + Firebase ──
-function persistSaved(){
+function excluirCotacaoSalva(id){
+  var idx=SAVED.findIndex(function(s){return s && String(s.id)===String(id);});
+  if(idx<0) return false;
+  SAVED.splice(idx,1);
   try { localStorage.setItem('maisacessivel_saved', JSON.stringify(SAVED)); } catch(e){}
-  // Salva cada cotacao individualmente no Firebase para evitar conflito entre usuarios
+  fbDelete('saved/'+String(id).replace(/[^a-zA-Z0-9_-]/g,'_'));
+  return true;
+}
+
+function persistSaved(idAlvo){
+  try { localStorage.setItem('maisacessivel_saved', JSON.stringify(SAVED)); } catch(e){}
+  if(idAlvo!==undefined && idAlvo!==null){
+    // Grava só a cotação que realmente mudou. Antes isto disparava uma
+    // gravação para TODAS as cotações do histórico a cada salvamento
+    // (dezenas de requisições simultâneas), o que podia fazer a gravação
+    // da cotação atual se perder na fila.
+    var alvo=SAVED.find(function(s){ return s && String(s.id)===String(idAlvo); });
+    if(alvo){
+      fbPut('saved/'+String(alvo.id).replace(/[^a-zA-Z0-9_-]/g,'_'), alvo);
+    }
+    return;
+  }
+  // Sem id específico (uso legado): grava tudo.
   SAVED.forEach(function(s){
     if(s && s.id){
       fbPut('saved/'+String(s.id).replace(/[^a-zA-Z0-9_-]/g,'_'), s);
@@ -2824,13 +2857,17 @@ function salvarCotacao(){
     solicitante:STATE.form.solicitante,
     dataHora:new Date().toLocaleString('pt-BR'),
     produtos:STATE.prods.filter(function(p){return p.nome;}),
-    transportadoras:STATE.manRows.filter(function(r){return parseFloat(r.valor)>0;})
+    transportadoras:STATE.manRows.filter(function(r){
+      // Mantém a linha se houver QUALQUER informação preenchida, não só o valor final
+      return (parseFloat(r.valor)>0) || (r.cotacao&&String(r.cotacao).trim()!=='') ||
+        (r.prazo&&String(r.prazo).trim()!=='') || (parseFloat(r.outros)>0) ||
+        (parseFloat(r.credito)>0) || (parseFloat(r.lucro)>0);
+    })
   };
+  nova._savedAt=Date.now();
   var idx=SAVED.findIndex(function(s){return s.id===num;});
   if(idx>=0){SAVED[idx]=nova;} else {SAVED.unshift(nova);}
-  // Mantém máximo 30 cotações
-  if(SAVED.length>30) SAVED.splice(30);
-  persistSaved();
+  persistSaved(num);
   alert('Cotação Nº '+num+' salva com sucesso!');
   STATE._lastSavedCotacao=nova;
   // Atualiza botão imprimir no header
@@ -3482,6 +3519,7 @@ function buildManTable(){
     };
   },100);
   var tbody=document.createElement('tbody');
+  var focusSeq=[]; // sequência de campos para navegação via Tab: Contato → Cotação → Prazo → Valor → Outros → Crédito% → Lucro% → (próxima linha)
   STATE.manRows.forEach(function(r,i){
     var val=parseFloat(r.valor)||0;
     var out=parseFloat(r.outros)||0;
@@ -3501,14 +3539,19 @@ function buildManTable(){
       '<td style="font-weight:'+(has?700:400)+';color:'+(has?'#059669':'#1a1a1a')+';font-size:11px;white-space:nowrap">'+r.nome+'</td>'+
       '<td style="font-size:11px;font-weight:600;white-space:nowrap;color:'+rTipColor+'">'+rTipo+'</td>'+
       '<td style="text-align:center">'+(rIsTri?'<span style="color:#059669;font-weight:700;font-size:14px">✓</span>':'')+'</td>';
-    tr.appendChild(buildPhoneCell(r.tel, r.nome));
+    var tdPhone=buildPhoneCell(r.tel, r.nome);
+    var phoneEl=tdPhone.querySelector('a');
+    if(phoneEl) focusSeq.push(phoneEl);
+    tr.appendChild(tdPhone);
     function mkTdInp(val,w,type,field){
       var td=document.createElement('td');
       var el=document.createElement('input'); el.className='inp'; el.value=val||''; el.style.width=w+'px'; el.style.fontSize='11px';
       if(type) el.type=type;
       el.oninput=function(){STATE.manRows[i][field]=this.value;};
       el.onblur=function(){STATE.manRows[i][field]=this.value; rebuildManRow(i);};
-      td.appendChild(el); return td;
+      td.appendChild(el);
+      focusSeq.push(el);
+      return td;
     }
     tr.appendChild(mkTdInp(r.cotacao,82,'text','cotacao'));
     tr.appendChild(mkTdInp(r.prazo,44,'text','prazo'));
@@ -3519,6 +3562,18 @@ function buildManTable(){
     var tdVc=document.createElement('td'); tdVc.style.cssText='font-weight:700;color:'+(has?'#059669':'#888'); tdVc.textContent=has?fmtBRL(vc):'—';
     tr.appendChild(tdVc);
     tbody.appendChild(tr);
+  });
+  // Navegação por Tab: Contato → Cotação → Prazo → Valor → Outros → Crédito% → Lucro% → próxima linha (Contato)...
+  focusSeq.forEach(function(el,idx){
+    el.addEventListener('keydown',function(ev){
+      if(ev.key!=='Tab') return;
+      var next=ev.shiftKey?focusSeq[idx-1]:focusSeq[idx+1];
+      if(next){
+        ev.preventDefault();
+        next.focus();
+        if(typeof next.select==='function'){ try{ next.select(); }catch(e){} }
+      }
+    });
   });
   tbl.appendChild(tbody);
   return tbl;
@@ -3537,7 +3592,7 @@ function renderSalvas(){
   srch.placeholder='🔍 Buscar pelo Nº da Cotação...';
   var srchBtn=document.createElement('button'); srchBtn.className='btn-main'; srchBtn.textContent='Buscar';
   var cnt=document.createElement('span'); cnt.style.cssText='color:#888;font-size:12px';
-  cnt.textContent=SAVED.length+' cotação(ões) salva(s) — máx. 30';
+  cnt.textContent=SAVED.length+' cotação(ões) salva(s)';
   searchBar.appendChild(srch); searchBar.appendChild(srchBtn); searchBar.appendChild(cnt);
   wrap.appendChild(searchBar);
 
@@ -3591,6 +3646,21 @@ function renderSalvas(){
         STATE.tab='cotacao'; STATE.modulo='frete'; render();
       };
       hdr.appendChild(arrow); hdr.appendChild(badge); hdr.appendChild(title); hdr.appendChild(sub); hdr.appendChild(btnCarregar);
+      var btnExcluirSalva=document.createElement('button');
+      btnExcluirSalva.className='btn-danger';
+      btnExcluirSalva.textContent='🗑 Excluir';
+      btnExcluirSalva.style.cssText='background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-weight:600';
+      btnExcluirSalva.onclick=function(e){
+        e.stopPropagation();
+        if(!confirm('Excluir a cotação Nº '+c.id+' do histórico? Esta ação não pode ser desfeita.')) return;
+        excluirCotacaoSalva(c.id);
+        item.remove();
+        cnt.textContent=SAVED.length+' cotação(ões) salva(s)';
+        if(!SAVED.length){
+          listEl.innerHTML='<div style="padding:20px;text-align:center;color:#888;font-size:13px">Nenhuma cotação encontrada.</div>';
+        }
+      };
+      hdr.appendChild(btnExcluirSalva);
       item.appendChild(hdr);
 
       // Body (colapsado por padrão)
