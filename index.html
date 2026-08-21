@@ -539,6 +539,7 @@ var TRANS_DATA = TRANS.map(function(t){return Object.assign({},t,{triangulacao:f
         SAVED.length = 0;
         loaded.forEach(function(s){SAVED.push(s);});
         base.forEach(function(s){SAVED.push(s);});
+        if(SAVED.length>30) SAVED.splice(30);
       }
     }
   } catch(e){}
@@ -577,12 +578,6 @@ function fbPut(key, data) {
   }).catch(function(e){ console.warn('[Firebase] Erro ao salvar '+key+':', e); });
 }
 
-function fbDelete(key) {
-  return fetch(FIREBASE_DB + '/' + key + '.json', { method: 'DELETE' })
-    .then(function(){ return true; })
-    .catch(function(e){ console.warn('[Firebase] Erro ao excluir '+key+':', e); return false; });
-}
-
 // Inicializa: busca dados do Firebase e mescla
 function fbInit() {
   // Carrega cotacoes salvas do Firebase (compartilhado entre todos os usuarios)
@@ -596,14 +591,6 @@ function fbInit() {
         var map={};
         raw.forEach(function(s){
           if(s&&s.id) map[String(s.id)]=s;
-        });
-        // Protege cotações salvas localmente há pouco tempo (evita sobrescrever
-        // com uma versão antiga do Firebase antes da gravação propagar)
-        var agora=Date.now();
-        SAVED.forEach(function(s){
-          if(s&&s.id&&s._savedAt&&(agora-s._savedAt)<20000){
-            map[String(s.id)]=s;
-          }
         });
         var arr=Object.values(map);
         if(arr.length>0){
@@ -680,29 +667,9 @@ setInterval(function() {
 }, 30000);
 
 // ── Funções para salvar no localStorage + Firebase ──
-function excluirCotacaoSalva(id){
-  var idx=SAVED.findIndex(function(s){return s && String(s.id)===String(id);});
-  if(idx<0) return false;
-  SAVED.splice(idx,1);
+function persistSaved(){
   try { localStorage.setItem('maisacessivel_saved', JSON.stringify(SAVED)); } catch(e){}
-  fbDelete('saved/'+String(id).replace(/[^a-zA-Z0-9_-]/g,'_'));
-  return true;
-}
-
-function persistSaved(idAlvo){
-  try { localStorage.setItem('maisacessivel_saved', JSON.stringify(SAVED)); } catch(e){}
-  if(idAlvo!==undefined && idAlvo!==null){
-    // Grava só a cotação que realmente mudou. Antes isto disparava uma
-    // gravação para TODAS as cotações do histórico a cada salvamento
-    // (dezenas de requisições simultâneas), o que podia fazer a gravação
-    // da cotação atual se perder na fila.
-    var alvo=SAVED.find(function(s){ return s && String(s.id)===String(idAlvo); });
-    if(alvo){
-      fbPut('saved/'+String(alvo.id).replace(/[^a-zA-Z0-9_-]/g,'_'), alvo);
-    }
-    return;
-  }
-  // Sem id específico (uso legado): grava tudo.
+  // Salva cada cotacao individualmente no Firebase para evitar conflito entre usuarios
   SAVED.forEach(function(s){
     if(s && s.id){
       fbPut('saved/'+String(s.id).replace(/[^a-zA-Z0-9_-]/g,'_'), s);
@@ -2857,17 +2824,13 @@ function salvarCotacao(){
     solicitante:STATE.form.solicitante,
     dataHora:new Date().toLocaleString('pt-BR'),
     produtos:STATE.prods.filter(function(p){return p.nome;}),
-    transportadoras:STATE.manRows.filter(function(r){
-      // Mantém a linha se houver QUALQUER informação preenchida, não só o valor final
-      return (parseFloat(r.valor)>0) || (r.cotacao&&String(r.cotacao).trim()!=='') ||
-        (r.prazo&&String(r.prazo).trim()!=='') || (parseFloat(r.outros)>0) ||
-        (parseFloat(r.credito)>0) || (parseFloat(r.lucro)>0);
-    })
+    transportadoras:STATE.manRows.filter(function(r){return parseFloat(r.valor)>0;})
   };
-  nova._savedAt=Date.now();
   var idx=SAVED.findIndex(function(s){return s.id===num;});
   if(idx>=0){SAVED[idx]=nova;} else {SAVED.unshift(nova);}
-  persistSaved(num);
+  // Mantém máximo 30 cotações
+  if(SAVED.length>30) SAVED.splice(30);
+  persistSaved();
   alert('Cotação Nº '+num+' salva com sucesso!');
   STATE._lastSavedCotacao=nova;
   // Atualiza botão imprimir no header
@@ -3538,19 +3501,14 @@ function buildManTable(){
       '<td style="font-weight:'+(has?700:400)+';color:'+(has?'#059669':'#1a1a1a')+';font-size:11px;white-space:nowrap">'+r.nome+'</td>'+
       '<td style="font-size:11px;font-weight:600;white-space:nowrap;color:'+rTipColor+'">'+rTipo+'</td>'+
       '<td style="text-align:center">'+(rIsTri?'<span style="color:#059669;font-weight:700;font-size:14px">✓</span>':'')+'</td>';
-    var tdPhone=buildPhoneCell(r.tel, r.nome);
-    var phoneEl=tdPhone.querySelector('a');
-    if(phoneEl){ phoneEl.dataset.rowIdx=String(i); phoneEl.dataset.field='contato'; }
-    tr.appendChild(tdPhone);
+    tr.appendChild(buildPhoneCell(r.tel, r.nome));
     function mkTdInp(val,w,type,field){
       var td=document.createElement('td');
       var el=document.createElement('input'); el.className='inp'; el.value=val||''; el.style.width=w+'px'; el.style.fontSize='11px';
       if(type) el.type=type;
-      el.dataset.rowIdx=String(i); el.dataset.field=field;
       el.oninput=function(){STATE.manRows[i][field]=this.value;};
       el.onblur=function(){STATE.manRows[i][field]=this.value; rebuildManRow(i);};
-      td.appendChild(el);
-      return td;
+      td.appendChild(el); return td;
     }
     tr.appendChild(mkTdInp(r.cotacao,82,'text','cotacao'));
     tr.appendChild(mkTdInp(r.prazo,44,'text','prazo'));
@@ -3561,42 +3519,6 @@ function buildManTable(){
     var tdVc=document.createElement('td'); tdVc.style.cssText='font-weight:700;color:'+(has?'#059669':'#888'); tdVc.textContent=has?fmtBRL(vc):'—';
     tr.appendChild(tdVc);
     tbody.appendChild(tr);
-  });
-  // Navegação por Tab: Contato → Cotação → Prazo → Valor → Outros → Crédito% → Lucro% → próxima linha (Contato)...
-  // Reconsulta o DOM a cada Tab (em vez de guardar referências), porque o onblur dos campos
-  // de input já reconstrói a tabela inteira (rebuildManRow) para recalcular o Valor Cobrar,
-  // o que invalidaria referências antigas guardadas de antemão.
-  var TAB_ORDER=['contato','cotacao','prazo','valor','outros','credito','lucro'];
-  function focarCampoTransportadora(rowIdx, field){
-    var wrap=document.getElementById('manTableWrap');
-    if(!wrap) return;
-    var rows=wrap.querySelectorAll('tbody tr');
-    var targetTr=rows[rowIdx];
-    if(!targetTr) return;
-    var targetEl = field==='contato' ? targetTr.querySelector('a') : targetTr.querySelector('input[data-field="'+field+'"]');
-    if(targetEl){
-      targetEl.focus();
-      if(typeof targetEl.select==='function'){ try{ targetEl.select(); }catch(e){} }
-    }
-  }
-  tbody.addEventListener('keydown',function(ev){
-    if(ev.key!=='Tab') return;
-    var el=ev.target;
-    var field=el.dataset&&el.dataset.field;
-    if(!field) return; // não é um campo navegável (ex: checkbox) — mantém comportamento padrão do navegador
-    ev.preventDefault();
-    var rowIdx=parseInt(el.dataset.rowIdx,10);
-    var dir=ev.shiftKey?-1:1;
-    var fi=TAB_ORDER.indexOf(field)+dir;
-    var targetRow=rowIdx;
-    if(fi<0){ targetRow-=1; fi=TAB_ORDER.length-1; }
-    else if(fi>=TAB_ORDER.length){ targetRow+=1; fi=0; }
-    if(targetRow<0 || targetRow>=STATE.manRows.length) return; // início/fim da tabela — não faz nada
-    var targetField=TAB_ORDER[fi];
-    // Se estamos saindo de um <input>, dispara o blur agora (que já reconstrói a tabela
-    // via rebuildManRow) ANTES de tentar focar o próximo campo, para focar o elemento já atualizado.
-    if(el.tagName==='INPUT'){ el.blur(); }
-    focarCampoTransportadora(targetRow, targetField);
   });
   tbl.appendChild(tbody);
   return tbl;
@@ -3615,7 +3537,7 @@ function renderSalvas(){
   srch.placeholder='🔍 Buscar pelo Nº da Cotação...';
   var srchBtn=document.createElement('button'); srchBtn.className='btn-main'; srchBtn.textContent='Buscar';
   var cnt=document.createElement('span'); cnt.style.cssText='color:#888;font-size:12px';
-  cnt.textContent=SAVED.length+' cotação(ões) salva(s)';
+  cnt.textContent=SAVED.length+' cotação(ões) salva(s) — máx. 30';
   searchBar.appendChild(srch); searchBar.appendChild(srchBtn); searchBar.appendChild(cnt);
   wrap.appendChild(searchBar);
 
@@ -3669,21 +3591,6 @@ function renderSalvas(){
         STATE.tab='cotacao'; STATE.modulo='frete'; render();
       };
       hdr.appendChild(arrow); hdr.appendChild(badge); hdr.appendChild(title); hdr.appendChild(sub); hdr.appendChild(btnCarregar);
-      var btnExcluirSalva=document.createElement('button');
-      btnExcluirSalva.className='btn-danger';
-      btnExcluirSalva.textContent='🗑 Excluir';
-      btnExcluirSalva.style.cssText='background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-weight:600';
-      btnExcluirSalva.onclick=function(e){
-        e.stopPropagation();
-        if(!confirm('Excluir a cotação Nº '+c.id+' do histórico? Esta ação não pode ser desfeita.')) return;
-        excluirCotacaoSalva(c.id);
-        item.remove();
-        cnt.textContent=SAVED.length+' cotação(ões) salva(s)';
-        if(!SAVED.length){
-          listEl.innerHTML='<div style="padding:20px;text-align:center;color:#888;font-size:13px">Nenhuma cotação encontrada.</div>';
-        }
-      };
-      hdr.appendChild(btnExcluirSalva);
       item.appendChild(hdr);
 
       // Body (colapsado por padrão)
@@ -5400,6 +5307,16 @@ var S_DOCS = {
 function textoPareceCorrompido(texto){
   var limpo=(texto||'').replace(/\s+/g,'');
   if(!limpo.length) return true;
+  // Detecta CNH digital / documentos que so extraem o rodape institucional
+  // (SERPRO/SENATRAN/ICP-Brasil), sem os dados do titular. Nesse caso o texto
+  // e curto e legivel, mas contem so termos institucionais - forcar fallback
+  // de imagem para a IA ler visualmente o documento.
+  var textoUp=(texto||'').toUpperCase();
+  var termosInstitucionais=['SERPRO','SENATRAN','ICP-BRASIL','MP N\u00ba 2200-2','MP N 2200-2','ASSINATURA DIGITAL','ASSINADO DIGITALMENTE','CERTIFICADO DIGITAL'];
+  var temInstitucional=termosInstitucionais.some(function(t){return textoUp.indexOf(t)>=0;});
+  if(temInstitucional && limpo.length<1500){
+    return true;
+  }
   var validos=(limpo.match(/[A-Za-zÀ-ÖØ-öø-ÿ0-9.,;:!?()\-\/%$'"@#&_+=°ºª]/g)||[]).length;
   return (validos/limpo.length)<0.85;
 }
