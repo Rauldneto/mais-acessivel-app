@@ -1,4 +1,9 @@
 <!-- v5.4-1785154153 -->
+<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only -->
+<!-- ANTES DE PUBLICAR QUALQUER MUDANCA NESTE ARQUIVO: busque a versao atual em producao via GitHub API,
+     confirme que os marcadores acima (nomes de funcao) ainda existem, e aplique a mudanca por cima dela -
+     NUNCA sobrescreva com uma copia local antiga. Um commit em 21/08/2026 (f0ebfff) reverteu por engano
+     todas as correcoes de historico/exclusao/navegacao ao fazer exatamente isso. -->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -699,6 +704,7 @@ function persistSaved(idAlvo){
     var alvo=SAVED.find(function(s){ return s && String(s.id)===String(idAlvo); });
     if(alvo){
       fbPut('saved/'+String(alvo.id).replace(/[^a-zA-Z0-9_-]/g,'_'), alvo);
+      backupCotacaoSalva(alvo);
     }
     return;
   }
@@ -706,8 +712,22 @@ function persistSaved(idAlvo){
   SAVED.forEach(function(s){
     if(s && s.id){
       fbPut('saved/'+String(s.id).replace(/[^a-zA-Z0-9_-]/g,'_'), s);
+      backupCotacaoSalva(s);
     }
   });
+}
+// Grava uma cópia de segurança em um caminho separado, com timestamp no nome,
+// que NUNCA é sobrescrita (cada salvamento cria uma entrada nova). Serve como
+// rede de segurança: mesmo que 'saved/{id}' seja perdido, sobrescrito ou
+// corrompido por algum bug futuro, o histórico completo de cada salvamento
+// continua recuperável aqui. O Firebase Realtime Database descarta arrays/
+// objetos vazios ao ler de volta — por isso este backup também ajuda a
+// diagnosticar quando isso aconteceu, comparando com o registro original.
+function backupCotacaoSalva(cotacao){
+  if(!cotacao || !cotacao.id) return;
+  var sufixo=Date.now()+'_'+Math.random().toString(36).slice(2,8);
+  var chave='saved_log/'+String(cotacao.id).replace(/[^a-zA-Z0-9_-]/g,'_')+'_'+sufixo;
+  fbPut(chave, cotacao);
 }
 function persistTrans(){
   try { localStorage.setItem('maisacessivel_trans', JSON.stringify(TRANS_DATA)); } catch(e){}
@@ -2856,7 +2876,12 @@ function salvarCotacao(){
     frete:STATE.form.frete||'CIF',
     solicitante:STATE.form.solicitante,
     dataHora:new Date().toLocaleString('pt-BR'),
-    produtos:STATE.prods.filter(function(p){return p.nome;}),
+    produtos:STATE.prods.filter(function(p){
+      // Mesma lógica das transportadoras: mantém a linha se houver QUALQUER
+      // informação preenchida, mesmo que o produto ainda não tenha sido selecionado.
+      return (p.nome&&String(p.nome).trim()!=='') || (parseFloat(p.vol)>0) ||
+        (p.dim&&String(p.dim).trim()!=='') || (parseFloat(p.cabe)>0);
+    }),
     transportadoras:STATE.manRows.filter(function(r){
       // Mantém a linha se houver QUALQUER informação preenchida, não só o valor final
       return (parseFloat(r.valor)>0) || (r.cotacao&&String(r.cotacao).trim()!=='') ||
