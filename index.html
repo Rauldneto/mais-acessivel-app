@@ -4008,8 +4008,10 @@ function preencherDoBling(bd) {
     else if(vStr.includes(',')) vStr=vStr.replace(',','.');
     STATE.form.valorNF=vStr;
   }
-  // Peso: não preenche automaticamente — usuário informa manualmente
-  // if(bd.kg) STATE.form.pesoTotal=String(bd.kg);
+  // Peso: preenche automaticamente a partir do Bling, mas o campo continua
+  // 100% editável (ver mkFieldG('Peso Total (kg)',...) — parâmetro 'ro' é false)
+  // para o usuário poder ajustar o valor manualmente se precisar.
+  if(bd.kg) STATE.form.pesoTotal=String(bd.kg).replace(',','.');
   // Frete: freteModalidade 0=CIF, 1=FOB
   if(bd.ft) STATE.form.frete=bd.ft;
   if(bd.freteModalidade!==undefined){
