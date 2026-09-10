@@ -948,7 +948,7 @@ function renderAdmin(){
   var divAbas=document.createElement('div');
   divAbas.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap';
   divAbas.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso &agrave;s abas:</span>';
-  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Aba 4'},{id:'mod5',label:'Modelo em Teste'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
+  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
     var lbl=document.createElement('label');
     lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
     var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=false;
@@ -2763,7 +2763,7 @@ function renderModuloNav(){
     {id:'frete', icon:'🚛', label:'Frete'},
     {id:'mod2',  icon:'📁', label:'Análise de Crédito'},
     {id:'mod3', icon:'🤖', label:'Ace IA'},
-    {id:'mod4',  icon:'📁', label:'Aba 4'},
+    {id:'mod4',  icon:'🧾', label:'Cotação avulsa'},
     {id:'mod5',  icon:'🧪', label:'Modelo em Teste'}
   ];
   // Mapeamento id antigo -> novo
@@ -2807,6 +2807,31 @@ function renderModuloVazio(num){
   return wrap;
 }
 
+function renderCotacaoAvulsa(){
+  var wrap=document.createElement('div');
+  wrap.style.cssText='padding:20px;max-width:960px;margin:0 auto';
+
+  var h=document.createElement('h2');
+  h.style.cssText='font-size:16px;color:#b45309;margin-bottom:4px;padding-bottom:8px;border-bottom:2px solid #f59e0b;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap';
+  h.innerHTML='<span>🧾 Cotação avulsa</span><a href="https://rauldneto.github.io/mais-acessivel-cotacao-avulsa/" target="_blank" style="padding:8px 18px;background:#FF6B00;color:#fff;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap">📄 Abrir cotação avulsa</a>';
+  wrap.appendChild(h);
+
+  var subTabs=document.createElement('div');
+  subTabs.style.cssText='display:flex;gap:8px;margin:16px 0';
+  var btnBaruc=document.createElement('button');
+  btnBaruc.textContent='Baruc';
+  btnBaruc.style.cssText='background:#fff3ea;border:1px solid #FF6B00;color:#b45309;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:default';
+  subTabs.appendChild(btnBaruc);
+  wrap.appendChild(subTabs);
+
+  var info=document.createElement('p');
+  info.style.cssText='font-size:13px;color:#888;margin-top:8px';
+  info.textContent='Cotação de produtos avulsos com a Baruc. Clique em "Abrir cotação avulsa" para acessar a ferramenta.';
+  wrap.appendChild(info);
+
+  return wrap;
+}
+
 function renderApp(){
   var wrap=document.createElement('div');
   // header
@@ -2833,7 +2858,7 @@ function renderApp(){
   } else if(STATE.modulo==='mod3'){
     main.appendChild(renderAceIA());
   } else if(STATE.modulo==='mod4'){
-    main.appendChild(renderModuloVazio(4));
+    main.appendChild(renderCotacaoAvulsa());
   } else if(STATE.modulo==='mod5'){
     main.appendChild(renderModeloEmTeste());
   }
