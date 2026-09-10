@@ -2809,26 +2809,45 @@ function renderModuloVazio(num){
 
 function renderCotacaoAvulsa(){
   var wrap=document.createElement('div');
-  wrap.style.cssText='padding:20px;max-width:960px;margin:0 auto';
+  wrap.style.cssText='padding:20px;max-width:1100px;margin:0 auto';
 
   var h=document.createElement('h2');
-  h.style.cssText='font-size:16px;color:#b45309;margin-bottom:4px;padding-bottom:8px;border-bottom:2px solid #f59e0b;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap';
-  h.innerHTML='<span>🧾 Cotação avulsa</span><a href="https://rauldneto.github.io/mais-acessivel-cotacao-avulsa/" target="_blank" style="padding:8px 18px;background:#FF6B00;color:#fff;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap">📄 Abrir cotação avulsa</a>';
+  h.style.cssText='font-size:16px;color:#b45309;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #f59e0b';
+  h.textContent='🧾 Cotação avulsa';
   wrap.appendChild(h);
 
-  var subTabs=document.createElement('div');
-  subTabs.style.cssText='display:flex;gap:8px;margin:16px 0';
-  var btnBaruc=document.createElement('button');
-  btnBaruc.textContent='Baruc';
-  btnBaruc.style.cssText='background:#fff3ea;border:1px solid #FF6B00;color:#b45309;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:default';
-  subTabs.appendChild(btnBaruc);
-  wrap.appendChild(subTabs);
+  var FORNECEDORES=[
+    {id:'baruc', label:'Baruc', url:'https://rauldneto.github.io/mais-acessivel-cotacao-avulsa/'}
+  ];
+  var subAtiva=FORNECEDORES[0].id;
 
-  var info=document.createElement('p');
-  info.style.cssText='font-size:13px;color:#888;margin-top:8px';
-  info.textContent='Cotação de produtos avulsos com a Baruc. Clique em "Abrir cotação avulsa" para acessar a ferramenta.';
-  wrap.appendChild(info);
+  var tabBar=document.createElement('div');
+  tabBar.style.cssText='display:flex;gap:8px';
+  var contentArea=document.createElement('div');
+  contentArea.style.cssText='border:1px solid #e5e5e5;border-radius:0 10px 10px 10px;overflow:hidden;background:#fff';
 
+  function renderSubTab(){
+    tabBar.innerHTML='';
+    FORNECEDORES.forEach(function(f){
+      var b=document.createElement('button');
+      b.textContent=f.label;
+      var ativo=f.id===subAtiva;
+      b.style.cssText='background:'+(ativo?'#fff3ea':'#f7f7f7')+';border:1px solid '+(ativo?'#FF6B00':'#ddd')+';border-bottom:none;color:'+(ativo?'#b45309':'#555')+';padding:8px 16px;border-radius:8px 8px 0 0;font-size:13px;font-weight:600;cursor:pointer;position:relative;top:1px';
+      b.onclick=function(){ subAtiva=f.id; renderSubTab(); };
+      tabBar.appendChild(b);
+    });
+    contentArea.innerHTML='';
+    var atual=FORNECEDORES.find(function(f){return f.id===subAtiva;});
+    var iframe=document.createElement('iframe');
+    iframe.src=atual.url;
+    iframe.style.cssText='width:100%;height:78vh;border:none;display:block';
+    iframe.title='Cotação avulsa - '+atual.label;
+    contentArea.appendChild(iframe);
+  }
+  renderSubTab();
+
+  wrap.appendChild(tabBar);
+  wrap.appendChild(contentArea);
   return wrap;
 }
 
