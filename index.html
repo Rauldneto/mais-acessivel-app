@@ -948,7 +948,7 @@ function renderAdmin(){
   var divAbas=document.createElement('div');
   divAbas.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap';
   divAbas.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso &agrave;s abas:</span>';
-  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
+  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
     var lbl=document.createElement('label');
     lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
     var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=false;
@@ -1041,7 +1041,7 @@ function renderAdmin(){
     selRole.value=u.role||'user';
 
     // Marcar checkboxes de abas com os dados do usuario
-    var abasAtivas=u.abas||['mod1','mod2','mod3','mod4','mod5'];
+    var abasAtivas=u.abas||['mod1','mod2','mod7','mod3','mod4','mod5'];
     divAbas.querySelectorAll('input[name=abaAcesso]').forEach(function(cb){
       cb.checked=abasAtivas.indexOf(cb.value)>-1;
     });
@@ -1114,7 +1114,7 @@ function renderAdmin(){
     }
     var id='u_'+Date.now();
     var abasSel=[];if(typeof divAbas!=='undefined'){divAbas.querySelectorAll('input[name=abaAcesso]:checked').forEach(function(cb){abasSel.push(cb.value);});}
-    await fbSaveUser(id,{nome:n,usuario:u,senha:hashSimple(s),role:selRole.value,ativo:true,abas:abasSel.length>0?abasSel:['mod1','mod2','mod3','mod4']});
+    await fbSaveUser(id,{nome:n,usuario:u,senha:hashSimple(s),role:selRole.value,ativo:true,abas:abasSel.length>0?abasSel:['mod1','mod2','mod7','mod3','mod4']});
     msgU.style.color='green';msgU.textContent='✅ Usuário '+n+' criado!';
     iNome.value='';iUser.value='';iSenha.value='';
     loadUsers();
@@ -2762,12 +2762,13 @@ function renderModuloNav(){
   var TODOS_MODULOS=[
     {id:'frete', icon:'🚛', label:'Frete'},
     {id:'mod2',  icon:'📁', label:'Análise de Crédito'},
+    {id:'mod7',  icon:'📐', label:'Norma NBR 9050'},
     {id:'mod3', icon:'🤖', label:'Ace IA'},
     {id:'mod4',  icon:'🧾', label:'Cotação avulsa'},
     {id:'mod5',  icon:'🧪', label:'Modelo em Teste'}
   ];
   // Mapeamento id antigo -> novo
-  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6'};
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7'};
   // Admin ve tudo; outros so veem abas permitidas
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
@@ -2851,6 +2852,132 @@ function renderCotacaoAvulsa(){
   return wrap;
 }
 
+// ===== ABA NORMA NBR 9050 (consulta NBR 9050 + NBR 16537) =====
+var NORMA={dados:null,carregando:false,erro:'',imgs:{},q:'',res:[],cur:-1,IDX:null};
+function normaCss(){
+  if(document.getElementById('normaCss'))return;
+  var st=document.createElement('style');st.id='normaCss';
+  st.textContent='.nm-wrap{padding:18px 14px 50px;max-width:920px;margin:0 auto}'+
+  '.nm-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}.nm-h h2{font-size:16px;color:#b45309;margin:0}'+
+  '.nm-ver{font-size:11px;background:#fff3ea;color:#9a3f00;padding:3px 10px;border-radius:999px;border:1px solid #fde68a}'+
+  '.nm-ask{background:#fff;border:2px solid #e5e5e5;border-radius:12px;padding:5px;display:flex;gap:6px}.nm-ask:focus-within{border-color:#FF6B00}'+
+  '.nm-ask input{flex:1;min-width:0;border:0;font:inherit;font-size:15px;padding:9px 10px;outline:none;background:#fff}'+
+  '.nm-btn{font:inherit;font-size:13px;cursor:pointer;border-radius:8px;border:1px solid #ddd;background:#fff;color:#333;padding:7px 12px}.nm-btn:disabled{opacity:.4;cursor:default}'+
+  '.nm-go{background:#FF6B00;border-color:#FF6B00;color:#fff;font-weight:700;padding:0 18px}'+
+  '.nm-err{color:#dc2626;font-size:12px;min-height:16px;margin:5px 4px}'+
+  '.nm-lbl{font-size:12px;color:#888;margin:4px 2px}'+
+  '.nm-res{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px}.nm-res button{flex:0 0 auto;max-width:240px;text-align:left;line-height:1.3}'+
+  '.nm-res b{display:block;font-size:12px}.nm-res span{display:block;color:#888;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nm-res button.on{border:2px solid #FF6B00;background:#fff3ea}'+
+  '.nm-view{background:#fff;border:1px solid #e5e5e5;border-radius:12px;overflow:hidden}'+
+  '.nm-bar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:8px;padding:8px;background:#fff;border-bottom:1px solid #eee}.nm-info{flex:1;text-align:center;font-size:13px;line-height:1.3}.nm-info span{display:block;color:#888;font-size:11px}'+
+  '.nm-tools{display:flex;gap:8px;flex-wrap:wrap;padding:8px;border-bottom:1px solid #eee}.nm-hint{font-size:11px;color:#888;padding:0 10px 8px;border-bottom:1px solid #eee}'+
+  '.nm-page{position:relative;background:#fff}.nm-page img{display:block;width:100%;height:auto;user-select:none;-webkit-user-select:none}'+
+  '.nm-tl{position:absolute;inset:0;pointer-events:none;z-index:2}.nm-tl span{position:absolute;white-space:pre;color:transparent;line-height:1.15;transform-origin:0 0;pointer-events:auto;cursor:text;font-family:Arial,sans-serif}.nm-tl span::selection{background:rgba(255,107,0,.35);color:transparent}'+
+  '.nm-fg{position:absolute;z-index:1;cursor:copy;border:2px dashed transparent;border-radius:6px;background:transparent;padding:0}.nm-fg:hover{border-color:#FF6B00;background:rgba(255,107,0,.07)}'+
+  '.nm-fg i{position:absolute;right:6px;top:6px;background:#FF6B00;color:#fff;font-size:11px;font-style:normal;padding:2px 8px;border-radius:999px;opacity:0}.nm-fg:hover i{opacity:1}'+
+  '.nm-foot{display:flex;justify-content:space-between;padding:8px}.nm-empty{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:18px;color:#888;font-size:14px}'+
+  '.nm-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1e293b;color:#fff;padding:9px 16px;border-radius:10px;font-size:13px;z-index:99999;opacity:0;pointer-events:none;transition:opacity .2s}.nm-toast.show{opacity:1}'+
+  '.nm-fb textarea{width:100%;min-height:130px;font:inherit;font-size:12px;border:1px solid #ddd;border-radius:8px;padding:8px;margin:6px 0}';
+  document.head.appendChild(st);
+}
+function normaNorm(s){return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
+var NORMA_STOP=new Set("a o e de da do das dos em no na nos nas um uma para por com sem que qual quais como quando onde ser deve devem sao ou se ao aos as os tem ter pra pro sobre fala falar norma nbr quero ver mostrar mostre pagina".split(" "));
+var NORMA_SYN={banheiro:"sanitario",wc:"sanitario",cadeirante:"cadeira rodas",pcd:"deficiencia",vaso:"bacia",privada:"bacia",cxa:"caixa",cx:"caixa",pia:"lavatorio",podotatil:"tatil",cego:"deficiencia visual"};
+function normaStem(w){if(w.length>4){if(/oes$|aes$/.test(w))return w.slice(0,-3)+'ao';if(/ais$/.test(w))return w.slice(0,-3)+'al';if(/eis$/.test(w))return w.slice(0,-3)+'el';if(/res$|zes$/.test(w))return w.slice(0,-2);if(/s$/.test(w))return w.slice(0,-1)}return w}
+function normaToks(s){return normaNorm(s).split(/[^a-z0-9,]+/).filter(function(w){return w.length>1&&!NORMA_STOP.has(w)}).map(normaStem)}
+function normaIndexar(){var D=NORMA.dados.docs;var idx=D.map(function(d){var tf={},len=0;function add(s,wt){normaToks(s||'').forEach(function(t){tf[t]=(tf[t]||0)+wt;len+=wt})}add(d.t,1);add(d.c,3);add(d.h,2);add(d.lab,1);return{tf:tf,len:len}});
+ var DF={};idx.forEach(function(d){for(var t in d.tf)DF[t]=(DF[t]||0)+1});NORMA.IDX={idx:idx,DF:DF,VOC:Object.keys(DF),AVG:idx.reduce(function(a,d){return a+d.len},0)/idx.length,N:idx.length}}
+function normaLev(a,b){if(Math.abs(a.length-b.length)>2)return 9;var p=[],i,j;for(j=0;j<=b.length;j++)p[j]=j;for(i=1;i<=a.length;i++){var c=[i];for(j=1;j<=b.length;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[b.length]}
+function normaFix(w){var X=NORMA.IDX;if(X.DF[w]||w.length<4)return w;var lim=w.length>=7?2:1,best=w,bd=9,bdf=0;X.VOC.forEach(function(v){var d=normaLev(w,v);if(d<bd||(d===bd&&X.DF[v]>bdf)){best=v;bd=d;bdf=X.DF[v]}});return bd<=lim?best:w}
+function normaBuscar(qs){var X=NORMA.IDX,qt=[];normaToks(qs).forEach(function(w){if(NORMA_SYN[w])normaToks(NORMA_SYN[w]).forEach(function(x){qt.push(x)});else qt.push(normaFix(w))});if(!qt.length)return[];
+ var T={};qt.forEach(function(w){T[w]=1;if(w.length>=5)X.VOC.forEach(function(v){if(v!==w&&v.indexOf(w)===0)T[v]=T[v]||0.5})});
+ var sc=[];X.idx.forEach(function(d,i){var s=0,hit=0;for(var t in T){var f=d.tf[t];if(!f)continue;if(T[t]===1)hit++;var idf=Math.log(1+(X.N-X.DF[t]+.5)/(X.DF[t]+.5));s+=T[t]*idf*(f*2.2)/(f+1.2*(0.25+0.75*d.len/X.AVG))}if(s>0){s*=1+0.6*hit/qt.length;sc.push([s,i])}});
+ sc.sort(function(a,b){return b[0]-a[0]});if(!sc.length)return[];var top=sc[0][0];return sc.filter(function(x){return x[0]>=top*0.35}).slice(0,10).map(function(x){return x[1]})}
+function normaEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function normaNome(i){return NORMA.dados.docs[i].k.indexOf('16537')===0?'NBR 16537':'NBR 9050'}
+function normaToast(m){var t=document.getElementById('nmToast');if(!t){t=document.createElement('div');t.id='nmToast';t.className='nm-toast';document.body.appendChild(t)}t.textContent=m;t.classList.add('show');clearTimeout(normaToast.h);normaToast.h=setTimeout(function(){t.classList.remove('show')},2200)}
+function normaCarregar(cb){if(NORMA.dados){cb();return}if(NORMA.carregando)return;NORMA.carregando=true;NORMA.erro='';
+ fetch(FIREBASE_DB+'/normas/indice.json').then(function(r){return r.ok?r.json():null}).then(function(d){NORMA.carregando=false;if(!d||!d.docs){NORMA.erro='vazio';cb();return}NORMA.dados=d;normaIndexar();cb()})
+ .catch(function(){NORMA.carregando=false;NORMA.erro='rede';cb()})}
+function normaImg(k){if(NORMA.imgs[k])return Promise.resolve(NORMA.imgs[k]);return fetch(FIREBASE_DB+'/normas/paginas/'+k+'.json').then(function(r){return r.json()}).then(function(s){NORMA.imgs[k]=s;return s})}
+
+function renderNormaNBR(){
+  normaCss();
+  var wrap=document.createElement('div');wrap.className='nm-wrap';
+  var ver=NORMA.dados?NORMA.dados.versao:'';
+  var h=document.createElement('div');h.className='nm-h';
+  h.innerHTML='<h2>📐 Norma NBR 9050</h2><div style="display:flex;gap:8px;align-items:center">'+(ver?'<span class="nm-ver">'+normaEsc(ver)+'</span>':'')+'</div>';
+  if(STATE.roleLogado==='admin'){var ba=document.createElement('button');ba.className='nm-btn';ba.textContent='⚙️ Atualizar norma';ba.onclick=normaAtualizar;h.lastChild.appendChild(ba);var fi=document.createElement('input');fi.type='file';fi.id='nmFile';fi.accept='.json,application/json';fi.multiple=true;fi.style.display='none';fi.setAttribute('aria-label','Pacote da norma');fi.onchange=function(){normaArquivos(fi.files)};h.appendChild(fi)}
+  wrap.appendChild(h);
+  var ask=document.createElement('div');ask.className='nm-ask';
+  var inp=document.createElement('input');inp.type='search';inp.placeholder='Ex.: barras para lavatório';inp.value=NORMA.q;inp.autocomplete='off';
+  var go=document.createElement('button');go.className='nm-btn nm-go';go.textContent='Buscar';
+  ask.appendChild(inp);ask.appendChild(go);wrap.appendChild(ask);
+  var err=document.createElement('div');err.className='nm-err';wrap.appendChild(err);
+  var out=document.createElement('div');wrap.appendChild(out);
+  function buscar(){NORMA.q=inp.value.trim();err.textContent='';if(!NORMA.q){err.textContent='Digite o que você procura.';inp.focus();return}
+    if(!NORMA.dados){out.innerHTML='<div class="nm-empty">Carregando a norma…</div>';normaCarregar(function(){if(NORMA.dados)buscar();else mostrarErro()});return}
+    NORMA.res=normaBuscar(NORMA.q);NORMA.cur=NORMA.res.length?NORMA.res[0]:-1;desenhar()}
+  function mostrarErro(){out.innerHTML='<div class="nm-empty">'+(NORMA.erro==='vazio'?'A norma ainda não foi carregada no sistema.'+(STATE.roleLogado==='admin'?' Use o botão "⚙️ Atualizar norma" para importar o pacote.':' Peça ao administrador para importar.'):'Não foi possível carregar a norma. Verifique a internet e tente de novo.')+'</div>'}
+  function desenhar(){var D=NORMA.dados.docs;
+    if(!NORMA.res.length){out.innerHTML='<div class="nm-empty">Não encontrei nada com essas palavras. Tente de outro jeito, por exemplo "barra lavatório", "piso tátil escada", "bacia caixa acoplada".</div>';return}
+    out.innerHTML='<div class="nm-lbl">Páginas encontradas ('+NORMA.res.length+') – a mais provável já está aberta:</div><div class="nm-res">'+NORMA.res.map(function(i,n){return '<button type="button" class="nm-btn'+(i===NORMA.cur?' on':'')+'" data-i="'+i+'"><b>'+(n+1)+'. '+normaNome(i)+' · pág. '+normaEsc(D[i].n)+'</b><span>'+normaEsc(D[i].lab)+'</span></button>'}).join('')+'</div><div class="nm-view" id="nmView"></div>';
+    pagina()}
+  function pagina(){var D=NORMA.dados.docs,i=NORMA.cur,d=D[i],v=document.getElementById('nmView');if(!v)return;
+    var norma=d.k.split('_')[0],prev=i>0&&D[i-1].k.split('_')[0]===norma,next=i<D.length-1&&D[i+1].k.split('_')[0]===norma;
+    var nav='<button type="button" class="nm-btn" data-mv="-1" '+(prev?'':'disabled')+'>◀ Anterior</button>';var nav2='<button type="button" class="nm-btn" data-mv="1" '+(next?'':'disabled')+'>Próxima ▶</button>';
+    var clips=(NORMA.dados.clips||{})[d.k]||[],tl=(NORMA.dados.tl||{})[d.k]||[];
+    v.innerHTML='<div class="nm-bar">'+nav+'<div class="nm-info"><b>'+normaNome(i)+' · página '+normaEsc(d.n)+'</b><span>'+normaEsc(d.lab)+'</span></div>'+nav2+'</div>'+
+     '<div class="nm-tools"><button type="button" class="nm-btn" data-cp="txt">📋 Copiar texto da página</button><button type="button" class="nm-btn" data-cp="img">🖼️ Copiar página inteira</button><button type="button" class="nm-btn" data-cp="ref">🔖 Copiar referência</button></div>'+
+     '<div class="nm-hint">Dica: arraste o mouse sobre o texto para selecionar e copiar (no celular, toque e segure). Clique em um desenho para copiar só a figura.</div><div class="nm-fb" id="nmFb"></div>'+
+     '<div class="nm-page" id="nmPage"><div class="nm-empty" style="border:0">Carregando página…</div></div><div class="nm-foot">'+nav+nav2+'</div>';
+    [].forEach.call(out.querySelectorAll('.nm-res button'),function(b){b.classList.toggle('on',+b.dataset.i===i)});
+    normaImg(d.k).then(function(src){if(NORMA.cur!==i)return;var pg=document.getElementById('nmPage');if(!pg)return;
+      pg.innerHTML='<img id="nmImg" src="'+src+'" alt="'+normaNome(i)+', página '+normaEsc(d.n)+'">'+clips.map(function(c,j){return '<button type="button" class="nm-fg" data-fg="'+j+'" style="left:'+c[0]+'%;top:'+c[1]+'%;width:'+(c[2]-c[0])+'%;height:'+(c[3]-c[1])+'%" aria-label="Copiar Figura '+c[4]+'"><i>📋 Copiar Figura '+c[4]+'</i></button>'}).join('')+
+       '<div class="nm-tl">'+tl.map(function(l){return '<span data-w="'+l[2]+'" data-s="'+l[3]+'" style="left:'+l[0]+'%;top:'+l[1]+'%">'+normaEsc(l[4])+'</span>'}).join('<br>')+'</div>';
+      var im=document.getElementById('nmImg');if(im.complete)ajustar();else im.onload=ajustar;
+    }).catch(function(){var pg=document.getElementById('nmPage');if(pg)pg.innerHTML='<div class="nm-empty" style="border:0">Não foi possível carregar esta página.</div>'})}
+  function ajustar(){var pg=document.getElementById('nmPage');if(!pg)return;var pw=pg.clientWidth;if(!pw)return;[].forEach.call(pg.querySelectorAll('.nm-tl span'),function(sp){sp.style.fontSize=(+sp.dataset.s*pw/100)+'px';sp.style.transform='none';var want=+sp.dataset.w*pw/100,got=sp.offsetWidth;if(got>0)sp.style.transform='scaleX('+(want/got)+')'})}
+  if(!window._nmResize){window._nmResize=1;window.addEventListener('resize',function(){clearTimeout(window._nmRT);window._nmRT=setTimeout(function(){var pg=document.getElementById('nmPage');if(pg&&pg.clientWidth){[].forEach.call(pg.querySelectorAll('.nm-tl span'),function(sp){var pw=pg.clientWidth;sp.style.fontSize=(+sp.dataset.s*pw/100)+'px';sp.style.transform='none';var got=sp.offsetWidth;if(got>0)sp.style.transform='scaleX('+((+sp.dataset.w*pw/100)/got)+')'})}},150)})}
+  function ref(i){var d=NORMA.dados.docs[i];return 'ABNT '+(normaNome(i)==='NBR 16537'?'NBR 16537:2024':'NBR 9050:2020')+', página '+d.n+(d.ids&&d.ids.length?', itens '+d.ids.join(', '):'')}
+  function manual(txt){var fb=document.getElementById('nmFb');fb.innerHTML='<div style="padding:8px"><div class="nm-lbl">Não deu para copiar automaticamente. Selecione o texto abaixo e copie:</div><textarea readonly>'+normaEsc(txt)+'</textarea></div>';var ta=fb.querySelector('textarea');ta.focus();ta.select()}
+  function copiarTexto(txt,msg){var ok=function(){normaToast(msg)};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(ok).catch(function(){velho()})}else velho();
+    function velho(){try{var ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();var r=document.execCommand('copy');ta.remove();if(r){ok();return}}catch(e){}manual(txt)}}
+  function copiarCanvas(cv,msg){cv.toBlob(function(blob){try{navigator.clipboard.write([new ClipboardItem({'image/png':blob})]).then(function(){normaToast(msg)}).catch(abrir)}catch(e){abrir()}});
+    function abrir(){var w=window.open('');if(w){w.document.write('<p style="font-family:sans-serif">Clique com o botão direito (ou toque e segure) na imagem e escolha "Copiar imagem".</p><img src="'+cv.toDataURL('image/png')+'" style="max-width:100%">')}else normaToast('Não foi possível copiar a imagem')}}
+  function copiarRecorte(c,msg){var img=document.getElementById('nmImg');if(!img)return;var W=img.naturalWidth,H=img.naturalHeight,r=c||[0,0,100,100];var x=r[0]/100*W,y=r[1]/100*H,w=(r[2]-r[0])/100*W,h=(r[3]-r[1])/100*H,k=c?2:1;
+    var cv=document.createElement('canvas');cv.width=Math.round(w*k);cv.height=Math.round(h*k);var g=cv.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,cv.width,cv.height);g.imageSmoothingQuality='high';g.drawImage(img,x,y,w,h,0,0,cv.width,cv.height);copiarCanvas(cv,msg)}
+  go.onclick=buscar;inp.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();buscar()}};inp.oninput=function(){err.textContent=''};
+  out.onclick=function(e){var b=e.target.closest('button');if(!b)return;var fb=document.getElementById('nmFb');
+    if(b.dataset.i){NORMA.cur=+b.dataset.i;pagina();return}
+    if(b.dataset.mv){NORMA.cur+=(+b.dataset.mv);pagina();if(b.closest('.nm-foot'))document.getElementById('nmView').scrollIntoView({block:'start'});return}
+    if(b.dataset.fg!==undefined){var d=NORMA.dados.docs[NORMA.cur],c=NORMA.dados.clips[d.k][+b.dataset.fg];copiarRecorte(c,'Figura '+c[4]+' copiada');return}
+    if(b.dataset.cp){if(fb)fb.innerHTML='';var d2=NORMA.dados.docs[NORMA.cur];if(b.dataset.cp==='txt')copiarTexto(ref(NORMA.cur)+'\n\n'+d2.t.trim(),'Texto da página copiado');else if(b.dataset.cp==='ref')copiarTexto(ref(NORMA.cur),'Referência copiada');else copiarRecorte(null,'Página copiada');}};
+  var tx=null;out.addEventListener('touchstart',function(e){if(e.target.closest('.nm-page'))tx=e.touches[0].clientX},{passive:true});
+  out.addEventListener('touchend',function(e){if(tx===null)return;var dx=e.changedTouches[0].clientX-tx;tx=null;if(String(window.getSelection())!=='')return;if(Math.abs(dx)>70){var b=out.querySelector('.nm-bar [data-mv="'+(dx<0?1:-1)+'"]');if(b&&!b.disabled)b.click()}});
+  // restaura estado ao re-renderizar
+  if(NORMA.dados&&NORMA.q&&NORMA.res.length){setTimeout(desenhar,0)}else if(!NORMA.dados){normaCarregar(function(){var sp=document.querySelector('.nm-h .nm-ver');if(!sp&&NORMA.dados){var h2=document.querySelector('.nm-h > div');if(h2)h2.insertAdjacentHTML('afterbegin','<span class="nm-ver">'+normaEsc(NORMA.dados.versao)+'</span>')}})}
+  return wrap;
+}
+function normaArquivos(fs){fs=[].slice.call(fs||[]);if(!fs.length)return;
+  Promise.all(fs.map(function(f){return new Promise(function(ok,no){var rd=new FileReader();rd.onload=function(){try{ok(JSON.parse(rd.result))}catch(e){no(e)}};rd.onerror=no;rd.readAsText(f)})}))
+  .then(function(partes){var p=NORMA.pendente||(NORMA.pendente={indice:null,paginas:{}});partes.forEach(function(x){if(x&&x.indice)p.indice=x.indice;if(x&&x.paginas)Object.keys(x.paginas).forEach(function(k){p.paginas[k]=x.paginas[k]})});
+    if(!p.indice||!p.indice.docs){normaToast('Parte carregada. Agora selecione a parte com o índice (parte 1).');return}
+    var faltam=p.indice.docs.filter(function(d){return !p.paginas[d.k]}).length;
+    if(faltam){normaToast('Parte carregada. Faltam '+faltam+' páginas: selecione a outra parte do pacote.');return}
+    NORMA.pendente=null;normaImportar(p)}).catch(function(){normaToast('Arquivo inválido. Use o pacote da norma (.json).')})}
+function normaAtualizar(){var fi=document.getElementById('nmFile');if(fi){fi.value='';fi.click()}}
+function normaImportar(p){var ks=Object.keys(p.paginas);
+  var box=document.createElement('div');box.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center';
+  box.innerHTML='<div style="background:#fff;padding:20px 24px;border-radius:12px;min-width:280px;max-width:420px;font-size:14px"><b>Importar "'+normaEsc(p.indice.versao||'norma')+'"?</b><div style="margin:8px 0 14px;color:#666">'+p.indice.docs.length+' páginas pesquisáveis, '+ks.length+' imagens. Isso substitui a versão atual.</div><div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="nm-btn" id="nmCanc">Cancelar</button><button type="button" class="nm-btn nm-go" id="nmOk" style="padding:7px 16px">Importar</button></div></div>';document.body.appendChild(box);
+  document.getElementById('nmCanc').onclick=function(){box.remove()};
+  document.getElementById('nmOk').onclick=function(){box.firstChild.innerHTML='<b>Importando a norma…</b><div id="nmProg" style="margin-top:10px;color:#666">0%</div>';prox()};
+  var n=0,falhas=0;
+  function put(path,data){return fetch(FIREBASE_DB+'/'+path+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(function(r){if(!r.ok)throw 0})}
+  function prox(){if(n>=ks.length){return put('normas/indice',p.indice).then(fim).catch(function(){falhas++;fim()})}
+    var k=ks[n++];put('normas/paginas/'+k,p.paginas[k]).catch(function(){falhas++}).then(function(){var el=document.getElementById('nmProg');if(el)el.textContent=Math.round(n/ks.length*100)+'% ('+n+'/'+ks.length+')';prox()})}
+  function fim(){box.remove();NORMA.dados=null;NORMA.imgs={};NORMA.res=[];NORMA.importado=falhas?'erro':'ok';render();normaToast(falhas?'Importação terminou com '+falhas+' falha(s). Tente de novo.':'Norma atualizada: '+(p.indice.versao||''))}
+}
 function renderApp(){
   var wrap=document.createElement('div');
   // header
@@ -2874,6 +3001,8 @@ function renderApp(){
     if(STATE.tabCredito==='historico') main.appendChild(renderHistoricoCredito());
     else if(STATE.tabCredito==='aprovacao') main.appendChild(renderAprovacoes());
     else main.appendChild(renderAnaliseCredito());
+  } else if(STATE.modulo==='mod7'){
+    main.appendChild(renderNormaNBR());
   } else if(STATE.modulo==='mod3'){
     main.appendChild(renderAceIA());
   } else if(STATE.modulo==='mod4'){
