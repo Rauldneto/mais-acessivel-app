@@ -2909,6 +2909,9 @@ function renderNormaNBR(){
   h.innerHTML='<h2>📐 Norma NBR 9050</h2><div style="display:flex;gap:8px;align-items:center">'+(ver?'<span class="nm-ver">'+normaEsc(ver)+'</span>':'')+'</div>';
   if(STATE.roleLogado==='admin'){var ba=document.createElement('button');ba.className='nm-btn';ba.textContent='⚙️ Atualizar norma';ba.onclick=normaAtualizar;h.lastChild.appendChild(ba);var fi=document.createElement('input');fi.type='file';fi.id='nmFile';fi.accept='.pdf,application/pdf,.json,application/json';fi.multiple=true;fi.style.display='none';fi.setAttribute('aria-label','Pacote da norma');fi.onchange=function(){normaArquivos(fi.files)};h.appendChild(fi)}
   wrap.appendChild(h);
+  var arq=document.createElement('div');arq.style.cssText='font-size:12px;color:#666;background:#fff;border:1px solid #eee;border-radius:8px;padding:6px 10px;margin:-4px 0 10px';
+  if(NORMA.dados){var dt=(NORMA.dados.gerado||'').split('-').reverse().join('/');arq.textContent='📄 Arquivos em uso: '+((NORMA.dados.arquivos&&NORMA.dados.arquivos.length)?NORMA.dados.arquivos.join(' · '):NORMA.dados.versao)+(dt?' — importado em '+dt:'')}else{arq.textContent=NORMA.erro==='vazio'?'📄 Nenhuma norma carregada ainda.':'📄 Carregando informações da norma…'}
+  wrap.appendChild(arq);
   var ask=document.createElement('div');ask.className='nm-ask';
   var inp=document.createElement('input');inp.type='search';inp.placeholder='Ex.: barras para lavatório';inp.value=NORMA.q;inp.autocomplete='off';
   var go=document.createElement('button');go.className='nm-btn nm-go';go.textContent='Buscar';
@@ -2956,7 +2959,7 @@ function renderNormaNBR(){
   var tx=null;out.addEventListener('touchstart',function(e){if(e.target.closest('.nm-page'))tx=e.touches[0].clientX},{passive:true});
   out.addEventListener('touchend',function(e){if(tx===null)return;var dx=e.changedTouches[0].clientX-tx;tx=null;if(String(window.getSelection())!=='')return;if(Math.abs(dx)>70){var b=out.querySelector('.nm-bar [data-mv="'+(dx<0?1:-1)+'"]');if(b&&!b.disabled)b.click()}});
   // restaura estado ao re-renderizar
-  if(NORMA.dados&&NORMA.q&&NORMA.res.length){setTimeout(desenhar,0)}else if(!NORMA.dados){normaCarregar(function(){var sp=document.querySelector('.nm-h .nm-ver');if(!sp&&NORMA.dados){var h2=document.querySelector('.nm-h > div');if(h2)h2.insertAdjacentHTML('afterbegin','<span class="nm-ver">'+normaEsc(NORMA.dados.versao)+'</span>')}})}
+  if(NORMA.dados&&NORMA.q&&NORMA.res.length){setTimeout(desenhar,0)}else if(!NORMA.dados&&!NORMA.erro){normaCarregar(function(){if(STATE.modulo==='mod7')render()})}
   return wrap;
 }
 function normaLinhas(tc,W,H){var its=tc.items.filter(function(it){return it.str&&it.str.trim()}).map(function(it){var sz=Math.abs(it.transform[3])||it.height||8;return{x:it.transform[4],y:it.transform[5],w:it.width,s:sz,t:it.str}});
@@ -3013,7 +3016,7 @@ async function normaProcessarPDFs(files){
         prog(info.ver+': página '+p+' de '+pdf.numPages)}
       if(!inicio)throw new Error('Não encontrei o início ("1 Escopo") em '+f.name);versoes.push(info.ver)}
     box.remove();
-    normaImportar({indice:{versao:versoes.join(' + '),gerado:new Date().toISOString().slice(0,10),docs:docs,tl:tl,clips:clips},paginas:paginas});
+    normaImportar({indice:{versao:versoes.join(' + '),gerado:new Date().toISOString().slice(0,10),arquivos:files.map(function(x){return x.name}),docs:docs,tl:tl,clips:clips},paginas:paginas});
   }catch(e){box.remove();normaToast('Erro ao ler os PDFs: '+(e&&e.message||e))}}
 function normaAtualizar(){var fi=document.getElementById('nmFile');if(fi){fi.value='';fi.click()}}
 function normaImportar(p){var ks=Object.keys(p.paginas);
@@ -3025,7 +3028,7 @@ function normaImportar(p){var ks=Object.keys(p.paginas);
   function put(path,data){return fetch(FIREBASE_DB+'/'+path+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(function(r){if(!r.ok)throw 0})}
   function prox(){if(n>=ks.length){return put('normas/indice',p.indice).then(fim).catch(function(){falhas++;fim()})}
     var k=ks[n++];put('normas/paginas/'+k,p.paginas[k]).catch(function(){falhas++}).then(function(){var el=document.getElementById('nmProg');if(el)el.textContent=Math.round(n/ks.length*100)+'% ('+n+'/'+ks.length+')';prox()})}
-  function fim(){box.remove();NORMA.dados=null;NORMA.imgs={};NORMA.res=[];NORMA.importado=falhas?'erro':'ok';render();normaToast(falhas?'Importação terminou com '+falhas+' falha(s). Tente de novo.':'Norma atualizada: '+(p.indice.versao||''))}
+  function fim(){box.remove();NORMA.dados=null;NORMA.erro='';NORMA.imgs={};NORMA.res=[];NORMA.importado=falhas?'erro':'ok';render();normaToast(falhas?'Importação terminou com '+falhas+' falha(s). Tente de novo.':'Norma atualizada: '+(p.indice.versao||''))}
 }
 function renderApp(){
   var wrap=document.createElement('div');
