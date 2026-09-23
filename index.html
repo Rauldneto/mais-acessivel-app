@@ -2877,6 +2877,7 @@ function normaCss(){
   '.nm-fg i{position:absolute;right:6px;top:6px;background:#FF6B00;color:#fff;font-size:11px;font-style:normal;padding:2px 8px;border-radius:999px;opacity:0}.nm-fg:hover i{opacity:1}'+
   '.nm-foot{display:flex;justify-content:space-between;padding:8px}.nm-empty{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:18px;color:#888;font-size:14px}'+
   '.nm-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1e293b;color:#fff;padding:9px 16px;border-radius:10px;font-size:13px;z-index:99999;opacity:0;pointer-events:none;transition:opacity .2s}.nm-toast.show{opacity:1}'+
+  '.nm-tl mark{background:rgba(255,196,0,.45);color:transparent;border-radius:2px;padding:0;box-shadow:0 0 0 1px rgba(255,140,0,.6)}'+
   '.nm-fb textarea{width:100%;min-height:130px;font:inherit;font-size:12px;border:1px solid #ddd;border-radius:8px;padding:8px;margin:6px 0}';
   document.head.appendChild(st);
 }
@@ -2889,7 +2890,7 @@ function normaIndexar(){var D=NORMA.dados.docs;var idx=D.map(function(d){var tf=
  var DF={};idx.forEach(function(d){for(var t in d.tf)DF[t]=(DF[t]||0)+1});NORMA.IDX={idx:idx,DF:DF,VOC:Object.keys(DF),AVG:idx.reduce(function(a,d){return a+d.len},0)/idx.length,N:idx.length}}
 function normaLev(a,b){if(Math.abs(a.length-b.length)>2)return 9;var p=[],i,j;for(j=0;j<=b.length;j++)p[j]=j;for(i=1;i<=a.length;i++){var c=[i];for(j=1;j<=b.length;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[b.length]}
 function normaFix(w){var X=NORMA.IDX;if(X.DF[w]||w.length<4)return w;var lim=w.length>=7?2:1,best=w,bd=9,bdf=0;X.VOC.forEach(function(v){var d=normaLev(w,v);if(d<bd||(d===bd&&X.DF[v]>bdf)){best=v;bd=d;bdf=X.DF[v]}});return bd<=lim?best:w}
-function normaBuscar(qs){var X=NORMA.IDX,qt=[];normaToks(qs).forEach(function(w){if(NORMA_SYN[w])normaToks(NORMA_SYN[w]).forEach(function(x){qt.push(x)});else qt.push(normaFix(w))});if(!qt.length)return[];
+function normaBuscar(qs){var X=NORMA.IDX,qt=[];normaToks(qs).forEach(function(w){if(NORMA_SYN[w])normaToks(NORMA_SYN[w]).forEach(function(x){qt.push(x)});else qt.push(normaFix(w))});if(!qt.length)return[];NORMA.termos=qt;
  var T={};qt.forEach(function(w){T[w]=1;if(w.length>=5)X.VOC.forEach(function(v){if(v!==w&&v.indexOf(w)===0)T[v]=T[v]||0.5})});
  var sc=[];X.idx.forEach(function(d,i){var s=0,hit=0;for(var t in T){var f=d.tf[t];if(!f)continue;if(T[t]===1)hit++;var idf=Math.log(1+(X.N-X.DF[t]+.5)/(X.DF[t]+.5));s+=T[t]*idf*(f*2.2)/(f+1.2*(0.25+0.75*d.len/X.AVG))}if(s>0){s*=1+0.6*hit/qt.length;sc.push([s,i])}});
  sc.sort(function(a,b){return b[0]-a[0]});if(!sc.length)return[];var top=sc[0][0];return sc.filter(function(x){return x[0]>=top*0.35}).slice(0,10).map(function(x){return x[1]})}
@@ -2901,6 +2902,7 @@ function normaCarregar(cb){if(NORMA.dados){cb();return}if(NORMA.carregando)retur
  .catch(function(){NORMA.carregando=false;NORMA.erro='rede';cb()})}
 function normaImg(k){if(NORMA.imgs[k])return Promise.resolve(NORMA.imgs[k]);return fetch(FIREBASE_DB+'/normas/paginas/'+k+'.json').then(function(r){return r.json()}).then(function(s){NORMA.imgs[k]=s;return s})}
 
+function normaMarcar(t){var T=NORMA.termos||[];if(!T.length)return normaEsc(t);var out='',last=0,re=/[A-Za-zÀ-ÿ0-9]+/g,m;while((m=re.exec(t))){var n0=normaNorm(m[0]);if(n0.length<2||NORMA_STOP.has(n0))continue;var w=normaStem(n0);var hit=T.some(function(q){return w===q||(q.length>=5&&w.indexOf(q)===0)||(w.length>=5&&q.indexOf(w)===0&&q.length-w.length<=2)});if(hit){out+=normaEsc(t.slice(last,m.index))+'<mark>'+normaEsc(m[0])+'</mark>';last=m.index+m[0].length}}return out+normaEsc(t.slice(last))}
 function renderNormaNBR(){
   normaCss();
   var wrap=document.createElement('div');wrap.className='nm-wrap';
@@ -2920,7 +2922,7 @@ function renderNormaNBR(){
   var out=document.createElement('div');wrap.appendChild(out);
   function buscar(){NORMA.q=inp.value.trim();err.textContent='';if(!NORMA.q){err.textContent='Digite o que você procura.';inp.focus();return}
     if(!NORMA.dados){out.innerHTML='<div class="nm-empty">Carregando a norma…</div>';normaCarregar(function(){if(NORMA.dados)buscar();else mostrarErro()});return}
-    NORMA.res=normaBuscar(NORMA.q);NORMA.cur=NORMA.res.length?NORMA.res[0]:-1;desenhar()}
+    NORMA.rolar=true;NORMA.res=normaBuscar(NORMA.q);NORMA.cur=NORMA.res.length?NORMA.res[0]:-1;desenhar()}
   function mostrarErro(){out.innerHTML='<div class="nm-empty">'+(NORMA.erro==='vazio'?'A norma ainda não foi carregada no sistema.'+(STATE.roleLogado==='admin'?' Use o botão "⚙️ Atualizar norma" para importar o pacote.':' Peça ao administrador para importar.'):'Não foi possível carregar a norma. Verifique a internet e tente de novo.')+'</div>'}
   function desenhar(){var D=NORMA.dados.docs;
     if(!NORMA.res.length){out.innerHTML='<div class="nm-empty">Não encontrei nada com essas palavras. Tente de outro jeito, por exemplo "barra lavatório", "piso tátil escada", "bacia caixa acoplada".</div>';return}
@@ -2937,8 +2939,8 @@ function renderNormaNBR(){
     [].forEach.call(out.querySelectorAll('.nm-res button'),function(b){b.classList.toggle('on',+b.dataset.i===i)});
     normaImg(d.k).then(function(src){if(NORMA.cur!==i)return;var pg=document.getElementById('nmPage');if(!pg)return;
       pg.innerHTML='<img id="nmImg" src="'+src+'" alt="'+normaNome(i)+', página '+normaEsc(d.n)+'">'+clips.map(function(c,j){return '<button type="button" class="nm-fg" data-fg="'+j+'" style="left:'+c[0]+'%;top:'+c[1]+'%;width:'+(c[2]-c[0])+'%;height:'+(c[3]-c[1])+'%" aria-label="Copiar Figura '+c[4]+'"><i>📋 Copiar Figura '+c[4]+'</i></button>'}).join('')+
-       '<div class="nm-tl">'+tl.map(function(l){return '<span data-w="'+l[2]+'" data-s="'+l[3]+'" style="left:'+l[0]+'%;top:'+l[1]+'%">'+normaEsc(l[4])+'</span>'}).join('<br>')+'</div>';
-      var im=document.getElementById('nmImg');if(im.complete)ajustar();else im.onload=ajustar;
+       '<div class="nm-tl">'+tl.map(function(l){return '<span data-w="'+l[2]+'" data-s="'+l[3]+'" style="left:'+l[0]+'%;top:'+l[1]+'%">'+normaMarcar(l[4])+'</span>'}).join('<br>')+'</div>';
+      var im=document.getElementById('nmImg');var pronto=function(){ajustar();if(NORMA.rolar){NORMA.rolar=false;var mk=pg.querySelector('.nm-tl mark');if(mk)mk.scrollIntoView({block:'center'})}};if(im.complete)pronto();else im.onload=pronto;
     }).catch(function(){var pg=document.getElementById('nmPage');if(pg)pg.innerHTML='<div class="nm-empty" style="border:0">Não foi possível carregar esta página.</div>'})}
   function ajustar(){var pg=document.getElementById('nmPage');if(!pg)return;var pw=pg.clientWidth;if(!pw)return;[].forEach.call(pg.querySelectorAll('.nm-tl span'),function(sp){sp.style.fontSize=(+sp.dataset.s*pw/100)+'px';sp.style.transform='none';var want=+sp.dataset.w*pw/100,got=sp.offsetWidth;if(got>0)sp.style.transform='scaleX('+(want/got)+')'})}
   if(!window._nmResize){window._nmResize=1;window.addEventListener('resize',function(){clearTimeout(window._nmRT);window._nmRT=setTimeout(function(){var pg=document.getElementById('nmPage');if(pg&&pg.clientWidth){[].forEach.call(pg.querySelectorAll('.nm-tl span'),function(sp){var pw=pg.clientWidth;sp.style.fontSize=(+sp.dataset.s*pw/100)+'px';sp.style.transform='none';var got=sp.offsetWidth;if(got>0)sp.style.transform='scaleX('+((+sp.dataset.w*pw/100)/got)+')'})}},150)})}
@@ -2952,7 +2954,7 @@ function renderNormaNBR(){
     var cv=document.createElement('canvas');cv.width=Math.round(w*k);cv.height=Math.round(h*k);var g=cv.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,cv.width,cv.height);g.imageSmoothingQuality='high';g.drawImage(img,x,y,w,h,0,0,cv.width,cv.height);copiarCanvas(cv,msg)}
   go.onclick=buscar;inp.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();buscar()}};inp.oninput=function(){err.textContent=''};
   out.onclick=function(e){var b=e.target.closest('button');if(!b)return;var fb=document.getElementById('nmFb');
-    if(b.dataset.i){NORMA.cur=+b.dataset.i;pagina();return}
+    if(b.dataset.i){NORMA.cur=+b.dataset.i;NORMA.rolar=true;pagina();return}
     if(b.dataset.mv){NORMA.cur+=(+b.dataset.mv);pagina();if(b.closest('.nm-foot'))document.getElementById('nmView').scrollIntoView({block:'start'});return}
     if(b.dataset.fg!==undefined){var d=NORMA.dados.docs[NORMA.cur],c=NORMA.dados.clips[d.k][+b.dataset.fg];copiarRecorte(c,'Figura '+c[4]+' copiada');return}
     if(b.dataset.cp){if(fb)fb.innerHTML='';var d2=NORMA.dados.docs[NORMA.cur];if(b.dataset.cp==='txt')copiarTexto(ref(NORMA.cur)+'\n\n'+d2.t.trim(),'Texto da página copiado');else if(b.dataset.cp==='ref')copiarTexto(ref(NORMA.cur),'Referência copiada');else copiarRecorte(null,'Página copiada');}};
