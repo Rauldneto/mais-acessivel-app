@@ -2887,7 +2887,7 @@ var NORMA_SYN={banheiro:"sanitario",wc:"sanitario",cadeirante:"cadeira rodas",pc
 function normaStem(w){if(w.length>4){if(/oes$|aes$/.test(w))return w.slice(0,-3)+'ao';if(/ais$/.test(w))return w.slice(0,-3)+'al';if(/eis$/.test(w))return w.slice(0,-3)+'el';if(/res$|zes$/.test(w))return w.slice(0,-2);if(/s$/.test(w))return w.slice(0,-1)}return w}
 function normaToks(s){return normaNorm(s).split(/[^a-z0-9,]+/).filter(function(w){return w.length>1&&!NORMA_STOP.has(w)}).map(normaStem)}
 function normaIndexar(){var D=NORMA.dados.docs;var idx=D.map(function(d){var tf={},len=0;function add(s,wt){normaToks(s||'').forEach(function(t){tf[t]=(tf[t]||0)+wt;len+=wt})}add(d.t,1);add(d.c,3);add(d.h,2);add(d.lab,1);return{tf:tf,len:len}});
- var DF={};idx.forEach(function(d){for(var t in d.tf)DF[t]=(DF[t]||0)+1});NORMA.IDX={idx:idx,DF:DF,VOC:Object.keys(DF),AVG:idx.reduce(function(a,d){return a+d.len},0)/idx.length,N:idx.length}}
+ var DF={};idx.forEach(function(d){for(var t in d.tf)DF[t]=(DF[t]||0)+1});NORMA.tokP=null;NORMA.IDX={idx:idx,DF:DF,VOC:Object.keys(DF),AVG:idx.reduce(function(a,d){return a+d.len},0)/idx.length,N:idx.length}}
 function normaLev(a,b){if(Math.abs(a.length-b.length)>2)return 9;var p=[],i,j;for(j=0;j<=b.length;j++)p[j]=j;for(i=1;i<=a.length;i++){var c=[i];for(j=1;j<=b.length;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[b.length]}
 function normaFix(w){var X=NORMA.IDX;if(X.DF[w]||w.length<4)return w;var lim=w.length>=7?2:1,best=w,bd=9,bdf=0;X.VOC.forEach(function(v){var d=normaLev(w,v);if(d<bd||(d===bd&&X.DF[v]>bdf)){best=v;bd=d;bdf=X.DF[v]}});return bd<=lim?best:w}
 function normaBuscar(qs){var X=NORMA.IDX,qt=[];normaToks(qs).forEach(function(w){if(NORMA_SYN[w])normaToks(NORMA_SYN[w]).forEach(function(x){qt.push(x)});else qt.push(normaFix(w))});if(!qt.length)return[];NORMA.termos=qt;
@@ -2902,6 +2902,25 @@ function normaCarregar(cb){if(NORMA.dados){cb();return}if(NORMA.carregando)retur
  .catch(function(){NORMA.carregando=false;NORMA.erro='rede';cb()})}
 function normaImg(k){if(NORMA.imgs[k])return Promise.resolve(NORMA.imgs[k]);return fetch(FIREBASE_DB+'/normas/paginas/'+k+'.json').then(function(r){return r.json()}).then(function(s){NORMA.imgs[k]=s;return s})}
 
+function normaChave(c){return c.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}
+function normaTokens(t){var r=[],re=/[A-Za-zÀ-ÿ0-9]+/g,m;while((m=re.exec(t))){var n=normaChave(m[0]);r.push({w:normaStem(n),n:n,a:m.index,b:m.index+m[0].length})}return r}
+function normaPrepFrase(q){var X=NORMA.IDX,ts=[];normaTokens(q).forEach(function(t){if(t.n.length<2||NORMA_STOP.has(t.n))return;var s=t.w;if(NORMA_SYN[t.n])s=normaStem(normaChave(NORMA_SYN[t.n].split(' ')[0]));ts.push(s)});
+ return ts.map(function(q){var set={};set[q]=1;set[normaFix(q)]=1;X.VOC.forEach(function(v){if(v===q)return;if((q.length>=5&&v.indexOf(q)===0)||(q.length>=4&&Math.abs(v.length-q.length)<=2&&normaLev(v,q)<=(q.length>=7?2:1)))set[v]=1});return set})}
+function normaAcha(tk,S,modo){var res=[],k=S.length;if(!k)return res;
+ for(var i=0;i<tk.length;i++){if(modo==='frase'){if(!S[0][tk[i]])continue;var pos=[i],j=i;for(var t=1;t<k;t++){var ok=-1;for(var x=j+1;x<=j+4&&x<tk.length;x++){if(S[t][tk[x]]){ok=x;break}}if(ok<0)break;pos.push(ok);j=ok}if(pos.length===k){res.push([pos[0],pos[k-1]]);i=pos[k-1]}}
+  else{var hit=-1;for(var t2=0;t2<k;t2++)if(S[t2][tk[i]]){hit=t2;break}if(hit<0)continue;var vis={},mx=i;vis[hit]=1;var nv=1;for(var y=i+1;y<tk.length&&y<=i+12&&nv<k;y++){for(var t3=0;t3<k;t3++){if(!vis[t3]&&S[t3][tk[y]]){vis[t3]=1;nv++;mx=y;break}}}if(nv===k){res.push([i,mx]);i=mx}}}
+ return res}
+function normaBuscarFrase(q){var D=NORMA.dados.docs;NORMA.cont={};var S=normaPrepFrase(q);NORMA.sets=S;if(!S.length)return{modo:'',res:[]};
+ if(!NORMA.tokP)NORMA.tokP=D.map(function(d){return{t:normaTokens(d.t||'').map(function(x){return x.w}),c:normaTokens((d.c||'')+' '+(d.h||'')).map(function(x){return x.w})}});
+ var modos=S.length>1?['frase','perto']:['frase'],res=[],vistos={};NORMA.modoP={};
+ for(var mi=0;mi<modos.length;mi++){var md=modos[mi],sc=[];
+  NORMA.tokP.forEach(function(p,i){if(vistos[i])return;var n=normaAcha(p.t,S,md).length;if(n){NORMA.cont[i]=n;sc.push([n+3*normaAcha(p.c,S,md).length,i])}});
+  sc.sort(function(a,b){return b[0]-a[0]||a[1]-b[1]});sc.forEach(function(x){if(res.length<15){res.push(x[1]);vistos[x[1]]=1;NORMA.modoP[x[1]]=md}})}
+ return{modo:res.length?NORMA.modoP[res[0]]:'',res:res}}
+function normaMarcasFrase(tl,S,modo){var R=tl.map(function(){return[]});if(!S||!S.length)return R;var tk=[],meta=[];
+ tl.forEach(function(l,li){normaTokens(l[4]).forEach(function(t){tk.push(t.w);meta.push([li,t.a,t.b])})});
+ normaAcha(tk,S,modo).forEach(function(w){var por={};for(var j=w[0];j<=w[1];j++){var m=meta[j],r=por[m[0]]||(por[m[0]]=[m[1],m[2]]);r[0]=Math.min(r[0],m[1]);r[1]=Math.max(r[1],m[2])}Object.keys(por).forEach(function(li){R[li].push(por[li])})});return R}
+function normaLinhaMarcada(t,rs){if(!rs||!rs.length)return normaEsc(t);rs.sort(function(a,b){return a[0]-b[0]});var out='',last=0;rs.forEach(function(r){if(r[0]<last)return;out+=normaEsc(t.slice(last,r[0]))+'<mark>'+normaEsc(t.slice(r[0],r[1]))+'</mark>';last=r[1]});return out+normaEsc(t.slice(last))}
 function normaMarcar(t){var T=NORMA.termos||[];if(!T.length)return normaEsc(t);var out='',last=0,re=/[A-Za-zÀ-ÿ0-9]+/g,m;while((m=re.exec(t))){var n0=normaNorm(m[0]);if(n0.length<2||NORMA_STOP.has(n0))continue;var w=normaStem(n0);var hit=T.some(function(q){return w===q||(q.length>=5&&w.indexOf(q)===0)||(w.length>=5&&q.indexOf(w)===0&&q.length-w.length<=2)});if(hit){out+=normaEsc(t.slice(last,m.index))+'<mark>'+normaEsc(m[0])+'</mark>';last=m.index+m[0].length}}return out+normaEsc(t.slice(last))}
 function renderNormaNBR(){
   normaCss();
@@ -2922,11 +2941,11 @@ function renderNormaNBR(){
   var out=document.createElement('div');wrap.appendChild(out);
   function buscar(){NORMA.q=inp.value.trim();err.textContent='';if(!NORMA.q){err.textContent='Digite o que você procura.';inp.focus();return}
     if(!NORMA.dados){out.innerHTML='<div class="nm-empty">Carregando a norma…</div>';normaCarregar(function(){if(NORMA.dados)buscar();else mostrarErro()});return}
-    NORMA.rolar=true;NORMA.res=normaBuscar(NORMA.q);NORMA.cur=NORMA.res.length?NORMA.res[0]:-1;desenhar()}
+    NORMA.rolar=true;var rf=normaBuscarFrase(NORMA.q);if(rf.res.length){NORMA.modo=rf.modo;NORMA.res=rf.res}else{NORMA.modo='palavras';NORMA.res=normaBuscar(NORMA.q)}NORMA.cur=NORMA.res.length?NORMA.res[0]:-1;desenhar()}
   function mostrarErro(){out.innerHTML='<div class="nm-empty">'+(NORMA.erro==='vazio'?'A norma ainda não foi carregada no sistema.'+(STATE.roleLogado==='admin'?' Use o botão "⚙️ Atualizar norma" para importar o pacote.':' Peça ao administrador para importar.'):'Não foi possível carregar a norma. Verifique a internet e tente de novo.')+'</div>'}
   function desenhar(){var D=NORMA.dados.docs;
     if(!NORMA.res.length){out.innerHTML='<div class="nm-empty">Não encontrei nada com essas palavras. Tente de outro jeito, por exemplo "barra lavatório", "piso tátil escada", "bacia caixa acoplada".</div>';return}
-    out.innerHTML='<div class="nm-lbl">Páginas encontradas ('+NORMA.res.length+') – a mais provável já está aberta:</div><div class="nm-res">'+NORMA.res.map(function(i,n){return '<button type="button" class="nm-btn'+(i===NORMA.cur?' on':'')+'" data-i="'+i+'"><b>'+(n+1)+'. '+normaNome(i)+' · pág. '+normaEsc(D[i].n)+'</b><span>'+normaEsc(D[i].lab)+'</span></button>'}).join('')+'</div><div class="nm-view" id="nmView"></div>';
+    out.innerHTML='<div class="nm-lbl">'+(NORMA.modo==='frase'?'Páginas com "'+normaEsc(NORMA.q)+'" ('+NORMA.res.length+') – a primeira já está aberta:':NORMA.modo==='perto'?'Não achei "'+normaEsc(NORMA.q)+'" nessa ordem. Páginas com essas palavras juntas ('+NORMA.res.length+'):':'Não achei "'+normaEsc(NORMA.q)+'" junto. Resultados aproximados ('+NORMA.res.length+'):')+'</div><div class="nm-res">'+NORMA.res.map(function(i,n){return '<button type="button" class="nm-btn'+(i===NORMA.cur?' on':'')+'" data-i="'+i+'"><b>'+(n+1)+'. '+normaNome(i)+' · pág. '+normaEsc(D[i].n)+'</b><span>'+(NORMA.modo!=='palavras'&&NORMA.cont[i]?NORMA.cont[i]+'× · ':'')+normaEsc(D[i].lab)+'</span></button>'}).join('')+'</div><div class="nm-view" id="nmView"></div>';
     pagina()}
   function pagina(){var D=NORMA.dados.docs,i=NORMA.cur,d=D[i],v=document.getElementById('nmView');if(!v)return;
     var norma=d.k.split('_')[0],prev=i>0&&D[i-1].k.split('_')[0]===norma,next=i<D.length-1&&D[i+1].k.split('_')[0]===norma;
@@ -2939,7 +2958,7 @@ function renderNormaNBR(){
     [].forEach.call(out.querySelectorAll('.nm-res button'),function(b){b.classList.toggle('on',+b.dataset.i===i)});
     normaImg(d.k).then(function(src){if(NORMA.cur!==i)return;var pg=document.getElementById('nmPage');if(!pg)return;
       pg.innerHTML='<img id="nmImg" src="'+src+'" alt="'+normaNome(i)+', página '+normaEsc(d.n)+'">'+clips.map(function(c,j){return '<button type="button" class="nm-fg" data-fg="'+j+'" style="left:'+c[0]+'%;top:'+c[1]+'%;width:'+(c[2]-c[0])+'%;height:'+(c[3]-c[1])+'%" aria-label="Copiar Figura '+c[4]+'"><i>📋 Copiar Figura '+c[4]+'</i></button>'}).join('')+
-       '<div class="nm-tl">'+tl.map(function(l){return '<span data-w="'+l[2]+'" data-s="'+l[3]+'" style="left:'+l[0]+'%;top:'+l[1]+'%">'+normaMarcar(l[4])+'</span>'}).join('<br>')+'</div>';
+       '<div class="nm-tl">'+(function(){var MR=NORMA.modo!=='palavras'?normaMarcasFrase(tl,NORMA.sets,(NORMA.modoP&&NORMA.modoP[i])||'perto'):null;return tl.map(function(l,li){return '<span data-w="'+l[2]+'" data-s="'+l[3]+'" style="left:'+l[0]+'%;top:'+l[1]+'%">'+(MR?normaLinhaMarcada(l[4],MR[li]):normaMarcar(l[4]))+'</span>'}).join('<br>')})()+'</div>';
       var im=document.getElementById('nmImg');var pronto=function(){ajustar();if(NORMA.rolar){NORMA.rolar=false;var mk=pg.querySelector('.nm-tl mark');if(mk)mk.scrollIntoView({block:'center'})}};if(im.complete)pronto();else im.onload=pronto;
     }).catch(function(){var pg=document.getElementById('nmPage');if(pg)pg.innerHTML='<div class="nm-empty" style="border:0">Não foi possível carregar esta página.</div>'})}
   function ajustar(){var pg=document.getElementById('nmPage');if(!pg)return;var pw=pg.clientWidth;if(!pw)return;[].forEach.call(pg.querySelectorAll('.nm-tl span'),function(sp){sp.style.fontSize=(+sp.dataset.s*pw/100)+'px';sp.style.transform='none';var want=+sp.dataset.w*pw/100,got=sp.offsetWidth;if(got>0)sp.style.transform='scaleX('+(want/got)+')'})}
