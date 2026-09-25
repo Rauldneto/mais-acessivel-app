@@ -5164,7 +5164,8 @@ function renderModeloEmTeste(){
     mE:0,mS:0,nS:1,sit:'',
     endTerceiro:false,
     simDoc:{1:0,2:0,3:0},simLoc:0,orcamento:0,
-    mOk:false,lOk:false
+    mOk:false,lOk:false,
+    verifManual:{maps:null,google:null,insta:null,googleSite:'',instaPerfil:''}
   };
   var D={nome:'',fantasia:'',cnpj:'',socio:'',capital:'',endereco:'',cidade:'',estado:'',cep:''};
   window._mod5D=D; // expor globalmente
@@ -5225,7 +5226,7 @@ function renderModeloEmTeste(){
 
   function card(cor,html){
     var bgMap={
-      '#0f6e56':'#f0faf6','#1565C0':'#f0f6ff','#6A1B9A':'#f8f0ff',
+      '#0f6e56':'#f0faf6','#1565C0':'#f0f6ff','#0891b2':'#ecfeff','#6A1B9A':'#f8f0ff',
       '#E65100':'#fff5f0','#1B5E20':'#f0faf2'
     };
     var bg=bgMap[cor]||'#f8f8f8';
@@ -5326,13 +5327,13 @@ function renderModeloEmTeste(){
   }
 
   function limpar(){
-    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,precisaAprovDir:false,justEndTerceiro:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},docsOk:{1:false,2:false,3:false},simLoc:0,orcamento:0,mOk:false,lOk:false};
+    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,precisaAprovDir:false,justEndTerceiro:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},docsOk:{1:false,2:false,3:false},simLoc:0,orcamento:0,mOk:false,lOk:false,verifManual:{maps:null,google:null,insta:null,googleSite:'',instaPerfil:''}};
     window._mod5S=S;
     S_DOCS={contrato:null,comprovante:null,docSocio:null};
     D={nome:'',fantasia:'',cnpj:'',socio:'',capital:''};
     var cl=q('#m5cl');if(cl)cl.innerHTML='';
     var pb=q('#m5pb');if(pb)pb.textContent='Digite o CNPJ e clique em Consultar.';
-    ['m5s1','m5s2','m5s3','m5s4','m5s5','m5sv'].forEach(function(id){
+    ['m5s1','m5s2','m5sVM','m5s3','m5s4','m5s5','m5sv'].forEach(function(id){
       var el=q('#'+id);if(el)el.style.display='none';
     });
   }
@@ -5493,7 +5494,8 @@ function renderModeloEmTeste(){
     cst.style.color=ok?'#166534':'#991b1b';
     cst.textContent=ok?'Confirmado: sem protestos.':'Confirmado: h\u00e1 protesto(s).';
 
-    // Esconder E3 ao mudar selecao
+    // Esconder E3 (Verificacao Manual), E4 (Documentos), E5 (Endereco), E6 (Referencias) ao mudar selecao
+    var sVM=q('#m5sVM');if(sVM){sVM.style.display='none';sVM.innerHTML='';}
     var s3=q('#m5s3');
     if(s3){s3.style.display='none';s3.innerHTML='';}
     S.checks=S.checks.filter(function(ck){
@@ -5506,9 +5508,9 @@ function renderModeloEmTeste(){
     var operador=STATE.usuarioLogado||'desconhecido';
 
     if(ok){
-      re2.innerHTML=resBox('ok','Etapa 2 aprovada','Sem protestos. Prossiga para os documentos.');
+      re2.innerHTML=resBox('ok','Etapa 2 aprovada','Sem protestos. Prossiga para a verifica\u00e7\u00e3o manual.');
       addCk('ok','ti-check','CENPROT: sem protestos em cart\u00f3rio');
-      setTimeout(buildE3,400);
+      setTimeout(buildVM,400);
     } else {
       addCk('neg','ti-x','CENPROT: protesto identificado');
       re2.innerHTML='<div style="background:#ffebee;border:2px solid #c62828;border-radius:12px;padding:16px 18px;margin-bottom:12px;box-shadow:0 2px 8px rgba(198,40,40,0.12)">'
@@ -5573,7 +5575,7 @@ function renderModeloEmTeste(){
         this.disabled=true;
         this.innerHTML='<i class="ti ti-check"></i> Registrado por '+operador+' em '+dtStr;
         this.style.background='#15803d';
-        setTimeout(buildE3,400);
+        setTimeout(buildVM,400);
       };
 
       // Excecao 2 - valida campos e registra
@@ -5603,12 +5605,99 @@ function renderModeloEmTeste(){
         q('#m5dirData').disabled=true;
         this.innerHTML='<i class="ti ti-check"></i> Autoriza\u00e7\u00e3o de '+nomeDiretor+' registrada por '+operador;
         this.style.background='#1d4ed8';
-        setTimeout(buildE3,400);
+        setTimeout(buildVM,400);
       };
     }
   }
 
 
+
+  // ======= ETAPA 3: VERIFICACAO MANUAL (Google Maps, Google, Instagram) =======
+  function buildVM(){
+    // Reset dos valores ao (re)entrar
+    S.verifManual={maps:null,google:null,insta:null,googleSite:'',instaPerfil:''};
+    var endStr=[D.endereco,D.cidade,D.estado,D.cep].filter(Boolean).join(', ');
+    var nomeBusca=(D.fantasia||D.nome||'').trim();
+    var urlMaps='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(endStr||nomeBusca);
+    var urlGoogle='https://www.google.com/search?q='+encodeURIComponent('"'+nomeBusca+'"');
+    var urlInsta='https://www.google.com/search?q='+encodeURIComponent('"'+nomeBusca+'" site:instagram.com');
+
+    function vmRow(id,icon,titulo,url,temCampo,campoLabel,campoPh){
+      return '<div style="background:#ffffff;border:0.5px solid #cffafe;border-radius:10px;padding:12px 14px;margin-bottom:8px">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">'
+        +'<a href="'+url+'" target="_blank" rel="noopener" style="font-size:13px;color:#0e7490;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-weight:500">'
+        +'<i class="ti '+icon+'" style="font-size:16px"></i>'+titulo+' <i class="ti ti-external-link" style="font-size:12px;opacity:.6"></i></a>'
+        +'<div style="display:flex;gap:6px">'
+        +'<button type="button" id="vm-'+id+'-ok" data-vm="'+id+'" data-r="ok" style="background:#ffffff;color:#166534;border:0.5px solid #86efac;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-check" style="font-size:13px"></i> Confere</button>'
+        +'<button type="button" id="vm-'+id+'-no" data-vm="'+id+'" data-r="no" style="background:#ffffff;color:#991b1b;border:0.5px solid #fca5a5;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-x" style="font-size:13px"></i> N\u00e3o confere</button>'
+        +'</div></div>'
+        +(temCampo?'<div id="vm-'+id+'-fld" style="display:none;margin-top:10px;padding-top:10px;border-top:0.5px dashed #cffafe;align-items:center;gap:8px">'
+          +'<label style="font-size:11px;color:#64748b;min-width:130px;display:inline-block">'+campoLabel+':</label>'
+          +'<input type="text" id="vm-'+id+'-in" placeholder="'+campoPh+'" style="flex:1;min-width:200px;padding:6px 9px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;background:#fff;color:#1e293b;outline:none">'
+          +'</div>':'')
+        +'</div>';
+    }
+
+    q('#m5sVM').innerHTML=card('#0891b2',
+      sec(3,'#0891b2','Verifica\u00e7\u00e3o Manual')
+      +'<p style="font-size:12px;color:#475569;margin-bottom:12px;padding:8px 10px;background:#ecfeff;border-radius:6px;line-height:1.6">'
+      +'Confira nos links abaixo e marque o resultado. Nenhum item bloqueia a an\u00e1lise \u2014 tudo entra no parecer final como observa\u00e7\u00e3o.</p>'
+      +vmRow('maps','ti-map-pin','Ver endere\u00e7o no Google Maps',urlMaps,false)
+      +vmRow('google','ti-search','Empresa no Google',urlGoogle,true,'Site (opcional)','https://www.empresa.com.br')
+      +vmRow('insta','ti-brand-instagram','Empresa no Instagram',urlInsta,true,'Perfil (opcional)','@empresa   ou   instagram.com/empresa')
+      +'<div id="m5vmOk" style="display:none;margin-top:12px"></div>'
+      +'<div id="m5vmNav" style="display:none;margin-top:10px">'
+      +'<button id="m5btnVM" type="button" style="background:#0891b2;color:#fff;border:none;border-radius:6px;padding:9px 16px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-arrow-right"></i> Prosseguir para documentos</button>'
+      +'</div>'
+    );
+    show('m5sVM');
+
+    // Handlers dos botoes Confere / Nao confere
+    function marcar(item,resultado){
+      S.verifManual[item]=resultado;
+      var bOk=q('#vm-'+item+'-ok'), bNo=q('#vm-'+item+'-no');
+      if(resultado==='ok'){
+        bOk.style.background='#166534';bOk.style.color='#fff';bOk.style.borderColor='#166534';
+        bNo.style.background='#fff';bNo.style.color='#991b1b';bNo.style.borderColor='#fca5a5';
+      } else {
+        bNo.style.background='#991b1b';bNo.style.color='#fff';bNo.style.borderColor='#991b1b';
+        bOk.style.background='#fff';bOk.style.color='#166534';bOk.style.borderColor='#86efac';
+      }
+      // Mostrar/esconder campo de texto (apenas quando Confere e item tem campo)
+      var fld=q('#vm-'+item+'-fld');
+      if(fld){
+        if(resultado==='ok'){fld.style.display='flex';}else{fld.style.display='none';var inp=q('#vm-'+item+'-in');if(inp)inp.value='';}
+      }
+      atualizarBotaoProsseguir();
+    }
+    function atualizarBotaoProsseguir(){
+      var vm=S.verifManual;
+      var todosMarcados = vm.maps!==null && vm.google!==null && vm.insta!==null;
+      if(todosMarcados){
+        q('#m5vmOk').innerHTML=resBox('ok','Etapa 3 registrada','As marca\u00e7\u00f5es ser\u00e3o inclu\u00eddas no parecer final. Prossiga para os documentos.');
+        q('#m5vmOk').style.display='block';
+        q('#m5vmNav').style.display='block';
+      }
+    }
+    wrap.querySelectorAll('#m5sVM [data-vm]').forEach(function(btn){
+      btn.addEventListener('click',function(){marcar(this.getAttribute('data-vm'),this.getAttribute('data-r'));});
+    });
+    // Capturar valores dos campos opcionais ao digitar
+    var inpG=q('#vm-google-in');if(inpG)inpG.addEventListener('input',function(){S.verifManual.googleSite=this.value.trim();});
+    var inpI=q('#vm-insta-in');if(inpI)inpI.addEventListener('input',function(){S.verifManual.instaPerfil=this.value.trim();});
+    // Botao prosseguir -> registra checks e vai para documentos
+    q('#m5btnVM').onclick=function(){
+      var vm=S.verifManual;
+      // Registrar cada item no checklist como observacao informativa (tipo 'ok' para nao afetar veredito)
+      if(vm.maps==='ok') addCk('ok','ti-map-pin','Endere\u00e7o confere no Google Maps');
+      if(vm.maps==='no') addCk('ok','ti-map-pin','Endere\u00e7o n\u00e3o confere no Google Maps \u2014 sem fachada ou detalhes que indiquem a empresa no local (observa\u00e7\u00e3o)');
+      if(vm.google==='ok') addCk('ok','ti-search','Empresa possui presen\u00e7a no Google'+(vm.googleSite?' \u2014 site: '+vm.googleSite:''));
+      if(vm.google==='no') addCk('ok','ti-search','Empresa n\u00e3o possui site pr\u00f3prio identificado no Google (observa\u00e7\u00e3o)');
+      if(vm.insta==='ok') addCk('ok','ti-brand-instagram','Empresa possui perfil no Instagram'+(vm.instaPerfil?' \u2014 '+vm.instaPerfil:''));
+      if(vm.insta==='no') addCk('ok','ti-brand-instagram','Empresa n\u00e3o possui perfil no Instagram (observa\u00e7\u00e3o)');
+      buildE3();
+    };
+  }
 
   function buildE3(){
     S.simDoc={1:0,2:0,3:0};S.docsOk={1:false,2:false,3:false};S.endTerceiro=false;
@@ -5624,7 +5713,7 @@ function renderModeloEmTeste(){
         +'</div><div id="'+eid+'" style="display:none;margin-top:8px"></div></div>';
     }
     q('#m5s3').innerHTML=card('#6A1B9A',
-      sec(3,'#6A1B9A','Documentos Obrigat\u00f3rios \u2014 An\u00e1lise pela IA')
+      sec(4,'#6A1B9A','Documentos Obrigat\u00f3rios \u2014 An\u00e1lise pela IA')
       +'<p style="font-size:12px;color:#475569;margin-bottom:12px;padding:8px 10px;background:#f1f5f9;border-radius:6px;line-height:1.6">'
       +'<strong>Simulado:</strong> Contrato (1\u00ba=ok / 2\u00ba=CNPJ diverge / 3\u00ba=s\u00f3cio diverge) \u00b7 '
       +'Endere\u00e7o (1\u00ba=empresa / 2\u00ba=s\u00f3cio / 3\u00ba=terceiro / 4\u00ba=inv\u00e1lido / 5\u00ba=vencido) \u00b7 '
@@ -5857,7 +5946,7 @@ function upDoc(n,inp){
               _ei2.innerHTML+=('<div style="margin-top:10px;background:#fff;border:2px solid #f59e0b;border-radius:10px;padding:14px">')
                 +('<div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-info-circle"></i> Justificativa obrigat\u00f3ria</div>')
                 +('<p style="font-size:12px;color:#78350f;margin-bottom:10px;line-height:1.6">O comprovante est\u00e1 em nome de terceiro (\''+json.titular_encontrado+'\').<br>Informe abaixo o motivo pelo qual o endere\u00e7o n\u00e3o est\u00e1 em nome da empresa ou do s\u00f3cio.</p>')
-                +('<textarea id="m5justTerceiro" rows="3" placeholder="Ex: Im\u00f3vel alugado de familiar do s\u00f3cio. Contrato de loca\u00e7\u00e3o a ser enviado na Etapa 4." style="width:100%;border:1.5px solid #fbbf24;border-radius:8px;padding:9px 12px;font-size:13px;background:#fffbeb;color:#1e293b;outline:none;resize:vertical;box-sizing:border-box"></textarea>')
+                +('<textarea id="m5justTerceiro" rows="3" placeholder="Ex: Im\u00f3vel alugado de familiar do s\u00f3cio. Contrato de loca\u00e7\u00e3o a ser enviado na Etapa 5." style="width:100%;border:1.5px solid #fbbf24;border-radius:8px;padding:9px 12px;font-size:13px;background:#fffbeb;color:#1e293b;outline:none;resize:vertical;box-sizing:border-box"></textarea>')
                 +('<button id="m5btnJust" style="margin-top:10px;background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-check"></i> Confirmar justificativa</button><div style="font-size:11px;color:#92400e;margin-top:8px"><i class="ti ti-alert-triangle"></i> Essa justificativa ser\u00e1 inclu\u00edda no parecer final e no hist\u00f3rico.</div>')
                 +'</div>';
               S.justTerceiro='';
@@ -5907,7 +5996,7 @@ function upDoc(n,inp){
           cls='warn';ico='ti-alert-triangle';
           var _tDesc={conta_agua:'Conta de \u00e1gua',conta_energia:'Conta de energia el\u00e9trica',conta_telefone:'Conta de telefone',cartao_credito:'Cart\u00e3o de cr\u00e9dito',contrato_locacao:'Contrato de loca\u00e7\u00e3o'};
           var _tL=_tDesc[S_DOCS.comprovante.tipo]||S_DOCS.comprovante.tipo||'Comprovante';
-          ei.innerHTML=it('warn','ti-alert-triangle','<strong>'+lbl+':</strong> '+_tL+' v\u00e1lido e dentro do prazo, por\u00e9m em nome de terceiro ("'+json.titular_encontrado+'"). N\u00e3o consta como s\u00f3cio nem como empresa no cart\u00e3o CNPJ. Etapa 4 ser\u00e1 obrigat\u00f3ria.');
+          ei.innerHTML=it('warn','ti-alert-triangle','<strong>'+lbl+':</strong> '+_tL+' v\u00e1lido e dentro do prazo, por\u00e9m em nome de terceiro ("'+json.titular_encontrado+'"). N\u00e3o consta como s\u00f3cio nem como empresa no cart\u00e3o CNPJ. Etapa 5 ser\u00e1 obrigat\u00f3ria.');
         }
 
         // So marca como pronto depois que a IA terminou de analisar de fato este documento
@@ -6030,7 +6119,7 @@ function upDoc(n,inp){
         warnCruz=true;
         var _tipoDesc={conta_agua:'Conta de \u00e1gua',conta_energia:'Conta de energia el\u00e9trica',conta_telefone:'Conta de telefone',cartao_credito:'Cart\u00e3o de cr\u00e9dito',contrato_locacao:'Contrato de loca\u00e7\u00e3o'};
         var _tipoLabel=_tipoDesc[cp.tipo]||cp.tipo||'Comprovante';
-        divCruz.push({t:'warn',tx:_tipoLabel+' v\u00e1lido'+(cp.dentro_90_dias!==false?' e dentro do prazo':'')+', por\u00e9m em nome de terceiro ("'+cp.titular+'"). O titular n\u00e3o consta como s\u00f3cio nem como empresa no cart\u00e3o CNPJ. Etapa 4 (loca\u00e7\u00e3o) obrigat\u00f3ria.'});
+        divCruz.push({t:'warn',tx:_tipoLabel+' v\u00e1lido'+(cp.dentro_90_dias!==false?' e dentro do prazo':'')+', por\u00e9m em nome de terceiro ("'+cp.titular+'"). O titular n\u00e3o consta como s\u00f3cio nem como empresa no cart\u00e3o CNPJ. Etapa 5 (loca\u00e7\u00e3o) obrigat\u00f3ria.'});
       } else if(cp.tipo_doc==='invalido'){
         negCruz=true;
         divCruz.push({t:'neg',tx:'Tipo de documento inv\u00e1lido como comprovante de endere\u00e7o (tipo: '+cp.tipo+'). Aceitos: conta \u00e1gua, conta energia, conta telefone, cart\u00e3o de cr\u00e9dito (at\u00e9 90 dias) ou contrato de loca\u00e7\u00e3o.'});
@@ -6180,7 +6269,7 @@ function upDoc(n,inp){
       var _proxE=S.endTerceiro?buildE4:buildE5;
       var _op=STATE.usuarioLogado||'desconhecido';
       re3.innerHTML=htmlCruz
-        +resBox('warn','Etapa 3 \u2014 pontos de aten\u00e7\u00e3o identificados','Verifique os pontos acima e justifique antes de prosseguir.')
+        +resBox('warn','Etapa 4 \u2014 pontos de aten\u00e7\u00e3o identificados','Verifique os pontos acima e justifique antes de prosseguir.')
         +'<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;padding:16px;margin-bottom:12px">'
         +'<div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-edit"></i> Justificativa obrigat\u00f3ria \u2014 Responsabilidade do colaborador</div>'
         +'<p style="font-size:12px;color:#78350f;margin-bottom:10px;line-height:1.6">Foram identificados pontos de aten\u00e7\u00e3o nos documentos. Explique abaixo a situa\u00e7\u00e3o e o que o cliente apresentou como justificativa para cada ponto. <strong>As informa\u00e7\u00f5es inseridas aqui s\u00e3o de responsabilidade exclusiva do colaborador logado ('+_op+').</strong></p>'
@@ -6208,7 +6297,7 @@ function upDoc(n,inp){
         };
       },200);
     } else {
-      re3.innerHTML=htmlCruz+resBox('ok','Etapa 3 aprovada','Todos os documentos conferem com o Cart\u00e3o CNPJ / Receita Federal.');
+      re3.innerHTML=htmlCruz+resBox('ok','Etapa 4 aprovada','Todos os documentos conferem com o Cart\u00e3o CNPJ / Receita Federal.');
       setTimeout(buildE5,400);
     }
   }
@@ -6255,7 +6344,7 @@ function upDoc(n,inp){
       :'';
 
     q('#m5s4').innerHTML=card('#E65100',
-      sec(4,'#E65100','Verifica\u00e7\u00e3o de Endere\u00e7o')
+      sec(5,'#E65100','Verifica\u00e7\u00e3o de Endere\u00e7o')
       +avisoEnd
       +blocoA
       +'<div style="font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Bloco B \u2014 Google Maps</div>'
@@ -6400,7 +6489,7 @@ function upDoc(n,inp){
 
   function buildE5(){
     q('#m5s5').innerHTML=card('#1B5E20',
-      sec(5,'#1B5E20','Refer\u00eancias Comerciais \u2014 Hist\u00f3rico de Pagamento')
+      sec(6,'#1B5E20','Refer\u00eancias Comerciais \u2014 Hist\u00f3rico de Pagamento')
       +'<p style="font-size:13px;color:#475569;margin-bottom:14px">M\u00ednimo 3 refer\u00eancias \u00b7 at\u00e9 8 \u00b7 Preencha os dados de cada fornecedor</p>'
       +'<div style="background:#fff;border:1.5px solid #1B5E20;border-radius:10px;padding:12px 14px;margin-bottom:14px">'
       +'<label style="font-size:11px;font-weight:700;color:#1B5E20;text-transform:uppercase;display:block;margin-bottom:6px">Valor do Or\u00e7amento (compra pretendida)</label>'
@@ -6619,6 +6708,7 @@ function upDoc(n,inp){
     +'</div>'
     +'<div id="m5s1" style="display:none"></div>'
     +'<div id="m5s2" style="display:none"></div>'
+    +'<div id="m5sVM" style="display:none"></div>'
     +'<div id="m5s3" style="display:none"></div>'
     +'<div id="m5s4" style="display:none"></div>'
     +'<div id="m5s5" style="display:none"></div>'
@@ -6964,7 +7054,7 @@ function renderAprovacoes(){
 
 
 
-// Coleta os dados de referencias comerciais preenchidos na Etapa 5 do mod5
+// Coleta os dados de referencias comerciais preenchidos na Etapa 6 do mod5
 function coletarReferenciasM5(){
   var arr=[];
   for(var i=0;i<8;i++){
