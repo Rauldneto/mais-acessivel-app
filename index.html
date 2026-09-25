@@ -5616,9 +5616,10 @@ function renderModeloEmTeste(){
   function buildVM(){
     // Reset dos valores ao (re)entrar
     S.verifManual={maps:null,google:null,insta:null,googleSite:'',instaPerfil:''};
-    var endStr=[D.endereco,D.cidade,D.estado,D.cep].filter(Boolean).join(', ');
     var nomeBusca=(D.fantasia||D.nome||'').trim();
-    var urlMaps='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(endStr||nomeBusca);
+    // Google Maps: busca por "nome fantasia + cidade" (fallback: razao social + cidade)
+    var buscaMaps=(nomeBusca+(D.cidade?' '+D.cidade:'')).trim();
+    var urlMaps='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(buscaMaps||nomeBusca);
     var urlGoogle='https://www.google.com/search?q='+encodeURIComponent('"'+nomeBusca+'"');
     var urlInsta='https://www.google.com/search?q='+encodeURIComponent('"'+nomeBusca+'" site:instagram.com');
 
