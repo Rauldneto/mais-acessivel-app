@@ -948,7 +948,7 @@ function renderAdmin(){
   var divAbas=document.createElement('div');
   divAbas.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap';
   divAbas.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso &agrave;s abas:</span>';
-  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
+  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod8',label:'Produtos'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
     var lbl=document.createElement('label');
     lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
     var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=false;
@@ -1041,7 +1041,7 @@ function renderAdmin(){
     selRole.value=u.role||'user';
 
     // Marcar checkboxes de abas com os dados do usuario
-    var abasAtivas=u.abas||['mod1','mod2','mod7','mod3','mod4','mod5'];
+    var abasAtivas=u.abas||['mod1','mod2','mod7','mod8','mod3','mod4','mod5'];
     divAbas.querySelectorAll('input[name=abaAcesso]').forEach(function(cb){
       cb.checked=abasAtivas.indexOf(cb.value)>-1;
     });
@@ -1114,7 +1114,7 @@ function renderAdmin(){
     }
     var id='u_'+Date.now();
     var abasSel=[];if(typeof divAbas!=='undefined'){divAbas.querySelectorAll('input[name=abaAcesso]:checked').forEach(function(cb){abasSel.push(cb.value);});}
-    await fbSaveUser(id,{nome:n,usuario:u,senha:hashSimple(s),role:selRole.value,ativo:true,abas:abasSel.length>0?abasSel:['mod1','mod2','mod7','mod3','mod4']});
+    await fbSaveUser(id,{nome:n,usuario:u,senha:hashSimple(s),role:selRole.value,ativo:true,abas:abasSel.length>0?abasSel:['mod1','mod2','mod7','mod8','mod3','mod4']});
     msgU.style.color='green';msgU.textContent='✅ Usuário '+n+' criado!';
     iNome.value='';iUser.value='';iSenha.value='';
     loadUsers();
@@ -2763,12 +2763,13 @@ function renderModuloNav(){
     {id:'frete', icon:'🚛', label:'Frete'},
     {id:'mod2',  icon:'📁', label:'Análise de Crédito'},
     {id:'mod7',  icon:'📐', label:'Norma NBR 9050'},
+    {id:'mod8',  icon:'📦', label:'Produtos'},
     {id:'mod3', icon:'🤖', label:'Ace IA'},
     {id:'mod4',  icon:'🧾', label:'Cotação avulsa'},
     {id:'mod5',  icon:'🧪', label:'Modelo em Teste'}
   ];
   // Mapeamento id antigo -> novo
-  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7'};
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8'};
   // Admin ve tudo; outros so veem abas permitidas
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
@@ -2793,6 +2794,7 @@ function renderModuloNav(){
       STATE.modulo=m.id;
       if(m.id==='frete') STATE.tab='cotacao';
       else if(m.id==='mod2') STATE.tabCredito='analise';
+      else if(m.id==='mod8') STATE.tabProdutos='pesquisa';
       else STATE.tab=m.id;
       render();
     };
@@ -2851,6 +2853,501 @@ function renderCotacaoAvulsa(){
   wrap.appendChild(contentArea);
   return wrap;
 }
+
+// ===== ABA PRODUTOS (sub-aba Pesquisa de produtos) =====
+// Produtos e estoque: retrato do Bling em 01/10/2026 (sincronizacao automatica com o Bling entra na proxima etapa).
+// Caracteristicas, fotos, links, vinculos e configuracoes editados aqui ficam salvos no Firebase em /produtos.
+var PP_BLING_DATA='01/10/2026';
+var PP_B='https://dcdn.mitiendanube.com/stores/001/064/628/products/',PP_U='https://dcdn-us.mitiendanube.com/stores/001/064/628/products/',PP_ML='https://http2.mlstatic.com/D_NQ_NP_',PP_AS='https://astrasa.vteximg.com.br/arquivos/ids/';
+var PP_TR_BASE=[
+["1194","TORNEIRA AUTOMATICA BANCADA LAV. METALFLEX",0,"https://cdn.leroymerlin.com.br/products/torneira_de_banheiro_lavatorio_oliveira_1194_automatica_com_t_1566855660_40ae_600x600.jpg","Metalflex","D","","","Automática (pressão)","Mesa","Padrão","","Lavatório",[]],
+["2193-1","TORNEIRA AUTOMÁTICA BICA MOVEL FAUZI",27,PP_U+"2193-medidas1-205f1570226559ac4c16915005086066-1024-1024.webp","Fauzi","S","","Automática","Automática (pressão)","Mesa","Móvel","","Lavatório",[]],
+["13004","TORNEIRA AUTOMATICA MESA ALAVANCA FAUZI",41,PP_B+"1300-4-pne-fauzimetais1-e3151702ae617621af16922040223714-1024-1024.webp","Fauzi","S","","Automática","Alavanca (clínica)","Mesa","Padrão","","Lavatório",["Modelo PCD"]],
+["13003","TORNEIRA AUTOMATICA MESA AREJADOR ANTI-VANDALISMO FAUZI",11,PP_B+"1300-3-botao-de-metal-fauzimetais1-eedbf96fcbd10df8c516922038207301-1024-1024.webp","Fauzi","S","","Automática","Automática (pressão)","Mesa","Padrão","","Lavatório",["Arejador","Antivandalismo"]],
+["1100-4","TORNEIRA AUTOMATICA MESA ALAVANCA JUNIOR FAUZI",38,PP_ML+"2X_850718-MLA105760343865_012026-F.webp","Fauzi","S","","Automática","Alavanca (clínica)","Mesa","Padrão","","Lavatório",["Modelo PCD"]],
+["11003","TORNEIRA AUTOMATICA MESA FAUZI",19,PP_B+"ml-automatica-4943b632334fec71bd17116553694754-1024-1024.webp","Fauzi","S","","Automática","Automática (pressão)","Mesa","Padrão","","Lavatório",[]],
+["9999","TORNEIRA AUTOMATICA MESA INCLINADA 1/2 IMPERATRIZ",0,"https://www.metaisimperatriz.com.br/_next/image/?url=https%3A%2F%2Fpainel-imperatriz.codiehost.com.br%2Fuploads%2F133410691118098626.png&w=1920&q=75","Imperatriz","D","","","Automática (pressão)","Mesa","Inclinada","","Lavatório",[]],
+["1800-1","TORNEIRA AUTOMATICA MESA INCLINADA AREJADOR ANTIFURTO FAUZI",20,PP_B+"1800-1-7753daecb40f10120a17115681501724-1024-1024.webp","Fauzi","S","","Automática","Automática (pressão)","Mesa","Inclinada","","Lavatório",["Arejador","Antivandalismo"]],
+["1200","TORNEIRA AUTOMATICA MESA LX AREJADOR EMBUTIDO FAUZI",0,PP_B+"1200-fauzi1-764d1e2db719e9c3fd16922040056072-1024-1024.webp","Fauzi","S","","Automática","Automática (pressão)","Mesa","Padrão","","Lavatório",["Arejador"]],
+["2170","TORNEIRA AUTOMATICA PAREDE FAUZI",10,PP_B+"2170-fauzi1-08ed50e530fdd517af16922051970879-480-0.webp","Fauzi","S","","Automática","Automática (pressão)","Parede","Padrão","","Lavatório",[]],
+["184491193","TORNEIRA BANC LAV/ AUT. METALFLEX",0,PP_ML+"2X_612019-MLU73468119802_122023-F.webp","Metalflex","D","","","Automática (pressão)","Mesa","Padrão","","Lavatório",[]],
+["19605","TORNEIRA BANCADA BICA ALTA AUTOMATICA 22CM METALFLEX",1,PP_ML+"764493-MLB46221412770_052021-O.webp","Metalflex","D","","","Automática (pressão)","Mesa","Alta","22 cm","Lavatório",[]],
+["196055","TORNEIRA BANCADA BICA ALTA AUTOMATICA 27CM METALFLEX",0,PP_ML+"764493-MLB46221412770_052021-O.webp","Metalflex","D","","","Automática (pressão)","Mesa","Alta","27 cm","Lavatório",[]],
+["16405","TORNEIRA BANCADA LAVATÓRIO ALTA AUTOMATICA METALFLEX",1,"https://i.postimg.cc/YC4CQnGL/Whats-App-Image-2025-04-11-at-12-16-25-1.jpg","Metalflex","D","","","Automática (pressão)","Mesa","Alta","","Lavatório",[]],
+["19385","TORNEIRA BANCADA SOFT COZINHA 1/4 METALFLEX",49,PP_ML+"2X_735402-MLA84836549485_052025-F.webp","Metalflex","D","","","Volante","Mesa","Padrão","","Cozinha",[]],
+["20178","TORNEIRA BANCADA SOFT COZINHA AREJ ART 1/4 METALFLEX",26,"https://i.postimg.cc/9Fws71TS/Whats-App-Image-2026-01-22-at-17-28-55.jpg","Metalflex","D","","","Volante","Mesa","Padrão","","Cozinha",["Arejador"]],
+["652806","TORNEIRA BANHEIRO LOGGICA MATIC - DOCOL",0,"https://copalux.cdn.magazord.com.br/img/2024/07/produto/10041/torneira-com-fechamento-automatico-docol-loggica-matic-652806-de-bancada-cromada-01.png?ims=800x800","Docol","D","","","Automática (pressão)","Mesa","Padrão","","Lavatório",[]],
+["12032","TORNEIRA CLINICA ALAVANCA DE PAREDE 22 CM LOREN",3,PP_ML+"613212-MLB77576278326_072024-O.webp","Loren","D","","Clínica","Alavanca (clínica)","Parede","Padrão","22 cm","Clínico",[]],
+["1825","TORNEIRA CLINICA MESA BICA ALTA C/ AREJADOR ARTIC FAUZI",30,PP_B+"1825-31f0e43e0ad1f14dfd17114503331899-1024-1024.webp","Fauzi","S","","Clínica","Alavanca (clínica)","Mesa","Alta","","Clínico",["Arejador"]],
+["18500","TORNEIRA CLINICA MESA BICA ALTA FIXA - LINHA PRATICA 21CM FAUZI",2,PP_B+"1850-031-4ef99211528518d38816932512098372-480-0.webp","Fauzi","S","","Clínica","Alavanca (clínica)","Mesa","Alta","21 cm","Clínico",[]],
+["18501","TORNEIRA CLINICA MESA BICA ALTA FIXA - LINHA PRATICA 24CM FAUZI",8,PP_B+"1850-121-25127284499c8cf49a16932512152902-480-0.webp","Fauzi","S","","Clínica","Alavanca (clínica)","Mesa","Alta","24 cm","Clínico",[]],
+["1856","TORNEIRA CLINICA MESA BICA BAIXA JUNIOR FAUZI",27,PP_B+"18561-ac46d5b0c44cda704b16932348920288-1024-1024.webp","Fauzi","S","","Clínica","Alavanca (clínica)","Mesa","Baixa","","Clínico",[]],
+["18101","TORNEIRA CLINICA MESA BICA MOVEL FAUZI",7,PP_B+"1810-121-9202888ac37b67417416932429164963-480-0.webp","Fauzi","S","","Clínica","Alavanca (clínica)","Mesa","Móvel","","Clínico",[]],
+["1839JR-ESP","TORNEIRA CLINICA PAREDE BICA ALTA COZ ALAVANCA P FAUZI",4,PP_U+"1839jr-esp-9a00a1077d582f447d17114506627289-1024-1024.webp","Fauzi","S","","Clínica","Alavanca (clínica)","Parede","Alta","","Cozinha",[]],
+["73284","TORNEIRA COZINHA GIRA PAREDE 1/2 3/4 C29 1168 BOGNAR",0,"https://tezbgl.vtexassets.com/arquivos/ids/163257-1200-auto?v=637661841483070000&width=1200&height=auto&aspect=true","Bognar","D","","","Volante","Parede","Móvel","","Cozinha",[]],
+["11670","TORNEIRA COZINHA MESA C/ BICA METAL 5/8 C23 1/4 VOLTA",0,PP_B+"1167-c231-fe293dd9d9afa97dba16865984558642-1024-1024.webp","Fauzi","S","","Uso geral","Volante","Mesa","Padrão","","Cozinha",[]],
+["490706","TORNEIRA DE MESA P/ LAV. PRESSMATIC BENEFIT - DOCOL",7,PP_ML+"2X_901054-MLU79363675153_092024-F.webp","Docol","D","","","Automática (pressão)","Mesa","Padrão","","Lavatório",[]],
+["17160606","TORNEIRA DE MESA P/ LAV. PRESSMATIC COMPACT - DOCOL",33,"https://docolinstitucional.vtexassets.com/arquivos/ids/158391-1200-1200?v=638785097203400000&width=1200&height=1200&aspect=true","Docol","D","","","Automática (pressão)","Mesa","Padrão","","Lavatório",[]],
+["185784040","TORNEIRA FIT BANC LAV/COZ METALFLEX",0,PP_ML+"2X_821527-MLU76116127260_052024-F.webp","Metalflex","D","","","","Mesa","Padrão","","Lavatório",[]],
+["22634020","TORNEIRA FIT PAREDE LAV/COZ METALFLEX",0,PP_ML+"2X_986865-MLA84538064780_052025-F.webp","Metalflex","D","","","","Parede","Padrão","","Lavatório",[]],
+["65234","TORNEIRA JARDIM METAL 1130 PRIMOR DOCOL",0,"https://condorbrasil.com.br//media/catalog/product/6/5/65234_4.png?optimize=high&bg-color=255,255,255&fit=bounds&height=485&width=485&canvas=485:485","Docol","D","","","Volante","Parede","Padrão","","Tanque e jardim",[]],
+["72688","TORNEIRA JARDIM/ TANQUE 1130 1/2 3/4 CR C31 CROMADA BOGNAR",9,"https://dauge.com.br/wp-content/uploads/2023/12/img_512277_1.webp","Bognar","D","","","Volante","Parede","Padrão","","Tanque e jardim",[]],
+["11300","TORNEIRA JARDIM/ TANQUE CROMADA C23 1/4 VOLTA FAUZI",0,PP_B+"1130-c231-55e215905bfbab362716865832834728-1024-1024.webp","Fauzi","S","","Uso geral","Volante","Parede","Padrão","","Tanque e jardim",[]],
+["3120","TORNEIRA LAVATORIO CONNECT MESA 13CM FAUZI",4,PP_B+"3120-ddec8faba3108db39017114548884945-480-0.webp","Fauzi","S","","Connect","","Mesa","Baixa","13 cm","Lavatório",[]],
+["3140-1","TORNEIRA LAVATORIO CONNECT MESA 25CM FAUZI",0,PP_B+"3140-6a856c0de61173904b17114549874415-480-0.webp","Fauzi","N","3125.CR","Connect","","Mesa","Alta","25 cm","Lavatório",[]],
+["3155.CR","TORNEIRA LAVATORIO CONNECT MESA 35CM FAUZI",9,PP_B+"31601-15e050f4622a963f4216886638044397-1024-1024.webp","Fauzi","S","","Connect","","Mesa","Alta","35 cm","Lavatório",[]],
+["3130-2","TORNEIRA LAVATORIO CONNECT PARADE 22CM",6,PP_B+"c3-20-b66e3de859edb6635e17114554368513-480-0.webp","Fauzi","N","3130","Connect","","Parede","Padrão","22 cm","Lavatório",[]],
+["11930","TORNEIRA LAVATÓRIO MESA C23 1/4 VOLTA",0,PP_B+"1193-23-b8c53f75e31a0f903016866658860670-1024-1024.webp","Fauzi","S","","Uso geral","Volante","Mesa","Padrão","","Lavatório",[]],
+["1872","TORNEIRA METAL PIA GIRA PAREDE 1/4V PRIMOR",0,"https://i.postimg.cc/k5vRtc6R/Whats-App-Image-2026-08-11-at-14-17-13.jpg","Primor","D","","","Volante","Parede","Móvel","","Cozinha",[]],
+["16239","TORNEIRA P/ LAVA. C23",0,"https://down-br.img.susercontent.com/file/a7108b791a9f7abf3801602938226423","","D","","","Volante","","Padrão","","Lavatório",[]],
+["19386","TORNEIRA PAREDE COZINHA 1/4 SOFT METALFLEX",0,PP_ML+"2X_844928-MLA93504084381_092025-F.webp","Metalflex","D","","","Volante","Parede","Padrão","","Cozinha",[]],
+["16027","TORNEIRA TANQUE/MAQUINA METALFLEX",0,PP_ML+"2X_691991-MLB49078751687_022022-F.webp","Metalflex","D","","","Volante","Parede","Padrão","","Tanque e jardim",[]]
+];
+var PP_AA_BASE=[
+["62749","ASSENTO ALMOFADADO OVAL CINZA CLARO HERC",0,"https://condorbrasil.com.br//media/catalog/product/6/2/62749_4_5.png?optimize=high&bg-color=255,255,255&fit=bounds&height=485&width=485&canvas=485:485","Herc","D","","Oval","Almofadado","Comum","Cinza","","",[]],
+["TLU/K*BR-00","ASSENTO ASTRA LUNA SPECIALE ALMOFADADO",21,"https://www.cache2net4.com//Repositorio/5721/Produtos/252478/Fotos/assento%20almof.webp?=2068634-4","Astra","S","","Modelo específico","Almofadado","Comum","Branco","","Luna Speciale",[]],
+["TTP/SC*NV-89","ASSENTO ETNA / SABATINI / VOGUE PLUS - SOFT CLOSE + PP BRANCO ASTRA",8,PP_AS+"311504-1000-1000/TTP-SC_Assento%20Sanitario%20com%20Fechamento%20Suave%20Paris_Sabatini_1.jpg","Astra","S","","Modelo específico","PP","Soft close","Branco","","Etna, Sabatini, Vogue Plus",[]],
+["TTP/K*NV-89","ASSENTO ETNA/SABATINI ALMOFADADO BRANCO ASTRA",22,"https://images.tcdn.com.br/img/img_prod/1038143/180_assento_sanitario_almofadado_retangular_branco_astra_ttp_k_443_1_35477350b6005390aaac1a8e22284271.png","Astra","S","","Modelo específico","Almofadado","Comum","Branco","","Etna, Sabatini",[]],
+["5709","ASSENTO ICASA LUNA SPECIALE BRANCO - TUPAN",3,"https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcS9fHKXKizpcCAGSWPTYN76Rl_ETZyLZeXf02_u2kCKP_lXZHP0uvqal_0Lw0v9kTVQ9Oz69gmfI9O3ZF0NrsefaAFR5et_MyUM7TPlgEJsbEbX8S4FXL-fZqkqUavLkuYU9j1HWrsZSg&usqp=CAc","Tupan","D","","Modelo específico","","Comum","Branco","","Luna Speciale",[]],
+["1000543","ASSENTO ICASA LUNA SPECIALE BRANCO S. CLOSE - TUPAN",3,PP_ML+"2X_816626-MLB68895462329_042023-F.webp","Tupan","D","","Modelo específico","","Soft close","Branco","","Luna Speciale",[]],
+["2572","ASSENTO LUNA MEDIC MADEIRA LUXO ASTRA",0,PP_AS+"304769-1000-1000/TLMMAP-BR00_1.jpg","Astra","S","","Modelo específico","Madeira","Comum","Branco","","Luna Medic",[]],
+["368","ASSENTO LUNA SPECIALE MADEIRA LUXO ASTRA",0,PP_AS+"304902-1000-1000/TLUMAP-BR00_1.jpg","Astra","S","","Modelo específico","Madeira","Comum","Branco","","Luna Speciale",[]],
+["ASTMTPP12SC","ASSENTO MISTI PP PRETO SOFT CLOSE",0,"https://tupan.ind.br/wp-content/uploads/2022/09/7896601011407A.jpg","","D","","Modelo específico","PP","Soft close","Preto","","Misti",[]],
+["66259","ASSENTO PLAST ALMOFADADO QUAD BR THEMA HERC",0,"https://condorbrasil.agilecdn.com.br/66259.jpg?v=694-3495366616","Herc","D","","Quadrado","Almofadado","Comum","Branco","","Thema",[]],
+["65006","ASSENTO PLAST OVAL BR PNE ASTRA",0,"https://magazineequipamentos.com/wp-content/uploads/2026/07/65006_4-1024x678.png","Astra","S","","Oval","Plástico","Comum","Branco","","",["Modelo PCD"]],
+["652400","ASSENTO SANITARIO CALYPSO PP ASTRA",0,"https://lojakaster.cdn.magazord.com.br/img/2024/03/produto/16624/png-1200-6.png?ims=600x600","Astra","S","","Modelo específico","PP","Comum","Branco","","Calypso",[]],
+["TAE7T/K*BR1","ASSENTO SANITÁRIO OVAL ELEVADO C ABERTURA/ALMOFADADO 11CM ASTRA",4,PP_AS+"254584-1000-1000/TAE7K-BR1_2.jpg","Astra","S","","Oval","Almofadado","Comum","Branco","11 cm","",["Modelo PCD","Abertura frontal"]],
+["TAE13T/T*BR1","ASSENTO SANITÁRIO OVAL ELEVADO C ABERTURA/TAMPA 13CM ASTRA",0,"https://m.media-amazon.com/images/I/31zsJcR8-kL._AC_SL1000_.jpg","Astra","S","","Oval","Plástico","Comum","Branco","13 cm","",["Modelo PCD","Abertura frontal"]],
+["TAE7T/T*BR1","ASSENTO SANITÁRIO OVAL ELEVADO C ABERTURA/TAMPA 7,5CM ASTRA",11,PP_AS+"309317-1000-1000/TAE7TrT-BR1_D1.jpg.jpg","Astra","S","","Oval","Plástico","Comum","Branco","7,5 cm","",["Modelo PCD","Abertura frontal"]],
+["TAE7FT/T*BR1","ASSENTO SANITÁRIO OVAL ELEVADO FECHADO/TAMPA 7,5CM ASTRA",3,PP_AS+"196991-1000-1000/TAE7FTrT-BR1_2.jpg","Astra","S","","Oval","Plástico","Comum","Branco","7,5 cm","",["Modelo PCD"]],
+["TAJ/AS*CM1","ASSENTO UNIV. OVAL ALMOFADADO CARAMELO 1 ASTRA",0,PP_AS+"312672-1000-1000/TAJAS_CM1_1.jpg","Astra","S","","Oval universal","Almofadado","Comum","Caramelo","","",[]],
+["TAJ/AS*CZ2","ASSENTO UNIV. OVAL ALMOFADADO SLIM CINZA 2 ASTRA",0,PP_AS+"311737-1000-1000/TAJAS_CZ2_1.jpg","Astra","S","","Oval universal","Almofadado","Comum","Cinza","","",[]],
+["TAJ/AS*BR1","ASSENTO UNIV. OVAL ALMOFADADO SLIM SABARA BRANCO ASTRA",34,PP_AS+"311369-1000-1000/TAJAS.jpg","Astra","S","","Oval universal","Almofadado","Comum","Branco","","",[]],
+["TPJ/AS*BR1","ASSENTO UNIV. OVAL ANATOMICO BRANCO ASTRA",23,"https://m.media-amazon.com/images/I/41PBIhojWCL._AC_SY300_SX300_QL70_ML2_.jpg","Astra","S","","Oval universal","Plástico","Comum","Branco","","",[]],
+["TPJ/AS*CM1","ASSENTO UNIV. OVAL ANATOMICO CARAMELO 1 ASTRA",0,PP_AS+"241596-1000-1000/TPJAS-CM1_1.jpg","Astra","S","","Oval universal","Plástico","Comum","Caramelo","","",[]],
+["TPJ/AS*CZ2","ASSENTO UNIV. OVAL ANATOMICO CINZA 2 ASTRA",0,PP_AS+"241623-1000-1000/TPJAS-CZ2_1.jpg","Astra","S","","Oval universal","Plástico","Comum","Cinza","","",[]],
+["TOV/SCK*BR1","ASSENTO UNIV. OVAL SOFT CLOSE + ALMOFADADO BRANCO ASTRA",20,"https://m.media-amazon.com/images/I/41PBIhojWCL._AC_SY300_SX300_QL70_ML2_.jpg","Astra","S","","Oval universal","Almofadado","Soft close","Branco","","",[]],
+["TOV2/SC*BR1","ASSENTO UNIV. OVAL SOFT CLOSE + PP BRANCO ASTRA",11,PP_AS+"288396-600-600/TOV2SC-BR1_1.jpg","Astra","S","","Oval universal","PP","Soft close","Branco","","",[]],
+["TVG/K*GE-17","ASSENTO VOGUE PLUS DECA/ ETNA BRANCO ASTRA",12,PP_ML+"2X_945541-MLB82766566816_032025-F.webp","Astra","N","TVG/K-GE17","Modelo específico","","Comum","Branco","","Vogue Plus, Etna",[]]
+];
+var PP_BASEOPT={bica:["Alta","Baixa","Móvel","Inclinada","Padrão"],inst:["Mesa","Parede"],acion:["Alavanca (clínica)","Automática (pressão)","Volante"],amb:["Clínico","Cozinha","Lavatório","Tanque e jardim"],fech:["Comum","Soft close"],material:["Almofadado","Madeira","Plástico","PP"],formato:["Oval","Oval universal","Quadrado","Modelo específico"]};
+var PP_CAT={
+  t:{nome:'torneira',tit:'Torneiras',icon:'🚰',F:[['bica','Tipo de bica'],['acion','Acionamento'],['inst','Instalação'],['linha','Linha'],['amb','Ambiente'],['alt','Altura da bica'],['marca','Marca'],['rec','Recursos']],req:[['marca','Marca'],['acion','Acionamento'],['inst','Instalação'],['bica','Tipo de bica'],['amb','Ambiente']],RC:['Arejador','Antivandalismo','Modelo PCD']},
+  a:{nome:'assento',tit:'Assentos sanitários',icon:'🚽',F:[['formato','Formato'],['material','Material'],['fech','Fechamento'],['cor','Cor'],['compat','Compatível com'],['alt','Altura elevada'],['marca','Marca'],['rec','Recursos']],req:[['marca','Marca'],['formato','Formato'],['material','Material'],['fech','Fechamento'],['cor','Cor']],RC:['Modelo PCD','Abertura frontal']}
+};
+var PP={T:'t',est:false,soP:false,openP:false,S:{},fresh:{},ST:{},q:'',ord:'c',L:{t:[],a:[]},cfg:{t:{Fauzi:{m:'site',u:'https://www.fauzimetais.com.br'}},a:{Astra:{m:'site',u:'https://www.astrasa.com.br'}}},cust:{t:{},a:{}},edits:{t:{},a:{}},carregado:false,carregando:false,erro:'',aviso:null,root:null};
+
+function ppEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function ppKey(c){return String(c).replace(/[^A-Za-z0-9-]/g,function(ch){return '_'+ch.charCodeAt(0).toString(16)+'_';});}
+function ppOkUrl(u){return /^https?:\/\/\S+\.\S+/i.test(u||'');}
+function ppMontaBase(){
+  PP.L.t=PP_TR_BASE.map(function(a){return {c:a[0],n:a[1],e:a[2],img:a[3],marca:a[4],src:a[5],sug:a[6],linha:a[7],acion:a[8],inst:a[9],bica:a[10],alt:a[11],amb:a[12],rec:a[13].slice(),x:{},imgApp:'',link:'',man:false};});
+  PP.L.a=PP_AA_BASE.map(function(a){return {c:a[0],n:a[1],e:a[2],img:a[3],marca:a[4],src:a[5],sug:a[6],formato:a[7],material:a[8],fech:a[9],cor:a[10],alt:a[11],compat:a[12],rec:a[13].slice(),x:{},imgApp:'',link:'',man:false};});
+}
+function ppAplicaEdicoes(){
+  ['t','a'].forEach(function(T){
+    var ed=PP.edits[T]||{};
+    PP.L[T].forEach(function(p){
+      var e=ed[ppKey(p.c)];if(!e)return;
+      PP_CAT[T].F.forEach(function(f){if(f[0]!=='rec'&&e[f[0]]!==undefined)p[f[0]]=e[f[0]];});
+      if(Array.isArray(e.rec))p.rec=e.rec.slice();
+      p.x=e.x&&typeof e.x==='object'?Object.assign({},e.x):{};
+      p.imgApp=e.imgApp||'';p.link=e.link||'';
+      if(e.vinc){p.src='S';p.vinc=e.vinc;}
+      p.man=!!e.man;
+    });
+  });
+}
+function ppCarregar(){
+  if(PP.carregando)return;
+  PP.carregando=true;PP.erro='';
+  fetch(FIREBASE_DB+'/produtos.json').then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(function(d){
+    d=d||{};
+    ppMontaBase();
+    if(d.config){['t','a'].forEach(function(T){if(d.config[T])PP.cfg[T]=d.config[T];});}
+    if(d.custom){['t','a'].forEach(function(T){if(d.custom[T])PP.cust[T]=d.custom[T];});}
+    PP.edits={t:(d.edicoes&&d.edicoes.t)||{},a:(d.edicoes&&d.edicoes.a)||{}};
+    ppAplicaEdicoes();
+    PP.carregado=true;
+  }).catch(function(e){
+    if(!PP.carregado)ppMontaBase();
+    PP.carregado=true;
+    PP.erro='Não foi possível carregar as edições salvas no servidor ('+(e&&e.message||e)+'). Você está vendo os dados do Bling sem as características editadas. Clique em Recarregar para tentar de novo.';
+  }).then(function(){PP.carregando=false;ppDraw();});
+}
+function ppSalvar(path,data){
+  return fetch(FIREBASE_DB+'/produtos/'+path+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return true;});
+}
+function ppErroSalvar(e){
+  PP.erro='Não foi possível salvar no servidor ('+(e&&e.message||e)+'). A alteração aparece na tela, mas não foi gravada. Verifique a internet e salve de novo.';
+  ppDraw();
+}
+
+function ppCss(){
+  if(document.getElementById('ppCss'))return;
+  var st=document.createElement('style');st.id='ppCss';
+  st.textContent=
+  '.pp-wrap{padding:16px 18px 50px;max-width:1280px;margin:0 auto}'+
+  '.pp-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}'+
+  '.pp-cats{display:flex;gap:6px}'+
+  '.pp-cat{font:inherit;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;border:1.5px solid #e5e5e5;background:#fff;color:#555;cursor:pointer}'+
+  '.pp-cat.on{border-color:#d97706;background:#fff8eb;color:#b45309}'+
+  '.pp-cat .n{font-weight:400;color:#999;margin-left:4px}'+
+  '.pp-stat{font-size:11px;color:#777;display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-left:auto}'+
+  '.pp-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;background:#f3f3f1;border:1px solid #e8e8e6}'+
+  '.pp-btn{font:inherit;font-size:12px;cursor:pointer;border-radius:6px;border:1px solid #ddd;background:#fff;color:#333;padding:6px 11px;white-space:nowrap}'+
+  '.pp-btn:hover{border-color:#d97706}.pp-btn:focus-visible,.pp-cat:focus-visible{outline:2px solid #d97706;outline-offset:1px}'+
+  '.pp-pri{background:#d97706;border-color:#d97706;color:#fff;font-weight:700}.pp-pri:hover{background:#b45309}'+
+  '.pp-bar{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}'+
+  '.pp-bar input,.pp-bar select{padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;background:#fff}'+
+  '.pp-bar input{flex:1;min-width:180px}.pp-bar input:focus,.pp-bar select:focus{border-color:#d97706}'+
+  '.pp-main{display:grid;grid-template-columns:200px minmax(0,1fr);gap:18px;align-items:start}'+
+  '.pp-side{background:#fff;border:1px solid #e8e8e6;border-radius:10px;padding:10px 12px;position:sticky;top:8px;max-height:calc(100vh - 16px);overflow:auto}'+
+  '.pp-gt{font-size:12px;font-weight:700;color:#444;margin:14px 0 4px}'+
+  '.pp-fx{display:flex;align-items:center;gap:6px;font-size:13px;padding:3px 0;cursor:pointer;color:#333}'+
+  '.pp-fx input{margin:0;accent-color:#d97706}.pp-fx .n{margin-left:auto;color:#aaa;font-size:11px}.pp-fx.dim{color:#bbb}'+
+  '.pp-nw{background:#dcfce7;color:#166534;border-radius:4px;padding:0 5px}'+
+  '.pp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}'+
+  '.pp-card{background:#fff;border:1px solid #e8e8e6;border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px}'+
+  '.pp-card.pd{border-color:#f59e0b;box-shadow:inset 0 0 0 1px #fde68a}'+
+  '.pp-img{height:150px;border-radius:8px;background:#fafaf9;display:flex;align-items:center;justify-content:center;overflow:hidden;text-align:center;font-size:12px;color:#aaa}'+
+  '.pp-img img{max-width:100%;max-height:100%;object-fit:contain}'+
+  '.pp-cod{font-family:Consolas,monospace;font-size:12px;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
+  '.pp-est{flex-shrink:0;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px}'+
+  '.pp-est.ok{background:#dcfce7;color:#166534}.pp-est.no{background:#fee2e2;color:#991b1b}'+
+  '.pp-nome{font-size:13px;font-weight:600;line-height:1.35;color:#1a1a1a}'+
+  '.pp-chip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;background:#f3f3f1;color:#555;margin:2px 4px 0 0}'+
+  '.pp-src{font-size:11px;display:flex;align-items:center;gap:4px}'+
+  '.pp-warnbtn{font:inherit;font-size:12px;padding:5px 8px;background:#fef3c7;color:#92400e;border:none;border-radius:6px;text-align:left;cursor:pointer}'+
+  '.pp-pend{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-bottom:12px;color:#92400e}'+
+  '.pp-pend-h{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;cursor:pointer;background:none;border:none;width:100%;color:inherit;font-family:inherit;padding:0;text-align:left}'+
+  '.pp-pi{display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 0;border-top:1px solid #fde68a;flex-wrap:wrap}'+
+  '.pp-ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px}'+
+  '.pp-err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px;display:flex;gap:8px;align-items:flex-start}'+
+  '.pp-toast{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px;display:flex;gap:8px;align-items:flex-start}'+
+  '.pp-act{display:flex;flex-wrap:wrap;margin-bottom:6px}.pp-ac{font:inherit;display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:3px 9px;border-radius:999px;background:#fff8eb;border:1px solid #fde68a;color:#b45309;margin:0 6px 6px 0;cursor:pointer}'+
+  '.pp-pnl{background:#fff;border:1.5px solid #d97706;border-radius:12px;padding:16px;margin-bottom:14px}'+
+  '.pp-pnl h3{font-size:15px;margin:0;color:#1a1a1a}'+
+  '.pp-fl{font-size:12px;color:#666;display:block;margin-bottom:3px;font-weight:600}'+
+  '.pp-pnl input,.pp-pnl select{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;background:#fff}'+
+  '.pp-pnl input:focus,.pp-pnl select:focus{border-color:#d97706}.pp-pnl input:disabled{background:#f5f5f5;color:#aaa}'+
+  '.pp-sec{background:#fafaf9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:12px}'+
+  '.pp-g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}'+
+  '.pp-mr{display:grid;grid-template-columns:120px 50px 180px minmax(0,1fr);gap:8px;align-items:center;font-size:13px;padding:7px 0;border-top:1px solid #eee}'+
+  '.pp-msg{font-size:12px;margin-top:3px}.pp-red{color:#dc2626}.pp-grn{color:#16a34a}.pp-mut{color:#888}'+
+  '@media(max-width:760px){.pp-main{grid-template-columns:1fr}.pp-side{position:static;max-height:none}.pp-g2{grid-template-columns:1fr}.pp-mr{grid-template-columns:1fr 1fr}.pp-stat{margin-left:0}}';
+  document.head.appendChild(st);
+}
+
+function ppC(){return PP_CAT[PP.T];}
+function ppLista(){return PP.L[PP.T];}
+function ppXK(){var s={};ppLista().forEach(function(p){Object.keys(p.x||{}).forEach(function(k){s[k]=1;});});return Object.keys(s).sort();}
+function ppFacets(){var f=ppC().F.slice(0,-1);ppXK().forEach(function(k){f.push(['x:'+k,k]);});f.push(['rec','Recursos']);return f;}
+function ppSk(k){return PP.S[k]||(PP.S[k]={});}
+function ppVals(p,k){if(k==='rec')return p.rec;if(k.indexOf('x:')===0){var v=p.x[k.slice(2)];return v?[v]:[];}return p[k]?[p[k]]:[];}
+function ppMode(p){var m=PP.cfg[PP.T][p.marca];return m&&m.m==='site'?'site':'manual';}
+function ppImg(p){return p.imgApp||p.img;}
+function ppOpts(k){var s={};(PP_BASEOPT[k]||[]).forEach(function(v){s[v]=1;});(PP.cust[PP.T][k]||[]).forEach(function(v){s[v]=1;});ppLista().forEach(function(p){if(p[k])s[p[k]]=1;});if(k==='marca')Object.keys(PP.cfg[PP.T]).forEach(function(v){s[v]=1;});return Object.keys(s).sort(function(a,b){return a.localeCompare(b,'pt',{numeric:true});});}
+function ppIssues(p){
+  var r=[];
+  if(ppMode(p)==='site'&&p.src==='N')r.push('Não encontrado no site '+p.marca);
+  var u=ppImg(p);
+  if(!u)r.push('Sem foto');else if(!ppOkUrl(u))r.push('Endereço da foto inválido');else if(PP.ST[u]==='fail')r.push('Foto quebrada');
+  ppC().req.forEach(function(q){if(!p[q[0]])r.push(q[1]+' não informado');});
+  return r;
+}
+function ppPass(p,skip){
+  if(PP.est&&p.e<=0)return false;
+  if(PP.soP&&!ppIssues(p).length)return false;
+  var q=PP.q.trim().toLowerCase();
+  if(q&&p.c.toLowerCase().indexOf(q)<0&&p.n.toLowerCase().indexOf(q)<0)return false;
+  var fs=ppFacets();
+  for(var i=0;i<fs.length;i++){
+    var k=fs[i][0];if(k===skip)continue;var sel=Object.keys(ppSk(k));if(!sel.length)continue;
+    var v=ppVals(p,k);
+    if(k==='rec'){for(var j=0;j<sel.length;j++)if(v.indexOf(sel[j])<0)return false;}
+    else if(!v.some(function(x){return sel.indexOf(x)>=0;}))return false;
+  }
+  return true;
+}
+
+var ppImgTimer=null;
+function ppImgEvt(el,ok){
+  var u=el.getAttribute('data-u');
+  if(PP.ST[u])return;
+  PP.ST[u]=ok?'ok':'fail';
+  if(!ok){el.parentNode.innerHTML='<span class="pp-red">⚠️ Foto quebrada</span>';clearTimeout(ppImgTimer);ppImgTimer=setTimeout(function(){ppDrawPend();ppDrawSide();},400);}
+}
+function ppImgHtml(u){
+  if(!u)return '<span style="color:#d97706">📷 Sem foto</span>';
+  if(!ppOkUrl(u))return '<span class="pp-red">Link de foto inválido</span>';
+  if(PP.ST[u]==='fail')return '<span class="pp-red">⚠️ Foto quebrada</span>';
+  return '<img src="'+ppEsc(u)+'" data-u="'+ppEsc(u)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onload="ppImgEvt(this,true)" onerror="ppImgEvt(this,false)">';
+}
+function ppSrcHtml(p){
+  var h;
+  if(ppMode(p)==='site'){
+    if(p.src==='N')h='<span class="pp-src" style="color:#b45309">🌐 Não achado no site '+ppEsc(p.marca)+'</span>';
+    else if(p.man)h='<span class="pp-src" style="color:#2563eb">✏️ Do site '+ppEsc(p.marca)+', ajustado no app</span>';
+    else h='<span class="pp-src" style="color:#16a34a">🌐 Características do site '+ppEsc(p.marca)+'</span>';
+  } else if(p.man)h='<span class="pp-src" style="color:#2563eb">✏️ Cadastradas no app</span>';
+  else h='<span class="pp-src" style="color:#888">📄 Lidas da descrição do Bling, confira</span>';
+  if(p.imgApp)h+='<span class="pp-src" style="color:#2563eb">🖼️ Foto definida no app</span>';
+  if(p.link)h+='<span class="pp-src" style="color:#2563eb">🔗 Link do produto cadastrado</span>';
+  return h;
+}
+
+function renderNavProdutos(){
+  var tabs=[{id:'pesquisa',icon:'🔎',l:'Pesquisa de produtos'}];
+  if(!STATE.tabProdutos)STATE.tabProdutos='pesquisa';
+  var nav=document.createElement('nav');
+  tabs.forEach(function(t){
+    var btn=document.createElement('button');
+    btn.className='tab'+(STATE.tabProdutos===t.id?' active':'');
+    btn.textContent=t.icon+' '+t.l;
+    btn.onclick=function(){STATE.tabProdutos=t.id;render();};
+    nav.appendChild(btn);
+  });
+  return nav;
+}
+
+function renderPesquisaProdutos(){
+  ppCss();
+  var wrap=document.createElement('div');wrap.className='pp-wrap';
+  wrap.innerHTML=
+    '<div class="pp-top"><div class="pp-cats" id="ppCats"></div>'+
+    '<div class="pp-stat"><span class="pp-pill">🔌 Bling: produtos e estoque de '+PP_BLING_DATA+'</span><span class="pp-pill" id="ppSync">☁️ Edições: carregando…</span>'+
+    '<button type="button" class="pp-btn" id="ppReload">🔄 Recarregar</button><button type="button" class="pp-btn" id="ppCfgBtn">⚙️ Configurações</button></div></div>'+
+    '<div id="ppErr"></div><div id="ppToast"></div><div id="ppPend"></div>'+
+    '<div class="pp-bar"><input id="ppQ" type="search" placeholder="Buscar por código ou nome" aria-label="Buscar produto"><select id="ppOrd" aria-label="Ordenar"><option value="c">Ordenar por código</option><option value="n">Ordenar por nome</option><option value="e">Maior estoque</option></select>'+
+    '<button type="button" class="pp-btn pp-pri" id="ppNew">＋ Cadastrar características</button></div>'+
+    '<div id="ppForm"></div><div class="pp-act" id="ppAct"></div>'+
+    '<div class="pp-main"><aside class="pp-side" id="ppSide" aria-label="Filtros"></aside><section><div id="ppCnt" style="font-size:13px;color:#777;margin-bottom:8px"></div><div class="pp-grid" id="ppGrid"></div></section></div>';
+  PP.root=wrap;
+  var q=wrap.querySelector('#ppQ');q.value=PP.q;q.oninput=function(){PP.q=q.value;ppDrawSide();ppDrawGrid();ppDrawAct();};
+  var o=wrap.querySelector('#ppOrd');o.value=PP.ord;o.onchange=function(){PP.ord=o.value;ppDrawGrid();};
+  wrap.querySelector('#ppReload').onclick=function(){PP.carregado=false;PP.ST={};ppCarregar();ppDraw();};
+  wrap.querySelector('#ppCfgBtn').onclick=ppConfig;
+  wrap.querySelector('#ppNew').onclick=ppPicker;
+  if(!PP.carregado){ppMontaBase();ppCarregar();}
+  setTimeout(ppDraw,0);
+  return wrap;
+}
+function ppEl(id){return PP.root?PP.root.querySelector('#'+id):null;}
+function ppDraw(){
+  if(!PP.root||!document.body.contains(PP.root))return;
+  var cats=ppEl('ppCats');
+  cats.innerHTML=['t','a'].map(function(T){return '<button type="button" class="pp-cat'+(PP.T===T?' on':'')+'" data-t="'+T+'">'+PP_CAT[T].icon+' '+PP_CAT[T].tit+'<span class="n">('+PP.L[T].length+')</span></button>';}).join('');
+  cats.querySelectorAll('[data-t]').forEach(function(b){b.onclick=function(){if(PP.T===b.dataset.t)return;PP.T=b.dataset.t;PP.S={};PP.fresh={};PP.aviso=null;ppEl('ppForm').innerHTML='';ppDraw();};});
+  ppEl('ppSync').textContent=PP.carregando?'☁️ Edições: carregando…':(PP.erro?'☁️ Edições: com erro':'☁️ Edições sincronizadas');
+  ppEl('ppSync').style.color=PP.erro?'#dc2626':'';
+  ppEl('ppErr').innerHTML=PP.erro?'<div class="pp-err" role="alert"><span>⚠️</span><div style="flex:1">'+ppEsc(PP.erro)+'</div><button type="button" class="pp-btn" id="ppErrX">Fechar</button></div>':'';
+  var ex=ppEl('ppErrX');if(ex)ex.onclick=function(){PP.erro='';ppDraw();};
+  ppDrawToast();ppDrawPend();ppDrawSide();ppDrawAct();ppDrawGrid();
+}
+function ppDrawToast(){
+  var t=ppEl('ppToast');if(!t)return;
+  if(!PP.aviso||!PP.aviso.length){t.innerHTML='';return;}
+  t.innerHTML='<div class="pp-toast" role="status"><span>✨</span><div style="flex:1">'+PP.aviso.join('<br>')+'</div><button type="button" class="pp-btn" id="ppTx">Fechar</button></div>';
+  ppEl('ppTx').onclick=function(){PP.aviso=null;PP.fresh={};ppDrawToast();ppDrawSide();};
+}
+function ppDrawPend(){
+  var el=ppEl('ppPend');if(!el)return;
+  var L=ppLista().map(function(p){return [p,ppIssues(p)];}).filter(function(x){return x[1].length;});
+  var tot=L.reduce(function(s,x){return s+x[1].length;},0);
+  if(!L.length){el.innerHTML='<div class="pp-ok">✅ Todos os '+ppC().nome+'s estão completos.</div>';return;}
+  el.innerHTML='<div class="pp-pend"><button type="button" class="pp-pend-h" id="ppPtog" aria-expanded="'+PP.openP+'">⚠️ '+tot+' '+(tot===1?'pendência':'pendências')+' em '+L.length+' '+(L.length===1?'produto':'produtos')+'<span style="margin-left:auto;font-size:12px;font-weight:400">'+(PP.openP?'Ocultar ▲':'Ver lista ▼')+'</span></button>'+
+    (PP.openP?'<div style="margin-top:8px">'+L.map(function(x){var p=x[0];return '<div class="pp-pi"><span class="pp-cod" style="min-width:110px;color:#92400e">'+ppEsc(p.c)+'</span><span style="flex:1;min-width:160px">'+x[1].map(ppEsc).join(' · ')+'</span><button type="button" class="pp-btn" data-fix="'+ppEsc(p.c)+'">'+(ppMode(p)==='site'&&p.src==='N'?'Vincular':'Completar')+'</button></div>';}).join('')+'</div>':'')+'</div>';
+  ppEl('ppPtog').onclick=function(){PP.openP=!PP.openP;ppDrawPend();};
+  el.querySelectorAll('[data-fix]').forEach(function(b){b.onclick=function(){ppForm(ppLista().find(function(p){return p.c===b.dataset.fix;}));};});
+}
+function ppDrawSide(){
+  var el=ppEl('ppSide');if(!el)return;
+  var np=ppLista().filter(function(p){return ppIssues(p).length;}).length;
+  var h='<label class="pp-fx" style="padding:4px 0"><input type="checkbox" id="ppEst"'+(PP.est?' checked':'')+'> Só com estoque</label>'+
+    '<label class="pp-fx" style="padding:2px 0 4px;color:#b45309"><input type="checkbox" id="ppSoP"'+(PP.soP?' checked':'')+'> Só com pendência<span class="n">'+np+'</span></label>';
+  ppFacets().forEach(function(f){
+    var k=f[0],t=f[1],m={},all={};
+    ppLista().forEach(function(p){ppVals(p,k).forEach(function(v){all[v]=1;});});
+    ppLista().filter(function(p){return ppPass(p,k);}).forEach(function(p){ppVals(p,k).forEach(function(v){m[v]=(m[v]||0)+1;});});
+    var vs=Object.keys(all).sort(function(a,b){return a.localeCompare(b,'pt',{numeric:true});});if(!vs.length)return;
+    var nk=PP.fresh[PP.T+'|'+k+'|*'];
+    h+='<div class="pp-gt"><span class="'+(nk?'pp-nw':'')+'">'+ppEsc(t)+'</span></div>';
+    vs.forEach(function(v){var n=m[v]||0,on=!!ppSk(k)[v],nv=nk||PP.fresh[PP.T+'|'+k+'|'+v];
+      h+='<label class="pp-fx'+(n||on?'':' dim')+'"><input type="checkbox" data-k="'+ppEsc(k)+'" data-v="'+ppEsc(v)+'"'+(on?' checked':'')+'> <span class="'+(nv?'pp-nw':'')+'">'+ppEsc(v)+'</span><span class="n">'+n+'</span></label>';});
+  });
+  el.innerHTML=h;
+  el.querySelector('#ppEst').onchange=function(e){PP.est=e.target.checked;ppDrawSide();ppDrawAct();ppDrawGrid();};
+  el.querySelector('#ppSoP').onchange=function(e){PP.soP=e.target.checked;ppDrawSide();ppDrawAct();ppDrawGrid();};
+  el.querySelectorAll('[data-k]').forEach(function(i){i.onchange=function(){var s=ppSk(i.dataset.k);if(i.checked)s[i.dataset.v]=1;else delete s[i.dataset.v];ppDrawSide();ppDrawAct();ppDrawGrid();};});
+}
+function ppDrawAct(){
+  var el=ppEl('ppAct');if(!el)return;var a='';
+  ppFacets().forEach(function(f){Object.keys(ppSk(f[0])).forEach(function(v){a+='<button type="button" class="pp-ac" data-k="'+ppEsc(f[0])+'" data-v="'+ppEsc(v)+'">'+ppEsc(v)+' ✕</button>';});});
+  if(PP.est)a+='<button type="button" class="pp-ac" data-x="est">Só com estoque ✕</button>';
+  if(PP.soP)a+='<button type="button" class="pp-ac" data-x="sop">Só com pendência ✕</button>';
+  if(a)a+='<button type="button" class="pp-ac" data-clr="1" style="background:#fff;border-color:#ddd;color:#666">Limpar tudo</button>';
+  el.innerHTML=a;
+  el.querySelectorAll('.pp-ac').forEach(function(b){b.onclick=function(){
+    if(b.dataset.clr){PP.S={};PP.est=false;PP.soP=false;}else if(b.dataset.x==='est')PP.est=false;else if(b.dataset.x==='sop')PP.soP=false;else delete ppSk(b.dataset.k)[b.dataset.v];
+    ppDrawSide();ppDrawAct();ppDrawGrid();};});
+}
+function ppDrawGrid(){
+  var el=ppEl('ppGrid');if(!el)return;
+  var r=ppLista().filter(function(p){return ppPass(p);});
+  if(PP.ord==='c')r.sort(function(a,b){return a.c.localeCompare(b.c,'pt',{numeric:true});});
+  if(PP.ord==='n')r.sort(function(a,b){return a.n.localeCompare(b.n,'pt');});
+  if(PP.ord==='e')r.sort(function(a,b){return b.e-a.e;});
+  var nm=ppC().nome;
+  ppEl('ppCnt').textContent=r.length+' '+nm+(r.length===1?'':'s')+' do Bling';
+  if(!r.length){el.innerHTML='<div style="grid-column:1/-1;padding:2rem;text-align:center;color:#888;font-size:14px">Nenhum '+nm+' com essa combinação de filtros. Remova um filtro acima.</div>';return;}
+  el.innerHTML=r.map(function(p){
+    var is=ppIssues(p),ok=p.e>0;
+    var ch=ppC().F.filter(function(f){return f[0]!=='rec'&&f[0]!=='marca';}).map(function(f){return p[f[0]];}).filter(function(x){return x&&x!=='Padrão'&&x!=='Comum';})
+      .concat(Object.keys(p.x).map(function(k){return p.x[k];})).concat(p.rec).map(function(x){return '<span class="pp-chip">'+ppEsc(x)+'</span>';}).join('');
+    return '<div class="pp-card'+(is.length?' pd':'')+'"><div class="pp-img">'+ppImgHtml(ppImg(p))+'</div>'+
+      (is.length?'<button type="button" class="pp-warnbtn" data-ed="'+ppEsc(p.c)+'" title="'+ppEsc(is.join(', '))+'">⚠️ '+(is.length===1?ppEsc(is[0]):is.length+' pendências')+'</button>':'')+
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><span class="pp-cod">'+ppEsc(p.c)+'</span><span class="pp-est '+(ok?'ok':'no')+'">'+(ok?p.e+' em estoque':'Sem estoque')+'</span></div>'+
+      '<div class="pp-nome">'+ppEsc(p.n)+'</div>'+(p.marca?'<div style="font-size:12px;color:#888">'+ppEsc(p.marca)+'</div>':'')+
+      '<div>'+ch+'</div>'+ppSrcHtml(p)+
+      '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:auto;padding-top:6px"><button type="button" class="pp-btn" data-ed="'+ppEsc(p.c)+'">✏️ Editar</button><button type="button" class="pp-btn" data-cp="'+ppEsc(p.c)+'">📋 Ficha</button></div></div>';
+  }).join('');
+  el.querySelectorAll('[data-ed]').forEach(function(b){b.onclick=function(){ppForm(ppLista().find(function(p){return p.c===b.dataset.ed;}));};});
+  el.querySelectorAll('[data-cp]').forEach(function(b){b.onclick=function(){
+    var p=ppLista().find(function(x){return x.c===b.dataset.cp;});var is=ppIssues(p);
+    if(is.length&&b.dataset.ok!=='1'){b.dataset.ok='1';b.textContent='⚠️ Incompleta, copiar?';b.style.color='#b45309';return;}
+    var linhas=[p.n,'Código: '+p.c];
+    ppC().F.forEach(function(f){if(f[0]!=='rec'&&p[f[0]])linhas.push(f[1]+': '+p[f[0]]);});
+    Object.keys(p.x).forEach(function(k){linhas.push(k+': '+p.x[k]);});
+    if(p.rec.length)linhas.push('Recursos: '+p.rec.join(', '));
+    if(ppImg(p))linhas.push('Foto: '+ppImg(p));
+    if(p.link)linhas.push('Mais detalhes: '+p.link);
+    var txt=linhas.join('\n');
+    function feito(){b.textContent='✅ Copiado';b.style.color='';b.dataset.ok='';setTimeout(function(){b.textContent='📋 Ficha';},2000);}
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(feito,function(){prompt('Copie a ficha:',txt);});}
+    else prompt('Copie a ficha:',txt);
+  };});
+}
+
+function ppPanel(html){var f=ppEl('ppForm');f.innerHTML='<div class="pp-pnl">'+html+'</div>';f.scrollIntoView({behavior:'smooth',block:'nearest'});f.querySelectorAll('.pp-close').forEach(function(b){b.onclick=function(){f.innerHTML='';};});return f;}
+function ppHdr(t){return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px"><h3>'+t+'</h3><button type="button" class="pp-btn pp-close" aria-label="Fechar">✕</button></div>';}
+
+function ppPicker(){
+  var L=ppLista().slice().sort(function(a,b){return a.c.localeCompare(b.c,'pt',{numeric:true});});
+  var f=ppPanel(ppHdr('Cadastrar características de '+(PP.T==='t'?'uma torneira':'um assento'))+
+    '<p style="font-size:13px;color:#666;margin:0 0 10px">O produto precisa existir no Bling. Escolha qual vai receber as características.</p>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap"><select id="ppPk" style="flex:1;min-width:220px"><option value="">Selecione o produto do Bling</option>'+L.map(function(p){return '<option value="'+ppEsc(p.c)+'">'+ppEsc(p.c+' · '+p.n)+(p.man?' (já cadastrado)':'')+'</option>';}).join('')+'</select><button type="button" class="pp-btn pp-pri" id="ppPkGo" style="width:auto">Continuar</button></div>'+
+    '<div id="ppPkE" class="pp-msg pp-red"></div><div class="pp-msg pp-mut" style="margin-top:8px">Não achou na lista? Cadastre o produto no Bling primeiro e ele passa a aparecer aqui.</div>');
+  f.querySelector('#ppPk').onchange=function(){f.querySelector('#ppPkE').textContent='';};
+  f.querySelector('#ppPkGo').onclick=function(){var c=f.querySelector('#ppPk').value;if(!c){f.querySelector('#ppPkE').textContent='Selecione um produto.';return;}ppForm(ppLista().find(function(p){return p.c===c;}));};
+}
+
+function ppConfig(){
+  var T=PP.T,cfg=PP.cfg[T];
+  var ms={};ppLista().forEach(function(p){if(p.marca)ms[p.marca]=1;});Object.keys(cfg).forEach(function(m){ms[m]=1;});
+  var lista=Object.keys(ms).sort();
+  var f=ppPanel(ppHdr('⚙️ Configurações · '+PP_CAT[T].tit)+
+    '<div style="font-weight:700;font-size:14px;margin-bottom:4px">Sites das marcas</div>'+
+    '<p style="font-size:13px;color:#666;margin:0 0 6px">Marca com site: as características e fotos virão de lá. Marca sem site: vocês preenchem no Editar de cada produto, podendo colar o link de uma página e o endereço da foto.</p>'+
+    '<div class="pp-mr" style="border-top:none;color:#888;font-size:12px;font-weight:600"><span>Marca</span><span>Itens</span><span>Características</span><span>Endereço do site</span></div>'+
+    lista.map(function(m,i){var md=cfg[m]||{m:'manual',u:''};var n=ppLista().filter(function(p){return p.marca===m;}).length;
+      return '<div class="pp-mr"><span style="font-weight:600">'+ppEsc(m)+'</span><span style="color:#888">'+n+'</span><select data-mi="'+i+'"><option value="site"'+(md.m==='site'?' selected':'')+'>Do site da marca</option><option value="manual"'+(md.m!=='site'?' selected':'')+'>Sem site (manual)</option></select><div><input data-ui="'+i+'" value="'+ppEsc(md.u||'')+'" placeholder="'+(md.m==='site'?'https://www.site-da-marca.com.br':'marca sem site')+'"'+(md.m==='site'?'':' disabled')+'><div class="pp-msg pp-red" data-ei="'+i+'"></div></div></div>';}).join('')+
+    '<div style="border-top:1px solid #eee;padding-top:10px;margin-top:4px"><span class="pp-fl">Adicionar marca</span><div style="display:flex;gap:6px;flex-wrap:wrap"><input id="ppNm" placeholder="Nome da marca" style="width:160px;flex:none"><input id="ppNs" placeholder="Site (deixe vazio se não tiver)" style="flex:1;min-width:180px;width:auto"><button type="button" class="pp-btn" id="ppAdd">＋ Adicionar</button></div><div id="ppNe" class="pp-msg pp-red"></div></div>'+
+    '<div class="pp-msg pp-mut" style="margin-top:10px">Os produtos de uma marca nova aparecem no catálogo quando estiverem cadastrados no Bling.</div>'+
+    '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="pp-btn pp-close">Cancelar</button><button type="button" class="pp-btn pp-pri" id="ppCfgSave">Salvar configurações</button></div>');
+  f.querySelectorAll('[data-mi]').forEach(function(s){s.onchange=function(){var i=f.querySelector('[data-ui="'+s.dataset.mi+'"]');i.disabled=s.value!=='site';i.placeholder=s.value==='site'?'https://www.site-da-marca.com.br':'marca sem site';if(s.value==='site')i.focus();};});
+  f.querySelector('#ppAdd').onclick=function(){
+    var n=f.querySelector('#ppNm').value.trim(),u=f.querySelector('#ppNs').value.trim(),e=f.querySelector('#ppNe');
+    if(!n){e.textContent='Digite o nome da marca.';return;}
+    if(lista.some(function(m){return m.toLowerCase()===n.toLowerCase();})){e.textContent='Essa marca já está na lista.';return;}
+    if(u&&!ppOkUrl(u)){e.textContent='O site precisa começar com http:// ou https://';return;}
+    cfg[n]={m:u?'site':'manual',u:u};ppConfig();
+  };
+  f.querySelector('#ppCfgSave').onclick=function(){
+    var bad=false,novo={};
+    lista.forEach(function(m,i){var s=f.querySelector('[data-mi="'+i+'"]').value,u=f.querySelector('[data-ui="'+i+'"]').value.trim(),e=f.querySelector('[data-ei="'+i+'"]');e.textContent='';
+      if(s==='site'&&!ppOkUrl(u)){e.textContent=u?'Endereço inválido':'Informe o site ou marque como sem site';bad=true;}
+      novo[m]={m:s,u:s==='site'?u:''};});
+    if(bad)return;
+    var btn=f.querySelector('#ppCfgSave');btn.disabled=true;btn.textContent='Salvando…';
+    ppSalvar('config/'+T,novo).then(function(){PP.cfg[T]=novo;PP.erro='';PP.aviso=['Configurações de '+PP_CAT[T].tit.toLowerCase()+' salvas.'];ppEl('ppForm').innerHTML='';ppDraw();})
+      .catch(function(e){btn.disabled=false;btn.textContent='Salvar configurações';ppErroSalvar(e);});
+  };
+}
+
+function ppFieldHtml(k,l,cur,rq){
+  var os=ppOpts(k);
+  return '<label><span class="pp-fl">'+ppEsc(l)+(rq?' *':'')+'</span><select data-fk="'+k+'"><option value="">Não informado</option>'+os.map(function(v){return '<option value="'+ppEsc(v)+'"'+(v===cur?' selected':'')+'>'+ppEsc(v)+'</option>';}).join('')+'<option value="__new">＋ Novo valor…</option></select><input data-fn="'+k+'" placeholder="Digite o novo valor" style="margin-top:4px;display:none"></label>';
+}
+function ppForm(p){
+  if(!p)return;
+  var T=PP.T,C=ppC(),site=ppMode(p)==='site';
+  var exs=Object.keys(p.x);
+  var h=ppHdr(ppEsc(p.c)+' · '+ppEsc(p.n))+
+    '<div class="pp-msg pp-mut" style="margin:-4px 0 10px">🔒 Nome, código e estoque vêm do Bling e só mudam lá.'+(site?' O que você alterar aqui fica valendo por cima do que o site informar.':'')+'</div>';
+  if(site&&p.src==='N')h+='<div class="pp-sec"><span class="pp-fl">Código deste produto no site '+ppEsc(p.marca)+'</span><div style="display:flex;gap:8px"><input id="ppSug" value="'+ppEsc(p.sug||'')+'" style="flex:1"><button type="button" class="pp-btn" id="ppVinc">Vincular</button></div><div class="pp-msg pp-mut">Sugestão pelo nome parecido. Confirme e o vínculo fica salvo.</div><div id="ppVe" class="pp-msg pp-red"></div></div>';
+  h+='<div class="pp-sec"><div style="font-weight:700;font-size:13px;margin-bottom:8px">🖼️ Foto e link do produto</div><div style="display:grid;grid-template-columns:130px minmax(0,1fr);gap:10px">'+
+    '<div id="ppIpv" class="pp-img" style="height:120px;border:1px dashed #ccc"></div><div>'+
+    '<label><span class="pp-fl">Endereço da imagem (vazio = usar a foto do Bling)</span><input id="ppFimg" value="'+ppEsc(p.imgApp)+'" placeholder="https://.../foto-do-produto.jpg"></label><div id="ppIe" class="pp-msg"></div>'+
+    '<label style="display:block;margin-top:8px"><span class="pp-fl">Link da página do produto</span><input id="ppFlink" value="'+ppEsc(p.link)+'" placeholder="https://loja.com.br/torneira-xyz"></label><div id="ppLe" class="pp-msg pp-mut">Útil para marcas sem site: vai junto na ficha do cliente como “Mais detalhes”.</div>'+
+    '</div></div></div>';
+  h+='<div class="pp-g2">'+C.F.filter(function(f){return f[0]!=='rec';}).map(function(f){return ppFieldHtml(f[0],f[1],p[f[0]]||'',C.req.some(function(r){return r[0]===f[0];}));}).join('')+
+    '<div style="grid-column:1/-1"><span class="pp-fl">Recursos</span><div style="display:flex;flex-wrap:wrap;gap:14px">'+C.RC.map(function(r){return '<label class="pp-fx"><input type="checkbox" class="ppRec" value="'+ppEsc(r)+'"'+(p.rec.indexOf(r)>=0?' checked':'')+'> '+ppEsc(r)+'</label>';}).join('')+'</div></div>'+
+    '<div style="grid-column:1/-1;border-top:1px solid #eee;padding-top:8px"><span class="pp-fl">Outras características (viram filtro automaticamente)</span><div id="ppFex">'+exs.map(function(k){return ppExRow(k,p.x[k]);}).join('')+'</div>'+
+    '<button type="button" class="pp-btn" id="ppExAdd">＋ Adicionar característica</button><datalist id="ppDlx">'+['Acabamento','Cor','Rosca','Material','Garantia'].concat(ppXK()).filter(function(v,i,a){return a.indexOf(v)===i;}).map(function(v){return '<option value="'+ppEsc(v)+'">';}).join('')+'</datalist></div></div>'+
+    '<div id="ppFerr" class="pp-msg pp-red" style="font-size:13px;margin-top:8px" role="alert"></div>'+
+    '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px"><button type="button" class="pp-btn pp-close">Cancelar</button><button type="button" class="pp-btn pp-pri" id="ppSave">Salvar</button></div>';
+  var f=ppPanel(h);
+  function q(s){return f.querySelector(s);}
+  function prev(u){var e=q('#ppIe'),pv=q('#ppIpv');if(!e||!pv)return;
+    if(!u){pv.innerHTML=ppImgHtml(p.img);e.className='pp-msg pp-mut';e.textContent='Usando a foto do Bling.';return;}
+    if(!ppOkUrl(u)){pv.innerHTML='<span class="pp-red">Link inválido</span>';e.className='pp-msg pp-red';e.textContent='O endereço precisa começar com http:// ou https://';return;}
+    e.className='pp-msg pp-mut';e.textContent='Verificando a imagem…';var im=new Image();
+    im.onload=function(){if(!document.body.contains(e)||q('#ppFimg').value.trim()!==u)return;pv.innerHTML='<img src="'+ppEsc(u)+'" alt="Prévia">';e.className='pp-msg pp-grn';e.textContent='✓ Imagem encontrada';};
+    im.onerror=function(){if(!document.body.contains(e)||q('#ppFimg').value.trim()!==u)return;pv.innerHTML='<span class="pp-red">⚠️ Não abriu</span>';e.className='pp-msg pp-red';e.textContent='Esse link não abriu nenhuma imagem. Confira o endereço.';};
+    im.src=u;}
+  prev(p.imgApp);
+  var tm;q('#ppSave').addEventListener('click',function(){clearTimeout(tm);});q('#ppFimg').oninput=function(){clearTimeout(tm);var v=this.value.trim();tm=setTimeout(function(){prev(v);},400);};
+  f.querySelectorAll('[data-fk]').forEach(function(s){s.onchange=function(){var i=f.querySelector('[data-fn="'+s.dataset.fk+'"]');i.style.display=s.value==='__new'?'':'none';if(s.value==='__new')i.focus();q('#ppFerr').textContent='';};});
+  function bindRm(){f.querySelectorAll('.ppExRm').forEach(function(b){b.onclick=function(){b.parentNode.remove();};});}
+  bindRm();
+  q('#ppExAdd').onclick=function(){var d=document.createElement('div');d.innerHTML=ppExRow('','');q('#ppFex').appendChild(d.firstChild);bindRm();};
+  if(q('#ppVinc'))q('#ppVinc').onclick=function(){
+    var v=q('#ppSug').value.trim();if(!v){q('#ppVe').textContent='Informe o código no site.';return;}
+    var ed=Object.assign({},PP.edits[T][ppKey(p.c)]||{},{vinc:v});
+    ppSalvar('edicoes/'+T+'/'+ppKey(p.c),ed).then(function(){PP.edits[T][ppKey(p.c)]=ed;p.src='S';p.vinc=v;PP.erro='';PP.aviso=['Produto '+ppEsc(p.c)+' vinculado ao código '+ppEsc(v)+' do site '+ppEsc(p.marca)+'.'];ppEl('ppForm').innerHTML='';ppDraw();}).catch(ppErroSalvar);
+  };
+  q('#ppSave').onclick=function(){
+    var got={},bad='',iu=q('#ppFimg').value.trim(),lk=q('#ppFlink').value.trim();
+    if(iu&&!ppOkUrl(iu))bad='Corrija o endereço da imagem ou deixe vazio.';
+    if(!bad&&lk&&!ppOkUrl(lk))bad='Corrija o link da página ou deixe vazio.';
+    C.F.forEach(function(fd){if(fd[0]==='rec')return;var s=f.querySelector('[data-fk="'+fd[0]+'"]');
+      if(s.value==='__new'){var v=f.querySelector('[data-fn="'+fd[0]+'"]').value.trim();if(!v)bad=bad||('Digite o novo valor de '+fd[1].toLowerCase()+'.');got[fd[0]]=v;}else got[fd[0]]=s.value;});
+    var rows=[].slice.call(f.querySelectorAll('.ppExR')).map(function(r){return [r.querySelector('.ppExK').value.trim(),r.querySelector('.ppExV').value.trim()];});
+    if(!bad&&rows.some(function(r){return (r[0]&&!r[1])||(!r[0]&&r[1]);}))bad='Preencha nome e valor em cada característica extra, ou remova a linha.';
+    if(!bad){var nomes=rows.filter(function(r){return r[0];}).map(function(r){return r[0].toLowerCase();});if(nomes.some(function(n,i){return nomes.indexOf(n)!==i;}))bad='Há duas características extras com o mesmo nome.';}
+    if(bad){q('#ppFerr').textContent=bad;return;}
+    var x={};rows.forEach(function(r){if(r[0]&&r[1])x[r[0]]=r[1];});
+    var rec=[].slice.call(f.querySelectorAll('.ppRec:checked')).map(function(i){return i.value;});
+    var msgs=[],fresh={},novosCust=JSON.parse(JSON.stringify(PP.cust[T]||{}));
+    C.F.forEach(function(fd){if(fd[0]==='rec')return;var v=got[fd[0]];if(v&&ppOpts(fd[0]).indexOf(v)<0){(novosCust[fd[0]]=novosCust[fd[0]]||[]).push(v);fresh[T+'|'+fd[0]+'|'+v]=1;msgs.push('Novo valor <b>'+ppEsc(v)+'</b> criado em '+ppEsc(fd[1])+'.');}});
+    var oldK=ppXK();
+    Object.keys(x).forEach(function(k){if(oldK.indexOf(k)<0){fresh[T+'|x:'+k+'|*']=1;msgs.push('Novo filtro <b>'+ppEsc(k)+'</b> criado com o valor '+ppEsc(x[k])+'.');}else if(!ppLista().some(function(o){return o.x[k]===x[k];})){fresh[T+'|x:'+k+'|'+x[k]]=1;msgs.push('Novo valor <b>'+ppEsc(x[k])+'</b> em '+ppEsc(k)+'.');}});
+    if(iu!==p.imgApp)msgs.push(iu?'Foto do produto atualizada pelo endereço informado.':'Foto voltou a ser a do Bling.');
+    var ed=Object.assign({},PP.edits[T][ppKey(p.c)]||{},got,{rec:rec,x:x,imgApp:iu,link:lk,man:true,cod:p.c,em:new Date().toISOString(),por:STATE.usuarioLogado||''});
+    var btn=q('#ppSave');btn.disabled=true;btn.textContent='Salvando…';
+    var ps=[ppSalvar('edicoes/'+T+'/'+ppKey(p.c),ed)];
+    if(JSON.stringify(novosCust)!==JSON.stringify(PP.cust[T]||{}))ps.push(ppSalvar('custom/'+T,novosCust));
+    Promise.all(ps).then(function(){
+      PP.edits[T][ppKey(p.c)]=ed;PP.cust[T]=novosCust;
+      Object.assign(p,got);p.rec=rec;p.x=x;p.imgApp=iu;p.link=lk;p.man=true;
+      PP.erro='';PP.fresh=fresh;PP.aviso=msgs.length?msgs:['Características de '+ppEsc(p.c)+' salvas.'];
+      ppEl('ppForm').innerHTML='';ppDraw();
+    }).catch(function(e){btn.disabled=false;btn.textContent='Salvar';ppErroSalvar(e);});
+  };
+}
+function ppExRow(k,v){return '<div class="ppExR" style="display:flex;gap:6px;margin-bottom:6px"><input class="ppExK" list="ppDlx" value="'+ppEsc(k)+'" placeholder="Nome, ex.: Acabamento" style="flex:1;width:auto"><input class="ppExV" value="'+ppEsc(v)+'" placeholder="Valor, ex.: Cromado" style="flex:1;width:auto"><button type="button" class="pp-btn ppExRm" aria-label="Remover característica">🗑️</button></div>';}
+// ===== FIM ABA PRODUTOS =====
 
 // ===== ABA NORMA NBR 9050 (consulta NBR 9050 + NBR 16537) =====
 var NORMA={dados:null,carregando:false,erro:'',imgs:{},q:'',res:[],cur:-1,IDX:null};
@@ -3061,6 +3558,8 @@ function renderApp(){
   if(STATE.modulo==='frete') wrap.appendChild(renderNav());
   // nav interno do módulo análise de crédito
   if(STATE.modulo==='mod2') wrap.appendChild(renderNavCredito());
+  // nav interno do módulo produtos
+  if(STATE.modulo==='mod8') wrap.appendChild(renderNavProdutos());
   // main
   var main=document.createElement('main');
   if(STATE.modulo==='frete'){
@@ -3076,6 +3575,8 @@ function renderApp(){
     else main.appendChild(renderAnaliseCredito());
   } else if(STATE.modulo==='mod7'){
     main.appendChild(renderNormaNBR());
+  } else if(STATE.modulo==='mod8'){
+    main.appendChild(renderPesquisaProdutos());
   } else if(STATE.modulo==='mod3'){
     main.appendChild(renderAceIA());
   } else if(STATE.modulo==='mod4'){
