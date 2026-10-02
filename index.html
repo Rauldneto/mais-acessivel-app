@@ -2932,21 +2932,97 @@ var PP_AA_BASE=[
 ["TVG/K*GE-17","ASSENTO VOGUE PLUS DECA/ ETNA BRANCO ASTRA",12,PP_ML+"2X_945541-MLB82766566816_032025-F.webp","Astra","N","TVG/K-GE17","Modelo específico","","Comum","Branco","","Vogue Plus, Etna",[]]
 ];
 var PP_BASEOPT={bica:["Alta","Baixa","Móvel","Inclinada","Padrão"],inst:["Mesa","Parede"],acion:["Alavanca (clínica)","Automática (pressão)","Volante"],amb:["Clínico","Cozinha","Lavatório","Tanque e jardim"],fech:["Comum","Soft close"],material:["Almofadado","Madeira","Plástico","PP"],formato:["Oval","Oval universal","Quadrado","Modelo específico"]};
+var PP_CATS=[
+ ['Pisos e elementos táteis',/^(ELEMENTO TATIL|PISO TATIL|GABARITO P\/ ELEMENTO)/],
+ ['Kit instalação de piso tátil',/^(COLA |ESTOPA|SOLVENTE|TRINCHA|VEDA BORDA|FIXADOR BICOMPONENTE|3M PRIMER|PRIMER)/],
+ ['Barras de apoio',/^(BARRA (DE APOIO|SUPORTE|LATERAL|ARTICULADA|FIXA)|BANCO ARTICULADO)/],
+ ['Corrimãos',/^(CORRIMAO|GUARDA CORPO)/],
+ ['Banheiro acessível',/^(BANCO|BANQUETA|CADEIRA|TROCADOR|FRALDARIO|CABIDE|PORTA OBJETO|PLACA DE IMPACTO|BOTAO ELEVADO|ACIONADOR|PAPELEIRA|CESTO|LIXEIRA|DOSADOR|ESPELHO RECLIN)/],
+ ['Dispensers',/^DISPENSER/],
+ ['Louças',/^(BACIA|CAIXA|CX ACOPLADA|COLUNA|CUBA|LAVAT|MICTORIO|TANQUE)/],
+ ['Torneiras',/^(TORNEIRA|MISTURADOR)/],
+ ['Assentos sanitários',/^ASSENTO/],
+ ['Metais e hidráulica',/^(ACABAMENTO|BASE |CHUVEIRO|DUCHA|REGISTRO|VALVULA|ENGATE|MECANISMO|ANEL DE VEDACAO|PARAFUSO P\/ VASO|KIT INSTALACAO|BRACO P\/CHUVEIRO|GRELHA)/],
+ ['Alarmes e emergência',/^(ALARME|LUMINARIA DE EMERGENCIA)/],
+ ['Mapas e placas em braille',/^(MAPA TATIL|PEDESTAL MAPA|PLACA BRAILLE|PLACA EM BRAILLE|PLACA CORRIMAO|PLACA PAVIMENTO)/],
+ ['Placas de sinalização',/^PLACA/],
+ ['Sinalização',/^(ADESIVO|FITA|SINALIZADOR|MOLDE|CAPA PARA ASSENTO|BATE RODAS|MEIO FIO|PISO EMBORRACHADO|PISO MOEDA)/],
+ ['Portas e ferragens',/^(MOLA|FECHADURA|BARRA ANTI|ESPELHO INOX DORMA|ESPELHO P\/ MOLA|EIXO|FECHO)/]
+];
+var PP_CAT_OUTROS='Outros';
+var PP_MARCAS=[['FAUZI','Fauzi'],['METALFLEX','Metalflex'],['DOCOL','Docol'],['DECA','Deca'],['LOREN','Loren'],['BOGNAR','Bognar'],['PRIMOR','Primor'],['IMPERATRIZ','Imperatriz'],['ASTRA','Astra'],['TUPAN','Tupan'],['HERC','Herc'],['ICASA','Icasa'],['CELITE','Celite'],['PREMISSE','Premisse'],['INVOQ','Premisse'],['VELOX','Premisse'],['UP+','Premisse'],['URBAN','Premisse'],['KITINOX','Kitinox'],['TRAMONTINA','Tramontina'],['DORMA','Dorma'],['VONDER','Vonder'],['ADERE','Adere'],['FURNA PACK','Furna Pack'],['KAPAZI','Kapazi'],['3M','3M'],[' UNA','Una'],['METASAL','Metasal'],['ZAGONEL','Zagonel'],['SINTEX','Sintex'],['FAME','Fame'],['CENSI','Censi'],['LOGASA','Logasa'],['TENDFER','Tendfer'],['DNI','DNI'],['EMMETI','Emmeti'],['PLASBOHN','Plasbohn'],['RAYOVAC','Rayovac'],['SEGURIMAX','Segurimax'],['NOVE54','Nove54'],['TYTAN','Tytan'],['THOMPSON','Thompson'],['BLUKIT','Blukit'],['SANTA MARINA','Santa Marina']];
+var PP_FORA_RE=/(CONECTOR|KEYSTONE|RJ45|PILHA|PAINEL LED|PAQUIMETRO|FILME STRETCH|LIZ CJ|ESGUICHO|ESPUMA EXPANSIVA|FITA CREPE|FITA D FACE|EXPOSITOR|MAO FRANCESA)/;
+function ppN(s){return String(s||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();}
+function ppClassifica(n){var N=ppN(n);for(var i=0;i<PP_CATS.length;i++){if(PP_CATS[i][1].test(N))return PP_CATS[i][0];}return PP_CAT_OUTROS;}
+function ppMarcaDe(n){var N=' '+ppN(n)+' ';for(var i=0;i<PP_MARCAS.length;i++){var t=PP_MARCAS[i][0];if(N.indexOf(t.charAt(0)===' '?t+' ':' '+t+' ')>=0||N.indexOf(' '+t+'\n')>=0)return PP_MARCAS[i][1];}return '';}
+function ppParseO(n){var N=ppN(n),o={material:'',cor:'',medida:'',lado:'',tipo:''};
+ var mats=[['INOX','Inox'],['ALUMINIO','Alumínio'],['ACRILICO','Acrílico'],[' ACM','ACM'],[' PS',' PS'],['PVC','PVC'],['CONCRETO','Concreto'],['ARGAMASSADO','Argamassado'],['EMBORRACHADO','Borracha'],['MADEIRA','Madeira'],['ABS','ABS'],['METAL','Metal']];
+ for(var i=0;i<mats.length;i++){if((' '+N+' ').indexOf(mats[i][0].charAt(0)===' '?mats[i][0]+' ':mats[i][0])>=0){o.material=mats[i][1].trim();break;}}
+ var cores=[['CINZA CHUMBO','Cinza chumbo'],['CINZA ESCURO','Cinza escuro'],['ROSE GOLD','Rose gold'],['AMARELA E PRETA','Amarelo e preto'],['PRETA/AMARELA','Amarelo e preto'],['FOTOLUMI','Fotoluminescente'],['TRANSPARENTE','Transparente'],['TRANSP','Transparente'],['BRANCA','Branco'],['BRANCO','Branco'],[' BR ','Branco'],['PRETA','Preto'],['PRETO','Preto'],[' PT ','Preto'],['AMARELA','Amarelo'],['AMARELO','Amarelo'],['AZUL','Azul'],['VERMELHA','Vermelho'],['VERMELHO','Vermelho'],['CINZA','Cinza'],['VERDE','Verde'],['NATURAL','Natural'],['CARAMELO','Caramelo'],['CROMADO','Cromado'],[' CR ','Cromado']];
+ for(var j=0;j<cores.length;j++){if((' '+N+' ').indexOf(cores[j][0])>=0){o.cor=cores[j][1];break;}}
+ var m=N.match(/\b\d+([.,]\d+)?\s*(MM|CM|MTS?|M)?\s*X\s*\d+([.,]\d+)?(\s*(MM|CM|MTS?|M))?(\s*X\s*\d+([.,]\d+)?)?\s*(MM|CM|MTS?|M)?\b/)||N.match(/\b\d+([.,]\d+)?\s*(MM|CM|MTS?|LTS?|L|ML|KG)\b/);
+ if(m)o.medida=m[0].replace(/\s+/g,'').toLowerCase().replace('mts','m').replace('mt','m');
+ if(/DIREIT/.test(N))o.lado='Direito';else if(/ESQUERD/.test(N))o.lado='Esquerdo';
+ if(/ALERTA/.test(N))o.tipo='Alerta';else if(/DIRECIONAL/.test(N))o.tipo='Direcional';
+ var ap=/ADESIVO|ADESIVADA/.test(N)&&/ELEMENTO|PISO/.test(N)?'Adesivo':/ PINO/.test(N)?'Com pino':/PARAFUS/.test(N)?'Parafusado':/ COLA$/.test(N)||/ COLA /.test(N)?'Com cola':'';
+ if(ap)o.tipo=o.tipo?o.tipo+' · '+ap:ap;
+ return o;}
+function ppParseT(n){var N=ppN(n),o={linha:'',acion:'',inst:'',bica:'Padrão',alt:'',amb:''};
+ if(/CLINIC/.test(N))o.linha='Clínica';else if(/AUTOMATIC/.test(N))o.linha='Automática';
+ if(/AUTOMATIC|PRESSMATIC|MATIC/.test(N))o.acion='Automática (pressão)';else if(/ALAVANCA|CLINIC/.test(N))o.acion='Alavanca (clínica)';else if(/1\/4|C23|C29|C31|VOLTA|SOFT/.test(N))o.acion='Volante';
+ if(/PAREDE|PARADE/.test(N))o.inst='Parede';else if(/MESA|BANCADA|BANC /.test(N))o.inst='Mesa';
+ if(/BICA ALTA|ALTA/.test(N))o.bica='Alta';else if(/BICA BAIXA/.test(N))o.bica='Baixa';else if(/MOVEL|GIRA/.test(N))o.bica='Móvel';else if(/INCLINAD/.test(N))o.bica='Inclinada';
+ var a=N.match(/(\d+)\s*CM/);if(a)o.alt=a[1]+' cm';
+ if(/COZ|PIA/.test(N))o.amb='Cozinha';else if(/TANQUE|JARDIM|MAQUINA/.test(N))o.amb='Tanque e jardim';else if(/CLINIC/.test(N))o.amb='Clínico';else if(/LAV|BANHEIRO/.test(N))o.amb='Lavatório';
+ return o;}
+function ppParseA(n){var N=ppN(n),o={formato:'',material:'',fech:'Comum',cor:'',alt:'',compat:''};
+ if(/UNIV/.test(N))o.formato='Oval universal';else if(/OVAL/.test(N))o.formato='Oval';else if(/QUAD/.test(N))o.formato='Quadrado';else o.formato='Modelo específico';
+ if(/ALMOFAD/.test(N))o.material='Almofadado';else if(/MADEIRA/.test(N))o.material='Madeira';else if(/ PP|PP /.test(N))o.material='PP';else if(/PLAST|ANATOMIC/.test(N))o.material='Plástico';
+ if(/SOFT|S\. CLOSE/.test(N))o.fech='Soft close';
+ var c=ppParseO(n).cor;o.cor=c||'';var a=N.match(/(\d+([.,]\d+)?)\s*CM/);if(a)o.alt=a[1]+' cm';return o;}
 var PP_CAT={
   t:{nome:'torneira',tit:'Torneiras',icon:'🚰',F:[['bica','Tipo de bica'],['acion','Acionamento'],['inst','Instalação'],['linha','Linha'],['amb','Ambiente'],['alt','Altura da bica'],['marca','Marca'],['rec','Recursos']],req:[['marca','Marca'],['acion','Acionamento'],['inst','Instalação'],['bica','Tipo de bica'],['amb','Ambiente']],RC:['Arejador','Antivandalismo','Modelo PCD']},
+  o:{nome:'produto',tit:'Outros produtos',icon:'📦',F:[['categoria','Categoria'],['tipo','Tipo / aplicação'],['material','Material'],['cor','Cor'],['medida','Medida'],['lado','Lado'],['marca','Marca'],['rec','Recursos']],req:[['categoria','Categoria']],RC:['Modelo PCD','Fotoluminescente']},
   a:{nome:'assento',tit:'Assentos sanitários',icon:'🚽',F:[['formato','Formato'],['material','Material'],['fech','Fechamento'],['cor','Cor'],['compat','Compatível com'],['alt','Altura elevada'],['marca','Marca'],['rec','Recursos']],req:[['marca','Marca'],['formato','Formato'],['material','Material'],['fech','Fechamento'],['cor','Cor']],RC:['Modelo PCD','Abertura frontal']}
 };
-var PP={T:'t',est:false,soP:false,openP:false,S:{},fresh:{},ST:{},q:'',ord:'c',L:{t:[],a:[]},cfg:{t:{Fauzi:{m:'site',u:'https://www.fauzimetais.com.br'}},a:{Astra:{m:'site',u:'https://www.astrasa.com.br'}}},cust:{t:{},a:{}},edits:{t:{},a:{}},carregado:false,carregando:false,erro:'',aviso:null,root:null,sel:{}};
+var PP={T:'t',est:false,soP:false,openP:false,S:{},fresh:{},ST:{},q:'',ord:'c',L:{t:[],a:[],o:[]},cfg:{t:{Fauzi:{m:'site',u:'https://www.fauzimetais.com.br'}},a:{Astra:{m:'site',u:'https://www.astrasa.com.br'}},o:{}},cust:{t:{},a:{},o:{}},edits:{t:{},a:{},o:{}},bling:null,blingInfo:null,probing:0,carregado:false,carregando:false,erro:'',aviso:null,root:null,sel:{}};
 
 function ppEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function ppKey(c){return String(c).replace(/[^A-Za-z0-9-]/g,function(ch){return '_'+ch.charCodeAt(0).toString(16)+'_';});}
 function ppOkUrl(u){return /^https?:\/\/\S+\.\S+/i.test(u||'');}
 function ppMontaBase(){
-  PP.L.t=PP_TR_BASE.map(function(a){return {c:a[0],n:a[1],e:a[2],img:a[3],marca:a[4],src:a[5],sug:a[6],linha:a[7],acion:a[8],inst:a[9],bica:a[10],alt:a[11],amb:a[12],rec:a[13].slice(),x:{},imgApp:'',link:'',man:false,_T:'t'};});
-  PP.L.a=PP_AA_BASE.map(function(a){return {c:a[0],n:a[1],e:a[2],img:a[3],marca:a[4],src:a[5],sug:a[6],formato:a[7],material:a[8],fech:a[9],cor:a[10],alt:a[11],compat:a[12],rec:a[13].slice(),x:{},imgApp:'',link:'',man:false,_T:'a'};});
+  var bt={},ba={};
+  PP_TR_BASE.forEach(function(a){bt[a[0]]={c:a[0],n:a[1],e:a[2],img:a[3],marca:a[4],src:a[5],sug:a[6],linha:a[7],acion:a[8],inst:a[9],bica:a[10],alt:a[11],amb:a[12],rec:a[13].slice(),x:{},imgApp:'',link:'',man:false,_T:'t'};});
+  PP_AA_BASE.forEach(function(a){ba[a[0]]={c:a[0],n:a[1],e:a[2],img:a[3],marca:a[4],src:a[5],sug:a[6],formato:a[7],material:a[8],fech:a[9],cor:a[10],alt:a[11],compat:a[12],rec:a[13].slice(),x:{},imgApp:'',link:'',man:false,_T:'a'};});
+  PP.L={t:[],a:[],o:[]};
+  if(!PP.bling||!PP.bling.length){
+    Object.keys(bt).forEach(function(k){bt[k].catNome='Torneiras';PP.L.t.push(bt[k]);});
+    Object.keys(ba).forEach(function(k){ba[k].catNome='Assentos sanitários';PP.L.a.push(ba[k]);});
+    return;
+  }
+  var nomes={};PP.bling.forEach(function(b){var k=ppN(b.n);nomes[k]=(nomes[k]||0)+1;});
+  var usados={};
+  PP.bling.forEach(function(b){
+    var cat=ppClassifica(b.n),code=String(b.c||'').trim(),semCod=!code;
+    if(semCod)code='id'+b.id;
+    if(usados[code]){code=code+'~'+b.id;}usados[code]=1;
+    var p;
+    if(cat==='Torneiras'&&ppN(b.n).indexOf('TORNEIRA')===0){
+      p=bt[code]?bt[code]:Object.assign({c:code,src:'D',sug:'',rec:[],marca:ppMarcaDe(b.n)},ppParseT(b.n));p._T='t';
+    } else if(cat==='Assentos sanitários'){
+      p=ba[code]?ba[code]:Object.assign({c:code,src:'D',sug:'',rec:[],marca:ppMarcaDe(b.n)},ppParseA(b.n));p._T='a';
+    } else {
+      p=Object.assign({c:code,src:'D',sug:'',rec:[],marca:ppMarcaDe(b.n),categoria:cat},ppParseO(b.n));p._T='o';
+      if(/FOTOLUMI/.test(ppN(b.n)))p.rec.push('Fotoluminescente');
+      if(/PCD|PNE/.test(ppN(b.n)))p.rec.push('Modelo PCD');
+    }
+    p.n=b.n;p.e=Number(b.e)||0;p.img=b.img||'';p.x=p.x||{};p.imgApp='';p.link='';p.man=false;p.bid=b.id;
+    p.semCod=semCod;p.dup=nomes[ppN(b.n)]>1;p.catNome=p._T==='t'?'Torneiras':p._T==='a'?'Assentos sanitários':p.categoria;
+    PP.L[p._T].push(p);
+  });
 }
 function ppAplicaEdicoes(){
-  ['t','a'].forEach(function(T){
+  ['t','a','o'].forEach(function(T){
     var ed=PP.edits[T]||{};
     PP.L[T].forEach(function(p){
       var e=ed[ppKey(p.c)];if(!e)return;
@@ -2955,7 +3031,8 @@ function ppAplicaEdicoes(){
       p.x=e.x&&typeof e.x==='object'?Object.assign({},e.x):{};
       p.imgApp=e.imgApp||'';p.link=e.link||'';
       if(e.vinc){p.src='S';p.vinc=e.vinc;}
-      p.man=!!e.man;
+      p.man=!!e.man;p.fora=!!e.fora;p.manter=!!e.manter;
+      if(T==='o'&&p.categoria)p.catNome=p.categoria;
     });
   });
 }
@@ -2965,16 +3042,18 @@ function ppCarregar(){
   fetch(FIREBASE_DB+'/produtos.json').then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(function(d){
     d=d||{};
     ppMontaBase();
-    if(d.config){['t','a'].forEach(function(T){if(d.config[T])PP.cfg[T]=d.config[T];});}
-    if(d.custom){['t','a'].forEach(function(T){if(d.custom[T])PP.cust[T]=d.custom[T];});}
-    PP.edits={t:(d.edicoes&&d.edicoes.t)||{},a:(d.edicoes&&d.edicoes.a)||{}};
+    if(d.bling&&Array.isArray(d.bling.itens)&&d.bling.itens.length){PP.bling=d.bling.itens;PP.blingInfo={em:d.bling.atualizado,por:d.bling.por,total:d.bling.itens.length};}else{PP.bling=null;PP.blingInfo=null;}
+    ppMontaBase();
+    if(d.config){['t','a','o'].forEach(function(T){if(d.config[T])PP.cfg[T]=d.config[T];});}
+    if(d.custom){['t','a','o'].forEach(function(T){if(d.custom[T])PP.cust[T]=d.custom[T];});}
+    PP.edits={t:(d.edicoes&&d.edicoes.t)||{},a:(d.edicoes&&d.edicoes.a)||{},o:(d.edicoes&&d.edicoes.o)||{}};
     ppAplicaEdicoes();
     PP.carregado=true;
   }).catch(function(e){
     if(!PP.carregado)ppMontaBase();
     PP.carregado=true;
     PP.erro='Não foi possível carregar as edições salvas no servidor ('+(e&&e.message||e)+'). Você está vendo os dados do Bling sem as características editadas. Clique em Recarregar para tentar de novo.';
-  }).then(function(){PP.carregando=false;ppDraw();});
+  }).then(function(){PP.carregando=false;ppDraw();ppProbe();});
 }
 function ppSalvar(path,data){
   return fetch(FIREBASE_DB+'/produtos/'+path+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return true;});
@@ -3047,28 +3126,64 @@ function ppCss(){
 function ppC(){return PP_CAT[PP.T];}
 function ppLista(){return PP.L[PP.T];}
 function ppXK(){var s={};ppLista().forEach(function(p){Object.keys(p.x||{}).forEach(function(k){s[k]=1;});});return Object.keys(s).sort();}
-function ppTodos(){return PP.L.t.concat(PP.L.a);}
+function ppTodos(){return PP.L.t.concat(PP.L.a,PP.L.o);}
 function ppKeyOf(p){return p._T+'|'+p.c;}
 function ppByKey(k){var i=k.indexOf('|'),T=k.slice(0,i),c=k.slice(i+1);return (PP.L[T]||[]).find(function(x){return x.c===c;});}
 function ppXKall(){var s={};ppTodos().forEach(function(p){Object.keys(p.x||{}).forEach(function(k){s[k]=1;});});return Object.keys(s).sort();}
-function ppFacets(){var f=[['cat','Categoria'],['marca','Marca']];['t','a'].forEach(function(T){PP_CAT[T].F.forEach(function(x){if(x[0]!=='marca'&&x[0]!=='rec')f.push([T+':'+x[0],x[1]]);});});ppXKall().forEach(function(k){f.push(['x:'+k,k]);});f.push(['rec','Recursos']);return f;}
-function ppCatOk(p){var s=Object.keys(ppSk('cat'));return !s.length||s.indexOf(PP_CAT[p._T].tit)>=0;}
+function ppFacets(){var f=[['cat','Categoria'],['marca','Marca']];['t','a','o'].forEach(function(T){PP_CAT[T].F.forEach(function(x){if(x[0]!=='marca'&&x[0]!=='rec'&&x[0]!=='categoria')f.push([T+':'+x[0],x[1]]);});});ppXKall().forEach(function(k){f.push(['x:'+k,k]);});f.push(['rec','Recursos']);return f;}
+function ppCatOk(p){var s=Object.keys(ppSk('cat'));return !s.length||s.indexOf(p.catNome)>=0;}
 function ppSk(k){return PP.S[k]||(PP.S[k]={});}
-function ppVals(p,k){if(k==='rec')return p.rec;if(k==='cat')return [PP_CAT[p._T].tit];if(k.indexOf('x:')===0){var v=p.x[k.slice(2)];return v?[v]:[];}if(k.charAt(1)===':'){if(k.charAt(0)!==p._T)return [];k=k.slice(2);}return p[k]?[p[k]]:[];}
+function ppVals(p,k){if(k==='rec')return p.rec;if(k==='cat')return [p.catNome||PP_CAT[p._T].tit];if(k.indexOf('x:')===0){var v=p.x[k.slice(2)];return v?[v]:[];}if(k.charAt(1)===':'){if(k.charAt(0)!==p._T)return [];k=k.slice(2);}return p[k]?[p[k]]:[];}
 function ppMode(p){var m=PP.cfg[p._T||PP.T][p.marca];return m&&m.m==='site'?'site':'manual';}
 function ppImg(p){return p.imgApp||p.img;}
-function ppOpts(k){var s={};(PP_BASEOPT[k]||[]).forEach(function(v){s[v]=1;});(PP.cust[PP.T][k]||[]).forEach(function(v){s[v]=1;});ppLista().forEach(function(p){if(p[k])s[p[k]]=1;});if(k==='marca')Object.keys(PP.cfg[PP.T]).forEach(function(v){s[v]=1;});return Object.keys(s).sort(function(a,b){return a.localeCompare(b,'pt',{numeric:true});});}
-function ppIssues(p){
-  var r=[];
-  if(ppMode(p)==='site'&&p.src==='N')r.push('Não encontrado no site '+p.marca);
-  var u=ppImg(p);
-  if(!u)r.push('Sem foto');else if(!ppOkUrl(u))r.push('Endereço da foto inválido');else if(PP.ST[u]==='fail')r.push('Foto quebrada');
-  PP_CAT[p._T||PP.T].req.forEach(function(q){if(!p[q[0]])r.push(q[1]+' não informado');});
+function ppOpts(k){var s={};if(k==='categoria'&&PP.T==='o')PP_CAT_ORDEM.forEach(function(v){if(v!=='Torneiras'&&v!=='Assentos sanitários')s[v]=1;});(PP_BASEOPT[k]||[]).forEach(function(v){s[v]=1;});(PP.cust[PP.T][k]||[]).forEach(function(v){s[v]=1;});ppLista().forEach(function(p){if(p[k])s[p[k]]=1;});if(k==='marca')Object.keys(PP.cfg[PP.T]).forEach(function(v){s[v]=1;});return Object.keys(s).sort(function(a,b){return a.localeCompare(b,'pt',{numeric:true});});}
+var PP_EXPIRA=/encrypted-tbn|gstatic\.com\/(shopping|images)|susercontent|th\.bing\.com/;
+function ppReview(p){
+  if(p.fora||p.manter)return '';
+  var N=ppN(p.n);
+  if(/^FORNECIMENTO|^SERVICO|MAO DE OBRA/.test(N))return 'É serviço, não produto';
+  if(PP_FORA_RE.test(N))return 'Fora do ramo de acessibilidade';
+  if(/SOB MEDIDA/.test(N)||/^[A-ZÇÃÕ]+$/.test(N))return 'Item genérico ou sob medida';
+  if(p._T==='o'&&p.catNome===PP_CAT_OUTROS)return 'Não se encaixa em nenhuma categoria';
+  return '';
+}
+function ppIssuesG(p){
+  var r=[],u=ppImg(p),N=ppN(p.n);
+  if(p.fora)return r;
+  if(ppMode(p)==='site'&&p.src==='N')r.push({g:'c',m:'Não encontrado no site '+p.marca});
+  if(!u)r.push({g:'f',m:'Sem foto'});
+  else if(!ppOkUrl(u))r.push({g:'f',m:'Endereço da foto inválido'});
+  else{
+    var s=PP.ST[u];
+    if(s==='fail'||(s&&s.fail))r.push({g:'f',m:'Foto quebrada'});
+    else if(s&&s.w){if(s.w<500||s.h<500)r.push({g:'f',m:'Foto em baixa resolução ('+s.w+'×'+s.h+')'});var q=s.w/s.h;if(q>2.2||q<0.45)r.push({g:'f',m:'Proporção ruim da foto'});}
+    if(PP_EXPIRA.test(u))r.push({g:'f',m:'Link de foto que costuma expirar'});
+    var du;try{du=decodeURIComponent(u).toLowerCase();}catch(e){du=u.toLowerCase();}
+    if(/INOX/.test(N)&&du.indexOf('alumin')>=0&&du.indexOf('inox')<0)r.push({g:'f',m:'Foto suspeita: produto inox com foto de alumínio'});
+    if(/ALUMIN/.test(N)&&du.indexOf('inox')>=0&&du.indexOf('alumin')<0)r.push({g:'f',m:'Foto suspeita: produto de alumínio com foto de inox'});
+    if(/DIREIT/.test(N)&&/esquerd|esqd/.test(du))r.push({g:'f',m:'Foto suspeita: lado direito com foto do esquerdo'});
+    if(/ESQUERD/.test(N)&&/direit/.test(du))r.push({g:'f',m:'Foto suspeita: lado esquerdo com foto do direito'});
+  }
+  PP_CAT[p._T||PP.T].req.forEach(function(q){if(!p[q[0]])r.push({g:'c',m:q[1]+' não informado'});});
+  if(p.semCod)r.push({g:'c',m:'Sem código no Bling'});
+  if(p.e<0)r.push({g:'c',m:'Estoque negativo no Bling ('+p.e+')'});
+  if(p.dup)r.push({g:'c',m:'Cadastro duplicado no Bling (mesmo nome)'});
+  var rv=ppReview(p);if(rv)r.push({g:'k',m:'Revisar se é de catálogo: '+rv});
   return r;
+}
+function ppIssues(p){return ppIssuesG(p).map(function(x){return x.m;});}
+function ppProbe(){
+  if(PP.probing)return;var us={};ppTodos().forEach(function(p){var u=ppImg(p);if(u&&ppOkUrl(u)&&!PP.ST[u])us[u]=1;});
+  var fila=Object.keys(us);if(!fila.length)return;PP.probing=fila.length;var ativos=0,t=null;
+  function fim(){clearTimeout(t);t=setTimeout(function(){ppDrawPend();ppDrawSide();if(!PP.probing)ppDrawGrid();},1200);}
+  function prox(){while(ativos<6&&fila.length){(function(u){ativos++;var im=new Image();im.referrerPolicy='no-referrer';
+    var done=function(v){if(!PP.ST[u]||PP.ST[u]==='ok')PP.ST[u]=v;ativos--;PP.probing--;fim();prox();};
+    im.onload=function(){done({w:im.naturalWidth,h:im.naturalHeight});};im.onerror=function(){done('fail');};im.src=u;})(fila.shift());}}
+  prox();
 }
 function ppPass(p,skip){
   if(PP.est&&p.e<=0)return false;
-  if(PP.soP&&!ppIssues(p).length)return false;
+  if(PP.soP){var ig=ppIssuesG(p);if(PP.soP==='fora'){if(!p.fora)return false;}else if(PP.soP==='all'?!ig.length:!ig.some(function(x){return x.g===PP.soP;}))return false;}
   var q=PP.q.trim().toLowerCase();
   if(q&&p.c.toLowerCase().indexOf(q)<0&&p.n.toLowerCase().indexOf(q)<0)return false;
   var fs=ppFacets();
@@ -3084,14 +3199,14 @@ function ppPass(p,skip){
 var ppImgTimer=null;
 function ppImgEvt(el,ok){
   var u=el.getAttribute('data-u');
-  if(PP.ST[u])return;
-  PP.ST[u]=ok?'ok':'fail';
+  if(PP.ST[u]&&PP.ST[u]!=='ok')return;
+  PP.ST[u]=ok?{w:el.naturalWidth,h:el.naturalHeight}:'fail';
   if(!ok){el.parentNode.innerHTML='<span class="pp-red">⚠️ Foto quebrada</span>';clearTimeout(ppImgTimer);ppImgTimer=setTimeout(function(){ppDrawPend();ppDrawSide();},400);}
 }
 function ppImgHtml(u){
   if(!u)return '<span style="color:#d97706">📷 Sem foto</span>';
   if(!ppOkUrl(u))return '<span class="pp-red">Link de foto inválido</span>';
-  if(PP.ST[u]==='fail')return '<span class="pp-red">⚠️ Foto quebrada</span>';
+  if(PP.ST[u]==='fail'||(PP.ST[u]&&PP.ST[u].fail))return '<span class="pp-red">⚠️ Foto quebrada</span>';
   return '<img src="'+ppEsc(u)+'" data-u="'+ppEsc(u)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onload="ppImgEvt(this,true)" onerror="ppImgEvt(this,false)">';
 }
 function ppSrcHtml(p){
@@ -3126,19 +3241,20 @@ function renderPesquisaProdutos(){
   var wrap=document.createElement('div');wrap.className='pp-wrap';
   wrap.innerHTML=
     '<div class="pp-top"><div class="pp-cats" id="ppCats"></div>'+
-    '<div class="pp-stat"><span class="pp-pill">🔌 Bling: produtos e estoque de '+PP_BLING_DATA+'</span><span class="pp-pill" id="ppSync">☁️ Edições: carregando…</span>'+
-    '<button type="button" class="pp-btn" id="ppReload">🔄 Recarregar</button><button type="button" class="pp-btn" id="ppCfgBtn">⚙️ Configurações</button></div></div>'+
+    '<div class="pp-stat"><span class="pp-pill" id="ppBl">🔌 Bling</span><span class="pp-pill" id="ppSync">☁️ Edições: carregando…</span>'+
+    '<button type="button" class="pp-btn" id="ppReload">🔄 Recarregar</button><button type="button" class="pp-btn" id="ppCfgBtn">⚙️ Configurações</button><button type="button" class="pp-btn pp-pri" id="ppCatBtn">📚 Gerar catálogo</button></div></div>'+
     '<div id="ppErr"></div><div id="ppToast"></div><div id="ppPend"></div>'+
     '<div class="pp-bar"><input id="ppQ" type="search" placeholder="Buscar por código ou nome" aria-label="Buscar produto"><select id="ppOrd" aria-label="Ordenar"><option value="c">Ordenar por código</option><option value="n">Ordenar por nome</option><option value="e">Maior estoque</option></select>'+
     '<button type="button" class="pp-btn pp-pri" id="ppNew">＋ Cadastrar características</button></div>'+
     '<div id="ppForm"></div><div class="pp-act" id="ppAct"></div>'+
     '<div class="pp-main"><aside class="pp-side" id="ppSide" aria-label="Filtros"></aside><section><div id="ppCnt" style="font-size:13px;color:#777;margin-bottom:8px"></div><div class="pp-grid" id="ppGrid"></div></section></div><div id="ppSelBar"></div>';
   PP.root=wrap;
-  var q=wrap.querySelector('#ppQ');q.value=PP.q;q.oninput=function(){PP.q=q.value;ppDrawSide();ppDrawGrid();ppDrawAct();};
+  var q=wrap.querySelector('#ppQ');q.value=PP.q;q.oninput=function(){PP.q=q.value;PP.lim=0;ppDrawSide();ppDrawGrid();ppDrawAct();};
   var o=wrap.querySelector('#ppOrd');o.value=PP.ord;o.onchange=function(){PP.ord=o.value;ppDrawGrid();};
   wrap.querySelector('#ppReload').onclick=function(){PP.carregado=false;PP.ST={};ppCarregar();ppDraw();};
   wrap.querySelector('#ppCfgBtn').onclick=function(){ppConfig();};
   wrap.querySelector('#ppNew').onclick=ppPicker;
+  wrap.querySelector('#ppCatBtn').onclick=ppCatalogo;
   if(!PP.carregado){ppMontaBase();ppCarregar();}
   setTimeout(ppDraw,0);
   return wrap;
@@ -3147,7 +3263,12 @@ function ppEl(id){return PP.root?PP.root.querySelector('#'+id):null;}
 function ppDraw(){
   if(!PP.root||!document.body.contains(PP.root))return;
   var cats=ppEl('ppCats');
-  cats.innerHTML='<div style="font-size:16px;font-weight:700;color:#1a1a1a">📦 Todos os produtos <span style="font-weight:400;color:#999;font-size:13px">('+ppTodos().length+': '+PP.L.t.length+' torneiras, '+PP.L.a.length+' assentos)</span></div>';
+  var nCat={};ppTodos().forEach(function(p){nCat[p.catNome]=1;});
+  cats.innerHTML='<div style="font-size:16px;font-weight:700;color:#1a1a1a">📦 Todos os produtos <span style="font-weight:400;color:#999;font-size:13px">('+ppTodos().length+' em '+Object.keys(nCat).length+' categorias)</span></div>';
+  var bl=ppEl('ppBl');
+  if(PP.blingInfo){var dt='';try{dt=new Date(PP.blingInfo.em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){}
+    bl.textContent='🔌 Bling sincronizado em '+dt+' · '+PP.blingInfo.total+' produtos';bl.style.color='';bl.title='Para atualizar: abra o Bling e clique em Sincronizar produtos na extensão Mais Acessível';}
+  else{bl.textContent='🔌 Bling ainda não sincronizado (mostrando torneiras e assentos)';bl.style.color='#b45309';bl.title='Abra o Bling e clique em Sincronizar produtos na extensão Mais Acessível';}
   ppEl('ppSync').textContent=PP.carregando?'☁️ Edições: carregando…':(PP.erro?'☁️ Edições: com erro':'☁️ Edições sincronizadas');
   ppEl('ppSync').style.color=PP.erro?'#dc2626':'';
   ppEl('ppErr').innerHTML=PP.erro?'<div class="pp-err" role="alert"><span>⚠️</span><div style="flex:1">'+ppEsc(PP.erro)+'</div><button type="button" class="pp-btn" id="ppErrX">Fechar</button></div>':'';
@@ -3162,19 +3283,23 @@ function ppDrawToast(){
 }
 function ppDrawPend(){
   var el=ppEl('ppPend');if(!el)return;
-  var L=ppTodos().map(function(p){return [p,ppIssues(p)];}).filter(function(x){return x[1].length;});
-  var tot=L.reduce(function(s,x){return s+x[1].length;},0);
-  if(!L.length){el.innerHTML='<div class="pp-ok">✅ Todos os produtos estão completos.</div>';return;}
-  el.innerHTML='<div class="pp-pend"><button type="button" class="pp-pend-h" id="ppPtog" aria-expanded="'+PP.openP+'">⚠️ '+tot+' '+(tot===1?'pendência':'pendências')+' em '+L.length+' '+(L.length===1?'produto':'produtos')+'<span style="margin-left:auto;font-size:12px;font-weight:400">'+(PP.openP?'Ocultar ▲':'Ver lista ▼')+'</span></button>'+
-    (PP.openP?'<div style="margin-top:8px">'+L.map(function(x){var p=x[0];return '<div class="pp-pi"><span class="pp-cod" style="min-width:110px;color:#92400e">'+ppEsc(p.c)+'</span><span style="flex:1;min-width:160px">'+x[1].map(ppEsc).join(' · ')+'</span><button type="button" class="pp-btn" data-fix="'+ppEsc(ppKeyOf(p))+'">'+(ppMode(p)==='site'&&p.src==='N'?'Vincular':'Completar')+'</button></div>';}).join('')+'</div>':'')+'</div>';
-  ppEl('ppPtog').onclick=function(){PP.openP=!PP.openP;ppDrawPend();};
-  el.querySelectorAll('[data-fix]').forEach(function(b){b.onclick=function(){ppForm(ppByKey(b.dataset.fix));};});
+  var G={f:{},c:{},k:{}},nFora=0;
+  ppTodos().forEach(function(p){if(p.fora)nFora++;ppIssuesG(p).forEach(function(x){G[x.g][ppKeyOf(p)]=1;});});
+  var nf=Object.keys(G.f).length,nc=Object.keys(G.c).length,nk=Object.keys(G.k).length;
+  var prob=PP.probing?'<span style="font-size:12px;color:#888;font-weight:400">· verificando fotos ('+PP.probing+' restantes)…</span>':'';
+  if(!nf&&!nc&&!nk){el.innerHTML='<div class="pp-ok">✅ Nenhuma pendência. '+prob+'</div>';return;}
+  function chip(g,ic,t,n){var on=PP.soP===g;return '<button type="button" class="pp-btn" data-g="'+g+'" aria-pressed="'+on+'" style="'+(on?'background:#d97706;border-color:#d97706;color:#fff;font-weight:700':'')+'">'+ic+' '+t+' <b>'+n+'</b></button>';}
+  el.innerHTML='<div class="pp-pend"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:14px;font-weight:700">⚠️ Pendências</span>'+prob+'<span style="flex:1"></span>'+
+    chip('f','🖼️','Fotos',nf)+chip('c','📝','Cadastro',nc)+chip('k','📚','Revisar se é de catálogo',nk)+(nFora?chip('fora','🚫','Fora do catálogo',nFora):'')+
+    (PP.soP?'<button type="button" class="pp-btn" data-g="">✕ Mostrar todos</button>':'')+'</div>'+
+    '<div style="font-size:12px;margin-top:6px;color:#92400e">Clique num grupo para ver só esses produtos. Cada card mostra o que corrigir.</div></div>';
+  el.querySelectorAll('[data-g]').forEach(function(b){b.onclick=function(){PP.soP=PP.soP===b.dataset.g?false:(b.dataset.g||false);ppDrawPend();ppDrawSide();ppDrawAct();ppDrawGrid();};});
 }
 function ppDrawSide(){
   var el=ppEl('ppSide');if(!el)return;
   var np=ppTodos().filter(function(p){return ppIssues(p).length;}).length;
   var h='<label class="pp-fx" style="padding:4px 0"><input type="checkbox" id="ppEst"'+(PP.est?' checked':'')+'> Só com estoque</label>'+
-    '<label class="pp-fx" style="padding:2px 0 4px;color:#b45309"><input type="checkbox" id="ppSoP"'+(PP.soP?' checked':'')+'> Só com pendência<span class="n">'+np+'</span></label>';
+    '<label class="pp-fx" style="padding:2px 0 4px;color:#b45309"><input type="checkbox" id="ppSoP"'+(PP.soP==='all'?' checked':'')+'> Só com pendência<span class="n">'+np+'</span></label>';
   ppFacets().forEach(function(f){
     var k=f[0],t=f[1],m={},all={};
     ppTodos().filter(function(p){return k==='cat'||ppCatOk(p);}).forEach(function(p){ppVals(p,k).forEach(function(v){all[v]=1;});});
@@ -3187,18 +3312,18 @@ function ppDrawSide(){
   });
   el.innerHTML=h;
   el.querySelector('#ppEst').onchange=function(e){PP.est=e.target.checked;ppDrawSide();ppDrawAct();ppDrawGrid();};
-  el.querySelector('#ppSoP').onchange=function(e){PP.soP=e.target.checked;ppDrawSide();ppDrawAct();ppDrawGrid();};
+  el.querySelector('#ppSoP').onchange=function(e){PP.soP=e.target.checked?'all':false;ppDrawPend();ppDrawSide();ppDrawAct();ppDrawGrid();};
   el.querySelectorAll('[data-k]').forEach(function(i){i.onchange=function(){var s=ppSk(i.dataset.k);if(i.checked)s[i.dataset.v]=1;else delete s[i.dataset.v];if(i.dataset.k==='cat'){var sc=Object.keys(ppSk('cat'));['t','a'].forEach(function(T){if(sc.length&&sc.indexOf(PP_CAT[T].tit)<0)Object.keys(PP.S).forEach(function(fk){if(fk.indexOf(T+':')===0)PP.S[fk]={};});});}ppDrawSide();ppDrawAct();ppDrawGrid();};});
 }
 function ppDrawAct(){
   var el=ppEl('ppAct');if(!el)return;var a='';
   ppFacets().forEach(function(f){Object.keys(ppSk(f[0])).forEach(function(v){a+='<button type="button" class="pp-ac" data-k="'+ppEsc(f[0])+'" data-v="'+ppEsc(v)+'">'+ppEsc(v)+' ✕</button>';});});
   if(PP.est)a+='<button type="button" class="pp-ac" data-x="est">Só com estoque ✕</button>';
-  if(PP.soP)a+='<button type="button" class="pp-ac" data-x="sop">Só com pendência ✕</button>';
+  if(PP.soP)a+='<button type="button" class="pp-ac" data-x="sop">'+({all:'Só com pendência',f:'Pendência de foto',c:'Pendência de cadastro',k:'Revisar se é de catálogo',fora:'Fora do catálogo'}[PP.soP])+' ✕</button>';
   if(a)a+='<button type="button" class="pp-ac" data-clr="1" style="background:#fff;border-color:#ddd;color:#666">Limpar tudo</button>';
   el.innerHTML=a;
   el.querySelectorAll('.pp-ac').forEach(function(b){b.onclick=function(){
-    if(b.dataset.clr){PP.S={};PP.est=false;PP.soP=false;}else if(b.dataset.x==='est')PP.est=false;else if(b.dataset.x==='sop')PP.soP=false;else delete ppSk(b.dataset.k)[b.dataset.v];
+    if(b.dataset.clr){PP.S={};PP.est=false;PP.soP=false;ppDrawPend();}else if(b.dataset.x==='est')PP.est=false;else if(b.dataset.x==='sop'){PP.soP=false;ppDrawPend();}else delete ppSk(b.dataset.k)[b.dataset.v];
     ppDrawSide();ppDrawAct();ppDrawGrid();};});
 }
 function ppDrawGrid(){
@@ -3207,20 +3332,25 @@ function ppDrawGrid(){
   if(PP.ord==='c')r.sort(function(a,b){return a.c.localeCompare(b.c,'pt',{numeric:true});});
   if(PP.ord==='n')r.sort(function(a,b){return a.n.localeCompare(b.n,'pt');});
   if(PP.ord==='e')r.sort(function(a,b){return b.e-a.e;});
-  ppEl('ppCnt').textContent=r.length+' produto'+(r.length===1?'':'s')+' do Bling';
+  var LIM=PP.lim||120,tot=r.length;r=r.slice(0,LIM);
+  ppEl('ppCnt').textContent=tot+' produto'+(tot===1?'':'s')+' do Bling'+(tot>LIM?' · mostrando '+LIM:'');
   if(!r.length){el.innerHTML='<div style="grid-column:1/-1;padding:2rem;text-align:center;color:#888;font-size:14px">Nenhum produto com essa combinação de filtros. Remova um filtro acima.</div>';return;}
   el.innerHTML=r.map(function(p){
     var is=ppIssues(p),ok=p.e>0;
-    var ch=PP_CAT[p._T].F.filter(function(f){return f[0]!=='rec'&&f[0]!=='marca';}).map(function(f){return p[f[0]];}).filter(function(x){return x&&x!=='Padrão'&&x!=='Comum';})
+    var ch=PP_CAT[p._T].F.filter(function(f){return f[0]!=='rec'&&f[0]!=='marca'&&f[0]!=='categoria';}).map(function(f){return p[f[0]];}).filter(function(x){return x&&x!=='Padrão'&&x!=='Comum';})
       .concat(Object.keys(p.x).map(function(k){return p.x[k];})).concat(p.rec).map(function(x){return '<span class="pp-chip">'+ppEsc(x)+'</span>';}).join('');
     var sl=!!PP.sel[ppKeyOf(p)],pk=ppEsc(ppKeyOf(p));
     return '<div class="pp-card'+(is.length?' pd':'')+(sl?' sel':'')+'"><div class="pp-img">'+ppImgHtml(ppImg(p))+'</div>'+
       (is.length?'<button type="button" class="pp-warnbtn" data-ed="'+pk+'" title="'+ppEsc(is.join(', '))+'">⚠️ '+(is.length===1?ppEsc(is[0]):is.length+' pendências')+'</button>':'')+
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><span class="pp-cod">'+ppEsc(p.c)+'</span><span class="pp-est '+(ok?'ok':'no')+'">'+(ok?p.e+' em estoque':'Sem estoque')+'</span></div>'+
-      '<div class="pp-nome">'+ppEsc(p.n)+'</div><div style="font-size:12px;color:#888">'+PP_CAT[p._T].icon+' '+(p._T==='t'?'Torneira':'Assento sanitário')+(p.marca?' · '+ppEsc(p.marca):'')+'</div>'+
+      '<div class="pp-nome">'+ppEsc(p.n)+'</div><div style="font-size:12px;color:#888">'+ppEsc(p.catNome)+(p.marca?' · '+ppEsc(p.marca):'')+'</div>'+
+      (p.fora?'<div style="font-size:12px;background:#f3f4f6;color:#555;border-radius:6px;padding:4px 8px">🚫 Fora do catálogo <button type="button" class="pp-btn" data-rv="'+pk+'" data-d="desfazer" style="padding:2px 8px;margin-left:4px">Desfazer</button></div>':'')+
+      (ppReview(p)?'<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="pp-btn" data-rv="'+pk+'" data-d="manter" style="border-color:#16a34a;color:#166534">✓ Manter no catálogo</button><button type="button" class="pp-btn" data-rv="'+pk+'" data-d="fora" style="border-color:#dc2626;color:#991b1b">✕ Tirar do catálogo</button></div>':'')+
       '<div>'+ch+'</div>'+ppSrcHtml(p)+
       '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:auto;padding-top:6px;flex-wrap:wrap"><button type="button" class="pp-btn pp-selb'+(sl?' on':'')+'" data-sel="'+pk+'" aria-pressed="'+sl+'">'+(sl?'☑ Selecionado':'☐ Selecionar')+'</button><button type="button" class="pp-btn" data-ed="'+pk+'">✏️ Editar</button><button type="button" class="pp-btn" data-cp="'+pk+'">📋 Ficha</button></div></div>';
-  }).join('');
+  }).join('')+(tot>LIM?'<div style="grid-column:1/-1;text-align:center;padding:10px"><button type="button" class="pp-btn" id="ppMais">Mostrar mais '+Math.min(120,tot-LIM)+' de '+(tot-LIM)+' restantes</button></div>':'');
+  var bm=el.querySelector('#ppMais');if(bm)bm.onclick=function(){PP.lim=LIM+120;ppDrawGrid();};
+  el.querySelectorAll('[data-rv]').forEach(function(b){b.onclick=function(){ppDecide(ppByKey(b.dataset.rv),b.dataset.d,b);};});
   el.querySelectorAll('[data-ed]').forEach(function(b){b.onclick=function(){ppForm(ppByKey(b.dataset.ed));};});
   el.querySelectorAll('[data-sel]').forEach(function(b){b.onclick=function(){var k=b.dataset.sel;if(PP.sel[k])delete PP.sel[k];else PP.sel[k]=1;ppDrawGrid();ppDrawSelBar();};});
   el.querySelectorAll('[data-cp]').forEach(function(b){b.onclick=function(){
@@ -3344,7 +3474,7 @@ function ppForm(p){
     var x={};rows.forEach(function(r){if(r[0]&&r[1])x[r[0]]=r[1];});
     var rec=[].slice.call(f.querySelectorAll('.ppRec:checked')).map(function(i){return i.value;});
     var msgs=[],fresh={},novosCust=JSON.parse(JSON.stringify(PP.cust[T]||{}));
-    C.F.forEach(function(fd){if(fd[0]==='rec')return;var v=got[fd[0]];if(v&&ppOpts(fd[0]).indexOf(v)<0){(novosCust[fd[0]]=novosCust[fd[0]]||[]).push(v);fresh[(fd[0]==='marca'?'marca':T+':'+fd[0])+'|'+v]=1;msgs.push('Novo valor <b>'+ppEsc(v)+'</b> criado em '+ppEsc(fd[1])+'.');}});
+    C.F.forEach(function(fd){if(fd[0]==='rec')return;var v=got[fd[0]];if(v&&ppOpts(fd[0]).indexOf(v)<0){(novosCust[fd[0]]=novosCust[fd[0]]||[]).push(v);fresh[(fd[0]==='marca'?'marca':fd[0]==='categoria'?'cat':T+':'+fd[0])+'|'+v]=1;msgs.push('Novo valor <b>'+ppEsc(v)+'</b> criado em '+ppEsc(fd[1])+'.');}});
     var oldK=ppXKall();
     Object.keys(x).forEach(function(k){if(oldK.indexOf(k)<0){fresh['x:'+k+'|*']=1;msgs.push('Novo filtro <b>'+ppEsc(k)+'</b> criado com o valor '+ppEsc(x[k])+'.');}else if(!ppTodos().some(function(o){return o.x[k]===x[k];})){fresh['x:'+k+'|'+x[k]]=1;msgs.push('Novo valor <b>'+ppEsc(x[k])+'</b> em '+ppEsc(k)+'.');}});
     if(iu!==p.imgApp)msgs.push(iu?'Foto do produto atualizada pelo endereço informado.':'Foto voltou a ser a do Bling.');
@@ -3354,7 +3484,7 @@ function ppForm(p){
     if(JSON.stringify(novosCust)!==JSON.stringify(PP.cust[T]||{}))ps.push(ppSalvar('custom/'+T,novosCust));
     Promise.all(ps).then(function(){
       PP.edits[T][ppKey(p.c)]=ed;PP.cust[T]=novosCust;
-      Object.assign(p,got);p.rec=rec;p.x=x;p.imgApp=iu;p.link=lk;p.man=true;
+      Object.assign(p,got);p.rec=rec;p.x=x;p.imgApp=iu;p.link=lk;p.man=true;if(p._T==='o'&&p.categoria)p.catNome=p.categoria;
       PP.erro='';PP.fresh=fresh;PP.aviso=msgs.length?msgs:['Características de '+ppEsc(p.c)+' salvas.'];
       ppEl('ppForm').innerHTML='';ppDraw();
     }).catch(function(e){btn.disabled=false;btn.textContent='Salvar';ppErroSalvar(e);});
@@ -3410,6 +3540,118 @@ function ppGerador(){
       var cp=document.getElementById('ppApCp');cp.onclick=function(){var i=document.getElementById('ppApUrl');if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(function(){cp.textContent='✅ Copiado';},function(){i.select();});else i.select();};
     }).catch(function(e){btn.disabled=false;btn.textContent='🔗 Gerar link';err.textContent='Não foi possível gerar o link ('+(e&&e.message||e)+'). Verifique a internet e tente de novo.';});
   };
+}
+function ppDecide(p,d,btn){
+  if(!p)return;var T=p._T,k=ppKey(p.c);
+  var ed=Object.assign({},PP.edits[T][k]||{});ed.fora=d==='fora';ed.manter=d==='manter';if(d==='desfazer'){ed.fora=false;ed.manter=false;}
+  if(btn){btn.disabled=true;btn.textContent='Salvando…';}
+  ppSalvar('edicoes/'+T+'/'+k,ed).then(function(){PP.edits[T][k]=ed;p.fora=ed.fora;p.manter=ed.manter;PP.erro='';ppDrawPend();ppDrawSide();ppDrawGrid();ppDrawSelBar();}).catch(ppErroSalvar);
+}
+var PP_CAT_ORDEM=PP_CATS.map(function(c){return c[0];}).concat([PP_CAT_OUTROS]);
+function ppModelos(lista){
+  var cores={BRANCO:'branco',BRANCA:'branco',PRETO:'preto',PRETA:'preto',NATURAL:'natural',AMARELO:'amarelo',AMARELA:'amarelo',AZUL:'azul',VERMELHO:'vermelho',VERMELHA:'vermelho',VERDE:'verde','CINZA CHUMBO':'cinza','CINZA ESCURO':'cinza',CINZA:'cinza',CARAMELO:'caramelo','ROSE GOLD':'rose',CROMADO:'inox',CR:'inox'};
+  var G={},ordem=[];
+  lista.forEach(function(p){
+    var N=ppN(p.n),suf='';
+    var di=N.indexOf(' - ');if(di>0&&/(ANDAR|TERREO|SUBSOLO|GARAGEM|INICIO|FINAL|HALL|ESCADA|RAMPA|MEZANINO|COBERTURA|ENTRADA|G\d|AUDITORIO|CANTINA|CALCADA|CIRCULACAO|LABORATORIO|SALAO|ACADEMIA|LAJE)/.test(N.slice(di+3))){suf=N.slice(di+3);N=N.slice(0,di);}
+    var med=[],cs=[],lados=[];
+    N=N.replace(/\b\d+([.,]\d+)?\s*(MM|CM|MTS?|M)?\s*X\s*\d+([.,]\d+)?(\s*(MM|CM|MTS?|M))?(\s*X\s*\d+([.,]\d+)?)?\s*(MM|CM|MTS?|M)?\b/g,function(m){med.push(m.replace(/\s+/g,'').toLowerCase().replace(/mts?/g,'m').replace(/\./g,','));return ' ';});
+    N=N.replace(/\b\d+([.,]\d+)?\s*(MM|CM|MTS?|MT)\b/g,function(m){var v=m.replace(/\s+/g,'');var n=parseFloat(v.replace(',','.'));if(/MM/.test(v))v=String(n/10).replace('.',',')+'cm';else if(/MT|M$|MTS/.test(v)&&!/CM/.test(v))v=String(v).replace(/MTS?|MT/,'m').toLowerCase();else v=v.toLowerCase();med.push(v);return ' ';});
+    ['CINZA CHUMBO','CINZA ESCURO','ROSE GOLD','BRANCO','BRANCA','PRETO','PRETA','NATURAL','AMARELO','AMARELA','AZUL','VERMELHO','VERMELHA','VERDE','CINZA','CARAMELO'].forEach(function(c){var re=new RegExp('\\b'+c+'\\b');if(re.test(N)){cs.push(cores[c]);N=N.replace(re,' ');}});
+    N=N.replace(/\bLADO\b/g,' ').replace(/\b(DIREITO|DIREITA)\b/g,function(){lados.push('direito');return ' ';}).replace(/\b(ESQUERDO|ESQUERDA)\b/g,function(){lados.push('esquerdo');return ' ';});
+    N=N.replace(/\b\d+\s*(º|O)?\s*ANDAR\b/g,function(m){suf=suf||m;return ' ';});
+    N=N.replace(/\s+-\s*$/,'').replace(/\s+/g,' ').trim().replace(/\s-$/,'');
+    var key=p.catNome+'|'+N;
+    if(!G[key]){G[key]={cat:p.catNome,tit:N,itens:[],med:{},cores:{},lados:{},suf:{}};ordem.push(key);}
+    var g=G[key];g.itens.push(p);med.forEach(function(m){g.med[m]=1;});cs.forEach(function(c){g.cores[c]=1;});lados.forEach(function(l){g.lados[l]=1;});if(suf)g.suf[suf.trim()]=1;
+    if(/INOX/.test(ppN(p.n)))g.cores.inox=1;else if(/ALUMIN/.test(ppN(p.n))&&!cs.length)g.cores.natural=1;
+  });
+  return ordem.map(function(k){var g=G[k];
+    var best=null,bs=-1;g.itens.forEach(function(p){var u=ppImg(p);if(!u||!ppOkUrl(u))return;var s=PP.ST[u];if(s==='fail'||(s&&s.fail))return;var sc=s&&s.w?Math.min(s.w,s.h):300;if(sc>bs){bs=sc;best=p;}});
+    var ms=Object.keys(g.med).sort(function(a,b){return parseFloat(a)-parseFloat(b);});
+    var lin=[];if(ms.length)lin.push((ms.length>1?'Medidas: ':'Medida: ')+(ms.length>10?ms.slice(0,10).join(', ')+' e outras':ms.join(', ')));
+    var ls=Object.keys(g.lados);if(ls.length)lin.push('Opções de lado: '+ls.join(' e '));
+    var sf=Object.keys(g.suf);if(sf.length)lin.push('Opções: '+(sf.length>8?sf.slice(0,8).join(', ')+' e outras':sf.join(', ')).toLowerCase());
+    if(!lin.length&&g.itens.length===1){var p0=g.itens[0];var sp=ppSpecs(p0._T,p0).filter(function(s){return !/Categoria|Marca/.test(s[0]);}).slice(0,2);if(sp.length)lin.push(sp.map(function(s){return s[0]+': '+s[1];}).join(' · '));}
+    var mk={};g.itens.forEach(function(p){if(p.marca)mk[p.marca]=1;});var mks=Object.keys(mk);if(mks.length&&mks.length<=3)lin.push('Marca: '+mks.join(', '));
+    return {cat:g.cat,tit:g.tit,linha:lin.join('. ')+(lin.length?'.':''),img:best?ppImg(best):'',cores:Object.keys(g.cores),n:g.itens.length,itens:g.itens,probFoto:!best};});
+}
+function ppCatalogo(){
+  var cats={},sel=ppSelItens().length;ppTodos().forEach(function(p){if(!p.fora)cats[p.catNome]=(cats[p.catNome]||0)+1;});
+  var ordem=PP_CAT_ORDEM.filter(function(c){return cats[c];});
+  var f=ppPanel(ppHdr('📚 Gerar catálogo')+
+    '<p style="font-size:13px;color:#666;margin:0 0 10px">No estilo do catálogo Mais Acessível: capa, páginas por categoria com foto, nome e medidas, e contracapa. Sem preços. Produtos iguais em tamanhos/cores diferentes viram um card só.</p>'+
+    '<div class="pp-sec"><span class="pp-fl">O que entra</span>'+
+    '<label class="pp-fx"><input type="radio" name="ppEsc" value="tudo" checked> Todo o catálogo</label>'+
+    '<label class="pp-fx"><input type="radio" name="ppEsc" value="cats"> Só as categorias marcadas abaixo</label>'+
+    '<label class="pp-fx"><input type="radio" name="ppEsc" value="sel"'+(sel?'':' disabled')+'> Só os produtos selecionados ('+sel+')</label>'+
+    '<div id="ppCatL" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 12px;margin-top:6px;padding-left:22px">'+ordem.map(function(c){return '<label class="pp-fx"><input type="checkbox" class="ppCc" value="'+ppEsc(c)+'" checked> '+ppEsc(c)+'<span class="n">'+cats[c]+'</span></label>';}).join('')+'</div></div>'+
+    '<div class="pp-sec"><label class="pp-fx"><input type="checkbox" id="ppCapa" checked> Incluir capa e contracapa</label>'+
+    '<label class="pp-fx"><input type="checkbox" id="ppSemFoto"> Incluir produtos sem foto</label>'+
+    '<label class="pp-fx"><input type="checkbox" id="ppRev"> Incluir itens ainda não revisados (“Revisar se é de catálogo”)</label></div>'+
+    '<div id="ppCatRes" class="pp-msg" style="font-size:13px"></div>'+
+    '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="pp-btn pp-close">Cancelar</button><button type="button" class="pp-btn pp-pri" id="ppCatGo">📄 Gerar PDF</button></div>');
+  function escolhe(){
+    var esc=f.querySelector('[name=ppEsc]:checked').value,cs={};f.querySelectorAll('.ppCc:checked').forEach(function(c){cs[c.value]=1;});
+    var semFoto=f.querySelector('#ppSemFoto').checked,rev=f.querySelector('#ppRev').checked;
+    var base=esc==='sel'?ppSelItens().map(function(x){return x.p;}):ppTodos();
+    return base.filter(function(p){if(p.fora)return false;if(esc==='cats'&&!cs[p.catNome])return false;if(!rev&&esc!=='sel'&&ppReview(p))return false;
+      var u=ppImg(p),s=PP.ST[u];var temFoto=u&&ppOkUrl(u)&&!(s==='fail'||(s&&s.fail));if(!semFoto&&!temFoto)return false;return true;});
+  }
+  function resumo(){
+    var L=escolhe(),M=ppModelos(L),ruins=0;M.forEach(function(m){var s=PP.ST[m.img];if(s&&s.w&&(s.w<500||s.h<500))ruins++;});
+    f.querySelector('#ppCatRes').innerHTML='<b>'+L.length+'</b> produtos em <b>'+M.length+'</b> cards'+(ruins?' · <span style="color:#b45309">⚠️ '+ruins+' card'+(ruins>1?'s':'')+' com foto em baixa resolução</span>':'')+(PP.probing?' · <span class="pp-mut">ainda verificando '+PP.probing+' fotos…</span>':'');
+  }
+  f.querySelectorAll('input').forEach(function(i){i.onchange=function(){if(i.name==='ppEsc'||i.classList.contains('ppCc')){if(i.classList.contains('ppCc'))f.querySelector('[name=ppEsc][value=cats]').checked=true;}resumo();};});
+  resumo();
+  f.querySelector('#ppCatGo').onclick=function(){
+    var L=escolhe();if(!L.length){f.querySelector('#ppCatRes').innerHTML='<span class="pp-red">Nenhum produto nessa seleção.</span>';return;}
+    var w=window.open('','_blank');if(!w){f.querySelector('#ppCatRes').innerHTML='<span class="pp-red">O navegador bloqueou a nova janela. Permita pop-ups para este site e tente de novo.</span>';return;}
+    w.document.write('<p style="font-family:Segoe UI,Arial;padding:40px;color:#666">Montando o catálogo…</p>');
+    var capa=f.querySelector('#ppCapa').checked;
+    ppCarregaCapas(capa,function(cp){ppEscreveCatalogo(w,ppModelos(L),cp);});
+  };
+}
+function ppCarregaCapas(quer,cb){
+  if(!quer)return cb(null);if(window.CATALOGO_CAPAS)return cb(window.CATALOGO_CAPAS);
+  var s=document.createElement('script');s.src='catalogo-capas.js?v=1';s.onload=function(){cb(window.CATALOGO_CAPAS||null);};s.onerror=function(){cb(null);};document.head.appendChild(s);
+}
+function ppEscreveCatalogo(w,M,cp){
+  var logo='';try{var hh=renderHeader();var im=hh.querySelector('img');if(im)logo=im.getAttribute('src');}catch(e){}
+  var css='*{box-sizing:border-box}body{margin:0;background:#e9e7e3;font-family:Segoe UI,Roboto,Arial,sans-serif;color:#1a1a1a}'+
+  '.bar{position:sticky;top:0;z-index:5;background:#2d2d2d;color:#fff;padding:10px 18px;display:flex;gap:12px;align-items:center;font-size:13px}.bar button{font:inherit;padding:7px 14px;border-radius:6px;border:none;background:#d97706;color:#fff;font-weight:700;cursor:pointer}'+
+  '.wrap{padding:20px 0;display:flex;flex-direction:column;align-items:center;gap:20px}'+
+  '.page{width:210mm;height:297mm;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.15);position:relative;padding:12mm 10mm 22mm 14mm;overflow:hidden;page-break-after:always;break-after:page}'+
+  '.full{padding:0}.full img{width:100%;height:100%;object-fit:cover;display:block}'+
+  '.dots{position:absolute;top:5mm;right:6mm;width:30mm;height:7mm;background:radial-gradient(circle,#f28c28 1.6px,transparent 1.8px) 0 0/6px 6px}'+
+  '.vb{position:absolute;left:3.5mm;top:32mm;width:6mm;height:90mm;background:repeating-linear-gradient(180deg,#d4d4d4 0 6mm,transparent 6mm 8mm)}'+
+  '.ic{position:absolute;top:4mm;left:5mm;color:#f28c28;font-size:20px}'+
+  'h2{font-style:italic;font-weight:400;font-size:19px;text-align:center;margin:6mm 0 4mm;letter-spacing:.3px}'+
+  '.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3.2mm}'+
+  '.card{border:4px solid #1d2b3a;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;break-inside:avoid;background:#fff}'+
+  '.im{height:38mm;display:flex;align-items:center;justify-content:center;padding:2mm;position:relative}.im img{max-width:100%;max-height:100%;object-fit:contain}'+
+  '.co{position:absolute;left:0;bottom:1mm;display:flex;align-items:center;gap:3px}.co .t{background:#16a34a;color:#fff;font-size:9.5px;font-weight:600;padding:1px 12px 1px 5px;clip-path:polygon(0 0,100% 0,85% 100%,0 100%)}'+
+  '.d{width:10px;height:10px;border-radius:50%;border:1px solid #888;display:inline-block}.d-inox{background:linear-gradient(90deg,#9aa0a6 50%,#fff 50%)}.d-natural{background:linear-gradient(135deg,#dde1e4,#8d939a)}.d-branco{background:#fff}.d-preto{background:#111;border-color:#111}.d-amarelo{background:#f2c200}.d-azul{background:#1d4ed8}.d-vermelho{background:#dc2626}.d-verde{background:#16a34a}.d-cinza{background:#6b7280}.d-caramelo{background:#b7793e}.d-rose{background:#e8b4a0}'+
+  '.cap{border-top:4px solid #1d2b3a;padding:1.6mm 2mm 2mm;min-height:17mm}.cap .n{font-size:8.6px;font-weight:800;color:#1d2b3a;text-transform:uppercase;line-height:1.2}.cap .l{font-size:8.2px;color:#333;margin-top:1mm;line-height:1.25}'+
+  '.sf{color:#bbb;font-size:10px}.foot{position:absolute;left:0;right:0;bottom:5mm;display:flex;align-items:center;justify-content:center;gap:5mm}.foot .ln{width:50mm;height:3.5mm;background:repeating-linear-gradient(90deg,#d4d4d4 0 5mm,transparent 5mm 6.5mm)}.foot img{height:12mm}'+
+  '@page{size:A4;margin:0}@media print{.bar{display:none}body{background:#fff}.wrap{padding:0;gap:0}.page{box-shadow:none}}';
+  function card(m){return '<div class="card"><div class="im">'+(m.img?'<img src="'+ppEsc(m.img)+'" alt="" referrerpolicy="no-referrer">':'<span class="sf">Foto em breve</span>')+(m.cores.length?'<div class="co"><span class="t">CORES:</span>'+m.cores.slice(0,6).map(function(c){return '<span class="d d-'+c+'"></span>';}).join('')+'</div>':'')+'</div><div class="cap"><div class="n">'+ppEsc(m.tit)+'</div>'+(m.linha?'<div class="l">'+ppEsc(m.linha)+'</div>':'')+'</div></div>';}
+  var porCat={};M.forEach(function(m){(porCat[m.cat]=porCat[m.cat]||[]).push(m);});
+  var cats=PP_CAT_ORDEM.filter(function(c){return porCat[c];});
+  var CAP=232,TIT=17,ROW=62,pages=[],cur=null,used=0;
+  function novaPag(){cur=[];pages.push(cur);used=0;}
+  novaPag();
+  cats.forEach(function(c){var L=porCat[c],i=0,first=true;
+    while(i<L.length){var rows=Math.ceil((L.length-i)/4);var cabe=Math.floor((CAP-used-TIT)/ROW);
+      if(cabe<1){novaPag();continue;}var n=Math.min(rows,cabe)*4;var part=L.slice(i,i+n);
+      cur.push({tit:c+(first?'':' (continuação)'),cards:part});used+=TIT+Math.ceil(part.length/4)*ROW;i+=n;first=false;}
+  });
+  var html='<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Catálogo Mais Acessível</title><style>'+css+'</style></head><body><div class="bar"><b>Catálogo Mais Acessível</b><span style="color:#ccc">'+M.length+' cards · '+pages.length+' páginas'+(cp?' + capa e contracapa':'')+'</span><span style="flex:1"></span><span style="color:#ccc">Na janela de impressão, escolha <b>Salvar como PDF</b></span><button onclick="window.print()">🖨️ Imprimir / Salvar PDF</button></div><div class="wrap">';
+  if(cp&&cp.capa)html+='<div class="page full"><img src="'+cp.capa+'" alt="Capa"></div>';
+  pages.forEach(function(pg){html+='<div class="page"><div class="ic">♿︎</div><div class="dots"></div><div class="vb"></div>'+pg.map(function(s){return '<h2>'+ppEsc(s.tit.toUpperCase())+'</h2><div class="grid">'+s.cards.map(card).join('')+'</div>';}).join('')+'<div class="foot"><div class="ln"></div>'+(logo?'<img src="'+logo+'" alt="Mais Acessível">':'')+'<div class="ln"></div></div></div>';});
+  if(cp&&cp.contra)html+='<div class="page full"><img src="'+cp.contra+'" alt="Contracapa"></div>';
+  html+='</div><script>(function(){var ims=[].slice.call(document.images);var n=ims.length,k=0;function ok(){k++;if(k>=n)setTimeout(function(){window.print();},400);}if(!n)return ok();ims.forEach(function(i){if(i.complete)ok();else{i.onload=i.onerror=ok;}});setTimeout(function(){if(k<n){k=n;window.print();}},9000);})();<\/script></body></html>';
+  w.document.open();w.document.write(html);w.document.close();
 }
 function ppEhApresentacao(){return /^#ap=[0-9a-f]{24}(;pdf)?$/.test(location.hash||'');}
 function ppRenderApresentacao(){
