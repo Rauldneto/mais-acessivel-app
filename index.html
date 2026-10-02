@@ -2942,8 +2942,8 @@ function ppEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g
 function ppKey(c){return String(c).replace(/[^A-Za-z0-9-]/g,function(ch){return '_'+ch.charCodeAt(0).toString(16)+'_';});}
 function ppOkUrl(u){return /^https?:\/\/\S+\.\S+/i.test(u||'');}
 function ppMontaBase(){
-  PP.L.t=PP_TR_BASE.map(function(a){return {c:a[0],n:a[1],e:a[2],img:a[3],marca:a[4],src:a[5],sug:a[6],linha:a[7],acion:a[8],inst:a[9],bica:a[10],alt:a[11],amb:a[12],rec:a[13].slice(),x:{},imgApp:'',link:'',man:false};});
-  PP.L.a=PP_AA_BASE.map(function(a){return {c:a[0],n:a[1],e:a[2],img:a[3],marca:a[4],src:a[5],sug:a[6],formato:a[7],material:a[8],fech:a[9],cor:a[10],alt:a[11],compat:a[12],rec:a[13].slice(),x:{},imgApp:'',link:'',man:false};});
+  PP.L.t=PP_TR_BASE.map(function(a){return {c:a[0],n:a[1],e:a[2],img:a[3],marca:a[4],src:a[5],sug:a[6],linha:a[7],acion:a[8],inst:a[9],bica:a[10],alt:a[11],amb:a[12],rec:a[13].slice(),x:{},imgApp:'',link:'',man:false,_T:'t'};});
+  PP.L.a=PP_AA_BASE.map(function(a){return {c:a[0],n:a[1],e:a[2],img:a[3],marca:a[4],src:a[5],sug:a[6],formato:a[7],material:a[8],fech:a[9],cor:a[10],alt:a[11],compat:a[12],rec:a[13].slice(),x:{},imgApp:'',link:'',man:false,_T:'a'};});
 }
 function ppAplicaEdicoes(){
   ['t','a'].forEach(function(T){
@@ -3047,10 +3047,15 @@ function ppCss(){
 function ppC(){return PP_CAT[PP.T];}
 function ppLista(){return PP.L[PP.T];}
 function ppXK(){var s={};ppLista().forEach(function(p){Object.keys(p.x||{}).forEach(function(k){s[k]=1;});});return Object.keys(s).sort();}
-function ppFacets(){var f=ppC().F.slice(0,-1).filter(function(x){return x[0]!=='marca';});f.unshift(['marca','Marca']);ppXK().forEach(function(k){f.push(['x:'+k,k]);});f.push(['rec','Recursos']);return f;}
+function ppTodos(){return PP.L.t.concat(PP.L.a);}
+function ppKeyOf(p){return p._T+'|'+p.c;}
+function ppByKey(k){var i=k.indexOf('|'),T=k.slice(0,i),c=k.slice(i+1);return (PP.L[T]||[]).find(function(x){return x.c===c;});}
+function ppXKall(){var s={};ppTodos().forEach(function(p){Object.keys(p.x||{}).forEach(function(k){s[k]=1;});});return Object.keys(s).sort();}
+function ppFacets(){var f=[['cat','Categoria'],['marca','Marca']];['t','a'].forEach(function(T){PP_CAT[T].F.forEach(function(x){if(x[0]!=='marca'&&x[0]!=='rec')f.push([T+':'+x[0],x[1]]);});});ppXKall().forEach(function(k){f.push(['x:'+k,k]);});f.push(['rec','Recursos']);return f;}
+function ppCatOk(p){var s=Object.keys(ppSk('cat'));return !s.length||s.indexOf(PP_CAT[p._T].tit)>=0;}
 function ppSk(k){return PP.S[k]||(PP.S[k]={});}
-function ppVals(p,k){if(k==='rec')return p.rec;if(k.indexOf('x:')===0){var v=p.x[k.slice(2)];return v?[v]:[];}return p[k]?[p[k]]:[];}
-function ppMode(p){var m=PP.cfg[PP.T][p.marca];return m&&m.m==='site'?'site':'manual';}
+function ppVals(p,k){if(k==='rec')return p.rec;if(k==='cat')return [PP_CAT[p._T].tit];if(k.indexOf('x:')===0){var v=p.x[k.slice(2)];return v?[v]:[];}if(k.charAt(1)===':'){if(k.charAt(0)!==p._T)return [];k=k.slice(2);}return p[k]?[p[k]]:[];}
+function ppMode(p){var m=PP.cfg[p._T||PP.T][p.marca];return m&&m.m==='site'?'site':'manual';}
 function ppImg(p){return p.imgApp||p.img;}
 function ppOpts(k){var s={};(PP_BASEOPT[k]||[]).forEach(function(v){s[v]=1;});(PP.cust[PP.T][k]||[]).forEach(function(v){s[v]=1;});ppLista().forEach(function(p){if(p[k])s[p[k]]=1;});if(k==='marca')Object.keys(PP.cfg[PP.T]).forEach(function(v){s[v]=1;});return Object.keys(s).sort(function(a,b){return a.localeCompare(b,'pt',{numeric:true});});}
 function ppIssues(p){
@@ -3058,7 +3063,7 @@ function ppIssues(p){
   if(ppMode(p)==='site'&&p.src==='N')r.push('Não encontrado no site '+p.marca);
   var u=ppImg(p);
   if(!u)r.push('Sem foto');else if(!ppOkUrl(u))r.push('Endereço da foto inválido');else if(PP.ST[u]==='fail')r.push('Foto quebrada');
-  ppC().req.forEach(function(q){if(!p[q[0]])r.push(q[1]+' não informado');});
+  PP_CAT[p._T||PP.T].req.forEach(function(q){if(!p[q[0]])r.push(q[1]+' não informado');});
   return r;
 }
 function ppPass(p,skip){
@@ -3132,7 +3137,7 @@ function renderPesquisaProdutos(){
   var q=wrap.querySelector('#ppQ');q.value=PP.q;q.oninput=function(){PP.q=q.value;ppDrawSide();ppDrawGrid();ppDrawAct();};
   var o=wrap.querySelector('#ppOrd');o.value=PP.ord;o.onchange=function(){PP.ord=o.value;ppDrawGrid();};
   wrap.querySelector('#ppReload').onclick=function(){PP.carregado=false;PP.ST={};ppCarregar();ppDraw();};
-  wrap.querySelector('#ppCfgBtn').onclick=ppConfig;
+  wrap.querySelector('#ppCfgBtn').onclick=function(){ppConfig();};
   wrap.querySelector('#ppNew').onclick=ppPicker;
   if(!PP.carregado){ppMontaBase();ppCarregar();}
   setTimeout(ppDraw,0);
@@ -3142,8 +3147,7 @@ function ppEl(id){return PP.root?PP.root.querySelector('#'+id):null;}
 function ppDraw(){
   if(!PP.root||!document.body.contains(PP.root))return;
   var cats=ppEl('ppCats');
-  cats.innerHTML=['t','a'].map(function(T){return '<button type="button" class="pp-cat'+(PP.T===T?' on':'')+'" data-t="'+T+'">'+PP_CAT[T].icon+' '+PP_CAT[T].tit+'<span class="n">('+PP.L[T].length+')</span></button>';}).join('');
-  cats.querySelectorAll('[data-t]').forEach(function(b){b.onclick=function(){if(PP.T===b.dataset.t)return;PP.T=b.dataset.t;PP.S={};PP.fresh={};PP.aviso=null;ppEl('ppForm').innerHTML='';ppDraw();};});
+  cats.innerHTML='<div style="font-size:16px;font-weight:700;color:#1a1a1a">📦 Todos os produtos <span style="font-weight:400;color:#999;font-size:13px">('+ppTodos().length+': '+PP.L.t.length+' torneiras, '+PP.L.a.length+' assentos)</span></div>';
   ppEl('ppSync').textContent=PP.carregando?'☁️ Edições: carregando…':(PP.erro?'☁️ Edições: com erro':'☁️ Edições sincronizadas');
   ppEl('ppSync').style.color=PP.erro?'#dc2626':'';
   ppEl('ppErr').innerHTML=PP.erro?'<div class="pp-err" role="alert"><span>⚠️</span><div style="flex:1">'+ppEsc(PP.erro)+'</div><button type="button" class="pp-btn" id="ppErrX">Fechar</button></div>':'';
@@ -3158,33 +3162,33 @@ function ppDrawToast(){
 }
 function ppDrawPend(){
   var el=ppEl('ppPend');if(!el)return;
-  var L=ppLista().map(function(p){return [p,ppIssues(p)];}).filter(function(x){return x[1].length;});
+  var L=ppTodos().map(function(p){return [p,ppIssues(p)];}).filter(function(x){return x[1].length;});
   var tot=L.reduce(function(s,x){return s+x[1].length;},0);
-  if(!L.length){el.innerHTML='<div class="pp-ok">✅ Todos os '+ppC().nome+'s estão completos.</div>';return;}
+  if(!L.length){el.innerHTML='<div class="pp-ok">✅ Todos os produtos estão completos.</div>';return;}
   el.innerHTML='<div class="pp-pend"><button type="button" class="pp-pend-h" id="ppPtog" aria-expanded="'+PP.openP+'">⚠️ '+tot+' '+(tot===1?'pendência':'pendências')+' em '+L.length+' '+(L.length===1?'produto':'produtos')+'<span style="margin-left:auto;font-size:12px;font-weight:400">'+(PP.openP?'Ocultar ▲':'Ver lista ▼')+'</span></button>'+
-    (PP.openP?'<div style="margin-top:8px">'+L.map(function(x){var p=x[0];return '<div class="pp-pi"><span class="pp-cod" style="min-width:110px;color:#92400e">'+ppEsc(p.c)+'</span><span style="flex:1;min-width:160px">'+x[1].map(ppEsc).join(' · ')+'</span><button type="button" class="pp-btn" data-fix="'+ppEsc(p.c)+'">'+(ppMode(p)==='site'&&p.src==='N'?'Vincular':'Completar')+'</button></div>';}).join('')+'</div>':'')+'</div>';
+    (PP.openP?'<div style="margin-top:8px">'+L.map(function(x){var p=x[0];return '<div class="pp-pi"><span class="pp-cod" style="min-width:110px;color:#92400e">'+ppEsc(p.c)+'</span><span style="flex:1;min-width:160px">'+x[1].map(ppEsc).join(' · ')+'</span><button type="button" class="pp-btn" data-fix="'+ppEsc(ppKeyOf(p))+'">'+(ppMode(p)==='site'&&p.src==='N'?'Vincular':'Completar')+'</button></div>';}).join('')+'</div>':'')+'</div>';
   ppEl('ppPtog').onclick=function(){PP.openP=!PP.openP;ppDrawPend();};
-  el.querySelectorAll('[data-fix]').forEach(function(b){b.onclick=function(){ppForm(ppLista().find(function(p){return p.c===b.dataset.fix;}));};});
+  el.querySelectorAll('[data-fix]').forEach(function(b){b.onclick=function(){ppForm(ppByKey(b.dataset.fix));};});
 }
 function ppDrawSide(){
   var el=ppEl('ppSide');if(!el)return;
-  var np=ppLista().filter(function(p){return ppIssues(p).length;}).length;
+  var np=ppTodos().filter(function(p){return ppIssues(p).length;}).length;
   var h='<label class="pp-fx" style="padding:4px 0"><input type="checkbox" id="ppEst"'+(PP.est?' checked':'')+'> Só com estoque</label>'+
     '<label class="pp-fx" style="padding:2px 0 4px;color:#b45309"><input type="checkbox" id="ppSoP"'+(PP.soP?' checked':'')+'> Só com pendência<span class="n">'+np+'</span></label>';
   ppFacets().forEach(function(f){
     var k=f[0],t=f[1],m={},all={};
-    ppLista().forEach(function(p){ppVals(p,k).forEach(function(v){all[v]=1;});});
-    ppLista().filter(function(p){return ppPass(p,k);}).forEach(function(p){ppVals(p,k).forEach(function(v){m[v]=(m[v]||0)+1;});});
+    ppTodos().filter(function(p){return k==='cat'||ppCatOk(p);}).forEach(function(p){ppVals(p,k).forEach(function(v){all[v]=1;});});
+    ppTodos().filter(function(p){return ppPass(p,k);}).forEach(function(p){ppVals(p,k).forEach(function(v){m[v]=(m[v]||0)+1;});});
     var vs=Object.keys(all).sort(function(a,b){return a.localeCompare(b,'pt',{numeric:true});});if(!vs.length)return;
-    var nk=PP.fresh[PP.T+'|'+k+'|*'];
-    h+='<div class="pp-gt"><span class="'+(nk?'pp-nw':'')+'">'+ppEsc(t)+'</span></div>';
-    vs.forEach(function(v){var n=m[v]||0,on=!!ppSk(k)[v],nv=nk||PP.fresh[PP.T+'|'+k+'|'+v];
+    var nk=PP.fresh[k+'|*'];
+    h+='<div class="pp-gt"'+(k==='cat'?' style="margin-top:10px;font-size:13px;color:#b45309"':'')+'><span class="'+(nk?'pp-nw':'')+'">'+ppEsc(t)+'</span></div>';
+    vs.forEach(function(v){var n=m[v]||0,on=!!ppSk(k)[v],nv=nk||PP.fresh[k+'|'+v];
       h+='<label class="pp-fx'+(n||on?'':' dim')+'"><input type="checkbox" data-k="'+ppEsc(k)+'" data-v="'+ppEsc(v)+'"'+(on?' checked':'')+'> <span class="'+(nv?'pp-nw':'')+'">'+ppEsc(v)+'</span><span class="n">'+n+'</span></label>';});
   });
   el.innerHTML=h;
   el.querySelector('#ppEst').onchange=function(e){PP.est=e.target.checked;ppDrawSide();ppDrawAct();ppDrawGrid();};
   el.querySelector('#ppSoP').onchange=function(e){PP.soP=e.target.checked;ppDrawSide();ppDrawAct();ppDrawGrid();};
-  el.querySelectorAll('[data-k]').forEach(function(i){i.onchange=function(){var s=ppSk(i.dataset.k);if(i.checked)s[i.dataset.v]=1;else delete s[i.dataset.v];ppDrawSide();ppDrawAct();ppDrawGrid();};});
+  el.querySelectorAll('[data-k]').forEach(function(i){i.onchange=function(){var s=ppSk(i.dataset.k);if(i.checked)s[i.dataset.v]=1;else delete s[i.dataset.v];if(i.dataset.k==='cat'){var sc=Object.keys(ppSk('cat'));['t','a'].forEach(function(T){if(sc.length&&sc.indexOf(PP_CAT[T].tit)<0)Object.keys(PP.S).forEach(function(fk){if(fk.indexOf(T+':')===0)PP.S[fk]={};});});}ppDrawSide();ppDrawAct();ppDrawGrid();};});
 }
 function ppDrawAct(){
   var el=ppEl('ppAct');if(!el)return;var a='';
@@ -3199,32 +3203,31 @@ function ppDrawAct(){
 }
 function ppDrawGrid(){
   var el=ppEl('ppGrid');if(!el)return;
-  var r=ppLista().filter(function(p){return ppPass(p);});
+  var r=ppTodos().filter(function(p){return ppPass(p);});
   if(PP.ord==='c')r.sort(function(a,b){return a.c.localeCompare(b.c,'pt',{numeric:true});});
   if(PP.ord==='n')r.sort(function(a,b){return a.n.localeCompare(b.n,'pt');});
   if(PP.ord==='e')r.sort(function(a,b){return b.e-a.e;});
-  var nm=ppC().nome;
-  ppEl('ppCnt').textContent=r.length+' '+nm+(r.length===1?'':'s')+' do Bling';
-  if(!r.length){el.innerHTML='<div style="grid-column:1/-1;padding:2rem;text-align:center;color:#888;font-size:14px">Nenhum '+nm+' com essa combinação de filtros. Remova um filtro acima.</div>';return;}
+  ppEl('ppCnt').textContent=r.length+' produto'+(r.length===1?'':'s')+' do Bling';
+  if(!r.length){el.innerHTML='<div style="grid-column:1/-1;padding:2rem;text-align:center;color:#888;font-size:14px">Nenhum produto com essa combinação de filtros. Remova um filtro acima.</div>';return;}
   el.innerHTML=r.map(function(p){
     var is=ppIssues(p),ok=p.e>0;
-    var ch=ppC().F.filter(function(f){return f[0]!=='rec'&&f[0]!=='marca';}).map(function(f){return p[f[0]];}).filter(function(x){return x&&x!=='Padrão'&&x!=='Comum';})
+    var ch=PP_CAT[p._T].F.filter(function(f){return f[0]!=='rec'&&f[0]!=='marca';}).map(function(f){return p[f[0]];}).filter(function(x){return x&&x!=='Padrão'&&x!=='Comum';})
       .concat(Object.keys(p.x).map(function(k){return p.x[k];})).concat(p.rec).map(function(x){return '<span class="pp-chip">'+ppEsc(x)+'</span>';}).join('');
-    var sl=!!PP.sel[PP.T+'|'+p.c];
+    var sl=!!PP.sel[ppKeyOf(p)],pk=ppEsc(ppKeyOf(p));
     return '<div class="pp-card'+(is.length?' pd':'')+(sl?' sel':'')+'"><div class="pp-img">'+ppImgHtml(ppImg(p))+'</div>'+
-      (is.length?'<button type="button" class="pp-warnbtn" data-ed="'+ppEsc(p.c)+'" title="'+ppEsc(is.join(', '))+'">⚠️ '+(is.length===1?ppEsc(is[0]):is.length+' pendências')+'</button>':'')+
+      (is.length?'<button type="button" class="pp-warnbtn" data-ed="'+pk+'" title="'+ppEsc(is.join(', '))+'">⚠️ '+(is.length===1?ppEsc(is[0]):is.length+' pendências')+'</button>':'')+
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><span class="pp-cod">'+ppEsc(p.c)+'</span><span class="pp-est '+(ok?'ok':'no')+'">'+(ok?p.e+' em estoque':'Sem estoque')+'</span></div>'+
-      '<div class="pp-nome">'+ppEsc(p.n)+'</div>'+(p.marca?'<div style="font-size:12px;color:#888">'+ppEsc(p.marca)+'</div>':'')+
+      '<div class="pp-nome">'+ppEsc(p.n)+'</div><div style="font-size:12px;color:#888">'+PP_CAT[p._T].icon+' '+(p._T==='t'?'Torneira':'Assento sanitário')+(p.marca?' · '+ppEsc(p.marca):'')+'</div>'+
       '<div>'+ch+'</div>'+ppSrcHtml(p)+
-      '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:auto;padding-top:6px;flex-wrap:wrap"><button type="button" class="pp-btn pp-selb'+(sl?' on':'')+'" data-sel="'+ppEsc(p.c)+'" aria-pressed="'+sl+'">'+(sl?'☑ Selecionado':'☐ Selecionar')+'</button><button type="button" class="pp-btn" data-ed="'+ppEsc(p.c)+'">✏️ Editar</button><button type="button" class="pp-btn" data-cp="'+ppEsc(p.c)+'">📋 Ficha</button></div></div>';
+      '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:auto;padding-top:6px;flex-wrap:wrap"><button type="button" class="pp-btn pp-selb'+(sl?' on':'')+'" data-sel="'+pk+'" aria-pressed="'+sl+'">'+(sl?'☑ Selecionado':'☐ Selecionar')+'</button><button type="button" class="pp-btn" data-ed="'+pk+'">✏️ Editar</button><button type="button" class="pp-btn" data-cp="'+pk+'">📋 Ficha</button></div></div>';
   }).join('');
-  el.querySelectorAll('[data-ed]').forEach(function(b){b.onclick=function(){ppForm(ppLista().find(function(p){return p.c===b.dataset.ed;}));};});
-  el.querySelectorAll('[data-sel]').forEach(function(b){b.onclick=function(){var k=PP.T+'|'+b.dataset.sel;if(PP.sel[k])delete PP.sel[k];else PP.sel[k]=1;ppDrawGrid();ppDrawSelBar();};});
+  el.querySelectorAll('[data-ed]').forEach(function(b){b.onclick=function(){ppForm(ppByKey(b.dataset.ed));};});
+  el.querySelectorAll('[data-sel]').forEach(function(b){b.onclick=function(){var k=b.dataset.sel;if(PP.sel[k])delete PP.sel[k];else PP.sel[k]=1;ppDrawGrid();ppDrawSelBar();};});
   el.querySelectorAll('[data-cp]').forEach(function(b){b.onclick=function(){
-    var p=ppLista().find(function(x){return x.c===b.dataset.cp;});var is=ppIssues(p);
+    var p=ppByKey(b.dataset.cp);var is=ppIssues(p);
     if(is.length&&b.dataset.ok!=='1'){b.dataset.ok='1';b.textContent='⚠️ Incompleta, copiar?';b.style.color='#b45309';return;}
     var linhas=[p.n,'Código: '+p.c];
-    ppC().F.forEach(function(f){if(f[0]!=='rec'&&p[f[0]])linhas.push(f[1]+': '+p[f[0]]);});
+    PP_CAT[p._T].F.forEach(function(f){if(f[0]!=='rec'&&p[f[0]])linhas.push(f[1]+': '+p[f[0]]);});
     Object.keys(p.x).forEach(function(k){linhas.push(k+': '+p.x[k]);});
     if(p.rec.length)linhas.push('Recursos: '+p.rec.join(', '));
     if(ppImg(p))linhas.push('Foto: '+ppImg(p));
@@ -3240,20 +3243,22 @@ function ppPanel(html){var f=ppEl('ppForm');f.innerHTML='<div class="pp-pnl">'+h
 function ppHdr(t){return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px"><h3>'+t+'</h3><button type="button" class="pp-btn pp-close" aria-label="Fechar">✕</button></div>';}
 
 function ppPicker(){
-  var L=ppLista().slice().sort(function(a,b){return a.c.localeCompare(b.c,'pt',{numeric:true});});
-  var f=ppPanel(ppHdr('Cadastrar características de '+(PP.T==='t'?'uma torneira':'um assento'))+
+  var L=ppTodos().slice().sort(function(a,b){return a._T===b._T?a.c.localeCompare(b.c,'pt',{numeric:true}):(a._T==='t'?-1:1);});
+  var f=ppPanel(ppHdr('Cadastrar características de um produto')+
     '<p style="font-size:13px;color:#666;margin:0 0 10px">O produto precisa existir no Bling. Escolha qual vai receber as características.</p>'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap"><select id="ppPk" style="flex:1;min-width:220px"><option value="">Selecione o produto do Bling</option>'+L.map(function(p){return '<option value="'+ppEsc(p.c)+'">'+ppEsc(p.c+' · '+p.n)+(p.man?' (já cadastrado)':'')+'</option>';}).join('')+'</select><button type="button" class="pp-btn pp-pri" id="ppPkGo" style="width:auto">Continuar</button></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap"><select id="ppPk" style="flex:1;min-width:220px"><option value="">Selecione o produto do Bling</option>'+L.map(function(p){return '<option value="'+ppEsc(ppKeyOf(p))+'">'+PP_CAT[p._T].icon+' '+ppEsc(p.c+' · '+p.n)+(p.man?' (já cadastrado)':'')+'</option>';}).join('')+'</select><button type="button" class="pp-btn pp-pri" id="ppPkGo" style="width:auto">Continuar</button></div>'+
     '<div id="ppPkE" class="pp-msg pp-red"></div><div class="pp-msg pp-mut" style="margin-top:8px">Não achou na lista? Cadastre o produto no Bling primeiro e ele passa a aparecer aqui.</div>');
   f.querySelector('#ppPk').onchange=function(){f.querySelector('#ppPkE').textContent='';};
-  f.querySelector('#ppPkGo').onclick=function(){var c=f.querySelector('#ppPk').value;if(!c){f.querySelector('#ppPkE').textContent='Selecione um produto.';return;}ppForm(ppLista().find(function(p){return p.c===c;}));};
+  f.querySelector('#ppPkGo').onclick=function(){var c=f.querySelector('#ppPk').value;if(!c){f.querySelector('#ppPkE').textContent='Selecione um produto.';return;}ppForm(ppByKey(c));};
 }
 
-function ppConfig(){
+function ppConfig(TT){
+  if(TT)PP.T=TT;
   var T=PP.T,cfg=PP.cfg[T];
   var ms={};ppLista().forEach(function(p){if(p.marca)ms[p.marca]=1;});Object.keys(cfg).forEach(function(m){ms[m]=1;});
   var lista=Object.keys(ms).sort();
-  var f=ppPanel(ppHdr('⚙️ Configurações · '+PP_CAT[T].tit)+
+  var f=ppPanel(ppHdr('⚙️ Configurações')+
+    '<div style="display:flex;gap:6px;margin:-4px 0 12px">'+['t','a'].map(function(x){return '<button type="button" class="pp-cat'+(x===T?' on':'')+'" data-ct="'+x+'">'+PP_CAT[x].icon+' '+PP_CAT[x].tit+'</button>';}).join('')+'</div>'+
     '<div style="font-weight:700;font-size:14px;margin-bottom:4px">Sites das marcas</div>'+
     '<p style="font-size:13px;color:#666;margin:0 0 6px">Marca com site: as características e fotos virão de lá. Marca sem site: vocês preenchem no Editar de cada produto, podendo colar o link de uma página e o endereço da foto.</p>'+
     '<div class="pp-mr" style="border-top:none;color:#888;font-size:12px;font-weight:600"><span>Marca</span><span>Itens</span><span>Características</span><span>Endereço do site</span></div>'+
@@ -3262,13 +3267,14 @@ function ppConfig(){
     '<div style="border-top:1px solid #eee;padding-top:10px;margin-top:4px"><span class="pp-fl">Adicionar marca</span><div style="display:flex;gap:6px;flex-wrap:wrap"><input id="ppNm" placeholder="Nome da marca" style="width:160px;flex:none"><input id="ppNs" placeholder="Site (deixe vazio se não tiver)" style="flex:1;min-width:180px;width:auto"><button type="button" class="pp-btn" id="ppAdd">＋ Adicionar</button></div><div id="ppNe" class="pp-msg pp-red"></div></div>'+
     '<div class="pp-msg pp-mut" style="margin-top:10px">Os produtos de uma marca nova aparecem no catálogo quando estiverem cadastrados no Bling.</div>'+
     '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="pp-btn pp-close">Cancelar</button><button type="button" class="pp-btn pp-pri" id="ppCfgSave">Salvar configurações</button></div>');
+  f.querySelectorAll('[data-ct]').forEach(function(b){b.onclick=function(){ppConfig(b.dataset.ct);};});
   f.querySelectorAll('[data-mi]').forEach(function(s){s.onchange=function(){var i=f.querySelector('[data-ui="'+s.dataset.mi+'"]');i.disabled=s.value!=='site';i.placeholder=s.value==='site'?'https://www.site-da-marca.com.br':'marca sem site';if(s.value==='site')i.focus();};});
   f.querySelector('#ppAdd').onclick=function(){
     var n=f.querySelector('#ppNm').value.trim(),u=f.querySelector('#ppNs').value.trim(),e=f.querySelector('#ppNe');
     if(!n){e.textContent='Digite o nome da marca.';return;}
     if(lista.some(function(m){return m.toLowerCase()===n.toLowerCase();})){e.textContent='Essa marca já está na lista.';return;}
     if(u&&!ppOkUrl(u)){e.textContent='O site precisa começar com http:// ou https://';return;}
-    cfg[n]={m:u?'site':'manual',u:u};ppConfig();
+    cfg[n]={m:u?'site':'manual',u:u};ppConfig(T);
   };
   f.querySelector('#ppCfgSave').onclick=function(){
     var bad=false,novo={};
@@ -3288,6 +3294,7 @@ function ppFieldHtml(k,l,cur,rq){
 }
 function ppForm(p){
   if(!p)return;
+  PP.T=p._T;
   var T=PP.T,C=ppC(),site=ppMode(p)==='site';
   var exs=Object.keys(p.x);
   var h=ppHdr(ppEsc(p.c)+' · '+ppEsc(p.n))+
@@ -3337,9 +3344,9 @@ function ppForm(p){
     var x={};rows.forEach(function(r){if(r[0]&&r[1])x[r[0]]=r[1];});
     var rec=[].slice.call(f.querySelectorAll('.ppRec:checked')).map(function(i){return i.value;});
     var msgs=[],fresh={},novosCust=JSON.parse(JSON.stringify(PP.cust[T]||{}));
-    C.F.forEach(function(fd){if(fd[0]==='rec')return;var v=got[fd[0]];if(v&&ppOpts(fd[0]).indexOf(v)<0){(novosCust[fd[0]]=novosCust[fd[0]]||[]).push(v);fresh[T+'|'+fd[0]+'|'+v]=1;msgs.push('Novo valor <b>'+ppEsc(v)+'</b> criado em '+ppEsc(fd[1])+'.');}});
-    var oldK=ppXK();
-    Object.keys(x).forEach(function(k){if(oldK.indexOf(k)<0){fresh[T+'|x:'+k+'|*']=1;msgs.push('Novo filtro <b>'+ppEsc(k)+'</b> criado com o valor '+ppEsc(x[k])+'.');}else if(!ppLista().some(function(o){return o.x[k]===x[k];})){fresh[T+'|x:'+k+'|'+x[k]]=1;msgs.push('Novo valor <b>'+ppEsc(x[k])+'</b> em '+ppEsc(k)+'.');}});
+    C.F.forEach(function(fd){if(fd[0]==='rec')return;var v=got[fd[0]];if(v&&ppOpts(fd[0]).indexOf(v)<0){(novosCust[fd[0]]=novosCust[fd[0]]||[]).push(v);fresh[(fd[0]==='marca'?'marca':T+':'+fd[0])+'|'+v]=1;msgs.push('Novo valor <b>'+ppEsc(v)+'</b> criado em '+ppEsc(fd[1])+'.');}});
+    var oldK=ppXKall();
+    Object.keys(x).forEach(function(k){if(oldK.indexOf(k)<0){fresh['x:'+k+'|*']=1;msgs.push('Novo filtro <b>'+ppEsc(k)+'</b> criado com o valor '+ppEsc(x[k])+'.');}else if(!ppTodos().some(function(o){return o.x[k]===x[k];})){fresh['x:'+k+'|'+x[k]]=1;msgs.push('Novo valor <b>'+ppEsc(x[k])+'</b> em '+ppEsc(k)+'.');}});
     if(iu!==p.imgApp)msgs.push(iu?'Foto do produto atualizada pelo endereço informado.':'Foto voltou a ser a do Bling.');
     var ed=Object.assign({},PP.edits[T][ppKey(p.c)]||{},got,{rec:rec,x:x,imgApp:iu,link:lk,man:true,cod:p.c,em:new Date().toISOString(),por:STATE.usuarioLogado||''});
     var btn=q('#ppSave');btn.disabled=true;btn.textContent='Salvando…';
@@ -3355,7 +3362,7 @@ function ppForm(p){
 }
 function ppExRow(k,v){return '<div class="ppExR" style="display:flex;gap:6px;margin-bottom:6px"><input class="ppExK" list="ppDlx" value="'+ppEsc(k)+'" placeholder="Nome, ex.: Acabamento" style="flex:1;width:auto"><input class="ppExV" value="'+ppEsc(v)+'" placeholder="Valor, ex.: Cromado" style="flex:1;width:auto"><button type="button" class="pp-btn ppExRm" aria-label="Remover característica">🗑️</button></div>';}
 function ppSelItens(){
-  return Object.keys(PP.sel).map(function(k){var i=k.indexOf('|'),T=k.slice(0,i),c=k.slice(i+1);var p=PP.L[T].find(function(x){return x.c===c;});return p?{T:T,p:p}:null;}).filter(Boolean);
+  return Object.keys(PP.sel).map(function(k){var p=ppByKey(k);return p?{T:p._T,p:p}:null;}).filter(Boolean);
 }
 function ppDrawSelBar(){
   var el=ppEl('ppSelBar');if(!el)return;
@@ -3397,16 +3404,16 @@ function ppGerador(){
       var msg='Olá'+(cli?' '+cli:'')+'! Segue a seleção de produtos que preparamos para você: '+url;
       var wa='https://wa.me/'+(tel||'')+'?text='+encodeURIComponent(msg);
       ppPanel(ppHdr('✅ Apresentação pronta')+
-        '<p style="font-size:13px;color:#666;margin:0 0 8px">'+itens.length+' modelo'+(itens.length>1?'s':'')+(cli?' para '+ppEsc(cli):'')+'. O link fica salvo e pode ser enviado quantas vezes quiser.</p>'+
+        '<p style="font-size:13px;color:#666;margin:0 0 8px">'+itens.length+' modelo'+(itens.length>1?'s':'')+(cli?' para '+ppEsc(cli):'')+'. Mande o link no WhatsApp ou baixe o PDF (na janela que abrir, escolha <b>Salvar como PDF</b>) e envie o arquivo.</p>'+
         '<input id="ppApUrl" readonly value="'+ppEsc(url)+'" style="font-family:Consolas,monospace;font-size:12px">'+
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><a class="pp-btn pp-pri" style="text-decoration:none;background:#16a34a;border-color:#16a34a" href="'+ppEsc(wa)+'" target="_blank" rel="noopener">🟢 Enviar no WhatsApp</a><button type="button" class="pp-btn" id="ppApCp">📋 Copiar link</button><a class="pp-btn" style="text-decoration:none" href="'+ppEsc(url)+'" target="_blank" rel="noopener">👁️ Ver como o cliente vê</a><button type="button" class="pp-btn pp-close">Fechar</button></div>');
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><a class="pp-btn pp-pri" style="text-decoration:none;background:#16a34a;border-color:#16a34a" href="'+ppEsc(wa)+'" target="_blank" rel="noopener">🟢 Enviar no WhatsApp</a><button type="button" class="pp-btn" id="ppApCp">📋 Copiar link</button><a class="pp-btn" style="text-decoration:none" href="'+ppEsc(url+';pdf')+'" target="_blank" rel="noopener">📄 Baixar PDF</a><a class="pp-btn" style="text-decoration:none" href="'+ppEsc(url)+'" target="_blank" rel="noopener">👁️ Ver como o cliente vê</a><button type="button" class="pp-btn pp-close">Fechar</button></div>');
       var cp=document.getElementById('ppApCp');cp.onclick=function(){var i=document.getElementById('ppApUrl');if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(function(){cp.textContent='✅ Copiado';},function(){i.select();});else i.select();};
     }).catch(function(e){btn.disabled=false;btn.textContent='🔗 Gerar link';err.textContent='Não foi possível gerar o link ('+(e&&e.message||e)+'). Verifique a internet e tente de novo.';});
   };
 }
-function ppEhApresentacao(){return /^#ap=[0-9a-f]{24}$/.test(location.hash||'');}
+function ppEhApresentacao(){return /^#ap=[0-9a-f]{24}(;pdf)?$/.test(location.hash||'');}
 function ppRenderApresentacao(){
-  var id=location.hash.slice(4);
+  var id=location.hash.slice(4,28),pdf=/;pdf$/.test(location.hash);
   if(!document.getElementById('ppApCss')){var st=document.createElement('style');st.id='ppApCss';st.textContent=
     '.ap-wrap{max-width:980px;margin:0 auto;padding:22px 18px 40px;font-family:Segoe UI,Arial,sans-serif}'+
     '.ap-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:3px solid #d97706;padding-bottom:14px;margin-bottom:18px}'+
@@ -3434,8 +3441,9 @@ function ppRenderApresentacao(){
     w.innerHTML='<div class="ap-bar"><button type="button" id="apPrint">🖨️ Imprimir ou salvar em PDF</button></div>'+
       '<div class="ap-head">'+(logo?'<img src="'+ppEsc(logo)+'" alt="Mais Acessível">':'')+'<div><h1>Seleção de produtos'+(d.cliente?' para '+ppEsc(d.cliente):'')+'</h1><div class="sub">'+d.itens.length+' modelo'+(d.itens.length>1?'s':'')+(dt?' · '+dt:'')+'</div></div></div>'+
       (d.obs?'<div class="ap-obs">'+ppEsc(d.obs)+'</div>':'')+
-      '<div class="ap-grid">'+d.itens.map(function(it){
-        return '<div class="ap-card"><div class="ap-img">'+(it.img?'<img src="'+ppEsc(it.img)+'" alt="'+ppEsc(it.n)+'" referrerpolicy="no-referrer" onerror="this.parentNode.innerHTML=\'<span style=&quot;color:#aaa;font-size:13px&quot;>Foto indisponível</span>\'">':'<span style="color:#aaa;font-size:13px">Foto indisponível</span>')+'</div>'+
+      (d.itens.length>1?'<div style="font-size:13px;color:#555;margin:-6px 0 14px">Compare as opções abaixo e responda com o <b>número da opção</b> que melhor atende.</div>':'')+
+      '<div class="ap-grid">'+d.itens.map(function(it,ix){
+        return '<div class="ap-card"><div class="ap-img" style="position:relative">'+(d.itens.length>1?'<span style="position:absolute;top:8px;left:8px;background:#d97706;color:#fff;font-weight:700;font-size:13px;border-radius:999px;padding:3px 10px">Opção '+(ix+1)+'</span>':'')+(it.img?'<img src="'+ppEsc(it.img)+'" alt="'+ppEsc(it.n)+'" referrerpolicy="no-referrer" onerror="this.outerHTML=\'<span style=&quot;color:#aaa;font-size:13px&quot;>Foto indisponível</span>\'">':'<span style="color:#aaa;font-size:13px">Foto indisponível</span>')+'</div>'+
           '<div class="ap-body"><div class="ap-n">'+ppEsc(it.n)+'</div>'+(it.marca?'<div class="ap-m">Marca: '+ppEsc(it.marca)+'</div>':'')+'<span class="ap-cod">Cód. '+ppEsc(it.c)+'</span>'+
           ((it.specs||[]).length?'<table class="ap-sp">'+(it.specs||[]).map(function(s){return '<tr><td>'+ppEsc(s[0])+'</td><td>'+ppEsc(s[1])+'</td></tr>';}).join('')+'</table>':'')+
           ((it.rec||[]).length?'<div class="ap-rec">'+it.rec.map(function(r){return '<span>'+ppEsc(r)+'</span>';}).join('')+'</div>':'')+
@@ -3443,6 +3451,7 @@ function ppRenderApresentacao(){
           '</div></div>';}).join('')+'</div>'+
       '<div class="ap-foot">Mais Acessível · Goiânia — GO</div>';
     w.querySelector('#apPrint').onclick=function(){window.print();};
+    if(pdf){var ims=[].slice.call(w.querySelectorAll('img'));Promise.all(ims.map(function(im){return im.complete?1:new Promise(function(r){im.onload=im.onerror=r;setTimeout(r,5000);});})).then(function(){setTimeout(function(){window.print();},300);});}
   }).catch(function(){w.innerHTML='<div style="padding:60px;text-align:center;color:#666"><div style="font-size:18px;font-weight:700;margin-bottom:6px">Não foi possível carregar a apresentação</div>Verifique sua internet e atualize a página.</div>';});
   return w;
 }
