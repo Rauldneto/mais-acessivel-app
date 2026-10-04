@@ -6015,7 +6015,8 @@ function renderModeloEmTeste(){
     endTerceiro:false,
     simDoc:{1:0,2:0,3:0},simLoc:0,orcamento:0,
     mOk:false,lOk:false,
-    verifManual:{maps:null,google:null,insta:null,googleSite:'',instaPerfil:''}
+    verifManual:{maps:null,google:null,insta:null,googleSite:'',instaPerfil:''},
+    temProtesto:false, relatoProtesto:null, defesaCliente:null
   };
   var D={nome:'',fantasia:'',cnpj:'',socio:'',capital:'',endereco:'',cidade:'',estado:'',cep:''};
   window._mod5D=D; // expor globalmente
@@ -6177,9 +6178,10 @@ function renderModeloEmTeste(){
   }
 
   function limpar(){
-    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,precisaAprovDir:false,justEndTerceiro:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},docsOk:{1:false,2:false,3:false},simLoc:0,orcamento:0,mOk:false,lOk:false,verifManual:{maps:null,google:null,insta:null,googleSite:'',instaPerfil:''}};
+    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,precisaAprovDir:false,justEndTerceiro:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},docsOk:{1:false,2:false,3:false},simLoc:0,orcamento:0,mOk:false,lOk:false,verifManual:{maps:null,google:null,insta:null,googleSite:'',instaPerfil:''},temProtesto:false,relatoProtesto:null,defesaCliente:null};
     window._mod5S=S;
     S_DOCS={contrato:null,comprovante:null,docSocio:null};
+    window._mod5S_DOCS = S_DOCS;
     D={nome:'',fantasia:'',cnpj:'',socio:'',capital:''};
     var cl=q('#m5cl');if(cl)cl.innerHTML='';
     var pb=q('#m5pb');if(pb)pb.textContent='Digite o CNPJ e clique em Consultar.';
@@ -6362,99 +6364,36 @@ function renderModeloEmTeste(){
       addCk('ok','ti-check','CENPROT: sem protestos em cart\u00f3rio');
       setTimeout(buildVM,400);
     } else {
-      addCk('neg','ti-x','CENPROT: protesto identificado');
-      re2.innerHTML='<div style="background:#ffebee;border:2px solid #c62828;border-radius:12px;padding:16px 18px;margin-bottom:12px;box-shadow:0 2px 8px rgba(198,40,40,0.12)">'
-        +'<div style="font-size:15px;font-weight:700;color:#b71c1c;margin-bottom:8px;display:flex;align-items:center;gap:8px"><i class="ti ti-x-circle" style="font-size:20px"></i> Venda faturada negada \u2014 protesto em cart\u00f3rio</div>'
-        +'<p style="font-size:13px;color:#7f1d1d;margin-bottom:14px;line-height:1.7">Protesto(s) identificado(s) em cart\u00f3rio. Venda a prazo n\u00e3o autorizada. Verifique as exce\u00e7\u00f5es abaixo:</p>'
-
-        // EXCECAO 1 - Carta de anuencia
-        +'<div style="background:#fff;border:2px solid #fbbf24;border-radius:10px;padding:16px;margin-bottom:12px">'
-        +'<div style="font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-file-certificate" style="font-size:16px"></i> Exce\u00e7\u00e3o 1 \u2014 Carta de anu\u00eancia</div>'
-        +'<p style="font-size:13px;color:#475569;line-height:1.7;margin-bottom:10px">Carta original do credor quitando o protesto. Requisitos: identifica\u00e7\u00e3o credor/devedor, n\u00ba protesto, declara\u00e7\u00e3o de quita\u00e7\u00e3o, data at\u00e9 90 dias, firma reconhecida em cart\u00f3rio.</p>'
-        +'<div style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;display:flex;gap:8px;align-items:flex-start">'
-        +'<i class="ti ti-alert-triangle" style="flex-shrink:0;margin-top:1px"></i>'
-        +'<span><strong>Aten\u00e7\u00e3o, operador '+operador+':</strong> ao confirmar, voc\u00ea declara ter verificado pessoalmente o documento original e assume responsabilidade por esta declara\u00e7\u00e3o. O registro ser\u00e1 gravado com seu nome, data e hora.</span>'
-        +'</div>'
-        +'<button id="m5bAnu" style="background:linear-gradient(135deg,#15803d,#166534);color:#fff;border:none;border-radius:8px;padding:12px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 8px rgba(21,128,61,0.3)">'
-        +'<i class="ti ti-file-check"></i> Confirmo ter verificado a carta de anu\u00eancia \u2014 prosseguir para Etapa 3'
+      // Marca que tem protesto (para liberar o campo "defesa do cliente" apos o veredito)
+      S.temProtesto = true;
+      addCk('warn','ti-alert-triangle','CENPROT: protesto identificado \u2014 relato do cliente registrado abaixo');
+      re2.innerHTML='<div style="background:#fff8e1;border:2px solid #f59e0b;border-radius:12px;padding:16px 18px;margin-bottom:12px;box-shadow:0 2px 8px rgba(245,158,11,0.12)">'
+        +'<div style="font-size:15px;font-weight:700;color:#92400e;margin-bottom:8px;display:flex;align-items:center;gap:8px"><i class="ti ti-alert-triangle" style="font-size:20px"></i> Protesto em cart\u00f3rio identificado</div>'
+        +'<p style="font-size:13px;color:#78350f;margin-bottom:14px;line-height:1.7">Pergunte ao cliente sobre a situa\u00e7\u00e3o do(s) protesto(s) e registre abaixo o que foi relatado. Exemplos: processo judicial em andamento, carta de anu\u00eancia j\u00e1 emitida, protesto antigo n\u00e3o pago com acordo, etc. Essa descri\u00e7\u00e3o far\u00e1 parte do relat\u00f3rio final para avalia\u00e7\u00e3o da diretoria.</p>'
+        +'<label style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:6px">Relato do cliente sobre o protesto</label>'
+        +'<textarea id="m5relProt" rows="4" placeholder="Ex: Cliente informou que o protesto de 2022 est\u00e1 em disputa judicial, com processo em andamento. Possui comprovante do protocolo." style="width:100%;border:2px solid #fbbf24;border-radius:8px;padding:10px 12px;font-size:13px;background:#fffbeb;color:#1e293b;outline:none;resize:vertical;box-sizing:border-box;font-family:inherit;line-height:1.6"></textarea>'
+        +'<button id="m5bProt" style="margin-top:12px;background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border:none;border-radius:8px;padding:11px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 8px rgba(217,119,6,0.3)">'
+        +'<i class="ti ti-arrow-right"></i> Registrar relato e prosseguir para a verifica\u00e7\u00e3o manual'
         +'</button>'
-        +'</div>'
+        +'</div>';
 
-        // EXCECAO 2 - Diretor
-        +'<div style="background:#fff;border:2px solid #93c5fd;border-radius:10px;padding:16px">'
-        +'<div style="font-size:12px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-building" style="font-size:16px"></i> Exce\u00e7\u00e3o 2 \u2014 Protesto Contestado</div>'
-        +'<p style="font-size:13px;color:#475569;line-height:1.7;margin-bottom:12px">Cliente alega que desconhece o protesto em cart\u00f3rio, ou que o protesto j\u00e1 foi pago por\u00e9m n\u00e3o conseguiu obter a baixa, ou ainda que est\u00e1 em disputa judicial. Nessa condi\u00e7\u00e3o \u00e9 necess\u00e1rio acionar um diretor para avaliar e autorizar o avan\u00e7o.</p>'        +'<div style="background:#eff6ff;border:1.5px solid #3b82f6;border-radius:10px;padding:14px 16px;margin-bottom:14px">'
-        +'<div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-info-circle"></i> Como proceder</div>'
-        +'<ol style="font-size:13px;color:#1e3a5f;line-height:1.9;padding-left:18px;margin:0">'
-        +'<li>Encaminhe uma mensagem pelo <strong>WhatsApp para o grupo financeiro da empresa</strong>, informando: nome do cliente, CNPJ e a situacao do protesto identificado.</li>'
-        +'<li>Aguarde a resposta do diretor com a <strong>autorizacao ou negativa</strong>.</li>'
-        +'<li>Somente apos receber a autorizacao, preencha abaixo o <strong>nome do diretor</strong> e a <strong>data e hora da mensagem enviada</strong>.</li>'
-        +'<li>Esses dados ficam gravados no historico para auditoria e conferencia futura.</li>'
-        +'</ol>'
-        +'<div style="margin-top:10px;padding:8px 12px;background:#dbeafe;border-radius:6px;font-size:12px;color:#1e40af;display:flex;align-items:flex-start;gap:6px">'
-        +'<i class="ti ti-alert-triangle" style="flex-shrink:0;margin-top:1px"></i>'
-        +'<span><strong>Atencao:</strong> nao preencher corretamente impossibilita localizar a autorizacao em auditoria. A responsabilidade recaira sobre o operador logado.</span>'
-        +'</div>'
-        +'</div>'
-
-        // Campos obrigatorios para excecao 2
-        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'
-        +'<div style="display:flex;flex-direction:column;gap:4px">'
-        +'<label style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.04em">Nome do Diretor que autorizou *</label>'
-        +'<input id="m5dirNome" type="text" placeholder="Nome completo do diretor" style="border:2px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:13px;background:#f0f9ff;color:#0f172a;outline:none;font-weight:500">'
-        +'</div>'
-        +'<div style="display:flex;flex-direction:column;gap:4px">'
-        +'<label style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.04em">Data e hora da autoriza\u00e7\u00e3o *</label>'
-        +'<input id="m5dirData" type="datetime-local" style="border:2px solid #93c5fd;border-radius:8px;padding:9px 12px;font-size:13px;background:#f0f9ff;color:#0f172a;outline:none">'
-        +'</div>'
-        +'</div>'
-        +'<button id="m5bDir" style="background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;border:none;border-radius:8px;padding:12px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 8px rgba(37,99,235,0.3)">'
-        +'<i class="ti ti-shield-check"></i> Registrar autoriza\u00e7\u00e3o do diretor \u2014 prosseguir para Etapa 3'
-        +'</button>'
-        +'</div></div>';
-
-      // Excecao 1 - registra com nome do operador + timestamp
-      q('#m5bAnu').onclick=function(){
+      // Botao: valida que o campo nao esta vazio e segue para E3 (Verificacao Manual)
+      q('#m5bProt').onclick=function(){
+        var relato=(q('#m5relProt').value||'').trim();
+        if(!relato){
+          q('#m5relProt').style.borderColor='#dc2626';
+          q('#m5relProt').focus();
+          q('#m5relProt').placeholder='\u26a0\ufe0f Descreva o relato do cliente antes de prosseguir.';
+          return;
+        }
         var agora=new Date();
         var dtStr=agora.toLocaleDateString('pt-BR')+' '+agora.toLocaleTimeString('pt-BR');
-        S.protestoDiretor=true;
-        S.excecao1={operador:operador,dataHora:dtStr};
-        // Esmaecer Excecao 2
-        var _bDir=q('#m5bDir');if(_bDir){var _bE2=_bDir.parentElement;while(_bE2&&!_bE2.style.border)_bE2=_bE2.parentElement;if(_bE2){_bE2.style.opacity='0.35';_bE2.style.pointerEvents='none';}}
-        addCk('warn','ti-alert-triangle','Exce\u00e7\u00e3o 1: carta de anu\u00eancia verificada por '+operador+' em '+dtStr);
+        S.relatoProtesto={texto:relato, operador:operador, dataHora:dtStr};
+        addCk('warn','ti-info-circle','Relato do cliente sobre o protesto registrado por '+operador+' em '+dtStr);
         this.disabled=true;
-        this.innerHTML='<i class="ti ti-check"></i> Registrado por '+operador+' em '+dtStr;
+        q('#m5relProt').disabled=true;
+        this.innerHTML='<i class="ti ti-check"></i> Relato registrado por '+operador;
         this.style.background='#15803d';
-        setTimeout(buildVM,400);
-      };
-
-      // Excecao 2 - valida campos e registra
-      q('#m5bDir').onclick=function(){
-        var nomeDiretor=(q('#m5dirNome').value||'').trim();
-        var dataDiretor=(q('#m5dirData').value||'').trim();
-        if(!nomeDiretor){
-          q('#m5dirNome').style.borderColor='#dc2626';
-          q('#m5dirNome').focus();
-          q('#m5dirNome').placeholder='\u26a0\ufe0f Preencha o nome do diretor';
-          return;
-        }
-        if(!dataDiretor){
-          q('#m5dirData').style.borderColor='#dc2626';
-          q('#m5dirData').focus();
-          return;
-        }
-        var dtFormatada=new Date(dataDiretor).toLocaleDateString('pt-BR')+' '+new Date(dataDiretor).toLocaleTimeString('pt-BR');
-        var agora2=new Date();
-        var dtRegistro=agora2.toLocaleDateString('pt-BR')+' '+agora2.toLocaleTimeString('pt-BR');
-        S.protestoDiretor=true;
-        S.excecao2={dirAutorizou:nomeDiretor,dataHoraAutorizacao:dtFormatada,operador:operador,dataHoraRegistro:dtRegistro};
-        var _bAnu=q('#m5bAnu');if(_bAnu){var _p=_bAnu.parentElement;while(_p&&_p.style.borderRadius===undefined)_p=_p.parentElement;if(_p){_p.style.opacity='0.35';_p.style.pointerEvents='none';}}
-        addCk('warn','ti-alert-triangle','Exce\u00e7\u00e3o 2: autorizado por Dir. '+nomeDiretor+' em '+dtFormatada+' | Registrado por '+operador);
-        this.disabled=true;
-        q('#m5dirNome').disabled=true;
-        q('#m5dirData').disabled=true;
-        this.innerHTML='<i class="ti ti-check"></i> Autoriza\u00e7\u00e3o de '+nomeDiretor+' registrada por '+operador;
-        this.style.background='#1d4ed8';
         setTimeout(buildVM,400);
       };
     }
@@ -6599,10 +6538,11 @@ function renderModeloEmTeste(){
 
   // Armazena dados extraidos de cada documento para cruzamento posterior
 var S_DOCS = {
-  contrato:    null,  // Doc 1: {cnpj, socio, endereco, capital}
-  comprovante: null,  // Doc 2: {titular, tipo, endereco, dentro_90_dias, titular_confere}
-  docSocio:    null   // Doc 3: {nome, tipo_doc}
+  contrato:    null,  // Doc 1: {cnpj, socio, endereco, capital, resumo, divergencias, observacoes, resultado}
+  comprovante: null,  // Doc 2: {titular, tipo, endereco, dentro_90_dias, titular_confere, resumo, divergencias, observacoes, resultado}
+  docSocio:    null   // Doc 3: {nome, tipo_doc, resumo, divergencias, observacoes, resultado}
 };
+window._mod5S_DOCS = S_DOCS;
 
 // Detecta texto extraido de PDF com codificacao de fonte corrompida (comum em PDFs da JUCEG/gov
 // com fontes customizadas sem ToUnicode CMap): o pdf.js extrai uma string longa, mas cheia de
@@ -6771,7 +6711,11 @@ function upDoc(n,inp){
             endereco:json.endereco_encontrado||'',
             cnpj_confere:json.cnpj_confere,
             socio_confere:json.socio_confere,
-            razao_social_confere:json.razao_social_confere
+            razao_social_confere:json.razao_social_confere,
+            resumo:json.resumo||'',
+            divergencias:json.divergencias||[],
+            observacoes:json.observacoes||[],
+            resultado:json.resultado||''
           };
         } else if(n===2){
           // Normalizar titular_confere: se nao e empresa nem socio, e terceiro
@@ -6787,7 +6731,11 @@ function upDoc(n,inp){
             endereco:json.endereco_encontrado||'',
             tipo:_te,
             tipo_doc:json.tipo_documento||'',
-            dentro_90_dias:json.dentro_90_dias
+            dentro_90_dias:json.dentro_90_dias,
+            resumo:json.resumo||'',
+            divergencias:json.divergencias||[],
+            observacoes:json.observacoes||[],
+            resultado:json.resultado||''
           };
           S.endTerceiro=(_tc==='terceiro'||json.tipo_documento==='contrato_locacao');
           // Se terceiro: mostrar campo de justificativa
@@ -6822,7 +6770,11 @@ function upDoc(n,inp){
           S_DOCS.docSocio={
             nome:json.nome_encontrado||'',
             nome_confere:json.nome_confere,
-            tipo:json.tipo_doc||''
+            tipo:json.tipo_doc||'',
+            resumo:json.resumo||'',
+            divergencias:json.divergencias||[],
+            observacoes:json.observacoes||[],
+            resultado:json.resultado||''
           };
         }
 
@@ -8097,51 +8049,35 @@ async function gerarParecerIA(){
     if(pb){
       pb.innerHTML = '<div style="font-size:13px;color:#1e293b;line-height:1.7">'+formatParecerHTML(texto)+'</div>';
     }
+    // Defesa do cliente: aparece APENAS quando houve protesto na E2
     var _mS=window._mod5S||{};
-    var _twP=_mS.checks&&_mS.checks.some(function(ck){return ck.cls==='warn';});
-    if(_twP&&!_mS.aprovDir&&!_mS.aprovacaoEnviada&&!document.querySelector('#m5aprov_dir_top')){
+    if(_mS.temProtesto && !document.querySelector('#m5defesa_bloco')){
       var _cT=document.querySelector('#m5card_resultado'), _oP=STATE.usuarioLogado||'desconhecido';
       if(_cT){
-        var _dA=document.createElement('div'); _dA.id='m5aprov_dir_top';
-        _dA.style.cssText='background:#fff;border:3px solid #1565c0;border-radius:12px;padding:16px;margin-top:14px';
-        _dA.innerHTML='<div style="font-size:14px;font-weight:700;color:#1565c0;margin-bottom:10px">\uD83D\uDEE1 Aprovacao do Diretor Obrigatoria</div>'
-          +'<p style="font-size:12px;color:#1e3a5f;margin-bottom:14px">Pontos de aten\u00e7\u00e3o identificados. Clique abaixo para enviar o relat\u00f3rio geral desta an\u00e1lise (checks, refer\u00eancias e parecer) para a aba <strong>Aprova\u00e7\u00e3o</strong>, onde o diretor ir\u00e1 analisar e decidir.</p>'
-          +'<button id="m5btnEnviarAprov" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:11px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-send"></i> Enviar para aprova\u00e7\u00e3o do diretor</button>';
+        var _dA=document.createElement('div'); _dA.id='m5defesa_bloco';
+        _dA.style.cssText='background:#fff;border:3px solid #E67E22;border-radius:12px;padding:16px;margin-top:14px';
+        _dA.innerHTML='<div style="font-size:14px;font-weight:700;color:#E67E22;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-message-circle" style="font-size:18px"></i> Defesa do cliente</div>'
+          +'<p style="font-size:12px;color:#78350f;margin-bottom:12px;line-height:1.6">Como foi identificado protesto na Etapa 2, descreva aqui a defesa/contexto do cliente que justifique a liberaç\u00e3o da venda faturada. Esse texto entrar\u00e1 no relat\u00f3rio final que a diretoria receber\u00e1 para avaliaç\u00e3o.</p>'
+          +'<textarea id="m5defTxt" rows="4" placeholder="Ex: Cliente \u00e9 recorrente da regi\u00e3o, j\u00e1 realizou compras conosco em 2024, apresentou comprovantes de pagamentos recentes e carta do credor confirmando o acordo em andamento." style="width:100%;border:2px solid #fed7aa;border-radius:8px;padding:10px 12px;font-size:13px;background:#fff8f1;color:#1e293b;outline:none;resize:vertical;box-sizing:border-box;font-family:inherit;line-height:1.6"></textarea>'
+          +'<button id="m5btnDefesa" style="margin-top:10px;background:linear-gradient(135deg,#E67E22,#c56515);color:#fff;border:none;border-radius:8px;padding:11px 16px;width:100%;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-check"></i> Registrar defesa do cliente</button>';
         _cT.appendChild(_dA);
         setTimeout(function(){
-          var _bE=document.querySelector('#m5btnEnviarAprov'); if(!_bE)return;
-          _bE.onclick=async function(){
-            _bE.disabled=true; _bE.innerHTML='<i class="ti ti-loader"></i> Enviando...';
-            var _D=window._mod5D||{}, _S2=window._mod5S||{};
-            var dtR=new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR');
-            var id='ap_'+Date.now();
-            var _msgAuto=[_S2.justWarn,_S2.justEndTerceiro,_S2.justMaps,_S2.justTerceiro,_S2.decl_divergencia].filter(Boolean).join(' | ');
-            var registro={
-              cnpj:_D.cnpj,empresa:_D.nome,fantasia:_D.fantasia,socio:_D.socio,capital:_D.capital,
-              situacao:_S2.sit,meses_empresa:_S2.mE,meses_socio:_S2.mS,
-              orcamento:_S2.orcamento||0,
-              checks:_S2.checks,
-              referencias:(typeof coletarReferenciasM5==='function')?coletarReferenciasM5():[],
-              condicao_sugerida:(window._mod5calcCond?window._mod5calcCond():''),
-              parecer_ia_texto:texto,
-              mensagem_colaborador:_msgAuto,
-              solicitante:_oP,
-              dataHoraSolicitacao:dtR,
-              timestamp:new Date().toISOString(),
-              status:'pendente'
-            };
-            try{
-              await fbSalvarAprovacaoPendente(id,registro);
-              _S2.aprovacaoEnviada=true; _S2.aprovacaoPendenteId=id; window._mod5S=_S2;
-              _bE.innerHTML='\u2713 Enviado para aprova\u00e7\u00e3o em '+dtR;
-              _bE.style.background='#16a34a';
-              var _info=document.createElement('div');
-              _info.style.cssText='margin-top:10px;font-size:12px;color:#1565c0;background:#eff6ff;border:1px solid #93c5fd;border-radius:6px;padding:8px 10px';
-              _info.innerHTML='Aguardando an\u00e1lise do diretor na aba <strong>Aprova\u00e7\u00e3o</strong>.';
-              _dA.appendChild(_info);
-            }catch(e){
-              _bE.disabled=false; _bE.innerHTML='<i class="ti ti-send"></i> Enviar para aprova\u00e7\u00e3o do diretor';
+          var _bD=document.querySelector('#m5btnDefesa'); if(!_bD)return;
+          _bD.onclick=function(){
+            var txt=(document.querySelector('#m5defTxt').value||'').trim();
+            if(!txt){
+              document.querySelector('#m5defTxt').style.borderColor='#dc2626';
+              document.querySelector('#m5defTxt').focus();
+              return;
             }
+            var dtR=new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR');
+            var _S3=window._mod5S||{};
+            _S3.defesaCliente={texto:txt, operador:_oP, dataHora:dtR};
+            window._mod5S=_S3;
+            _bD.disabled=true;
+            document.querySelector('#m5defTxt').disabled=true;
+            _bD.innerHTML='<i class="ti ti-check"></i> Defesa registrada por '+_oP+' em '+dtR;
+            _bD.style.background='#16a34a';
           };
         },200);
       }
@@ -8155,7 +8091,7 @@ async function gerarParecerIA(){
 
 // Salvar análise no Firebase e retornar ID
 function salvarAnaliseMod5(btn){
-  var D=window._mod5D||{}; var S=window._mod5S||{};
+  var D=window._mod5D||{}; var S=window._mod5S||{}; var SD=window._mod5S_DOCS||{};
   function feedback(ok,msg){
     if(!btn) return;
     var _orig=btn.innerHTML, _origBg=btn.style.background;
@@ -8168,6 +8104,7 @@ function salvarAnaliseMod5(btn){
   var dtStr = agora.toLocaleDateString('pt-BR')+' '+agora.toLocaleTimeString('pt-BR');
   var registro = {
     cnpj:D.cnpj, empresa:D.nome, fantasia:D.fantasia, socio:D.socio, capital:D.capital,
+    endereco:D.endereco||'', cidade:D.cidade||'', estado:D.estado||'', cep:D.cep||'',
     situacao:S.sit, meses_empresa:S.mE, meses_socio:S.mS,
     orcamento:S.orcamento||0,
     referencias:(typeof coletarReferenciasM5==='function')?coletarReferenciasM5():[],
@@ -8175,6 +8112,19 @@ function salvarAnaliseMod5(btn){
     dataHora:dtStr, timestamp:agora.toISOString(),
     condicao_pagamento:(window._mod5calcCond?window._mod5calcCond():''),
     checks:S.checks,
+    // Dados de documentos (texto extraido e analise da IA, SEM PDF original)
+    documentos:{
+      contrato:SD.contrato||null,
+      comprovante:SD.comprovante||null,
+      docSocio:SD.docSocio||null
+    },
+    // Verificacao manual E3
+    verifManual:S.verifManual||null,
+    // Protesto e defesa do cliente (novos)
+    temProtesto:S.temProtesto||false,
+    relatoProtesto:S.relatoProtesto||null,
+    defesaCliente:S.defesaCliente||null,
+    // Legados (mantidos para compatibilidade com historico antigo)
     excecao1:S.excecao1||null, excecao2:S.excecao2||null,
     excecao_doc:S.excecao_doc||null,
     justificativa_warn:S.justWarn||null,
@@ -8195,61 +8145,189 @@ function salvarAnaliseMod5(btn){
   return registro;
 }
 
-// Imprimir / gerar PDF
-function imprimirMod5(btn){
-  var q2=document.querySelector.bind(document);
-  var D=window._mod5D||{}; var S=window._mod5S||{};
+// Imprimir / gerar PDF (identidade Mais Acessível)
+var LOGO_MAIS_ACESSIVEL_B64 = "data:image/jpeg;base64,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";
+
+async function imprimirMod5(btn){
+  var D=window._mod5D||{}; var S=window._mod5S||{}; var SD=window._mod5S_DOCS||{};
   if(!D.cnpj){
     if(btn){ var _o=btn.innerHTML; btn.innerHTML='\u26a0\ufe0f Fa\u00e7a uma consulta antes'; setTimeout(function(){btn.innerHTML=_o;},2200); }
     return;
   }
   var _calcCond=window._mod5calcCond||function(){return '';};
   var _tStr=window._mod5tStr||function(){return '';};
-  var cond_txt = {
-    '100':'Aprovado — 100% boleto sem entrada',
-    '30':'Aprovado — 30% entrada + boleto',
-    '50':'Atenção — 50% entrada + boleto',
-    '70':'Atenção — 70% entrada + 1 parcela',
-    'av':'Negado — somente à vista'
-  }[_calcCond()] || '';
+  var cond_key = _calcCond();
+  var cond_data = {
+    '100':{txt:'Aprovado \u2014 100% boleto sem entrada', cor:'#166534', bg:'#dcfce7', ic:'\u2705'},
+    '30':{txt:'Aprovado \u2014 30% entrada + boleto', cor:'#1e40af', bg:'#dbeafe', ic:'\u2705'},
+    '50':{txt:'Aten\u00e7\u00e3o \u2014 50% entrada + boleto', cor:'#92400e', bg:'#fef3c7', ic:'\u26a0\ufe0f'},
+    '70':{txt:'Aten\u00e7\u00e3o \u2014 70% entrada + 1 parcela', cor:'#92400e', bg:'#fef3c7', ic:'\u26a0\ufe0f'},
+    'av':{txt:'Negado \u2014 somente \u00e0 vista', cor:'#991b1b', bg:'#fee2e2', ic:'\u274c'},
+    'pend':{txt:'Pendente de avalia\u00e7\u00e3o da diretoria', cor:'#92400e', bg:'#fef3c7', ic:'\u26a0\ufe0f'}
+  };
+  var cond = cond_data[cond_key] || cond_data['pend'];
 
+  if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i> Gerando relat\u00f3rio...'; }
+
+  // Preparar lista de referencias para o resumo da IA
+  var refs = (typeof coletarReferenciasM5==='function')?coletarReferenciasM5():[];
+  var resumoRefs = '';
+  if(refs && refs.length > 0){
+    try{
+      var promptRef = 'Voc\u00ea \u00e9 analista de cr\u00e9dito. Analise as refer\u00eancias comerciais abaixo e produza um resumo CURTO (3-5 linhas, em portugu\u00eas) destacando: '
+        + '(1) se \u00e9 bom pagador ou tem atrasos recorrentes, '
+        + '(2) qual o maior limite j\u00e1 concedido e a maior compra realizada, '
+        + '(3) se as refer\u00eancias RECOMENDAM cr\u00e9dito, '
+        + '(4) tempo m\u00e9dio de relacionamento com fornecedores. '
+        + 'Escreva em texto corrido, direto, sem bullet points. N\u00e3o repita todos os dados, apenas a conclus\u00e3o.\n\n'
+        + 'Or\u00e7amento desta an\u00e1lise: R$ ' + (S.orcamento||0) + '\n\n'
+        + 'Refer\u00eancias:\n' + refs.map(function(r,i){
+            return (i+1)+'. '+(r.nome||'(sem nome)')
+              +' | Cliente desde: '+(r.clienteDesde||'?')
+              +' | Limite: '+(r.limite||'?')
+              +' | Maior compra: '+(r.valorMaiorCompra||'?')+' em '+(r.dataMaiorCompra||'?')
+              +' | \u00daltima compra: '+(r.valorUltimaCompra||'?')+' em '+(r.dataUltimaCompra||'?')
+              +' | Atraso: '+(r.atraso||'?')+' ('+(r.maiorAtrasoDias||'0')+' dias)'
+              +' | D\u00e9bito aberto: '+(r.debitoAberto||'?')
+              +' | Recomenda cr\u00e9dito: '+(r.recomendaCredito||'?');
+          }).join('\n');
+      var resp = await fetch('https://soft-limit-b3a1.rauldias.workers.dev',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:'claude-sonnet-4-6', max_tokens:400, messages:[{role:'user',content:promptRef}]})
+      });
+      var data = await resp.json();
+      resumoRefs = (data.content&&data.content[0])?data.content[0].text:'';
+    }catch(e){ resumoRefs=''; }
+  }
+
+  // Montar checklist com cores
   var checks_html = (S.checks||[]).map(function(ck){
-    var cor = ck.cls==='ok'?'#166534':ck.cls==='neg'?'#b71c1c':'#92400e';
-    var bg = ck.cls==='ok'?'#dcfce7':ck.cls==='neg'?'#fee2e2':'#fef9c3';
-    var ic = ck.cls==='ok'?'✅':ck.cls==='neg'?'❌':'⚠️';
-    return '<div style="padding:6px 10px;margin-bottom:4px;border-radius:6px;background:'+bg+';color:'+cor+';font-size:12px">'+ic+' '+ck.txt+'</div>';
+    var cor = ck.cls==='ok'?'#166534':ck.cls==='neg'?'#991b1b':'#92400e';
+    var bg = ck.cls==='ok'?'#dcfce7':ck.cls==='neg'?'#fee2e2':'#fef3c7';
+    var brd = ck.cls==='ok'?'#86efac':ck.cls==='neg'?'#fca5a5':'#fde68a';
+    var ic = ck.cls==='ok'?'\u2713':ck.cls==='neg'?'\u2717':'\u26a0\ufe0f';
+    return '<div style="padding:7px 11px;margin-bottom:5px;border-radius:6px;background:'+bg+';color:'+cor+';font-size:11.5px;border-left:3px solid '+brd+'"><b>'+ic+'</b> &nbsp;'+ck.txt+'</div>';
   }).join('');
 
-  var extras = '';
-  if(S.excecao1) extras += '<div style="background:#fff8e1;border:1px solid #fbbf24;border-radius:8px;padding:10px;margin-bottom:8px"><strong>⚠️ Exceção 1 - Carta de anuência:</strong> Verificada por '+S.excecao1.operador+' em '+S.excecao1.dataHora+'</div>';
-  if(S.excecao2) extras += '<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px;margin-bottom:8px"><strong>ℹ️ Exceção 2 - Diretor:</strong> Autorizado por '+S.excecao2.dirAutorizou+' em '+S.excecao2.dataHoraAutorizacao+' | Registrado por '+S.excecao2.operador+'</div>';
-  if(S.justEndTerceiro) extras += '<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:10px;margin-bottom:8px"><strong>📝 Justificativa endereço terceiro:</strong> '+S.justEndTerceiro+'</div>';
-  if(S.aprovDir) extras += '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px;margin-bottom:8px"><strong>✅ Aprovação diretor:</strong> '+S.aprovDir.diretor+' em '+S.aprovDir.dataHoraMsg+' | Registrado por '+S.aprovDir.operador+'</div>';
-  if(S.excecao_doc) extras += '<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px;margin-bottom:8px"><strong>📋 Declaração colaborador:</strong> '+(S.excecao_doc.declaracao_colaborador||'')+'<br><strong>Autorizado por:</strong> '+S.excecao_doc.autorizador+' | Registrado por '+S.excecao_doc.operador+'</div>';
+  // Verificacao manual E3
+  var vm = S.verifManual||{};
+  var vmHtml = '';
+  function vmItem(label,res,extra){
+    if(res===null) return '';
+    var ic = res==='ok'?'\u2713':'\u2717';
+    var cor = res==='ok'?'#166534':'#78350f';
+    var bg = res==='ok'?'#dcfce7':'#fef3c7';
+    return '<div style="padding:7px 11px;margin-bottom:5px;border-radius:6px;background:'+bg+';color:'+cor+';font-size:11.5px"><b>'+ic+' '+label+':</b> '+(res==='ok'?'Confere':'N\u00e3o confere')+(extra?' \u2014 '+extra:'')+'</div>';
+  }
+  vmHtml += vmItem('Endere\u00e7o no Google Maps', vm.maps);
+  vmHtml += vmItem('Empresa no Google', vm.google, vm.googleSite||'');
+  vmHtml += vmItem('Empresa no Instagram', vm.insta, vm.instaPerfil||'');
 
-  var parecer_atual = (q2('#m5pb')||{}).innerText||'';
+  // Documentos analisados pela IA
+  var docsHtml = '';
+  function docBlock(titulo, dados, extras){
+    if(!dados) return '';
+    var res = dados.resultado||'';
+    var cor = res==='ok'?'#166534':res==='neg'?'#991b1b':'#92400e';
+    var bg = res==='ok'?'#dcfce7':res==='neg'?'#fee2e2':'#fef3c7';
+    var brd = res==='ok'?'#86efac':res==='neg'?'#fca5a5':'#fde68a';
+    var ic = res==='ok'?'\u2713':res==='neg'?'\u2717':'\u26a0\ufe0f';
+    var html = '<div style="margin-bottom:12px;border:1px solid '+brd+';border-radius:8px;overflow:hidden">';
+    html += '<div style="background:'+bg+';color:'+cor+';padding:8px 12px;font-weight:600;font-size:12px"><b>'+ic+' '+titulo+'</b></div>';
+    html += '<div style="padding:10px 12px;font-size:11.5px;color:#1e293b;line-height:1.6;background:#fff">';
+    if(dados.resumo) html += '<div style="margin-bottom:6px"><b>Resumo:</b> '+dados.resumo+'</div>';
+    if(extras) html += extras;
+    if(dados.divergencias && dados.divergencias.length>0){
+      html += '<div style="margin-top:6px;color:#991b1b"><b>Diverg\u00eancias:</b> '+dados.divergencias.join('; ')+'</div>';
+    }
+    if(dados.observacoes && dados.observacoes.length>0){
+      html += '<div style="margin-top:6px;color:#475569;font-size:11px"><b>Observa\u00e7\u00f5es:</b> '+dados.observacoes.join('; ')+'</div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+  docsHtml += docBlock('Contrato Social', SD.contrato,
+    SD.contrato ? '<div><b>CNPJ:</b> '+(SD.contrato.cnpj||'\u2014')+' | <b>Raz\u00e3o:</b> '+(SD.contrato.razao_social||'\u2014')+' | <b>S\u00f3cio:</b> '+(SD.contrato.socio||'\u2014')+' | <b>Capital:</b> '+(SD.contrato.capital||'\u2014')+'</div>' : '');
+  docsHtml += docBlock('Comprovante de Endere\u00e7o', SD.comprovante,
+    SD.comprovante ? '<div><b>Titular:</b> '+(SD.comprovante.titular||'\u2014')+' ('+(SD.comprovante.titular_confere||'?')+') | <b>Tipo:</b> '+(SD.comprovante.tipo||'\u2014')+' | <b>Vigente (90d):</b> '+(SD.comprovante.dentro_90_dias?'sim':'n\u00e3o')+'</div>' : '');
+  docsHtml += docBlock('Documento do S\u00f3cio', SD.docSocio,
+    SD.docSocio ? '<div><b>Nome:</b> '+(SD.docSocio.nome||'\u2014')+' | <b>Tipo:</b> '+(SD.docSocio.tipo||'\u2014')+'</div>' : '');
+  if(!docsHtml) docsHtml = '<div style="padding:10px;background:#f1f5f9;border-radius:6px;font-size:11.5px;color:#64748b">Nenhum documento analisado nesta an\u00e1lise.</div>';
 
+  // Protesto e defesa
+  var protestoHtml = '';
+  if(S.temProtesto){
+    if(S.relatoProtesto){
+      protestoHtml += '<div style="background:#fff8e1;border:1px solid #f59e0b;border-radius:8px;padding:11px 13px;margin-bottom:8px"><div style="font-size:11px;color:#92400e;font-weight:600;margin-bottom:4px">\u26a0\ufe0f RELATO DO CLIENTE SOBRE O PROTESTO</div><div style="font-size:12px;color:#78350f;line-height:1.6">'+S.relatoProtesto.texto+'</div><div style="font-size:10.5px;color:#92400e;margin-top:6px;font-style:italic">Registrado por '+S.relatoProtesto.operador+' em '+S.relatoProtesto.dataHora+'</div></div>';
+    }
+    if(S.defesaCliente){
+      protestoHtml += '<div style="background:#fff8f1;border:1px solid #E67E22;border-radius:8px;padding:11px 13px;margin-bottom:8px"><div style="font-size:11px;color:#c56515;font-weight:600;margin-bottom:4px">\ud83d\udcac DEFESA DO CLIENTE (p\u00f3s-veredito)</div><div style="font-size:12px;color:#78350f;line-height:1.6">'+S.defesaCliente.texto+'</div><div style="font-size:10.5px;color:#c56515;margin-top:6px;font-style:italic">Registrado por '+S.defesaCliente.operador+' em '+S.defesaCliente.dataHora+'</div></div>';
+    }
+  }
+
+  // Resumo da IA sobre refs
+  var resumoRefsHtml = '';
+  if(resumoRefs){
+    resumoRefsHtml = '<div style="background:#fef3c7;border-left:4px solid #E67E22;border-radius:6px;padding:12px 14px;font-size:12px;color:#1e293b;line-height:1.7;white-space:pre-wrap">'+resumoRefs+'</div>';
+  }
+
+  // Operador e data
+  var _op = STATE.usuarioLogado||'desconhecido';
+  var _dtAgora = new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR');
+
+  // ---- HTML do relatorio ----
   var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
-    +'<title>Análise de Crédito — '+D.nome+'</title>'
-    +'<style>body{font-family:Arial,sans-serif;padding:30px;color:#1e293b;max-width:900px;margin:0 auto}'
-    +'h1{color:#0f6e56;font-size:20px;border-bottom:2px solid #0f6e56;padding-bottom:8px}'
-    +'h2{color:#374151;font-size:15px;margin-top:20px}'
-    +'@media print{body{padding:15px}}</style>'
-    +'</head><body>'
-    +'<h1>Análise de Crédito — Modelo em Teste</h1>'
-    +'<div style="background:#f0fdf4;border:2px solid #16a34a;border-radius:10px;padding:14px;margin-bottom:16px">'
-    +'<strong>Empresa:</strong> '+D.nome+' ('+D.fantasia+') — CNPJ: '+D.cnpj+'<br>'
-    +'<strong>Sócio:</strong> '+D.socio+' — Capital: '+D.capital+'<br>'
-    +'<strong>Situação:</strong> '+S.sit+' — '+_tStr(S.mE)+' de existência — Sócio há '+_tStr(S.mS)
+    +'<title>An\u00e1lise de Cr\u00e9dito \u2014 '+D.nome+'</title>'
+    +'<style>'
+    +'*{box-sizing:border-box;margin:0;padding:0}'
+    +'body{font-family:"Segoe UI",Arial,sans-serif;color:#2D3061;background:#fff;padding:28px 36px;line-height:1.5}'
+    +'.hdr{display:flex;align-items:center;gap:16px;padding-bottom:16px;border-bottom:3px solid #E67E22;margin-bottom:20px}'
+    +'.hdr img{width:70px;height:70px;object-fit:contain}'
+    +'.hdr .title{flex:1}'
+    +'.hdr h1{color:#E67E22;font-size:21px;font-weight:700;margin:0;line-height:1.2}'
+    +'.hdr .sub{color:#2D3061;font-size:11.5px;font-weight:600;letter-spacing:.5px;margin-top:2px}'
+    +'.hdr .doc-info{text-align:right;font-size:10.5px;color:#64748b;line-height:1.5}'
+    +'h2{color:#2D3061;font-size:14px;font-weight:700;margin-top:18px;margin-bottom:8px;padding-bottom:4px;border-bottom:1.5px solid #E67E22;display:flex;align-items:center;gap:6px}'
+    +'h2 .n{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:#E67E22;color:#fff;border-radius:50%;font-size:11px;font-weight:600}'
+    +'.emp-card{background:linear-gradient(135deg,#fff8f1,#fef3e5);border:1.5px solid #E67E22;border-radius:10px;padding:14px 16px;margin-bottom:14px}'
+    +'.emp-card .nome{font-size:15px;font-weight:700;color:#2D3061;margin-bottom:3px}'
+    +'.emp-card .meta{font-size:11.5px;color:#4b4e73;line-height:1.7}'
+    +'.emp-card .meta b{color:#2D3061}'
+    +'.vered{border-radius:10px;padding:14px 16px;margin-bottom:16px;font-size:14px;font-weight:700;text-align:center;border:2px solid}'
+    +'.sec{margin-bottom:14px}'
+    +'.footer{margin-top:28px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;text-align:center;line-height:1.6}'
+    +'.footer b{color:#2D3061}'
+    +'@page{size:A4;margin:16mm 14mm}'
+    +'@media print{body{padding:0}}' 
+    +'</style></head><body>'
+    +'<div class="hdr">'
+      +'<img src="'+LOGO_MAIS_ACESSIVEL_B64+'" alt="Mais Acess\u00edvel">'
+      +'<div class="title">'
+        +'<h1>Mais Acess\u00edvel</h1>'
+        +'<div class="sub">TUDO PARA ACESSIBILIDADE \u2022 AN\u00c1LISE DE CR\u00c9DITO</div>'
+      +'</div>'
+      +'<div class="doc-info">Relat\u00f3rio emitido em<br><b>'+_dtAgora+'</b></div>'
     +'</div>'
-    +'<div style="background:'+(S.negado?'#ffebee':_calcCond()==='100'?'#e8f5e9':'#fff8e1')+';border:2px solid '+(S.negado?'#b71c1c':_calcCond()==='100'?'#16a34a':'#f59e0b')+';border-radius:10px;padding:14px;margin-bottom:16px;font-size:16px;font-weight:700">'
-    +cond_txt+'</div>'
-    +'<h2>Checklist de verificação</h2>'+checks_html
-    +(extras?'<h2>Registros e exceções</h2>'+extras:'')
-    +'<h2>Parecer inteligente</h2>'
-    +'<div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:14px;font-size:13px;line-height:1.7;white-space:pre-wrap">'+parecer_atual+'</div>'
-    +'<div style="margin-top:20px;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px">'
-    +'Análise realizada por: '+( STATE.usuarioLogado||'desconhecido')+' — '+new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR')
+    +'<div class="emp-card">'
+      +'<div class="nome">'+(D.nome||'\u2014')+(D.fantasia?' <span style="font-weight:500;color:#4b4e73">\u2014 '+D.fantasia+'</span>':'')+'</div>'
+      +'<div class="meta">'
+        +'<b>CNPJ:</b> '+(D.cnpj||'\u2014')+' &nbsp;\u2022&nbsp; <b>Situa\u00e7\u00e3o:</b> '+(S.sit||'\u2014')+' &nbsp;\u2022&nbsp; <b>Idade:</b> '+_tStr(S.mE)+'<br>'
+        +'<b>S\u00f3cio:</b> '+(D.socio||'\u2014')+' ('+_tStr(S.mS)+') &nbsp;\u2022&nbsp; <b>Capital:</b> '+(D.capital||'\u2014')+'<br>'
+        +(D.endereco?'<b>Endere\u00e7o:</b> '+D.endereco+(D.cidade?', '+D.cidade:'')+(D.estado?' - '+D.estado:'')+(D.cep?' \u2022 CEP '+D.cep:''):'')
+      +'</div>'
+    +'</div>'
+    +'<div class="vered" style="background:'+cond.bg+';border-color:'+cond.cor+';color:'+cond.cor+'">'
+      +cond.ic+' &nbsp;'+cond.txt
+    +'</div>'
+    +'<div class="sec"><h2><span class="n">1</span>Checklist das 6 etapas</h2>'+checks_html+'</div>'
+    +(vmHtml?'<div class="sec"><h2><span class="n">3</span>Verifica\u00e7\u00e3o manual</h2>'+vmHtml+'</div>':'')
+    +'<div class="sec"><h2><span class="n">4</span>Documentos \u2014 an\u00e1lise comparativa pela IA</h2>'+docsHtml+'</div>'
+    +(protestoHtml?'<div class="sec"><h2 style="color:#E67E22;border-bottom-color:#E67E22"><span class="n" style="background:#E67E22">!</span>Protesto em cart\u00f3rio</h2>'+protestoHtml+'</div>':'')
+    +(resumoRefsHtml?'<div class="sec"><h2><span class="n">6</span>Resumo das refer\u00eancias comerciais</h2>'+resumoRefsHtml+(S.orcamento?'<div style="margin-top:8px;font-size:11px;color:#4b4e73"><b>Or\u00e7amento base:</b> R$ '+Number(S.orcamento).toLocaleString('pt-BR',{minimumFractionDigits:2})+'</div>':'')+'</div>':'')
+    +'<div class="footer">'
+      +'<b>Mais Acess\u00edvel \u2022 Tudo para Acessibilidade</b><br>'
+      +'An\u00e1lise realizada por <b>'+_op+'</b> em '+_dtAgora+'<br>'
+      +'Documento interno para avalia\u00e7\u00e3o da diretoria'
     +'</div>'
     +'</body></html>';
 
@@ -8257,7 +8335,9 @@ function imprimirMod5(btn){
   win.document.write(html);
   win.document.close();
   win.focus();
-  setTimeout(function(){ win.print(); },800);
+  setTimeout(function(){ win.print(); },1200);
+
+  if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-file-type-pdf"></i> PDF'; }
 }
 
 
