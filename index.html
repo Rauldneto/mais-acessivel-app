@@ -949,7 +949,7 @@ function renderAdmin(){
   var divAbas=document.createElement('div');
   divAbas.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap';
   divAbas.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso &agrave;s abas:</span>';
-  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod8',label:'Produtos'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
+  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod8',label:'Produtos'},{id:'mod9',label:'Clientes'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
     var lbl=document.createElement('label');
     lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
     var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=false;
@@ -1042,7 +1042,7 @@ function renderAdmin(){
     selRole.value=u.role||'user';
 
     // Marcar checkboxes de abas com os dados do usuario
-    var abasAtivas=u.abas||['mod1','mod2','mod7','mod8','mod3','mod4','mod5'];
+    var abasAtivas=u.abas||['mod1','mod2','mod7','mod8','mod9','mod3','mod4','mod5'];
     divAbas.querySelectorAll('input[name=abaAcesso]').forEach(function(cb){
       cb.checked=abasAtivas.indexOf(cb.value)>-1;
     });
@@ -1115,7 +1115,7 @@ function renderAdmin(){
     }
     var id='u_'+Date.now();
     var abasSel=[];if(typeof divAbas!=='undefined'){divAbas.querySelectorAll('input[name=abaAcesso]:checked').forEach(function(cb){abasSel.push(cb.value);});}
-    await fbSaveUser(id,{nome:n,usuario:u,senha:hashSimple(s),role:selRole.value,ativo:true,abas:abasSel.length>0?abasSel:['mod1','mod2','mod7','mod8','mod3','mod4']});
+    await fbSaveUser(id,{nome:n,usuario:u,senha:hashSimple(s),role:selRole.value,ativo:true,abas:abasSel.length>0?abasSel:['mod1','mod2','mod7','mod8','mod9','mod3','mod4']});
     msgU.style.color='green';msgU.textContent='✅ Usuário '+n+' criado!';
     iNome.value='';iUser.value='';iSenha.value='';
     loadUsers();
@@ -2765,12 +2765,13 @@ function renderModuloNav(){
     {id:'mod2',  icon:'📁', label:'Análise de Crédito'},
     {id:'mod7',  icon:'📐', label:'Norma NBR 9050'},
     {id:'mod8',  icon:'📦', label:'Produtos'},
+    {id:'mod9',  icon:'👥', label:'Clientes'},
     {id:'mod3', icon:'🤖', label:'Ace IA'},
     {id:'mod4',  icon:'🧾', label:'Cotação avulsa'},
     {id:'mod5',  icon:'🧪', label:'Modelo em Teste'}
   ];
   // Mapeamento id antigo -> novo
-  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8'};
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9'};
   // Admin ve tudo; outros so veem abas permitidas
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
@@ -2796,6 +2797,7 @@ function renderModuloNav(){
       if(m.id==='frete') STATE.tab='cotacao';
       else if(m.id==='mod2') STATE.tabCredito='analise';
       else if(m.id==='mod8') STATE.tabProdutos='pesquisa';
+      else if(m.id==='mod9') STATE.tabClientes='licitacao';
       else STATE.tab=m.id;
       render();
     };
@@ -3898,6 +3900,508 @@ function normaImportar(p){var ks=Object.keys(p.paginas);
     var k=ks[n++];put('normas/paginas/'+k,p.paginas[k]).catch(function(){falhas++}).then(function(){var el=document.getElementById('nmProg');if(el)el.textContent=Math.round(n/ks.length*100)+'% ('+n+'/'+ks.length+')';prox()})}
   function fim(){box.remove();NORMA.dados=null;NORMA.erro='';NORMA.imgs={};NORMA.res=[];NORMA.importado=falhas?'erro':'ok';render();normaToast(falhas?'Importação terminou com '+falhas+' falha(s). Tente de novo.':'Norma atualizada: '+(p.indice.versao||''))}
 }
+// ══════════════════════════════════════════
+//  MÓDULO CLIENTES › LICITAÇÃO (mod9)
+//  Firebase: clientesLicitacao/{empresas,importados,uploads,config}
+// ══════════════════════════════════════════
+var LC={emp:null,ups:null,cfg:{prefixo:'0'},err:'',sub:'lista',F:{st:'',vd:'',uf:'',pt:'',tg:''},ord:'d',q:'',pn:{},det:{},outras:{},web:{},busy:null,res:null,enr:null,timer:null};
+var LC_P='clientesLicitacao',LC_W='https://soft-limit-b3a1.rauldias.workers.dev';
+var LC_OPT=['Sucesso','Atendido','Não encontrado','Desinteressante'],LC_ALL=['Novo','Em atendimento'].concat(LC_OPT);
+var LC_SC={'Novo':'n','Em atendimento':'a','Sucesso':'s','Atendido':'t','Não encontrado':'x','Desinteressante':'d'};
+var LC_TAGS=['Calçadas','Rampas','Piso tátil','Banheiros PCD','Plataforma elevatória','Corrimão/guarda-corpo','Sinalização','Adequação geral','Normas NBR'];
+var LC_PT={'Alto':3,'Médio':2,'Baixo':1};
+
+function lcEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function lcMe(){return STATE.usuarioLogado||'desconhecido';}
+function lcSleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+function lcFb(path,method,body){
+  return fetch(FIREBASE_DB+'/'+LC_P+'/'+path+'.json',{method:method||'GET',headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)})
+    .then(function(r){if(!r.ok)throw new Error('Firebase '+r.status);return r.json();});
+}
+function lcDig(s){return String(s||'').replace(/\D/g,'');}
+function lcNorm(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();}
+function lcSafeKey(s){return String(s||'').replace(/[.#$\[\]\/]/g,'_').slice(0,120);}
+function lcFmtCnpj(d){d=lcDig(d);return d.length===14?d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5'):d;}
+function lcTelDig(t){var d=lcDig(t);if(d.length>=12&&d.indexOf('55')===0)d=d.slice(2);if(d.length>=11&&d[0]==='0')d=d.slice(1);return d;}
+function lcFmtTel(t){var d=lcTelDig(t);if(d.length===10)return '('+d.slice(0,2)+') '+d.slice(2,6)+'-'+d.slice(6);if(d.length===11)return '('+d.slice(0,2)+') '+d.slice(2,7)+'-'+d.slice(7);return String(t||'').trim();}
+function lcTelHref(t){var d=lcTelDig(t);return 'tel:'+((d.length===10||d.length===11)?(LC.cfg.prefixo||'')+d:d);}
+function lcAddTels(lista,novos){var out=(lista||[]).slice(),ds=out.map(lcTelDig);(novos||[]).forEach(function(t){var d=lcTelDig(t);if(d.length>=10&&ds.indexOf(d)<0&&out.length<4){out.push(lcFmtTel(d));ds.push(d);}});return out;}
+function lcPrimeiroNome(s){var ps=String(s||'').trim().split(/\s+/).filter(function(p){return p.replace(/\./g,'').length>2;});if(!ps.length)return '';var p=ps[0].toLowerCase();return p.charAt(0).toUpperCase()+p.slice(1);}
+function lcEf(e){return e.st||(e.resp?'Em atendimento':'Novo');}
+function lcLics(e){return Object.keys(e.lics||{}).map(function(k){return Object.assign({ref:k},e.lics[k]);}).sort(function(a,b){return (b.dt||'').localeCompare(a.dt||'');});}
+function lcUlt(e){return lcLics(e)[0]||{};}
+function lcFd(s){return s?String(s).slice(0,10).split('-').reverse().join('/'):'';}
+function lcFdh(iso){try{var d=new Date(iso);return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}catch(e){return '';}}
+function lcPtEmp(e){var b='';lcLics(e).forEach(function(l){if((LC_PT[l.pt]||0)>(LC_PT[b]||0))b=l.pt;});return b||'Baixo';}
+function lcTagsEmp(e){var s=[];lcLics(e).forEach(function(l){(l.tags||[]).forEach(function(t){if(s.indexOf(t)<0)s.push(t);});});return s;}
+function lcUfsEmp(e){var s=[];lcLics(e).forEach(function(l){if(l.uf&&s.indexOf(l.uf)<0)s.push(l.uf);});return s;}
+
+function lcCss(){
+  if(document.getElementById('lcCss'))return;
+  var st=document.createElement('style');st.id='lcCss';
+  st.textContent=
+  '.lc-wrap{padding:16px 18px 60px;max-width:1280px;margin:0 auto}'+
+  '.lc-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}'+
+  '.lc-seg{display:inline-flex;background:#ecebe6;border-radius:10px;padding:3px;gap:2px}'+
+  '.lc-seg button{border:1px solid transparent;background:transparent;border-radius:8px;padding:7px 14px;font:inherit;font-size:13px;color:#666;cursor:pointer;display:flex;gap:6px;align-items:center}'+
+  '.lc-seg button.on{background:#fff;color:#1a1a1a;font-weight:700;border-color:#e2e1dc}'+
+  '.lc-n{font-size:11px;background:#fef3c7;color:#b45309;border-radius:10px;padding:1px 7px;font-weight:700}'+
+  '.lc-info{font-size:12px;color:#888;flex:1;min-width:160px}'+
+  '.lc-btn{background:#fff;border:1px solid #d9d8d3;border-radius:7px;padding:5px 11px;font:inherit;font-size:12px;cursor:pointer;color:#333;white-space:nowrap}'+
+  '.lc-btn:hover{border-color:#d97706;color:#b45309}.lc-btn:focus-visible,.lc-fl:focus-visible,.lc-seg button:focus-visible{outline:2px solid #d97706;outline-offset:1px}'+
+  '.lc-btn.pri{background:#d97706;border-color:#d97706;color:#fff}.lc-btn.pri:hover{background:#b45309;color:#fff}'+
+  '.lc-btn[disabled]{opacity:.6;cursor:wait}'+
+  '.lc-grid{display:grid;grid-template-columns:200px minmax(0,1fr);gap:22px;align-items:start}'+
+  '.lc-side{border-right:1px solid #e3e2dd;padding-right:16px;position:sticky;top:8px}'+
+  '.lc-fg{padding:12px 0;border-bottom:1px solid #ecebe7}.lc-fg:first-child{padding-top:0}.lc-fg:last-child{border-bottom:none}'+
+  '.lc-fg h4{font-size:13px;margin:0 0 6px;color:#1a1a1a}'+
+  '.lc-fl{display:flex;justify-content:space-between;gap:6px;font-size:13px;color:#555;cursor:pointer;padding:3px 7px;margin:0 -7px;border-radius:6px;background:none;border:none;width:calc(100% + 14px);text-align:left;font-family:inherit}'+
+  '.lc-fl:hover{background:#efeee9;color:#1a1a1a}.lc-fl.sel{background:#fef3c7;color:#b45309;font-weight:700}'+
+  '.lc-fl span:last-child{color:#aaa;font-size:12px}.lc-fl.sel span:last-child{color:#b45309}'+
+  '.lc-q{position:relative;margin-bottom:8px}.lc-q input{width:100%;box-sizing:border-box;padding:9px 12px 9px 34px;border:1px solid #d9d8d3;border-radius:8px;font:inherit;font-size:14px;background:#fff}'+
+  '.lc-q input:focus{outline:none;border-color:#d97706}.lc-q span{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:14px}'+
+  '.lc-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:3px 10px;background:#fef3c7;color:#b45309;border-radius:14px;margin:0 4px 6px 0;cursor:pointer;border:none;font-family:inherit}'+
+  '.lc-cnt{font-size:12px;color:#999;margin:2px 0 6px}'+
+  '.lc-list{background:#fff;border:1px solid #e3e2dd;border-radius:10px;padding:0 16px}'+
+  '.lc-row{padding:16px 0;border-bottom:1px solid #f0efeb}.lc-row:last-child{border-bottom:none}'+
+  '.lc-top{display:flex;justify-content:space-between;gap:10px}'+
+  '.lc-emp{font-size:15px;font-weight:700;color:#1a1a1a}.lc-cnpj{font-size:12px;color:#777;font-family:Consolas,monospace}'+
+  '.lc-val{font-size:16px;font-weight:700;text-align:right;white-space:nowrap}'+
+  '.lc-sub{font-size:13px;color:#555;margin:5px 0 2px}.lc-meta{font-size:12px;color:#999}'+
+  '.lc-pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:6px;margin:2px 4px 2px 0;background:#f3f2ee;color:#444;text-decoration:none;border:none;font-family:inherit}'+
+  'a.lc-pill.tel{color:#1d4ed8;cursor:pointer}a.lc-pill.tel:hover{background:#dbeafe}'+
+  '.lc-tag{background:#dcfce7;color:#166534}.lc-ptA{background:#dcfce7;color:#166534}.lc-ptM{background:#dbeafe;color:#1d4ed8}.lc-ptB{background:#f3f2ee;color:#777}'+
+  '.st-n{background:#f3f2ee;color:#555}.st-a{background:#dbeafe;color:#1d4ed8}.st-s{background:#dcfce7;color:#166534}.st-t{background:#ede9fe;color:#6d28d9}.st-x{background:#fee2e2;color:#b91c1c}.st-d{background:#f3f2ee;color:#999}'+
+  '.lc-warn{display:block;background:#fef3c7;color:#92400e;font-size:12px;padding:6px 10px;border-radius:6px;margin-bottom:8px}'+
+  '.lc-pn{background:#f8f7f4;border-radius:8px;padding:12px;margin-top:8px}'+
+  '.lc-dt{width:100%;font-size:13px;border-collapse:collapse;background:none;border:none}.lc-dt tr{background:none!important}.lc-dt td{padding:4px 0;vertical-align:top;font-family:inherit!important;border:none!important;background:none!important;font-size:13px}.lc-dt td:first-child{color:#777;width:130px;padding-right:10px}'+
+  '.lc-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}'+
+  '.lc-acts label{font-size:12px;font-weight:700;color:#555;display:inline-flex;gap:6px;align-items:center}'+
+  '.lc-acts select{font:inherit;font-size:12px;padding:4px 6px;border:1px solid #d9d8d3;border-radius:6px;background:#fff;font-weight:400}'+
+  '.lc-obs{width:100%;box-sizing:border-box;margin-top:8px;font:inherit;font-size:13px;padding:7px 10px;border:1px solid #e3e2dd;border-radius:7px;background:#fff}'+
+  '.lc-obs:focus{outline:none;border-color:#d97706}'+
+  '.lc-lig{font-size:12px;color:#888;margin-top:4px}'+
+  '.lc-g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.lc-g2 input{font:inherit;font-size:13px;padding:7px 9px;border:1px solid #d9d8d3;border-radius:6px}'+
+  '.lc-err{color:#b91c1c;font-size:13px}'+
+  '.lc-wa{margin:0;font-family:inherit;font-size:13px;white-space:pre-wrap;user-select:all;cursor:text;background:#fff;border:1px solid #e3e2dd;border-radius:6px;padding:10px}'+
+  '.lc-drop{border:2px dashed #d0cec7;border-radius:12px;padding:30px;text-align:center;background:#fff;margin-bottom:14px}'+
+  '.lc-drop.over{border-color:#d97706;background:#fffbeb}'+
+  '.lc-res{background:#fff;border:1px solid #e3e2dd;border-left:4px solid #d97706;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;line-height:1.6}'+
+  '.lc-res.erro{border-left-color:#b91c1c}'+
+  '.lc-tbl{width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid #e3e2dd;border-radius:8px;overflow:hidden}'+
+  '.lc-tbl th{font-weight:600;color:#777;font-size:12px;text-align:left;padding:8px;background:#f8f7f4;border-bottom:1px solid #e3e2dd}'+
+  '.lc-tbl td{padding:8px;border-bottom:1px solid #f0efeb}'+
+  '.lc-empty{padding:40px 10px;text-align:center;color:#888;font-size:14px}'+
+  '@media(max-width:760px){.lc-grid{grid-template-columns:1fr}.lc-side{border-right:none;padding-right:0;border-bottom:1px solid #e3e2dd;position:static}.lc-g2{grid-template-columns:1fr}}';
+  document.head.appendChild(st);
+}
+
+function renderNavClientes(){
+  if(!STATE.tabClientes)STATE.tabClientes='licitacao';
+  var nav=document.createElement('nav');
+  [{id:'licitacao',l:'🏛️ Licitação'}].forEach(function(t){
+    var b=document.createElement('button');b.className='tab'+(STATE.tabClientes===t.id?' active':'');b.textContent=t.l;
+    b.onclick=function(){STATE.tabClientes=t.id;render();};nav.appendChild(b);
+  });
+  return nav;
+}
+
+function renderClientes(){
+  lcCss();
+  var wrap=document.createElement('div');wrap.className='lc-wrap';wrap.id='lcRoot';
+  wrap.innerHTML='<div class="lc-empty">Carregando clientes…</div>';
+  wrap.addEventListener('click',lcClick);wrap.addEventListener('change',lcChange);wrap.addEventListener('input',lcInput);
+  setTimeout(function(){
+    if(LC.emp)lcDraw();
+    lcLoad().then(function(){lcDraw();lcEnriquecer();});
+  },0);
+  if(!LC.timer)LC.timer=setInterval(function(){
+    if(STATE.modulo!=='mod9'||LC.sub!=='lista'||LC.busy)return;
+    var a=document.activeElement;if(a&&document.getElementById('lcRoot')&&document.getElementById('lcRoot').contains(a)&&/INPUT|SELECT|TEXTAREA/.test(a.tagName))return;
+    if(Object.keys(LC.pn).some(function(k){return LC.pn[k];}))return;
+    lcLoad().then(lcDrawList);
+  },60000);
+  return wrap;
+}
+
+function lcLoad(){
+  return Promise.all([lcFb('empresas'),lcFb('uploads'),lcFb('config')]).then(function(r){
+    LC.emp=r[0]||{};LC.ups=r[1]||{};LC.cfg=Object.assign({prefixo:'0'},r[2]||{});LC.err='';
+  }).catch(function(e){LC.emp=LC.emp||{};LC.ups=LC.ups||{};LC.err='Não foi possível carregar os clientes ('+e.message+'). Verifique a internet e clique em Atualizar.';});
+}
+
+function lcUpsArr(){return Object.keys(LC.ups||{}).map(function(k){return Object.assign({id:k},LC.ups[k]);}).sort(function(a,b){return (b.dt||'').localeCompare(a.dt||'');});}
+
+function lcDraw(){
+  var root=document.getElementById('lcRoot');if(!root)return;
+  var n=Object.keys(LC.emp||{}).length,ups=lcUpsArr(),u=ups[0];
+  var info=LC.sub==='lista'?(u?'Última lista: '+lcFd(u.dt)+(u.regiao?' · '+lcEsc(u.regiao):''):'Nenhuma lista carregada ainda'):(ups.length+' upload'+(ups.length===1?' realizado':'s realizados'));
+  var h='<div class="lc-head"><div class="lc-seg" role="tablist">'+
+    '<button type="button" role="tab" class="'+(LC.sub==='lista'?'on':'')+'" data-a="sub" data-v="lista">📋 Lista de clientes <span class="lc-n">'+n+'</span></button>'+
+    '<button type="button" role="tab" class="'+(LC.sub==='upload'?'on':'')+'" data-a="sub" data-v="upload">⬆️ Upload</button></div>'+
+    '<span class="lc-info" id="lcInfo">'+info+(LC.enr?' · Buscando contatos no cartão CNPJ '+LC.enr.i+'/'+LC.enr.n:'')+'</span>'+
+    '<button type="button" class="lc-btn" data-a="reload">🔄 Atualizar</button>'+
+    (STATE.roleLogado==='admin'?'<button type="button" class="lc-btn" data-a="cfg">⚙️ Prefixo de discagem</button>':'')+'</div>';
+  if(LC.err)h+='<div class="lc-res erro">'+lcEsc(LC.err)+'</div>';
+  if(LC.sub==='lista'){
+    h+='<div class="lc-grid"><aside class="lc-side" id="lcSide"></aside><div>'+
+      '<div class="lc-q"><span aria-hidden="true">🔎</span><input id="lcQ" type="search" placeholder="Buscar empresa, cidade, CNPJ ou contato" aria-label="Buscar cliente" value="'+lcEsc(LC.q)+'"></div>'+
+      '<div id="lcChips"></div><div class="lc-cnt" id="lcCnt"></div><div id="lcList"></div></div></div>';
+    root.innerHTML=h;lcDrawList();
+  }else{
+    h+=lcUploadHtml();root.innerHTML=h;lcWireDrop();
+  }
+}
+
+var LC_G=[
+  ['st','Status',function(e){return [lcEf(e)];}],
+  ['vd','Vendedor',function(e){return [e.resp||'Sem vendedor'];}],
+  ['uf','Estado',lcUfsEmp],
+  ['pt','Potencial',function(e){return [lcPtEmp(e)];}],
+  ['tg','Acessibilidade',lcTagsEmp]
+];
+function lcPass(e,skip){
+  var q=lcNorm(LC.q);
+  if(q){var hay=lcNorm([e.emp,e.cnpj,lcDig(e.cnpj),e.cont,e.email].concat(lcLics(e).map(function(l){return l.c+' '+l.orgao;})).join(' '));if(hay.indexOf(q)<0)return false;}
+  return LC_G.every(function(g){return g[0]===skip||!LC.F[g[0]]||g[2](e).indexOf(LC.F[g[0]])>=0;});
+}
+function lcDrawList(){
+  var side=document.getElementById('lcSide'),list=document.getElementById('lcList');if(!side||!list)return;
+  var E=LC.emp||{},keys=Object.keys(E);
+  var sh='<div class="lc-fg"><h4>Ordenar por</h4>'+
+    '<button type="button" class="lc-fl'+(LC.ord==='d'?' sel':'')+'" data-a="ord" data-v="d"><span>Mais recentes</span><span></span></button>'+
+    '<button type="button" class="lc-fl'+(LC.ord==='a'?' sel':'')+'" data-a="ord" data-v="a"><span>Mais antigas</span><span></span></button></div>';
+  LC_G.forEach(function(g){
+    var c={};keys.forEach(function(k){if(lcPass(E[k],g[0]))g[2](E[k]).forEach(function(v){c[v]=(c[v]||0)+1;});});
+    var ks=Object.keys(c);
+    if(g[0]==='st')ks=LC_ALL.filter(function(s){return c[s];});
+    else if(g[0]==='pt')ks=['Alto','Médio','Baixo'].filter(function(s){return c[s];});
+    else ks.sort(function(a,b){return c[b]-c[a];});
+    sh+='<div class="lc-fg"><h4>'+g[1]+'</h4>'+(ks.map(function(v){return '<button type="button" class="lc-fl'+(LC.F[g[0]]===v?' sel':'')+'" data-a="flt" data-k="'+g[0]+'" data-v="'+lcEsc(v)+'"><span>'+lcEsc(v)+'</span><span>'+c[v]+'</span></button>';}).join('')||'<span class="lc-cnt">Nenhum</span>')+'</div>';
+  });
+  side.innerHTML=sh;
+  var chips=document.getElementById('lcChips'),act=LC_G.filter(function(g){return LC.F[g[0]];});
+  chips.innerHTML=act.map(function(g){return '<button type="button" class="lc-chip" data-a="flt" data-k="'+g[0]+'" data-v="'+lcEsc(LC.F[g[0]])+'">'+lcEsc(LC.F[g[0]])+' ✕</button>';}).join('')+(act.length?'<button type="button" class="lc-chip" style="background:none" data-a="limpar">Limpar filtros</button>':'');
+  var L=keys.filter(function(k){return lcPass(E[k]);}).map(function(k){return {k:k,e:E[k],u:lcUlt(E[k])};});
+  L.sort(function(a,b){var x=(a.u.dt||''),y=(b.u.dt||'');return LC.ord==='d'?y.localeCompare(x):x.localeCompare(y);});
+  document.getElementById('lcCnt').textContent=L.length+(L.length===1?' resultado':' resultados');
+  if(!keys.length){list.innerHTML='<div class="lc-list"><div class="lc-empty">Nenhum cliente ainda. Carregue a planilha do ConLicitação na aba Upload.<br><br><button type="button" class="lc-btn pri" data-a="sub" data-v="upload">⬆️ Ir para Upload</button></div></div>';return;}
+  if(!L.length){list.innerHTML='<div class="lc-list"><div class="lc-empty">Nenhum cliente com esses filtros.</div></div>';return;}
+  var max=200,more=L.length>max;
+  list.innerHTML='<div class="lc-list">'+L.slice(0,max).map(function(x){return lcCard(x.k,x.e,x.u);}).join('')+'</div>'+(more?'<div class="lc-cnt">Mostrando os 200 primeiros. Use os filtros para refinar.</div>':'');
+}
+
+function lcCard(k,e,u){
+  var ef=lcEf(e),me=lcMe(),isAdm=STATE.roleLogado==='admin',ks=lcEsc(k),lics=lcLics(e),pt=lcPtEmp(e);
+  var h='<div class="lc-row" data-k="'+ks+'">';
+  if(e.novaLic)h+='<div class="lc-warn">⚠️ Empresa já cadastrada: entrou uma nova licitação dela no último upload. Contato e vendedor foram mantidos. <button type="button" class="lc-btn" style="margin-left:6px;padding:2px 8px" data-a="visto" data-k="'+ks+'">Ok, visto</button></div>';
+  h+='<div class="lc-top"><div><div class="lc-emp">'+lcEsc(e.emp)+'</div><div class="lc-cnpj">'+(e.cnpj?lcEsc(e.cnpj):'CNPJ não informado')+'</div></div>'+
+    '<div><div class="lc-val">'+(u.val?lcEsc(u.val):'')+'</div><div style="text-align:right"><span class="lc-pill st-'+LC_SC[ef]+'">'+ef+'</span></div></div></div>';
+  h+='<div class="lc-sub">'+lcEsc([u.tipo,u.local].filter(Boolean).join(' · '))+'</div>';
+  h+='<div class="lc-meta">'+lcFd(u.dt)+' · '+lcEsc(u.c)+' / '+lcEsc(u.uf)+(u.nums?' · nº '+lcEsc([].concat(u.nums)[0]):'')+(lics.length>1?' · '+lics.length+' licitações':'')+'</div>';
+  h+='<div style="margin:6px 0 2px">'+(u.tags||[]).map(function(t){return '<span class="lc-pill lc-tag">♿ '+lcEsc(t)+'</span>';}).join('')+'<span class="lc-pill lc-pt'+pt.charAt(0)+'">Potencial '+pt+'</span></div>';
+  h+='<div style="margin:4px 0">'+((e.tel||[]).map(function(t){return '<a class="lc-pill tel" href="'+lcEsc(lcTelHref(t))+'" data-a="ligar" data-k="'+ks+'" data-t="'+lcEsc(t)+'" title="Ligar pelo MicroSIP">📞 '+lcEsc(lcFmtTel(t))+'</a>';}).join('')||'<span class="lc-meta">'+(e.enriq?'Sem telefone encontrado · ':'Buscando contato… · ')+'</span>')+
+    (e.email?'<span class="lc-pill">✉️ '+lcEsc(e.email)+'</span>':'')+(e.cont?'<span class="lc-pill">👤 '+lcEsc(e.cont)+'</span>':'')+
+    '<button type="button" class="lc-btn" style="padding:2px 8px" data-a="web" data-k="'+ks+'"'+(LC.web[k]?' disabled':'')+'>'+(LC.web[k]?'Buscando…':'🌐 Buscar na web')+'</button></div>';
+  if(LC.det[k])h+=lcDetHtml(u);
+  if(LC.det[k]&&lics.length>1){
+    h+='<div class="lc-pn"><b style="font-size:13px">Outras licitações desta empresa</b>'+lics.slice(1).map(function(l){return '<div style="font-size:13px;margin-top:6px">'+lcFd(l.dt)+' · '+lcEsc(l.c)+' / '+lcEsc(l.uf)+' · '+lcEsc(l.val||'')+'<br><span style="color:#666">'+lcEsc([l.tipo,l.local].filter(Boolean).join(' · '))+'</span></div>';}).join('')+'</div>';
+  }
+  h+='<div class="lc-acts"><button type="button" class="lc-btn" data-a="det" data-k="'+ks+'">'+(LC.det[k]?'▲':'▼')+' Detalhes da obra</button>';
+  if(e.resp){h+='<span class="lc-pill '+(e.resp===me?'st-a':'lc-warn')+'" style="display:inline-block;margin:0">👤 '+lcEsc(e.resp)+'</span>';if(e.resp===me||isAdm)h+='<button type="button" class="lc-btn" data-a="liberar" data-k="'+ks+'">Liberar</button>';}
+  else h+='<button type="button" class="lc-btn pri" data-a="assumir" data-k="'+ks+'">✋ Assumir</button>';
+  h+='<label>Status <select data-a="status" data-k="'+ks+'"><option value="" disabled hidden'+(e.st?'':' selected')+'>Selecione</option>'+LC_OPT.map(function(o){return '<option'+(o===e.st?' selected':'')+'>'+o+'</option>';}).join('')+'</select></label>'+
+    '<button type="button" class="lc-btn" data-a="pn" data-v="e" data-k="'+ks+'">✏️ Editar contato</button>'+
+    '<button type="button" class="lc-btn" data-a="pn" data-v="w" data-k="'+ks+'">💬 Dados p/ WhatsApp</button></div>';
+  h+='<input class="lc-obs" data-a="obs" data-k="'+ks+'" placeholder="Observação do atendimento" value="'+lcEsc(e.obs||'')+'" aria-label="Observação">';
+  if(e.lig&&e.lig.n)h+='<div class="lc-lig">📞 '+e.lig.n+(e.lig.n===1?' ligação':' ligações')+' · última por '+lcEsc(e.lig.por)+' em '+lcFdh(e.lig.ultima)+'</div>';
+  if(LC.pn[k]==='e'){
+    h+='<div class="lc-pn"><div class="lc-g2">'+
+      '<input id="lcC_'+ks+'" placeholder="CNPJ" value="'+lcEsc(e.cnpj||'')+'" aria-label="CNPJ"><input id="lcM_'+ks+'" placeholder="E-mail" value="'+lcEsc(e.email||'')+'" aria-label="E-mail">'+
+      '<input id="lcT_'+ks+'" placeholder="Telefones separados por /" value="'+lcEsc((e.tel||[]).map(lcFmtTel).join(' / '))+'" aria-label="Telefones"><input id="lcN_'+ks+'" placeholder="Nome do sócio ou contato" value="'+lcEsc(e.cont||'')+'" aria-label="Nome"></div>'+
+      '<div class="lc-acts"><button type="button" class="lc-btn pri" data-a="salvar" data-k="'+ks+'">Salvar</button><button type="button" class="lc-btn" data-a="pn" data-v="e" data-k="'+ks+'">Cancelar</button><span class="lc-err" id="lcE_'+ks+'"></span></div></div>';
+  }
+  if(LC.pn[k]==='w'){
+    h+='<div class="lc-pn"><pre class="lc-wa" id="lcW_'+ks+'" data-a="selwa">'+lcEsc(lcWaTxt(e))+'</pre><div class="lc-acts"><button type="button" class="lc-btn" data-a="copiar" data-k="'+ks+'">📋 Copiar</button><span class="lc-meta" id="lcOk_'+ks+'">Clique no texto para selecionar tudo</span></div></div>';
+  }
+  return h+'</div>';
+}
+function lcDetHtml(u){
+  var r=[['Tipo de obra',u.tipo],['Local',u.local],['Serviços previstos',u.servicos],['Materiais citados',u.materiais],['Acessibilidade',u.acess],['Prazo',u.prazo],['Modalidade',u.modalidade],['Órgão',u.orgao]];
+  return '<div class="lc-pn"><table class="lc-dt">'+r.map(function(x){return '<tr><td>'+x[0]+'</td><td>'+lcEsc(x[1]||'Não informado')+'</td></tr>';}).join('')+
+    '<tr><td>O que oferecer</td><td style="color:#166534">'+lcEsc(u.oferecer||'—')+' <span style="color:#999;font-size:11px">(sugestão da IA)</span></td></tr></table></div>';
+}
+function lcWaTxt(e){return 'Empresa: '+(e.emp||'-')+'\nCNPJ: '+(e.cnpj||'-')+'\nTelefone: '+((e.tel||[]).map(lcFmtTel).join(' / ')||'-')+'\nE-mail: '+(e.email||'-')+'\nNome: '+(e.cont||'-');}
+function lcSel(el){var r=document.createRange();r.selectNodeContents(el);var s=getSelection();s.removeAllRanges();s.addRange(r);}
+
+function lcPatch(k,upd){
+  upd.atualizado=new Date().toISOString();
+  Object.assign(LC.emp[k],upd);
+  return lcFb('empresas/'+k,'PATCH',upd).catch(function(){alert('Não foi possível salvar. Verifique a internet e tente de novo.');});
+}
+
+function lcClick(ev){
+  var b=ev.target.closest('[data-a]');if(!b||!this.contains(b))return;
+  var a=b.getAttribute('data-a'),k=b.getAttribute('data-k'),v=b.getAttribute('data-v'),e=k&&LC.emp?LC.emp[k]:null;
+  if(a==='sub'){LC.sub=v;lcDraw();return;}
+  if(a==='reload'){b.disabled=true;lcLoad().then(lcDraw);return;}
+  if(a==='cfg'){var p=prompt('Prefixo antes do DDD para o MicroSIP (ex: 0). Deixe vazio para nenhum.',LC.cfg.prefixo||'');if(p===null)return;p=lcDig(p);LC.cfg.prefixo=p;lcFb('config','PATCH',{prefixo:p}).then(lcDrawList);return;}
+  if(a==='ord'){LC.ord=v;lcDrawList();return;}
+  if(a==='flt'){LC.F[k]=LC.F[k]===v?'':v;lcDrawList();return;}
+  if(a==='limpar'){for(var f in LC.F)LC.F[f]='';lcDrawList();return;}
+  if(a==='pick'){var fi=document.getElementById('lcFile');if(fi)fi.click();return;}
+  if(a==='selwa'){lcSel(b);return;}
+  if(!e)return;
+  if(a==='det'){LC.det[k]=!LC.det[k];lcDrawList();return;}
+  if(a==='pn'){LC.pn[k]=LC.pn[k]===v?'':v;lcDrawList();return;}
+  if(a==='visto'){lcPatch(k,{novaLic:false});lcDrawList();return;}
+  if(a==='assumir'){
+    b.disabled=true;
+    lcFb('empresas/'+k+'/resp').then(function(r){
+      if(r&&r!==lcMe()){LC.emp[k].resp=r;alert(r+' já assumiu este cliente.');lcDrawList();return;}
+      lcPatch(k,{resp:lcMe(),respEm:new Date().toISOString()}).then(lcDrawList);
+    }).catch(function(){b.disabled=false;alert('Sem conexão. Tente de novo.');});
+    return;
+  }
+  if(a==='liberar'){if(!confirm('Liberar este cliente? Ele volta para Novo.'))return;lcPatch(k,{resp:'',st:''}).then(lcDrawList);return;}
+  if(a==='ligar'){
+    var lg=e.lig||{n:0},upd={lig:{n:(lg.n||0)+1,ultima:new Date().toISOString(),por:lcMe(),tel:b.getAttribute('data-t')}};
+    if(!e.resp)upd.resp=lcMe();
+    lcPatch(k,upd);setTimeout(lcDrawList,300);return; // não bloqueia o link tel:
+  }
+  if(a==='salvar'){
+    var g=function(p){var el=document.getElementById(p+k);return el?el.value.trim():'';};
+    var t=g('lcT_'),m=g('lcM_'),c=g('lcC_'),n=g('lcN_');
+    if(!t&&!m){document.getElementById('lcE_'+k).textContent='Informe pelo menos um telefone ou e-mail';return;}
+    if(m&&!/^\S+@\S+\.\S+$/.test(m)){document.getElementById('lcE_'+k).textContent='E-mail inválido';return;}
+    var tels=lcAddTels([],t.split(/[\/;,]/));
+    var up={tel:tels,email:m,cont:n,cnpj:c?lcFmtCnpj(c):''};
+    if(!e.resp)up.resp=lcMe();
+    if(!e.st||e.st==='Não encontrado')up.st='Sucesso';
+    LC.pn[k]='';lcPatch(k,up).then(lcDrawList);lcDrawList();return;
+  }
+  if(a==='copiar'){
+    var el=document.getElementById('lcW_'+k),ok=document.getElementById('lcOk_'+k);lcSel(el);
+    try{navigator.clipboard.writeText(el.innerText).then(function(){ok.textContent='Copiado ✓';},function(){ok.textContent='Texto selecionado, use Ctrl+C';});}catch(_e){ok.textContent='Texto selecionado, use Ctrl+C';}
+    return;
+  }
+  if(a==='web'){lcBuscarWeb(k);return;}
+}
+function lcChange(ev){
+  var el=ev.target,a=el.getAttribute('data-a'),k=el.getAttribute('data-k');
+  if(el.id==='lcFile'){if(el.files&&el.files[0])lcUpload(el.files[0]);el.value='';return;}
+  if(!k||!LC.emp||!LC.emp[k])return;
+  if(a==='status'){var up={st:el.value};if(!LC.emp[k].resp)up.resp=lcMe();lcPatch(k,up).then(lcDrawList);return;}
+  if(a==='obs'){lcPatch(k,{obs:el.value,obsPor:lcMe(),obsEm:new Date().toISOString()});return;}
+}
+var lcQT=null;
+function lcInput(ev){if(ev.target.id!=='lcQ')return;LC.q=ev.target.value;clearTimeout(lcQT);lcQT=setTimeout(lcDrawList,200);}
+
+// ── Contatos: cartão CNPJ (BrasilAPI, gratuito) ──
+function lcEnriquecer(){
+  if(LC.enr||!LC.emp)return;
+  var ks=Object.keys(LC.emp).filter(function(k){var e=LC.emp[k];return !e.enriq&&lcDig(e.cnpj).length===14;});
+  if(!ks.length)return;
+  LC.enr={i:0,n:ks.length};
+  (async function(){
+    for(var i=0;i<ks.length;i++){
+      var k=ks[i],e=LC.emp[k],upd={},tent=0;
+      if(!e)continue;
+      while(true){
+        try{
+          var r=await fetch('https://brasilapi.com.br/api/cnpj/v1/'+lcDig(e.cnpj));
+          if(r.status===429&&tent<3){tent++;await lcSleep(4000);continue;}
+          if(!r.ok)throw new Error(r.status);
+          var j=await r.json();
+          upd.tel=lcAddTels(e.tel,[j.ddd_telefone_1,j.ddd_telefone_2]);
+          if(!e.email&&j.email)upd.email=String(j.email).toLowerCase();
+          if(!e.cont){var s=(j.qsa&&j.qsa[0]&&j.qsa[0].nome_socio)||j.razao_social||e.emp;upd.cont=lcPrimeiroNome(s);}
+          if(j.municipio)upd.sede=j.municipio+(j.uf?' / '+j.uf:'');
+          if(j.nome_fantasia)upd.fantasia=j.nome_fantasia;
+          upd.enriq='ok';
+        }catch(_e){upd.enriq='erro';}
+        break;
+      }
+      await lcPatch(k,upd);
+      LC.enr.i=i+1;
+      var inf=document.getElementById('lcInfo');if(inf)inf.textContent='Buscando contatos no cartão CNPJ '+LC.enr.i+'/'+LC.enr.n;
+      if(STATE.modulo==='mod9'&&LC.sub==='lista'&&!Object.keys(LC.pn).some(function(x){return LC.pn[x];})&&!(document.activeElement&&document.activeElement.classList.contains('lc-obs')))lcDrawList();
+      await lcSleep(400);
+    }
+    LC.enr=null;if(STATE.modulo==='mod9')lcDraw();
+  })();
+}
+
+// ── Contatos: busca na web via IA (até 4 telefones) ──
+function lcBuscarWeb(k){
+  var e=LC.emp[k];if(!e||LC.web[k])return;
+  LC.web[k]=true;lcDrawList();
+  var u=lcUlt(e);
+  var prompt='Pesquise na web os contatos comerciais da empresa "'+e.emp+'"'+(e.cnpj?' (CNPJ '+e.cnpj+')':'')+(e.sede?', sede em '+e.sede:', que venceu licitação em '+u.c+'/'+u.uf)+'. '+
+    'Procure no site da empresa, Google Meu Negócio, redes sociais e cadastros públicos. Responda SOMENTE com JSON, sem texto extra: {"telefones":["(DD) XXXXX-XXXX"],"email":"","site":""}. No máximo 4 telefones, apenas números que você encontrou de fato. Se não achar nada, retorne listas vazias.';
+  fetch(LC_W,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1500,tools:[{type:'web_search_20250305',name:'web_search',max_uses:4}],messages:[{role:'user',content:prompt}]})})
+  .then(function(r){return r.json();}).then(function(d){
+    if(d&&d.error)throw new Error(d.error.message||'erro');
+    var t=(d.content||[]).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
+    var m=t.match(/\{[\s\S]*\}/);if(!m)throw new Error('sem JSON');
+    var j=JSON.parse(m[0]),upd={tel:lcAddTels(e.tel,j.telefones||[])};
+    if(!e.email&&j.email)upd.email=String(j.email).toLowerCase();
+    if(j.site)upd.site=j.site;
+    var achou=upd.tel.length>(e.tel||[]).length||upd.email;
+    return lcPatch(k,upd).then(function(){if(!achou)alert('A busca na web não encontrou contatos novos para '+e.emp+'.');});
+  }).catch(function(){
+    if(confirm('A busca automática não funcionou agora. Abrir a pesquisa no Google numa nova aba?'))
+      window.open('https://www.google.com/search?q='+encodeURIComponent(e.emp+' '+(e.cnpj||'')+' telefone'),'_blank');
+  }).then(function(){LC.web[k]=false;lcDrawList();});
+}
+
+// ── Upload ──
+function lcUploadHtml(){
+  var h='';
+  if(LC.busy)h+='<div class="lc-res">⏳ '+lcEsc(LC.busy)+'</div>';
+  else h+='<div class="lc-drop" id="lcDrop"><div style="font-size:28px">📊</div><div style="font-size:15px;font-weight:700;margin:6px 0 2px">Arraste a planilha do ConLicitação aqui</div>'+
+    '<div class="lc-meta" style="margin-bottom:12px">Arquivo .xlsx com as colunas Número ConLicitação, Cidade, Estado, Data Fonte, Objeto e Síntese. Linhas já importadas são ignoradas.</div>'+
+    '<button type="button" class="lc-btn pri" data-a="pick">Escolher arquivo</button><input type="file" id="lcFile" accept=".xlsx,.xls" style="display:none"></div>';
+  var r=LC.res;
+  if(r){
+    if(r.erro)h+='<div class="lc-res erro"><b>Não foi possível importar.</b><br>'+lcEsc(r.erro)+'</div>';
+    else h+='<div class="lc-res"><b>Upload concluído: '+lcEsc(r.arquivo)+'</b><br>'+
+      r.linhas+' linhas lidas. '+r.novas+' licitações novas, '+r.repetidas+' linhas ignoradas (nº ConLicitação já importado ou repetido na planilha).<br>'+
+      r.empNovas+' empresas novas na lista'+(r.pf?', '+r.pf+' vencedores pessoa física ignorados':'')+(r.semIA?'. <span style="color:#b45309">'+r.semIA+' licitações foram lidas sem IA (resumo simplificado).</span>':'.')+
+      (r.jaCad&&r.jaCad.length?'<div style="margin-top:6px">'+r.jaCad.map(function(j){return '<span class="lc-pill" style="background:#fef3c7;color:#92400e">⚠️ Já cadastrada: '+lcEsc(j.emp)+(j.resp?', vendedor '+lcEsc(j.resp):', sem vendedor')+'</span>';}).join('')+'</div>':'')+'</div>';
+  }
+  var ups=lcUpsArr();
+  h+='<h4 style="font-size:14px;margin:18px 0 8px">Histórico de uploads</h4>';
+  if(!ups.length)h+='<div class="lc-meta">Nenhum upload ainda.</div>';
+  else h+='<div style="overflow-x:auto"><table class="lc-tbl"><thead><tr><th>Data</th><th>Documento</th><th>Linhas</th><th>Licitações novas</th><th>Nº repetido</th><th>Empresas novas</th><th>Já cadastradas</th><th>Região</th><th>Por</th></tr></thead><tbody>'+
+    ups.map(function(u){return '<tr><td>'+lcFdh(u.dt)+'</td><td>'+lcEsc(u.arquivo)+'</td><td>'+(u.linhas||0)+'</td><td>'+(u.novas||0)+'</td><td>'+(u.repetidas||0)+'</td><td>'+(u.empNovas||0)+'</td><td>'+(u.jaCad||0)+'</td><td>'+lcEsc(u.regiao||'')+'</td><td>'+lcEsc(u.por||'')+'</td></tr>';}).join('')+'</tbody></table></div>';
+  return h;
+}
+function lcWireDrop(){
+  var d=document.getElementById('lcDrop');if(!d)return;
+  d.addEventListener('dragover',function(ev){ev.preventDefault();d.classList.add('over');});
+  d.addEventListener('dragleave',function(){d.classList.remove('over');});
+  d.addEventListener('drop',function(ev){ev.preventDefault();d.classList.remove('over');var f=ev.dataTransfer.files&&ev.dataTransfer.files[0];if(f)lcUpload(f);});
+}
+function lcSetBusy(t){LC.busy=t;if(STATE.modulo==='mod9'&&LC.sub==='upload')lcDraw();}
+function lcXlsx(){
+  if(window.XLSX)return Promise.resolve();
+  return new Promise(function(ok,no){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=ok;s.onerror=function(){no(new Error('Não foi possível carregar o leitor de planilhas. Verifique a internet.'));};document.head.appendChild(s);});
+}
+function lcDataIso(v){
+  if(v instanceof Date&&!isNaN(v))return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
+  if(typeof v==='number'){var d=new Date(Math.round((v-25569)*864e5));return d.toISOString().slice(0,10);}
+  var m=String(v||'').match(/(\d{2})\/(\d{2})\/(\d{4})/);if(m)return m[3]+'-'+m[2]+'-'+m[1];
+  return '';
+}
+function lcLimpaTxt(s){return String(s||'').replace(/[a-z.\s]*\{[^}]*\}/gi,' ').replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim();}
+
+var LC_PROMPT='Você analisa resultados de licitações públicas (homologação/adjudicação) para uma distribuidora de produtos de acessibilidade (piso tátil, barras de apoio, sinalização, corrimão). '+
+'Para CADA licitação abaixo, extraia os dados e responda SOMENTE com um array JSON (sem texto antes ou depois), um objeto por licitação, com os campos:\n'+
+'{"id":<copie o id>,"vencedores":[{"nome":"razão social","cnpj":"00.000.000/0000-00 ou vazio","pj":true se pessoa jurídica (false se pessoa física/CPF),"valor":"R$ ... ou vazio"}],'+
+'"tipo":"tipo de obra (ex: Reforma e ampliação, Construção de passeio público)","local":"edificação ou local da obra","servicos":"serviços previstos, frase objetiva",'+
+'"materiais":"materiais citados no texto, ou Não detalhado no objeto","acess":"itens de acessibilidade citados (rampas, banheiros PCD, calçadas, adequação NBR 9050...)",'+
+'"tags":[1 a 4 entre: '+LC_TAGS.map(function(t){return '"'+t+'"';}).join(', ')+'],"prazo":"prazo de execução ou Não informado","modalidade":"ex: Concorrência eletrônica nº 2/2026",'+
+'"oferecer":"produtos de acessibilidade que a distribuidora pode oferecer para essa obra, curto","potencial":"Alto se envolve calçadas, passeio, rampas, piso tátil ou banheiros PCD; Médio se acessibilidade genérica; Baixo se acessibilidade é marginal"}\n'+
+'Regras: não invente dados que não estão no texto (exceto "oferecer"). Se houver vários vencedores, liste todos. Ignore cabeçalhos e textos de formatação.';
+
+async function lcIA(lote){
+  var itens=lote.map(function(g,i){return '### id: '+i+'\nÓrgão: '+g.orgao+' ('+g.c+'/'+g.uf+')\nObjeto: '+g.objeto.slice(0,900)+'\nSíntese: '+g.txt.slice(0,2600);}).join('\n\n');
+  var r=await fetch(LC_W,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,messages:[{role:'user',content:LC_PROMPT+'\n\n'+itens}]})});
+  var d=await r.json();
+  var t=(d.content||[]).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
+  var m=t.match(/\[[\s\S]*\]/);if(!m)throw new Error('IA sem JSON');
+  var arr=JSON.parse(m[0]),out={};arr.forEach(function(o){if(o&&o.id!=null)out[o.id]=o;});return out;
+}
+function lcRegra(g){
+  var t=g.txt+' '+g.objeto,low=lcNorm(t),tags=[];
+  [['Calçadas',/calcad|passeio|calcament/],['Rampas',/rampa/],['Piso tátil',/piso tatil|podotatil/],['Banheiros PCD',/(sanitario|banheiro)s? (pcd|acessive|adaptad)/],['Plataforma elevatória',/plataforma elevatoria|elevador/],['Corrimão/guarda-corpo',/corrimao|guarda corpo/],['Sinalização',/sinaliza/],['Normas NBR',/nbr|normas tecnicas/]]
+    .forEach(function(x){if(x[1].test(low)&&tags.length<4)tags.push(x[0]);});
+  if(!tags.length)tags.push('Adequação geral');
+  var pt=tags.some(function(x){return ['Calçadas','Rampas','Piso tátil','Banheiros PCD'].indexOf(x)>=0;})?'Alto':'Médio';
+  var vs=[],re=/([A-ZÀ-Ú0-9&][A-ZÀ-Ú0-9&.\- ]{3,80}?\s(?:LTDA|EIRELI|EPP|S\/A|S\.A\.?|ME))\.?[^0-9]{0,60}?(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\s?\d{2})/gi,m;
+  while((m=re.exec(t))&&vs.length<5){var nm=m[1].replace(/^.*?(?:VENCEDORA?|EMPRESA|CONTRATADA|PROPONENTE|ITEM:? ?\d+ ?-)[:\s]*/i,'').trim();if(!vs.some(function(v){return lcDig(v.cnpj)===lcDig(m[2]);}))vs.push({nome:nm,cnpj:m[2],pj:true,valor:''});}
+  if(!vs.length){var m2=t.match(/VENCEDORA?:?\s*([A-ZÀ-Ú0-9&.\- ]{4,80}?(?:LTDA|EIRELI|EPP|S\/A|ME))/);if(m2)vs.push({nome:m2[1].trim(),cnpj:'',pj:true,valor:''});}
+  var val=t.match(/R\$\s?[\d.]+,\d{2}/);if(val&&vs[0])vs[0].valor=val[0];
+  return {vencedores:vs,tipo:'',local:g.orgao,servicos:g.objeto.slice(0,300),materiais:'Não detalhado (resumo sem IA)',acess:tags.join(', '),tags:tags,prazo:'Não informado',modalidade:'',oferecer:'',potencial:pt,_regra:true};
+}
+
+async function lcUpload(file){
+  LC.res=null;LC.sub='upload';lcSetBusy('Lendo a planilha '+file.name+'…');
+  try{
+    await lcXlsx();
+    var wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});
+    var rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+    if(!rows.length)throw new Error('A planilha está vazia.');
+    var cols={};Object.keys(rows[0]).forEach(function(c){cols[lcNorm(c)]=c;});
+    var col=function(r,n){var c=cols[n];return c?r[c]:'';};
+    ['numero conlicitacao','cidade','estado','objeto','sintese'].forEach(function(n){if(!cols[n])throw new Error('Coluna "'+n+'" não encontrada. Use a planilha exportada do ConLicitação.');});
+    lcSetBusy('Verificando linhas já importadas…');
+    var imp=(await lcFb('importados'))||{};
+    var grupos={},ordem=[],rep=0,numsNovos={};
+    rows.forEach(function(r){
+      var n=String(col(r,'numero conlicitacao')).trim();if(!n)return;
+      if(imp[n]||numsNovos[n]){rep++;return;}
+      numsNovos[n]=1;
+      var ref=lcSafeKey(String(col(r,'licitacao referente')).trim()||(col(r,'edital')+'_'+col(r,'cidade')));
+      var dt=lcDataIso(col(r,'data fonte')),sin=lcLimpaTxt(col(r,'sintese'));
+      var g=grupos[ref];
+      if(!g){g=grupos[ref]={ref:ref,nums:[],dt:dt,c:String(col(r,'cidade')).trim(),uf:String(col(r,'estado')).trim(),orgao:String(col(r,'orgao')).trim(),edital:String(col(r,'edital')).trim(),objeto:lcLimpaTxt(col(r,'objeto')).replace(/\*\s*https?:\S+\s*\*/g,'').replace(/\* Licitação Eletrônica \*/g,'').trim(),sins:[]};ordem.push(ref);}
+      g.nums.push(n);if(dt>g.dt)g.dt=dt;
+      if(sin&&g.sins.length<3&&!g.sins.some(function(s){return s.slice(0,200)===sin.slice(0,200);}))g.sins.push(sin);
+    });
+    var gs=ordem.map(function(r){var g=grupos[r];g.txt=g.sins.join(' || ');return g;});
+    var ext={},semIA=0,L=5;
+    for(var i=0;i<gs.length;i+=L){
+      lcSetBusy('Analisando licitações com IA: '+Math.min(i+L,gs.length)+' de '+gs.length+'…');
+      var lote=gs.slice(i,i+L),res=null;
+      try{res=await lcIA(lote);}catch(_e){res=null;}
+      for(var j=0;j<lote.length;j++){
+        var o=res&&res[j];
+        if(!o||!o.vencedores){try{var r1=await lcIA([lote[j]]);o=r1[0];}catch(_e2){o=null;}}
+        if(!o||!o.vencedores){o=lcRegra(lote[j]);semIA++;}
+        ext[lote[j].ref]=o;
+      }
+    }
+    lcSetBusy('Salvando clientes…');
+    await lcLoad();
+    var E=LC.emp,nomeIdx={};Object.keys(E).forEach(function(k){nomeIdx[lcNorm(E[k].emp)]=k;});
+    var patch={},novos={},jaCad=[],jaCadK={},pf=0,agora=new Date().toISOString(),ufs={};
+    gs.forEach(function(g){
+      var o=ext[g.ref]||{};
+      (o.vencedores||[]).forEach(function(v){
+        if(!v||!v.nome)return;
+        if(v.pj===false){pf++;return;}
+        var cn=lcDig(v.cnpj),nk=lcNorm(v.nome),key;
+        if(cn.length===14)key=(!E[cn]&&nomeIdx[nk]&&nomeIdx[nk].indexOf('n_')===0)?nomeIdx[nk]:cn;
+        else key=nomeIdx[nk]||('n_'+lcSafeKey(nk.replace(/ /g,'-').slice(0,60)));
+        var tags=(o.tags||[]).filter(function(t){return LC_TAGS.indexOf(t)>=0;});
+        var lic={nums:g.nums,dt:g.dt,c:g.c,uf:g.uf,orgao:g.orgao,edital:g.edital,val:v.valor||'',tipo:o.tipo||'',local:o.local||'',servicos:o.servicos||'',materiais:o.materiais||'',acess:o.acess||'',tags:tags.length?tags:['Adequação geral'],prazo:o.prazo||'',modalidade:o.modalidade||'',oferecer:o.oferecer||'',pt:LC_PT[o.potencial]?o.potencial:'Médio',objeto:g.objeto.slice(0,600),semIA:!!o._regra};
+        ufs[g.uf]=1;
+        if(E[key]){
+          patch[key+'/lics/'+g.ref]=lic;patch[key+'/novaLic']=true;patch[key+'/atualizado']=agora;
+          if(cn.length===14&&!E[key].cnpj)patch[key+'/cnpj']=lcFmtCnpj(cn);
+          if(!jaCadK[key]){jaCadK[key]=1;jaCad.push({emp:E[key].emp,resp:E[key].resp||''});}
+        }else if(novos[key]){novos[key].lics[g.ref]=lic;}
+        else{
+          novos[key]={emp:v.nome.trim(),cnpj:cn.length===14?lcFmtCnpj(cn):'',tel:[],email:'',cont:'',enriq:cn.length===14?'':'semcnpj',resp:'',st:'',obs:'',criado:agora,atualizado:agora,lics:{}};
+          novos[key].lics[g.ref]=lic;nomeIdx[nk]=key;
+        }
+      });
+    });
+    Object.keys(novos).forEach(function(k){patch[k]=novos[k];});
+    if(Object.keys(patch).length)await lcFb('empresas','PATCH',patch);
+    if(Object.keys(numsNovos).length)await lcFb('importados','PATCH',numsNovos);
+    var up={dt:agora,arquivo:file.name,linhas:rows.length,novas:gs.length,repetidas:rep,empNovas:Object.keys(novos).length,jaCad:jaCad.length,pf:pf,semIA:semIA,regiao:Object.keys(ufs).sort().join(', '),por:lcMe()};
+    await lcFb('uploads/'+Date.now(),'PUT',up);
+    LC.res=Object.assign({},up,{jaCad:jaCad});
+    await lcLoad();
+    LC.busy=null;lcDraw();lcEnriquecer();
+  }catch(e){
+    LC.busy=null;LC.res={erro:(e&&e.message)||String(e)};lcDraw();
+  }
+}
+
 function renderApp(){
   var wrap=document.createElement('div');
   // header
@@ -3910,6 +4414,7 @@ function renderApp(){
   if(STATE.modulo==='mod2') wrap.appendChild(renderNavCredito());
   // nav interno do módulo produtos
   if(STATE.modulo==='mod8') wrap.appendChild(renderNavProdutos());
+  if(STATE.modulo==='mod9') wrap.appendChild(renderNavClientes());
   // main
   var main=document.createElement('main');
   if(STATE.modulo==='frete'){
@@ -3927,6 +4432,8 @@ function renderApp(){
     main.appendChild(renderNormaNBR());
   } else if(STATE.modulo==='mod8'){
     main.appendChild(renderPesquisaProdutos());
+  } else if(STATE.modulo==='mod9'){
+    main.appendChild(renderClientes());
   } else if(STATE.modulo==='mod3'){
     main.appendChild(renderAceIA());
   } else if(STATE.modulo==='mod4'){
