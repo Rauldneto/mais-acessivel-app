@@ -4209,8 +4209,9 @@ function lcEnriquecer(){
       if(!e)continue;
       while(true){
         try{
-          var r=await fetch('https://brasilapi.com.br/api/cnpj/v1/'+lcDig(e.cnpj));
-          if(r.status===429&&tent<3){tent++;await lcSleep(4000);continue;}
+          var r;
+          try{r=await fetch('https://brasilapi.com.br/api/cnpj/v1/'+lcDig(e.cnpj));}catch(_n){r={status:429,ok:false};}
+          if(r.status===429||r.status>=500){if(tent<4){tent++;await lcSleep(15000);continue;}LC.enr=null;if(STATE.modulo==='mod9')lcDraw();return;}
           if(!r.ok)throw new Error(r.status);
           var j=await r.json();
           upd.tel=lcAddTels(e.tel,[j.ddd_telefone_1,j.ddd_telefone_2]);
@@ -4226,7 +4227,7 @@ function lcEnriquecer(){
       LC.enr.i=i+1;
       var inf=document.getElementById('lcInfo');if(inf)inf.textContent='Buscando contatos no cartão CNPJ '+LC.enr.i+'/'+LC.enr.n;
       if(STATE.modulo==='mod9'&&LC.sub==='lista'&&!Object.keys(LC.pn).some(function(x){return LC.pn[x];})&&!(document.activeElement&&document.activeElement.classList.contains('lc-obs')))lcDrawList();
-      await lcSleep(400);
+      await lcSleep(1500);
     }
     LC.enr=null;if(STATE.modulo==='mod9')lcDraw();
   })();
