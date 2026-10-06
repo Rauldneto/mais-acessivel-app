@@ -4378,7 +4378,8 @@ async function lcGetJson(url,api,ms){
   for(var t=0;t<4;t++){
     await lcRate(api,ms);
     var r;try{r=await fetch(url);}catch(_n){r={status:429,ok:false};}
-    if(r.status===429||r.status>=500){await lcSleep(15000*(t+1));continue;}
+    if(r.status===429){await lcSleep(15000*(t+1));continue;}
+    if(r.status>=500){if(t<1){await lcSleep(3000);continue;}return null;}
     if(!r.ok)return null;
     try{return await r.json();}catch(_e){return null;}
   }
@@ -4392,11 +4393,14 @@ async function lcCartao(cnpj,precisaIe){
     o.socio=(j.qsa&&j.qsa[0]&&j.qsa[0].nome_socio)||'';
     o.end={logradouro:[j.descricao_tipo_de_logradouro,j.logradouro].filter(Boolean).join(' '),numero:j.numero||'',complemento:j.complemento||'',bairro:j.bairro||'',cep:lcDig(j.cep),municipio:j.municipio||'',uf:j.uf||''};
   }
-  if(!o.email){
+  var cOk=false,wOk=false;
+  if(!o.email||!j){
     try{
       var c=await lcGetJson('https://open.cnpja.com/office/'+d,'cnpja',13000);
       if(c){
-        var em=(c.emails||[]).map(function(x){return x&&x.address;}).filter(Boolean);if(em.length)o.email=em[0];
+        cOk=true;
+        var em=(c.emails||[]).slice().sort(function(a,b){return (a&&a.ownership==='CORPORATE'?0:1)-(b&&b.ownership==='CORPORATE'?0:1);}).map(function(x){return x&&x.address;}).filter(Boolean);if(em.length)o.email=em[0];
+        var mb=c.company&&c.company.members&&c.company.members[0];if(!o.socio&&mb&&mb.person)o.socio=mb.person.name||'';
         (c.phones||[]).forEach(function(p){if(p&&p.number)o.tel.push(String(p.area||'')+String(p.number));});
         if(!o.end&&c.address)o.end={logradouro:c.address.street||'',numero:c.address.number||'',complemento:c.address.details||'',bairro:c.address.district||'',cep:lcDig(c.address.zip),municipio:c.address.city||'',uf:c.address.state||''};
         if(!o.razao&&c.company)o.razao=c.company.name||'';if(!o.fantasia)o.fantasia=c.alias||'';
@@ -4407,6 +4411,7 @@ async function lcCartao(cnpj,precisaIe){
     try{
       var w=await lcGetJson('https://publica.cnpj.ws/cnpj/'+d,'cnpjws',21000),es=w&&w.estabelecimento;
       if(es){
+        wOk=true;
         if(!o.email&&es.email)o.email=es.email;
         o.tel.push(String(es.ddd1||'')+String(es.telefone1||''),String(es.ddd2||'')+String(es.telefone2||''));
         var ie=(es.inscricoes_estaduais||[]).filter(function(x){return x&&x.ativo!==false&&x.inscricao_estadual;})[0];if(ie)o.ie=ie.inscricao_estadual;
@@ -4414,6 +4419,7 @@ async function lcCartao(cnpj,precisaIe){
       }
     }catch(_e){}
   }
+  if(!j&&!cOk&&!wOk)throw new Error('fontes fora do ar');
   o.email=String(o.email||'').toLowerCase().trim();
   return o;
 }
