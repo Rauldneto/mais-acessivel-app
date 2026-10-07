@@ -4717,7 +4717,7 @@ function renderApp(){
     else if(STATE.tab==='salvas') main.appendChild(renderSalvas());
     else if(STATE.tab==='transportadoras') main.appendChild(renderTrans());
     else if(STATE.tab==='embalagens') main.appendChild(renderEmb());
-    else if(STATE.tab==='extensao') main.appendChild(renderExtensao());
+    else if(STATE.tab==='extensao'){STATE.tab='cotacao';main.appendChild(renderCotacao());}
   else if(STATE.tab==='admin') main.appendChild(renderAdmin());
   } else if(STATE.modulo==='mod2'){
     if(STATE.tabCredito==='historico') main.appendChild(renderHistoricoCredito());
@@ -4754,6 +4754,21 @@ function renderApp(){
     panel.appendChild(renderAdmin());
     overlay.appendChild(panel);
     wrap.appendChild(overlay);
+  }
+  if(STATE.showExtPanel){
+    var ovE=document.createElement('div');
+    ovE.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px';
+    ovE.onclick=function(e){if(e.target===ovE){STATE.showExtPanel=false;render();}};
+    var pnE=document.createElement('div');
+    pnE.style.cssText='background:#f7f7f5;border-radius:14px;max-width:760px;width:100%;position:relative;box-shadow:0 8px 40px rgba(0,0,0,.3);padding-top:44px';
+    var clE=document.createElement('button');
+    clE.textContent='✕ Fechar';
+    clE.style.cssText='position:absolute;top:14px;right:14px;z-index:2;background:#fff;border:1.5px solid #fca5a5;color:#ef4444;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit';
+    clE.onclick=function(){STATE.showExtPanel=false;render();};
+    pnE.appendChild(clE);
+    pnE.appendChild(renderExtensao());
+    ovE.appendChild(pnE);
+    wrap.appendChild(ovE);
   }
   return wrap;
 }
@@ -4855,19 +4870,22 @@ function renderHeader(){
       <span class="badge">📍 Goiânia — GO</span>
       <span style="font-family:monospace;font-size:11px;color:#888">35.017.646/0001-66</span>
       <span id="syncBadge" style="display:none;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;margin-right:8px;vertical-align:middle">↻ Sincronizado!</span>
+      <button class="btn-out" id="btnExtensao" style="border-color:#fdba74;color:#c2410c">🧩 Extensão</button>
       ${STATE.roleLogado==='admin' ? '<button class="btn-out" id="btnConfig" style="border-color:#fde68a;color:#92400e">⚙️ Configurações</button>' : ''}
       <button class="btn-out" id="btnSair">🔒 Sair</button>
     </div>`;
   el.querySelector('#btnSair').onclick=function(){STATE.auth=false;try{localStorage.removeItem('maisacessivel_session');}catch(e){}render();};
   var btnCfg=el.querySelector('#btnConfig');
   if(btnCfg) btnCfg.onclick=function(){STATE.showConfigPanel=true;render();};
+  var btnExt=el.querySelector('#btnExtensao');
+  if(btnExt) btnExt.onclick=function(){STATE.showExtPanel=true;render();};
   // btnNovaCot movido para renderNav
   // Botões de ação movidos para dentro da aba Frete (renderNav)
   return el;
 }
 
 function renderNav(){
-  var tabs=[{id:'cotacao',icon:'📋',l:'Cotação Frete'},{id:'salvas',icon:'🗂️',l:'Cotações Salvas'},{id:'transportadoras',icon:'🚛',l:'Transportadoras'},{id:'embalagens',icon:'📦',l:'Embalagens'},{id:'extensao',icon:'🧩',l:'Extensão'}];
+  var tabs=[{id:'cotacao',icon:'📋',l:'Cotação Frete'},{id:'salvas',icon:'🗂️',l:'Cotações Salvas'},{id:'transportadoras',icon:'🚛',l:'Transportadoras'},{id:'embalagens',icon:'📦',l:'Embalagens'}];
   var nav=document.createElement('nav');
   tabs.forEach(function(t){
     var btn=document.createElement('button');
