@@ -972,7 +972,7 @@ function renderAdmin(){
   var iUser=inp('Usuário (login)');
   var iSenha=inp('Senha','password');
   var selRole=document.createElement('select');
-  selRole.innerHTML='<option value="user">Operador</option><option value="admin">Admin</option>';
+  selRole.innerHTML='<option value="user">Operador</option><option value="gestor">Gestor</option><option value="admin">Admin</option>';
   selRole.style.cssText='padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px';
   var btnAdd=document.createElement('button');
   btnAdd.textContent='+ Adicionar';
@@ -4042,17 +4042,18 @@ function normaImportar(p){var ks=Object.keys(p.paginas);
 //  MÓDULO CLIENTES › LICITAÇÃO (mod9) v2
 //  Firebase: clientesLicitacao/{empresas,textos,importados,uploads,config}
 // ══════════════════════════════════════════
-var LC={emp:null,ups:null,cfg:{prefixo:'0'},err:'',sub:'lista',F:{st:'Novo',sit:'',vd:'',uf:'',pt:'',tg:''},ord:'d',q:'',pn:{},op:{},web:{},txt:{},busy:null,res:null,enr:null,es:null,pend:false,toast:'',rel:{per:'30',col:''},reproc:false};
+var LC={emp:null,ups:null,cfg:{prefixo:'0'},err:'',sub:'lista',F:{st:'Novo',lg:'',sit:'',vd:'',uf:'',pt:'',tg:''},ord:'d',q:'',pn:{},op:{},web:{},txt:{},busy:null,res:null,enr:null,es:null,pend:false,toast:'',rel:{per:'30',col:''},reproc:false};
 var LC_P='clientesLicitacao',LC_W='https://soft-limit-b3a1.rauldias.workers.dev';
 var LC_OPT=['Sucesso','Atendido','Não encontrado','Desinteressante'],LC_ALL=['Novo','Em atendimento'].concat(LC_OPT);
 var LC_SC={'Novo':'n','Em atendimento':'a','Sucesso':'s','Atendido':'t','Não encontrado':'x','Desinteressante':'d','Liberado':'d'};
 var LC_TAGS=['Calçadas','Rampas','Piso tátil','Banheiros PCD','Plataforma elevatória','Corrimão/guarda-corpo','Sinalização','Adequação geral','Normas NBR'];
-var LC_SIT=['Novas licitações','Nova oportunidade','Já no Bling','Várias licitações','Sem vencedor','Pessoa física','Fora do perfil'];
+var LC_SIT=['Novas licitações','Nova oportunidade','Já no Bling','Sem vencedor','Pessoa física','Fora do perfil'];
 var LC_PT={'Alto':3,'Médio':2,'Baixo':1};
 var LC_MOD={CR:'Concorrência',PE:'Pregão Eletrônico',PR:'Pregão',PP:'Pregão Presencial',DL:'Dispensa de Licitação',DE:'Dispensa Eletrônica',TP:'Tomada de Preços',IN:'Inexigibilidade',CV:'Convite',LE:'Leilão',SM:'Licitação'};
 
 function lcEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function lcMe(){return STATE.usuarioLogado||'desconhecido';}
+function lcGestor(){return STATE.roleLogado==='admin'||STATE.roleLogado==='gestor';}
 function lcSleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
 function lcFb(path,method,body){
   return fetch(FIREBASE_DB+'/'+LC_P+'/'+path+'.json',{method:method||'GET',headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)})
@@ -4076,7 +4077,7 @@ function lcPtEmp(e){var b='';lcLics(e).forEach(function(l){if((LC_PT[l.pt]||0)>(
 function lcTagsEmp(e){var s=[];lcLics(e).forEach(function(l){(l.tags||[]).forEach(function(t){if(s.indexOf(t)<0)s.push(t);});});return s;}
 function lcUfsEmp(e){var s=[];lcLics(e).forEach(function(l){if(l.uf&&s.indexOf(l.uf)<0)s.push(l.uf);});return s;}
 function lcFora(e){var l=lcLics(e);return l.length>0&&l.every(function(x){return x.fora;});}
-function lcSits(e){var s=[];if(e.novaLic)s.push('Novas licitações');if(e.ant)s.push('Nova oportunidade');if(e.bling&&e.bling.em)s.push('Já no Bling');if(lcLics(e).length>1)s.push('Várias licitações');if(e.tp==='sem')s.push('Sem vencedor');if(e.tp==='pf')s.push('Pessoa física');if(lcFora(e))s.push('Fora do perfil');return s;}
+function lcSits(e){var s=[];if(e.novaLic)s.push('Novas licitações');if(e.ant)s.push('Nova oportunidade');if(e.bling&&e.bling.em)s.push('Já no Bling');if(e.tp==='sem')s.push('Sem vencedor');if(e.tp==='pf')s.push('Pessoa física');if(lcFora(e))s.push('Fora do perfil');return s;}
 function lcEdTxt(ed){var m=String(ed||'').match(/^([A-Z]+)\/(.+)$/);return m?((LC_MOD[m[1]]||m[1])+' '+m[2]):String(ed||'');}
 function lcSoma(lics){var t=0,c=0;lics.forEach(function(l){var m=String(l.val||'').match(/R\$\s?([\d.]+,\d{2})/);if(m){t+=parseFloat(m[1].replace(/\./g,'').replace(',','.'));c++;}});return c?'R$ '+t.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';}
 
@@ -4220,12 +4221,13 @@ function lcUpsArr(){return Object.keys(LC.ups||{}).map(function(k){return Object
 
 function lcDraw(){
   var root=document.getElementById('lcRoot');if(!root)return;
+  if(!lcGestor()&&LC.sub!=='lista')LC.sub='lista';
   var n=Object.keys(LC.emp||{}).length,ups=lcUpsArr(),u=ups[0];
   var info=LC.sub==='upload'?(ups.length+' upload'+(ups.length===1?' realizado':'s realizados')):(u?'Última lista: '+lcFd(u.dt)+(u.regiao?' · '+lcEsc(u.regiao):''):'Nenhuma lista carregada ainda');
   var h='<div class="lc-head"><div class="lc-seg" role="tablist">'+
     '<button type="button" role="tab" class="'+(LC.sub==='lista'?'on':'')+'" data-a="sub" data-v="lista">📋 Lista de clientes <span class="lc-n" id="lcNum">'+n+'</span></button>'+
-    '<button type="button" role="tab" class="'+(LC.sub==='relatorio'?'on':'')+'" data-a="sub" data-v="relatorio">📊 Relatório</button>'+
-    '<button type="button" role="tab" class="'+(LC.sub==='upload'?'on':'')+'" data-a="sub" data-v="upload">⬆️ Upload</button></div>'+
+    (lcGestor()?'<button type="button" role="tab" class="'+(LC.sub==='relatorio'?'on':'')+'" data-a="sub" data-v="relatorio">📊 Relatório</button>'+
+    '<button type="button" role="tab" class="'+(LC.sub==='upload'?'on':'')+'" data-a="sub" data-v="upload">⬆️ Upload</button>':'')+'</div>'+
     '<span class="lc-info" id="lcInfo">'+(LC.es?'<span class="lc-live" title="Atualização ao vivo"></span>':'')+info+(LC.enr?' · Buscando contatos no cartão CNPJ '+LC.enr.i+'/'+LC.enr.n:'')+'</span>'+
     '<button type="button" class="lc-btn" data-a="reload">🔄 Atualizar</button>'+
     (STATE.roleLogado==='admin'?'<button type="button" class="lc-btn" data-a="cfg">⚙️ Prefixo de discagem</button>':'')+'</div>';
@@ -4244,6 +4246,7 @@ function lcDraw(){
 
 var LC_G=[
   ['st','Status',function(e){return [lcEf(e)];}],
+  ['lg','Licitações ganhas',function(e){return [lcLics(e).length>1?'Mais de 1':'Só 1'];}],
   ['sit','Situação',lcSits],
   ['vd','Vendedor',function(e){return [e.resp||'Sem vendedor'];}],
   ['uf','Estado',lcUfsEmp],
@@ -4267,6 +4270,7 @@ function lcDrawList(){
     if(g[0]==='st')ks=LC_ALL.filter(function(s){return c[s];});
     else if(g[0]==='sit')ks=LC_SIT.filter(function(s){return c[s];});
     else if(g[0]==='pt')ks=['Alto','Médio','Baixo'].filter(function(s){return c[s];});
+    else if(g[0]==='lg')ks=['Mais de 1','Só 1'].filter(function(s){return c[s];});
     else ks.sort(function(a,b){return c[b]-c[a];});
     if(LC.F[g[0]]&&ks.indexOf(LC.F[g[0]])<0)ks.unshift(LC.F[g[0]]);
     sh+='<div class="lc-fg"><h4>'+g[1]+'</h4>'+(ks.map(function(v){return '<button type="button" class="lc-fl'+(LC.F[g[0]]===v?' sel':'')+'" data-a="flt" data-k="'+g[0]+'" data-v="'+lcEsc(v)+'"><span>'+lcEsc(v)+'</span><span>'+(c[v]||0)+'</span></button>';}).join('')||'<span class="lc-cnt">Nenhum</span>')+'</div>';
@@ -4279,14 +4283,14 @@ function lcDrawList(){
   var L=keys.filter(function(k){return lcPass(E[k]);}).map(function(k){return {k:k,e:E[k],u:lcUlt(E[k])};});
   L.sort(function(a,b){var x=(a.u.dt||''),y=(b.u.dt||'');return LC.ord==='d'?y.localeCompare(x):x.localeCompare(y);});
   document.getElementById('lcCnt').textContent=L.length+(L.length===1?' resultado':' resultados');
-  if(!keys.length){list.innerHTML='<div class="lc-list"><div class="lc-empty">Nenhum cliente ainda. Carregue a planilha do ConLicitação na aba Upload.<br><br><button type="button" class="lc-btn pri" data-a="sub" data-v="upload">⬆️ Ir para Upload</button></div></div>';return;}
+  if(!keys.length){list.innerHTML='<div class="lc-list"><div class="lc-empty">Nenhum cliente ainda. '+(lcGestor()?'Carregue a planilha do ConLicitação na aba Upload.<br><br><button type="button" class="lc-btn pri" data-a="sub" data-v="upload">⬆️ Ir para Upload</button>':'Aguarde o gestor carregar uma lista de licitações.')+'</div></div>';return;}
   if(!L.length){list.innerHTML='<div class="lc-list"><div class="lc-empty">Nenhum cliente com esses filtros.'+(LC.F.st==='Novo'?'<br>Todos os clientes novos já foram assumidos.':'')+'</div></div>';return;}
   var max=200,more=L.length>max;
   list.innerHTML='<div class="lc-list">'+L.slice(0,max).map(function(x){return lcCard(x.k,x.e,x.u);}).join('')+'</div>'+(more?'<div class="lc-cnt">Mostrando os 200 primeiros. Use os filtros para refinar.</div>':'');
 }
 
 function lcCard(k,e,u){
-  var ef=lcEf(e),me=lcMe(),isAdm=STATE.roleLogado==='admin',ks=lcEsc(k),lics=lcLics(e),n=lics.length,pt=lcPtEmp(e),sem=e.tp==='sem',pf=e.tp==='pf',fora=lcFora(e),tels=e.tel||[],p=LC.pn[k];
+  var ef=lcEf(e),me=lcMe(),isAdm=lcGestor(),ks=lcEsc(k),lics=lcLics(e),n=lics.length,pt=lcPtEmp(e),sem=e.tp==='sem',pf=e.tp==='pf',fora=lcFora(e),tels=e.tel||[],p=LC.pn[k];
   var h='<div class="lc-row'+(sem?' lc-sem':'')+'">';
   if(e.novaLic){var nn=Object.keys(e.novas||{}).length||1;h+='<div class="lc-warn">🆕 <b>'+nn+(nn===1?' nova licitação adicionada':' novas licitações adicionadas')+'</b> a este cliente no último upload'+(e.resp?' (continua com '+lcEsc(e.resp)+')':'')+'. As novas estão marcadas com 🆕 em "licitações ganhas". <button type="button" class="lc-btn" style="margin-left:6px;padding:2px 8px" data-a="visto" data-k="'+ks+'">Ok, visto</button></div>';}
   if(e.ant){var an=e.ant;h+='<div class="lc-warn" style="background:#ede9fe;color:#5b21b6">🔁 <b>Nova oportunidade.</b> Este cliente já foi atendido antes'+(an.resp?' por '+lcEsc(an.resp):'')+(an.st?' (status: '+lcEsc(an.st)+')':'')+(an.em?' em '+lcFd(an.em):'')+'. Aqui estão só as licitações novas; o atendimento anterior continua no card antigo.'+(an.obs?'<br>Observação anterior: '+lcEsc(an.obs):'')+'</div>';}
@@ -4386,7 +4390,7 @@ function lcAssumir(k){
 function lcClick(ev){
   var b=ev.target.closest('[data-a]');if(!b||!this.contains(b))return;
   var a=b.getAttribute('data-a'),k=b.getAttribute('data-k'),v=b.getAttribute('data-v'),e=k&&LC.emp?LC.emp[k]:null;
-  if(a==='sub'){LC.sub=v;lcDraw();return;}
+  if(a==='sub'){LC.sub=(v!=='lista'&&!lcGestor())?'lista':v;lcDraw();return;}
   if(a==='reload'){b.disabled=true;lcLoad().then(lcDraw);return;}
   if(a==='cfg'){var p=prompt('Prefixo antes do DDD para o MicroSIP (ex: 0). Deixe vazio para nenhum.',LC.cfg.prefixo||'');if(p===null)return;p=lcDig(p);LC.cfg.prefixo=p;lcFb('config','PATCH',{prefixo:p}).then(lcDrawList);return;}
   if(a==='ord'){LC.ord=v;lcDrawList();return;}
@@ -4682,7 +4686,7 @@ function lcUploadHtml(){
   else h+='<div class="lc-drop" id="lcDrop"><div style="font-size:28px">📊</div><div style="font-size:15px;font-weight:700;margin:6px 0 2px">Arraste a planilha do ConLicitação aqui</div>'+
     '<div class="lc-meta" style="margin-bottom:12px">Arquivo .xlsx com as colunas Número ConLicitação, Cidade, Estado, Data Fonte, Objeto e Síntese. Linhas já importadas são ignoradas.</div>'+
     '<button type="button" class="lc-btn pri" data-a="pick">Escolher arquivo</button><input type="file" id="lcFile" accept=".xlsx,.xls" style="display:none">'+
-    (STATE.roleLogado==='admin'?'<div style="margin-top:12px;font-size:12px;color:#666"><label><input type="checkbox" id="lcReproc"'+(LC.reproc?' checked':'')+'> Atualizar licitações já importadas (refaz a leitura e guarda o texto completo, sem mexer nos atendimentos)</label></div>':'')+'</div>';
+    (lcGestor()?'<div style="margin-top:12px;font-size:12px;color:#666"><label><input type="checkbox" id="lcReproc"'+(LC.reproc?' checked':'')+'> Atualizar licitações já importadas (refaz a leitura e guarda o texto completo, sem mexer nos atendimentos)</label></div>':'')+'</div>';
   var r=LC.res;
   if(r){
     if(r.erro)h+='<div class="lc-res erro"><b>Não foi possível importar.</b><br>'+lcEsc(r.erro)+'</div>';
@@ -4748,7 +4752,8 @@ function lcRegra(g){
 
 async function lcUpload(file){
   LC.res=null;LC.sub='upload';lcSetBusy('Lendo a planilha '+file.name+'…');
-  var reproc=!!LC.reproc&&STATE.roleLogado==='admin';
+  if(!lcGestor()){alert('Somente administrador ou gestor pode carregar planilhas.');return;}
+  var reproc=!!LC.reproc&&lcGestor();
   try{
     await lcXlsx();
     var wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});
