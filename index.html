@@ -750,6 +750,25 @@ var STATE={
   showConfigPanel:false
 };
 
+// ── AVISO DE NOVA VERSÃO: compara o código em uso com o publicado ──
+(function(){
+  function meu(){var m='';Array.prototype.forEach.call(document.scripts,function(x){if(!x.src&&x.text.length>m.length)m=x.text;});return m;}
+  function checar(){
+    if(document.getElementById('appNovaVersao'))return;
+    fetch(location.pathname+'?v='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():'';}).then(function(t){
+      if(!t)return;var d=new DOMParser().parseFromString(t,'text/html'),m='';
+      Array.prototype.forEach.call(d.querySelectorAll('script:not([src])'),function(x){if(x.textContent.length>m.length)m=x.textContent;});
+      if(!m||m===meu())return;
+      var b=document.createElement('div');b.id='appNovaVersao';
+      b.style.cssText='position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:99999;background:#d97706;color:#fff;padding:10px 16px;border-radius:10px;font:600 14px sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer';
+      b.textContent='🔄 Nova versão do app disponível — clique aqui para atualizar';
+      b.onclick=function(){location.reload();};document.body.appendChild(b);
+    }).catch(function(){});
+  }
+  setTimeout(checar,20000);setInterval(checar,180000);
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)checar();});
+})();
+
 // ── AUTO-LOGIN: verifica sessão salva ──
 (function(){
   try{
@@ -4028,7 +4047,7 @@ var LC_P='clientesLicitacao',LC_W='https://soft-limit-b3a1.rauldias.workers.dev'
 var LC_OPT=['Sucesso','Atendido','Não encontrado','Desinteressante'],LC_ALL=['Novo','Em atendimento'].concat(LC_OPT);
 var LC_SC={'Novo':'n','Em atendimento':'a','Sucesso':'s','Atendido':'t','Não encontrado':'x','Desinteressante':'d','Liberado':'d'};
 var LC_TAGS=['Calçadas','Rampas','Piso tátil','Banheiros PCD','Plataforma elevatória','Corrimão/guarda-corpo','Sinalização','Adequação geral','Normas NBR'];
-var LC_SIT=['Várias licitações','Sem vencedor','Pessoa física','Fora do perfil'];
+var LC_SIT=['Novas licitações','Nova oportunidade','Já no Bling','Várias licitações','Sem vencedor','Pessoa física','Fora do perfil'];
 var LC_PT={'Alto':3,'Médio':2,'Baixo':1};
 var LC_MOD={CR:'Concorrência',PE:'Pregão Eletrônico',PR:'Pregão',PP:'Pregão Presencial',DL:'Dispensa de Licitação',DE:'Dispensa Eletrônica',TP:'Tomada de Preços',IN:'Inexigibilidade',CV:'Convite',LE:'Leilão',SM:'Licitação'};
 
@@ -4057,7 +4076,7 @@ function lcPtEmp(e){var b='';lcLics(e).forEach(function(l){if((LC_PT[l.pt]||0)>(
 function lcTagsEmp(e){var s=[];lcLics(e).forEach(function(l){(l.tags||[]).forEach(function(t){if(s.indexOf(t)<0)s.push(t);});});return s;}
 function lcUfsEmp(e){var s=[];lcLics(e).forEach(function(l){if(l.uf&&s.indexOf(l.uf)<0)s.push(l.uf);});return s;}
 function lcFora(e){var l=lcLics(e);return l.length>0&&l.every(function(x){return x.fora;});}
-function lcSits(e){var s=[];if(lcLics(e).length>1)s.push('Várias licitações');if(e.tp==='sem')s.push('Sem vencedor');if(e.tp==='pf')s.push('Pessoa física');if(lcFora(e))s.push('Fora do perfil');return s;}
+function lcSits(e){var s=[];if(e.novaLic)s.push('Novas licitações');if(e.ant)s.push('Nova oportunidade');if(e.bling&&e.bling.em)s.push('Já no Bling');if(lcLics(e).length>1)s.push('Várias licitações');if(e.tp==='sem')s.push('Sem vencedor');if(e.tp==='pf')s.push('Pessoa física');if(lcFora(e))s.push('Fora do perfil');return s;}
 function lcEdTxt(ed){var m=String(ed||'').match(/^([A-Z]+)\/(.+)$/);return m?((LC_MOD[m[1]]||m[1])+' '+m[2]):String(ed||'');}
 function lcSoma(lics){var t=0,c=0;lics.forEach(function(l){var m=String(l.val||'').match(/R\$\s?([\d.]+,\d{2})/);if(m){t+=parseFloat(m[1].replace(/\./g,'').replace(',','.'));c++;}});return c?'R$ '+t.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';}
 
@@ -4269,7 +4288,9 @@ function lcDrawList(){
 function lcCard(k,e,u){
   var ef=lcEf(e),me=lcMe(),isAdm=STATE.roleLogado==='admin',ks=lcEsc(k),lics=lcLics(e),n=lics.length,pt=lcPtEmp(e),sem=e.tp==='sem',pf=e.tp==='pf',fora=lcFora(e),tels=e.tel||[],p=LC.pn[k];
   var h='<div class="lc-row'+(sem?' lc-sem':'')+'">';
-  if(e.novaLic)h+='<div class="lc-warn">⚠️ Empresa já cadastrada: entrou uma nova licitação dela no último upload. Contato e vendedor foram mantidos. <button type="button" class="lc-btn" style="margin-left:6px;padding:2px 8px" data-a="visto" data-k="'+ks+'">Ok, visto</button></div>';
+  if(e.novaLic){var nn=Object.keys(e.novas||{}).length||1;h+='<div class="lc-warn">🆕 <b>'+nn+(nn===1?' nova licitação adicionada':' novas licitações adicionadas')+'</b> a este cliente no último upload'+(e.resp?' (continua com '+lcEsc(e.resp)+')':'')+'. As novas estão marcadas com 🆕 em "licitações ganhas". <button type="button" class="lc-btn" style="margin-left:6px;padding:2px 8px" data-a="visto" data-k="'+ks+'">Ok, visto</button></div>';}
+  if(e.ant){var an=e.ant;h+='<div class="lc-warn" style="background:#ede9fe;color:#5b21b6">🔁 <b>Nova oportunidade.</b> Este cliente já foi atendido antes'+(an.resp?' por '+lcEsc(an.resp):'')+(an.st?' (status: '+lcEsc(an.st)+')':'')+(an.em?' em '+lcFd(an.em):'')+'. Aqui estão só as licitações novas; o atendimento anterior continua no card antigo.'+(an.obs?'<br>Observação anterior: '+lcEsc(an.obs):'')+'</div>';}
+  if((e.bling&&e.bling.em)||(e.baruc&&e.baruc.em))h+='<div class="lc-toast" style="background:#dcfce7;color:#166534;margin-bottom:8px">'+[(e.bling&&e.bling.em)?'✅ Já cadastrado no Bling em '+lcFd(e.bling.em)+(e.bling.por?' por '+lcEsc(e.bling.por):''):'',(e.baruc&&e.baruc.em)?'✅ Baruc já feito em '+lcFd(e.baruc.em)+(e.baruc.por?' por '+lcEsc(e.baruc.por):''):''].filter(Boolean).join(' · ')+'. Não precisa refazer.</div>';
   h+='<div class="lc-top"><div style="min-width:0">'+(sem?'<div class="lc-emp" style="color:#b45309">⚠️ Vencedor não consta na publicação</div><div class="lc-meta">Busque o nome da empresa e preencha em Editar contato</div>':
     '<div class="lc-emp">'+lcEsc(e.emp)+'</div><div class="lc-cnpj">'+(e.cnpj?lcEsc(e.cnpj):(pf?'Pessoa física · CPF não divulgado':'CNPJ não informado'))+'</div>')+'</div>'+
     '<div style="flex-shrink:0"><div class="lc-val">'+lcEsc(n>1?(lcSoma(lics)||u.val||''):(u.val||''))+'</div>'+(n>1?'<div class="lc-meta" style="text-align:right">soma das licitações</div>':'')+'<div style="text-align:right"><span class="lc-pill st-'+LC_SC[ef]+'">'+ef+'</span></div></div></div>';
@@ -4279,7 +4300,7 @@ function lcCard(k,e,u){
   h+='<div>'+(n>1?'<button type="button" class="lc-pill lc-ptM" data-a="op" data-k="'+ks+'">🏆 '+n+' licitações ganhas '+(LC.op[k]?'▲':'▼')+'</button>':'')+
     (sem?'<span class="lc-pill lc-wp">Sem vencedor</span>':'')+(pf?'<span class="lc-pill st-t">Pessoa física</span>':'')+(fora?'<span class="lc-pill st-d">Fora do perfil</span>':'')+
     (u.tags||[]).map(function(t){return '<span class="lc-pill lc-tag">♿ '+lcEsc(t)+'</span>';}).join('')+'<span class="lc-pill lc-pt'+pt.charAt(0)+'">Potencial '+pt+'</span></div>';
-  if(n>1&&LC.op[k])h+='<div class="lc-pn">'+lics.map(function(l){return '<div class="lc-lic"><span class="lc-meta">'+lcFd(l.dt)+'</span><span>'+lcEsc(l.c)+' / '+lcEsc(l.uf)+' · '+lcEsc([l.tipo,l.local].filter(Boolean).join(' · '))+'</span><span style="white-space:nowrap">'+lcEsc(l.val||'Não informado')+'</span></div>';}).join('')+'</div>';
+  if(n>1&&(LC.op[k]||(e.novaLic&&LC.op[k]!==false)))h+='<div class="lc-pn">'+lics.map(function(l){return '<div class="lc-lic"><span class="lc-meta">'+lcFd(l.dt)+'</span><span>'+((e.novas||{})[l.ref]?'🆕 ':'')+lcEsc(l.c)+' / '+lcEsc(l.uf)+' · '+lcEsc([l.tipo,l.local].filter(Boolean).join(' · '))+'</span><span style="white-space:nowrap">'+lcEsc(l.val||'Não informado')+'</span></div>';}).join('')+'</div>';
   if(!sem)h+='<div style="margin:4px 0">'+(tels.map(function(t){return '<a class="lc-pill tel" href="'+lcEsc(lcTelHref(t))+'" data-a="ligar" data-k="'+ks+'" data-t="'+lcEsc(t)+'" title="Ligar pelo MicroSIP">📞 '+lcEsc(lcFmtTel(t))+'</a>';}).join('')||'<span class="lc-meta">'+(e.enriq||pf||!e.cnpj?'Sem telefone · ':'Buscando contato… · ')+'</span>')+
     (e.email?'<span class="lc-pill">✉️ '+lcEsc(e.email)+'</span>':'')+(e.cont?'<span class="lc-pill">👤 '+lcEsc(e.cont)+'</span>':'')+
     '<button type="button" class="lc-btn" style="padding:2px 8px" data-a="web" data-k="'+ks+'"'+(LC.web[k]?' disabled':'')+'>'+(LC.web[k]?'Buscando…':'🌐 Buscar na web')+'</button></div>';
@@ -4290,7 +4311,7 @@ function lcCard(k,e,u){
   else h+='<button type="button" class="lc-btn lig" data-a="pn" data-v="l" data-k="'+ks+'">📞 Ligar'+(tels.length>1?' ▾':'')+'</button>';
   h+='<span class="lc-grp"><button type="button" class="lc-btn" data-a="pn" data-v="d" data-k="'+ks+'">'+(p==='d'?'▲':'▼')+' Detalhes da obra</button><button type="button" class="lc-btn" data-a="google" data-k="'+ks+'" title="Pesquisar no Google" aria-label="Pesquisar no Google">+</button></span>';
   h+='<button type="button" class="lc-btn" data-a="pn" data-v="e" data-k="'+ks+'">✏️ Editar contato</button>'+
-    '<button type="button" class="lc-btn" data-a="pn" data-v="w" data-k="'+ks+'">📋 Baruc</button>'+
+    '<button type="button" class="lc-btn" data-a="pn" data-v="w" data-k="'+ks+'">'+(e.baruc&&e.baruc.em?'✅ Baruc':'📋 Baruc')+'</button>'+
     '<button type="button" class="lc-btn" data-a="bling" data-k="'+ks+'">'+(e.bling&&e.bling.em?'✅ No Bling':'🅱️ Bling')+'</button>';
   h+='<label>Status <select data-a="status" data-k="'+ks+'"><option value="" disabled hidden'+(e.st?'':' selected')+'>Selecione</option>'+LC_OPT.map(function(o){return '<option'+(o===e.st?' selected':'')+'>'+o+'</option>';}).join('')+'</select></label></div>';
   h+='<input class="lc-obs" data-a="obs" data-k="'+ks+'" placeholder="Observação do atendimento" value="'+lcEsc(e.obs||'')+'" aria-label="Observação">';
@@ -4330,6 +4351,7 @@ function lcTxtHtml(k,e){
   return h+'</div>';
 }
 function lcWaTxt(e){return 'Empresa: '+(e.emp||'-')+'\nCNPJ: '+(e.cnpj||'-')+'\nTelefone: '+((e.tel||[]).map(lcFmtTel).join(' / ')||'-')+'\nE-mail: '+(e.email||'-')+'\nNome: '+(e.cont||'-');}
+function lcBarucFeito(k){var e=LC.emp&&LC.emp[k];if(!e||(e.baruc&&e.baruc.em))return;var o={em:new Date().toISOString(),por:lcMe()};lcPatch(k,{baruc:o});lcLog(k,{t:'baruc'});}
 function lcSel(el){var r=document.createRange();r.selectNodeContents(el);var s=getSelection();s.removeAllRanges();s.addRange(r);}
 
 function lcPatch(k,upd){
@@ -4371,11 +4393,11 @@ function lcClick(ev){
   if(a==='flt'){LC.F[k]=LC.F[k]===v?'':v;lcDrawList();return;}
   if(a==='limpar'){for(var f in LC.F)LC.F[f]='';lcDrawList();return;}
   if(a==='pick'){var fi=document.getElementById('lcFile');if(fi)fi.click();return;}
-  if(a==='selwa'){lcSel(b);return;}
+  if(a==='selwa'){lcSel(b);var kw=(b.id||'').replace('lcW_','');if(kw)lcBarucFeito(kw);return;}
   if(a==='relxls'){lcRelExport();return;}
   if(a==='relprint'){lcRelPrint();return;}
   if(!e)return;
-  if(a==='op'){LC.op[k]=!LC.op[k];lcDrawList();return;}
+  if(a==='op'){LC.op[k]=!(LC.op[k]||(e.novaLic&&LC.op[k]!==false));lcDrawList();return;}
   if(a==='pn'){LC.pn[k]=LC.pn[k]===v?'':v;lcDrawList();return;}
   if(a==='txt'){
     LC.pn[k]=LC.pn[k]==='t'?'':'t';lcDrawList();
@@ -4386,7 +4408,7 @@ function lcClick(ev){
     var u=lcUlt(e),qq=['"'+(u.orgao||u.c||'')+'"',u.edital?'"'+lcEdTxt(u.edital)+'"':(u.processo?'"'+u.processo+'"':'')].filter(function(x){return x&&x!=='""';}).join(' ');
     window.open('https://www.google.com/search?q='+encodeURIComponent(qq),'_blank');return;
   }
-  if(a==='visto'){lcPatch(k,{novaLic:false});lcDrawList();return;}
+  if(a==='visto'){lcPatch(k,{novaLic:false,novas:null});delete LC.emp[k].novas;LC.op[k]=false;lcDrawList();return;}
   if(a==='assumir'){
     b.disabled=true;
     lcAssumir(k).then(function(r){if(!r.ok){LC.emp[k].resp=r.quem;alert(r.quem+' acabou de assumir este cliente.');}lcDrawList();})
@@ -4416,12 +4438,12 @@ function lcClick(ev){
     lcDrawList();return;
   }
   if(a==='copiar'){
-    var el=document.getElementById('lcW_'+k),ok=document.getElementById('lcOk_'+k);lcSel(el);
+    var el=document.getElementById('lcW_'+k),ok=document.getElementById('lcOk_'+k);lcSel(el);lcBarucFeito(k);
     try{navigator.clipboard.writeText(el.innerText).then(function(){ok.textContent='Copiado ✓';},function(){ok.textContent='Texto selecionado, use Ctrl+C';});}catch(_e){ok.textContent='Texto selecionado, use Ctrl+C';}
     return;
   }
   if(a==='web'){lcBuscarWeb(k);return;}
-  if(a==='bling'){if(LC.pn[k]==='b'){LC.pn[k]='';lcDrawList();return;}lcBling(k);return;}
+  if(a==='bling'){if(LC.pn[k]==='b'){LC.pn[k]='';lcDrawList();return;}if(e.bling&&e.bling.em&&!confirm('Este cliente já foi cadastrado no Bling em '+lcFd(e.bling.em)+(e.bling.por?' por '+e.bling.por:'')+'.\nPreparar o cadastro de novo mesmo assim?'))return;lcBling(k);return;}
   if(a==='abrebling'){window.open('https://www.bling.com.br/contatos.php','_blank');return;}
 }
 function lcChange(ev){
@@ -4652,7 +4674,7 @@ function lcFunil(r){
     '<div><span class="lc-meta">Publicações novas</span><b>'+(r.publicacoes||0)+'</b><span class="lc-meta">nº ConLicitação diferentes</span></div>'+
     '<div><span class="lc-meta">Licitações</span><b>'+(r.licitacoes||r.novas||0)+'</b><span class="lc-meta">publicações agrupadas</span></div>'+
     '<div><span class="lc-meta">Cards novos</span><b>'+(r.cards||r.empNovas||0)+'</b><span class="lc-meta">na lista de clientes</span></div></div>'+
-    '<div class="lc-meta" style="margin-bottom:6px">'+[(r.empNovas||0)+' empresas',(r.pf||0)+' pessoas físicas',(r.fora||0)+' fora do perfil',(r.sem||0)+' sem vencedor',(r.jaCad&&r.jaCad.length!==undefined?r.jaCad.length:(r.jaCad||0))+' já cadastradas'].join(' · ')+(r.semIA?' · '+r.semIA+' lidas sem IA':'')+'</div>';
+    '<div class="lc-meta" style="margin-bottom:6px">'+[(r.empNovas||0)+' empresas',(r.pf||0)+' pessoas físicas',(r.fora||0)+' fora do perfil',(r.sem||0)+' sem vencedor',(r.reab||0)+' novas oportunidades',(r.jaCad&&r.jaCad.length!==undefined?r.jaCad.length:(r.jaCad||0))+' já cadastradas'].join(' · ')+(r.semIA?' · '+r.semIA+' lidas sem IA':'')+'</div>';
 }
 function lcUploadHtml(){
   var h='';
@@ -4665,7 +4687,7 @@ function lcUploadHtml(){
   if(r){
     if(r.erro)h+='<div class="lc-res erro"><b>Não foi possível importar.</b><br>'+lcEsc(r.erro)+'</div>';
     else h+='<div class="lc-res"><b>Upload concluído: '+lcEsc(r.arquivo)+'</b>'+lcFunil(r)+
-      (r.jaCad&&r.jaCad.length?'<div>'+r.jaCad.map(function(j){return '<span class="lc-pill lc-wp">⚠️ Já cadastrada: '+lcEsc(j.emp)+(j.resp?', vendedor '+lcEsc(j.resp):', sem vendedor')+'</span>';}).join('')+'</div>':'')+'</div>';
+      (r.jaCad&&r.jaCad.length?'<div>'+r.jaCad.map(function(j){return (j.reab?'<span class="lc-pill" style="background:#ede9fe;color:#5b21b6">🔁 Já atendida antes, virou nova oportunidade: '+lcEsc(j.emp)+'</span>':'<span class="lc-pill lc-wp">🆕 Novas licitações para cliente existente: '+lcEsc(j.emp)+(j.resp?', com '+lcEsc(j.resp):', sem vendedor')+'</span>');}).join('')+'</div>':'')+'</div>';
   }else{var u0=lcUpsArr()[0];if(u0&&!LC.busy)h+='<div class="lc-res"><b>Último upload: '+lcEsc(u0.arquivo)+'</b>'+lcFunil(u0)+'</div>';}
   var ups=lcUpsArr();
   h+='<h4 style="font-size:14px;margin:18px 0 8px">Histórico de uploads</h4>';
@@ -4788,11 +4810,20 @@ async function lcUpload(file){
           else if(cn.length===14)key=(!E[cn]&&nomeIdx[nk]&&nomeIdx[nk].indexOf('n_')===0)?nomeIdx[nk]:cn;
           else key=nomeIdx[nk]||('n_'+lcSafeKey(nk.replace(/ /g,'-').slice(0,60)));
         }
-        if(E[key]){
-          var tinha=!!(E[key].lics&&E[key].lics[g.ref]);
+        var dono=(refIdx[g.ref]||[]).filter(function(x){var y=key;for(var z=0;z<20&&y;z++){if(y===x)return true;y=(E[y]||novos[y]||{}).prox;}return false;})[0];
+        if(dono&&E[dono]){patch[dono+'/lics/'+g.ref]=lic;patch[dono+'/atualizado']=agora;return;}
+        for(var z=0;z<20&&E[key]&&E[key].prox&&(E[E[key].prox]||novos[E[key].prox]);z++)key=E[key].prox;
+        if(E[key]&&E[key].st&&LC_OPT.indexOf(E[key].st)>=0&&!novos[key]){
+          var a0=E[key],nk2=key.replace(/_c\d+$/,'')+'_c'+((a0.ciclo||1)+1);
+          novos[nk2]={tp:a0.tp||tp,emp:a0.emp||nome,cnpj:a0.cnpj||'',razao:a0.razao||'',fantasia:a0.fantasia||'',tel:a0.tel||[],email:a0.email||'',cont:a0.cont||'',end:a0.end||null,ie:a0.ie||'',sede:a0.sede||'',enriq:a0.enriq||'',enrV:a0.enrV||0,bling:a0.bling||null,baruc:a0.baruc||null,
+            ciclo:(a0.ciclo||1)+1,ant:{k:key,resp:a0.resp||'',st:a0.st,em:a0.stEm||a0.atualizado||'',obs:a0.obs||''},resp:'',st:'',obs:'',criado:agora,atualizado:agora,lics:{}};
+          novos[nk2].lics[g.ref]=lic;patch[key+'/prox']=nk2;E[key].prox=nk2;cont.reab=(cont.reab||0)+1;
+          if(!jaCadK[key]){jaCadK[key]=1;jaCad.push({emp:a0.emp||'Vencedor não identificado',resp:a0.resp||'',reab:true});}
+        }else if(E[key]){
           patch[key+'/lics/'+g.ref]=lic;patch[key+'/atualizado']=agora;
           if(v&&lcDig(v.cnpj).length===14&&!E[key].cnpj)patch[key+'/cnpj']=lcFmtCnpj(v.cnpj);
-          if(!tinha){patch[key+'/novaLic']=true;if(!jaCadK[key]){jaCadK[key]=1;jaCad.push({emp:E[key].emp||'Vencedor não identificado',resp:E[key].resp||''});}}
+          patch[key+'/novaLic']=true;patch[key+'/novas/'+g.ref]=agora;
+          if(!jaCadK[key]){jaCadK[key]=1;jaCad.push({emp:E[key].emp||'Vencedor não identificado',resp:E[key].resp||''});}
         }else if(novos[key]){novos[key].lics[g.ref]=lic;}
         else{
           var cn2=v?lcDig(v.cnpj):'';
@@ -4806,7 +4837,7 @@ async function lcUpload(file){
     if(Object.keys(patch).length)await lcFb('empresas','PATCH',patch);
     if(Object.keys(textos).length)await lcFb('textos','PATCH',textos);
     if(Object.keys(numsNovos).length)await lcFb('importados','PATCH',numsNovos);
-    var up={dt:agora,arquivo:file.name,linhas:rows.length,repetidas:rep,jaImp:jaImp,publicacoes:Object.keys(numsNovos).length,licitacoes:gs.length,cards:Object.keys(novos).length,empNovas:cont.emp,pf:cont.pf,sem:cont.sem,fora:cont.fora,jaCad:jaCad.length,semIA:semIA,reproc:reproc,regiao:Object.keys(ufs).sort().join(', '),por:lcMe()};
+    var up={dt:agora,arquivo:file.name,linhas:rows.length,repetidas:rep,jaImp:jaImp,publicacoes:Object.keys(numsNovos).length,licitacoes:gs.length,cards:Object.keys(novos).length,reab:cont.reab||0,empNovas:cont.emp,pf:cont.pf,sem:cont.sem,fora:cont.fora,jaCad:jaCad.length,semIA:semIA,reproc:reproc,regiao:Object.keys(ufs).sort().join(', '),por:lcMe()};
     await lcFb('uploads/'+Date.now(),'PUT',up);
     LC.txt={};
     LC.res=Object.assign({},up,{jaCad:jaCad});
