@@ -2841,7 +2841,8 @@ function renderModuloNav(){
 
 // ===================== MÓDULO COTAÇÕES › CONFERÊNCIA EM LOTE (mod10) =====================
 // Lê as propostas do Bling pela extensão (app-bridge.js) e aplica as regras do Check.
-var CQ={aba:'conf',ext:null,rodando:false,status:'',total:0,feitos:0,itens:[],erro:'',periodo:'7',sit:'ambas',soPend:true,vend:'',reqId:null,quando:null};
+var CQ_SITS=['Rascunho','Pendente','Aguardando','Aprovado','Não aprovado','Concluído'];
+var CQ={aba:'conf',ext:null,rodando:false,status:'',total:0,feitos:0,itens:[],erro:'',periodo:'7',sits:['Rascunho','Pendente','Aguardando'],soPend:true,vend:'',reqId:null,quando:null};
 window.addEventListener('message',function(e){
   if(e.source!==window||!e.data||e.data.source!=='ma-ext')return;
   var m=e.data;
@@ -2859,7 +2860,8 @@ function cqIniciar(){
   if(!CQ.ext){cqDraw();return;}
   var d=new Date();d.setDate(d.getDate()-(parseInt(CQ.periodo,10)||0));
   var desde=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  var sits=CQ.sit==='abertas'?['Rascunho']:CQ.sit==='concluidas'?['Concluído']:CQ.sit==='ambas'?['Rascunho','Concluído']:null;
+  if(!CQ.sits.length)return;
+  var sits=CQ.sits.length===CQ_SITS.length?null:CQ.sits.slice();
   CQ.rodando=true;CQ.erro='';CQ.itens=[];CQ.total=0;CQ.feitos=0;CQ.status='Conectando ao Bling...';CQ.vend='';
   CQ.reqId='cq'+Date.now();
   window.postMessage({source:'ma-app',type:'auditar',reqId:CQ.reqId,filtro:{desde:desde,situacoes:sits}},'*');
@@ -2890,10 +2892,10 @@ function cqDrawConf(root){
   }
   h+='<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px">'+
      '<label style="font-size:12px;color:#57534e">Período <select id="cqPer" style="'+sel+'">'+
-       [['0','Hoje'],['7','Últimos 7 dias'],['15','Últimos 15 dias'],['30','Últimos 30 dias']].map(function(o){return '<option value="'+o[0]+'"'+(CQ.periodo===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></label>'+
-     '<label style="font-size:12px;color:#57534e">Situação <select id="cqSit" style="'+sel+'">'+
-       [['abertas','Em aberto (Rascunho)'],['concluidas','Concluídas'],['ambas','Em aberto + Concluídas'],['todas','Todas']].map(function(o){return '<option value="'+o[0]+'"'+(CQ.sit===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></label>'+
-     '<button id="cqGo" '+((CQ.rodando||!verOk)?'disabled':'')+' style="margin-left:auto;background:'+((CQ.rodando||!verOk)?'#d6d3d1':'#d97706')+';color:#fff;border:none;padding:10px 20px;border-radius:8px;font-weight:800;font-size:14px;cursor:'+((CQ.rodando||!verOk)?'default':'pointer')+';font-family:inherit">'+(CQ.rodando?'⏳ Conferindo...':'🔍 Conferir cotações')+'</button></div>';
+       [['0','Hoje'],['7','Últimos 7 dias'],['15','Últimos 15 dias'],['30','Últimos 30 dias'],['60','Últimos 60 dias'],['90','Últimos 90 dias']].map(function(o){return '<option value="'+o[0]+'"'+(CQ.periodo===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></label>'+
+     '<div style="display:flex;flex-direction:column;gap:5px"><span style="font-size:12px;color:#57534e">Situação no Bling <a href="#" id="cqSitAberto" style="color:#d97706;font-size:11px;margin-left:6px">em aberto</a> · <a href="#" id="cqSitTodas" style="color:#d97706;font-size:11px">todas</a></span><div style="display:flex;gap:6px;flex-wrap:wrap">'+
+       CQ_SITS.map(function(st){var on=CQ.sits.indexOf(st)!==-1;return '<button class="cqSitChip" data-s="'+st+'" style="border:1.5px solid '+(on?'#d97706':'#e7e5e4')+';background:'+(on?'#fff7ed':'#fff')+';color:'+(on?'#b45309':'#78716c')+';border-radius:20px;padding:5px 11px;font-size:12px;font-weight:'+(on?800:500)+';cursor:pointer;font-family:inherit">'+(on?'✓ ':'')+st+'</button>';}).join('')+'</div></div>'+
+     '<button id="cqGo" '+((CQ.rodando||!verOk||!CQ.sits.length)?'disabled':'')+' style="margin-left:auto;background:'+((CQ.rodando||!verOk||!CQ.sits.length)?'#d6d3d1':'#d97706')+';color:#fff;border:none;padding:10px 20px;border-radius:8px;font-weight:800;font-size:14px;cursor:'+((CQ.rodando||!verOk||!CQ.sits.length)?'default':'pointer')+';font-family:inherit">'+(CQ.rodando?'⏳ Conferindo...':'🔍 Conferir cotações')+'</button></div>';
   if(CQ.rodando||CQ.status){
     var pct=CQ.total?Math.round(CQ.feitos/CQ.total*100):0;
     h+='<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;font-size:12px;color:#57534e;margin-bottom:5px"><span>'+cqEsc(CQ.status)+'</span><span>'+(CQ.total?CQ.feitos+' de '+CQ.total:'')+'</span></div>'+
@@ -2938,7 +2940,9 @@ function cqDrawConf(root){
   root.innerHTML=cqTabs()+h;
   var g=document.getElementById('cqGo');if(g)g.onclick=cqIniciar;
   var p=document.getElementById('cqPer');if(p)p.onchange=function(){CQ.periodo=p.value;};
-  var s=document.getElementById('cqSit');if(s)s.onchange=function(){CQ.sit=s.value;};
+  root.querySelectorAll('.cqSitChip').forEach(function(b){b.onclick=function(){var st=b.getAttribute('data-s'),i=CQ.sits.indexOf(st);if(i===-1)CQ.sits.push(st);else CQ.sits.splice(i,1);cqDraw();};});
+  var sa=document.getElementById('cqSitAberto');if(sa)sa.onclick=function(e){e.preventDefault();CQ.sits=['Rascunho','Pendente','Aguardando'];cqDraw();};
+  var st2=document.getElementById('cqSitTodas');if(st2)st2.onclick=function(e){e.preventDefault();CQ.sits=CQ_SITS.slice();cqDraw();};
   var sp=document.getElementById('cqSoPend');if(sp)sp.onchange=function(){CQ.soPend=sp.checked;cqDraw();};
   root.querySelectorAll('.cqVend').forEach(function(b){b.onclick=function(){CQ.vend=(CQ.vend===b.getAttribute('data-v'))?'':b.getAttribute('data-v');cqDraw();};});
 }
