@@ -1,5 +1,5 @@
 <!-- v5.4-1785154153 -->
-<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material | fin-sem-nro-documento -->
+<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material | fin-sem-nro-documento | fin-sem-ocorrencia -->
 <!-- ANTES DE PUBLICAR QUALQUER MUDANCA NESTE ARQUIVO: busque a versao atual em producao via GitHub API,
      confirme que os marcadores acima (nomes de funcao) ainda existem, e aplique a mudanca por cima dela -
      NUNCA sobrescreva com uma copia local antiga. Um commit em 21/08/2026 (f0ebfff) reverteu por engano
@@ -5915,7 +5915,6 @@ function rebuildManRow(i){
 var FIN_FORMAS=[['11272919','Boleto - Bling Conta'],['5567901','Boleto à vista'],['3639541','Boleto Info Sicoob'],['3677778','Cartão de Credito Info-Inter'],['6642716','Cartão de Credito Info-Sicoob'],['6640964','Cartão de Debito Info-Siccob'],['3750430','Dinheiro Caixa Info'],['11272920','Pix - Bling Conta'],['3639534','PIX Info - Sicoob'],['6625656','Saque Info - Sicoob'],['3457303','Transferencia']]; // só as formas de PAGAMENTO (as mesmas que o Bling mostra em Contas a pagar)
 var FIN_CONTAS=[['14890739452','Sicoob'],['14888383799','Banco Inter'],['14889553114','Banco Itau'],['14893994469','Bling Conta'],['14888321458','Caixa'],['14888383818','Caixa Fisico'],['14888462617','Pag Seguro']];
 var FIN_CATEGORIAS=['Despesas comerciais > Fretes e seguros - Compra','Despesas comerciais > Fretes e seguros - Venda']; // só as 2 categorias de frete (ids Bling: Compra 14634451798 · Venda 14700094019)
-var FIN_OCORRENCIAS=['Única','Parcelada','Mensal','Bimestral','Trimestral','Semestral','Anual','Quinzenal','Semanal'];
 var FIN_TRANSP_BLING=[['Rodo Danny','11389565000200'],['Transportadora Dalastra','75303222000263'],['Transportadora do Vale','01329621000186'],['Transportadora Zero Grau','00077008000156'],['Transportes e Armazenagem Zilli','81804684001905'],['Transportes Serrana GO Eireli ME','17652857000199']];
 var FIN_ORIGEM='Goiânia/GO';
 
@@ -5991,7 +5990,6 @@ function abrirLancarFinanceiro(c,onSaved){
    '<div><label style="'+L+'">Categoria *</label><select id="finCat" style="'+I+'">'+opts(FIN_CATEGORIAS,prev.categoria||FIN_CATEGORIAS[0],false)+'</select></div>'+
    '<div><label style="'+L+'">Juros %</label><input id="finJuros" style="'+I+'" value="'+esc(prev.juros||'')+'"></div>'+
    '<div><label style="'+L+'">Multa %</label><input id="finMulta" style="'+I+'" value="'+esc(prev.multa||'')+'"></div></div></div>'+
-   '<div style="margin-top:8px"><label style="'+L+'">Ocorrência</label><select id="finOcor" style="'+I+';max-width:200px">'+opts(FIN_OCORRENCIAS,prev.ocorrencia||'Única',false)+'</select></div>'+
    '<div id="finErr" style="display:none;margin-top:10px;border:1px solid #fca5a5;background:#fef2f2;color:#991b1b;border-radius:6px;padding:8px;font-size:12px"></div>'+
    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button id="finCancel" style="padding:8px 14px;border:1px solid #c8c8c4;background:#f3f3f1;border-radius:6px;cursor:pointer">Cancelar</button><button id="finSave" style="padding:8px 16px;border:none;background:#16a34a;color:#fff;border-radius:6px;font-weight:700;cursor:pointer">Salvar como pendente</button></div>';
   document.body.appendChild(ov);
@@ -6066,7 +6064,7 @@ function abrirLancarFinanceiro(c,onSaved){
       frete:$('finFrete').value,nf:$('finNF').value.trim(),despacho:$('finDesp').value,obs:$('finObs').value.trim(),
       historico:$('finHist').value.trim(),forma:$('finForma').value,formaNome:$('finForma').selectedOptions[0]?$('finForma').selectedOptions[0].textContent:'',
       conta:$('finConta').value,contaNome:$('finConta').selectedOptions[0]?$('finConta').selectedOptions[0].textContent:'',
-      categoria:$('finCat').value,documento:$('finNF').value.trim(),juros:$('finJuros').value.trim(),multa:$('finMulta').value.trim(),ocorrencia:$('finOcor').value
+      categoria:$('finCat').value,documento:$('finNF').value.trim(),juros:$('finJuros').value.trim(),multa:$('finMulta').value.trim(),ocorrencia:'Única'
     };
     var r=box.querySelector('input[name=finWin]:checked'); d.vencedor=r?parseInt(r.value,10):null;
     var existeBling=finNoBling(d.fornecedor,(box.querySelector('[data-cad=cnpj]')||{}).value); d.fornecedorBling=existeBling?{nome:existeBling[0],cnpj:existeBling[1]}:null;
