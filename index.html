@@ -6048,7 +6048,8 @@ function abrirLancarFinanceiro(c,onSaved){
         function set(k,v){var el=cadEl(k); if(el&&v!=null&&String(v).trim()!=='') el.value=String(v).trim();}
         set('cnpj',fmtCnpj(d)); set('nome',j.razao_social); set('fantasia',j.nome_fantasia);
         set('cep',fmtCep(soDig(j.cep))); set('uf',j.uf);
-        set('endereco',[j.descricao_tipo_de_logradouro,j.logradouro].filter(Boolean).join(' ')); set('numero',j.numero); set('compl',j.complemento);
+        var tl=String(j.descricao_tipo_de_logradouro||'').trim(), lg=String(j.logradouro||'').trim();
+        set('endereco',(tl&&lg.toUpperCase().indexOf(tl.toUpperCase())!==0)?(tl+' '+lg):lg); set('numero',j.numero); set('compl',j.complemento);
         set('email',String(j.email||'').toLowerCase()); set('fone',tel);
         var ativa=(j.situacao_cadastral===2||/ativa/i.test(j.descricao_situacao_cadastral||''));
         var ja=FIN_TRANSP_BLING.filter(function(b){return b[1]===d;})[0];
