@@ -2918,8 +2918,9 @@ function cqDrawConf(root){
     }
     var lista=(CQ.soPend?comErro:CQ.itens).filter(function(i){return !CQ.vend||(i.vendedor||'(sem vendedor)')===CQ.vend;});
     lista.sort(function(a,b){return (b.data||'').localeCompare(a.data||'')||(parseInt(b.numero,10)-parseInt(a.numero,10));});
-    h+='<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 2px 10px"><div style="font-size:13px;font-weight:800;color:#1c1917">'+lista.length+' cotação(ões)</div>'+
-       '<label style="font-size:12px;color:#57534e;cursor:pointer"><input type="checkbox" id="cqSoPend" '+(CQ.soPend?'checked':'')+'> Mostrar só as com pendência</label></div>';
+    CQ._lista=lista;
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 2px 10px"><div style="font-size:13px;font-weight:800;color:#1c1917">'+lista.length+' cotação(ões)</div>'+
+       '<div style="display:flex;gap:12px;align-items:center"><label style="font-size:12px;color:#57534e;cursor:pointer"><input type="checkbox" id="cqSoPend" '+(CQ.soPend?'checked':'')+'> Mostrar só as com pendência</label>'+'<button id="cqPdf" style="background:#1c1917;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:800;font-size:12.5px;cursor:pointer;font-family:inherit">🖨️ Imprimir PDF</button>'+'</div></div>';
     h+=lista.map(function(i){
       var bad=i.falha||(i.erros&&i.erros.length);
       var dt=(i.data||'').split('-').reverse().join('/');
@@ -2939,6 +2940,7 @@ function cqDrawConf(root){
   var g=document.getElementById('cqGo');if(g)g.onclick=cqIniciar;
   var p=document.getElementById('cqPer');if(p)p.onchange=function(){CQ.periodo=p.value;};
   var s=document.getElementById('cqSit');if(s)s.onchange=function(){CQ.sitPesq=s.value;};
+  var pdf=document.getElementById('cqPdf');if(pdf)pdf.onclick=cqPdfConferencia;
   var sp=document.getElementById('cqSoPend');if(sp)sp.onchange=function(){CQ.soPend=sp.checked;cqDraw();};
   root.querySelectorAll('.cqVend').forEach(function(b){b.onclick=function(){CQ.vend=(CQ.vend===b.getAttribute('data-v'))?'':b.getAttribute('data-v');cqDraw();};});
 }
@@ -3023,8 +3025,8 @@ function crDraw(root){
         '<div style="flex:1;background:#f5f5f4;border-radius:4px;height:14px"><div style="width:'+Math.max(2,Math.round(te[k]/mx*100))+'%;height:100%;background:#dc2626;border-radius:4px;opacity:'+(on?1:.75)+'"></div></div>'+
         '<div style="width:40px;text-align:right;font-weight:800;font-size:13px">'+te[k]+'</div></div>';}).join('')+'</div>';}
   // histórico
-  var vis=F.slice(0,CR.limite);
-  h+='<div style="font-size:13px;font-weight:800;color:#1c1917;margin:4px 2px 10px">Histórico ('+F.length+' check'+(F.length===1?'':'s')+')</div>'+
+  var vis=F.slice(0,CR.limite);CR._F=F;
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 2px 10px"><div style="font-size:13px;font-weight:800;color:#1c1917">Histórico ('+F.length+' check'+(F.length===1?'':'s')+')</div>'+'<button id="crPdf" style="background:#1c1917;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:800;font-size:12.5px;cursor:pointer;font-family:inherit">🖨️ Imprimir PDF</button>'+'</div>'+
     vis.map(function(x){var d=new Date(x.ts);var bad=x.nErros>0;
       return '<div style="'+card+';padding:12px 16px;border-left:5px solid '+(bad?'#dc2626':'#16a34a')+'">'+
         '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px"><div><b style="color:#d97706">Nº '+cqEsc(x.numero)+'</b> <span style="font-size:12px;color:#57534e">· '+cqEsc(x.cliente||'')+'</span></div>'+
@@ -3038,10 +3040,69 @@ function crBind(root){
   var on=function(id,k){var e=document.getElementById(id);if(e)e.onchange=function(){CR[k]=e.value;CR.limite=100;cqDraw();};};
   on('crUsu','usuario');on('crVen','vendedor');on('crAno','ano');on('crMes','mes');on('crTipo','tipo');
   var r=document.getElementById('crReload');if(r)r.onclick=crCarregar;
+  var pdf=document.getElementById('crPdf');if(pdf)pdf.onclick=cqPdfRelatorio;
   var l=document.getElementById('crLimpa');if(l)l.onclick=function(){CR.usuario=CR.vendedor=CR.ano=CR.mes=CR.tipo='';cqDraw();};
   var m=document.getElementById('crMais');if(m)m.onclick=function(){CR.limite+=100;cqDraw();};
   root.querySelectorAll('.crUsuLink').forEach(function(a){a.onclick=function(ev){ev.preventDefault();CR.usuario=a.getAttribute('data-u');cqDraw();};});
   root.querySelectorAll('.crTipoBar').forEach(function(b){b.onclick=function(){var t=b.getAttribute('data-t');CR.tipo=CR.tipo===t?'':t;cqDraw();};});
+}
+
+// ── Impressão em PDF ("Relatório de erros Bling") ──
+var CQ_PDF_TITULO='Relatório de erros Bling';
+function cqPdfAbrir(corpo){
+  var w=window.open('','_blank');
+  if(!w){alert('O navegador bloqueou a janela de impressão. Libere pop-ups para este site e tente de novo.');return;}
+  var agora=new Date();
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+CQ_PDF_TITULO+'</title><style>'+
+    '@page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#1c1917;font-size:11px;margin:0}'+
+    'h1{font-size:20px;margin:0 0 2px;color:#b45309}.sub{color:#78716c;font-size:10.5px;margin-bottom:12px}'+
+    '.filtros{background:#fafaf9;border:1px solid #e7e5e4;border-radius:6px;padding:8px 10px;margin-bottom:12px;font-size:10.5px}'+
+    '.tiles{display:flex;gap:8px;margin-bottom:12px}.tile{flex:1;border:1px solid #e7e5e4;border-top:3px solid #57534e;border-radius:6px;padding:8px}.tile b{display:block;font-size:18px}'+
+    'h2{font-size:13px;margin:14px 0 6px;border-bottom:2px solid #e7e5e4;padding-bottom:3px}'+
+    'table{width:100%;border-collapse:collapse;margin-bottom:8px}th{background:#f5f5f4;text-align:left;font-size:9.5px;text-transform:uppercase;color:#57534e}th,td{padding:5px 6px;border-bottom:1px solid #e7e5e4;vertical-align:top}'+
+    'tr{page-break-inside:avoid}.err{color:#b91c1c}.ok{color:#15803d;font-weight:bold}.av{color:#b45309}.num{font-weight:bold;white-space:nowrap}'+
+    '.rod{margin-top:14px;color:#a8a29e;font-size:9.5px;text-align:right}'+
+    '</style></head><body><h1>'+CQ_PDF_TITULO+'</h1><div class="sub">Mais Acessível · gerado em '+agora.toLocaleDateString('pt-BR')+' às '+agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+
+    (STATE&&STATE.usuarioLogado?' por '+cqEsc(STATE.usuarioLogado):'')+'</div>'+corpo+
+    '<div class="rod">'+CQ_PDF_TITULO+' · Mais Acessível</div></body></html>');
+  w.document.close();
+  setTimeout(function(){w.focus();w.print();},400);
+}
+function cqPdfConferencia(){
+  var L=CQ._lista||[];
+  var per={'0':'Hoje','7':'Últimos 7 dias','15':'Últimos 15 dias','30':'Últimos 30 dias','60':'Últimos 60 dias','90':'Últimos 90 dias'}[CQ.periodo]||CQ.periodo;
+  var sit=(CQ_SITS.filter(function(o){return o[0]===CQ.sitPesq;})[0]||['',''])[1];
+  var comErro=CQ.itens.filter(function(i){return i.falha||(i.erros&&i.erros.length);});
+  var c='<div class="filtros"><b>Filtros:</b> Período: '+cqEsc(per)+' · Situação: '+cqEsc(sit)+(CQ.vend?' · Vendedor: '+cqEsc(CQ.vend):'')+(CQ.soPend?' · Só cotações com pendência':' · Todas as cotações')+'</div>';
+  c+='<div class="tiles"><div class="tile"><b>'+CQ.itens.length+'</b>cotações conferidas</div><div class="tile" style="border-top-color:#16a34a"><b>'+(CQ.itens.length-comErro.length)+'</b>completas</div><div class="tile" style="border-top-color:#dc2626"><b>'+comErro.length+'</b>com pendências</div></div>';
+  var pv={};comErro.forEach(function(i){var v=i.vendedor||'(sem vendedor)';var o=pv[v]||(pv[v]={n:0,e:0,t:{}});o.n++;(i.erros||[]).forEach(function(e){o.e++;o.t[e.campo]=(o.t[e.campo]||0)+1;});});
+  var vs=Object.keys(pv).sort(function(a,b){return pv[b].n-pv[a].n;});
+  if(vs.length){c+='<h2>Pendências por vendedor</h2><table><tr><th>Vendedor</th><th>Cotações com pendência</th><th>Total de erros</th><th>Erro mais comum</th></tr>'+
+    vs.map(function(v){var o=pv[v];var top=Object.keys(o.t).sort(function(a,b){return o.t[b]-o.t[a];})[0];return '<tr><td>'+cqEsc(v)+'</td><td>'+o.n+'</td><td>'+o.e+'</td><td>'+(top?cqEsc(top)+' ('+o.t[top]+')':'—')+'</td></tr>';}).join('')+'</table>';}
+  c+='<h2>Cotações ('+L.length+')</h2><table><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Vendedor</th><th>Situação</th><th>Pendências</th></tr>'+
+    L.map(function(i){var dt=(i.data||'').split('-').reverse().join('/');
+      var pend=i.falha?'<span class="av">Não consegui ler: '+cqEsc(i.falha)+'</span>':(i.erros&&i.erros.length?i.erros.map(function(e){return '<div class="err">✖ <b>'+cqEsc(e.campo)+'</b>'+(e.msg?' — '+cqEsc(e.msg):'')+'</div>';}).join(''):'<span class="ok">✔ Completa</span>')+
+        (i.avisos||[]).map(function(e){return '<div class="av">⚠ '+cqEsc(e.campo)+' — '+cqEsc(e.msg)+'</div>';}).join('');
+      return '<tr><td class="num">'+cqEsc(i.numero)+'</td><td>'+dt+'</td><td>'+cqEsc(i.cliente)+'</td><td>'+cqEsc(i.vendedor||'—')+'</td><td>'+cqEsc(i.situacao)+'</td><td>'+pend+'</td></tr>';}).join('')+'</table>';
+  cqPdfAbrir(c);
+}
+function cqPdfRelatorio(){
+  var F=CR._F||[];
+  var f=[];if(CR.usuario)f.push('Colaborador: '+CR.usuario);if(CR.vendedor)f.push('Vendedor: '+CR.vendedor);if(CR.ano)f.push('Ano: '+CR.ano);if(CR.mes)f.push('Mês: '+CR_MESES[CR.mes-1]);if(CR.tipo)f.push('Tipo de erro: '+CR.tipo);
+  var comErro=F.filter(function(x){return x.nErros>0;});var tot=F.reduce(function(a,x){return a+(x.erros||[]).length;},0);
+  var c='<div class="filtros"><b>Filtros:</b> '+(f.length?cqEsc(f.join(' · ')):'nenhum (todos os registros)')+'</div>';
+  c+='<div class="tiles"><div class="tile"><b>'+F.length+'</b>checks feitos</div><div class="tile" style="border-top-color:#16a34a"><b>'+(F.length?Math.round((F.length-comErro.length)/F.length*100):0)+'%</b>checks sem erro</div><div class="tile" style="border-top-color:#dc2626"><b>'+tot+'</b>erros encontrados</div></div>';
+  var pc={};F.forEach(function(x){var k=x.usuario||'desconhecido';var o=pc[k]||(pc[k]={n:0,err:0,tot:0,t:{}});o.n++;if(x.nErros>0)o.err++;(x.erros||[]).forEach(function(e){o.tot++;o.t[e.campo]=(o.t[e.campo]||0)+1;});});
+  c+='<h2>Por colaborador</h2><table><tr><th>Colaborador</th><th>Checks</th><th>Com erro</th><th>% com erro</th><th>Erros</th><th>Erro mais comum</th></tr>'+
+    Object.keys(pc).sort(function(a,b){return pc[b].tot-pc[a].tot;}).map(function(k){var o=pc[k];var top=Object.keys(o.t).sort(function(a,b){return o.t[b]-o.t[a];})[0];
+      return '<tr><td>'+cqEsc(k)+'</td><td>'+o.n+'</td><td>'+o.err+'</td><td>'+(o.n?Math.round(o.err/o.n*100):0)+'%</td><td>'+o.tot+'</td><td>'+(top?cqEsc(top)+' ('+o.t[top]+')':'—')+'</td></tr>';}).join('')+'</table>';
+  var te={};F.forEach(function(x){(x.erros||[]).forEach(function(e){te[e.campo]=(te[e.campo]||0)+1;});});
+  var tk=Object.keys(te).sort(function(a,b){return te[b]-te[a];});
+  if(tk.length)c+='<h2>Tipos de erro</h2><table><tr><th>Tipo de erro</th><th>Ocorrências</th></tr>'+tk.map(function(k){return '<tr><td>'+cqEsc(k)+'</td><td>'+te[k]+'</td></tr>';}).join('')+'</table>';
+  c+='<h2>Histórico ('+F.length+')</h2><table><tr><th>Data</th><th>Nº</th><th>Cliente</th><th>Colaborador</th><th>Vendedor</th><th>Erros</th></tr>'+
+    F.map(function(x){var d=new Date(x.ts);return '<tr><td>'+d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'</td><td class="num">'+cqEsc(x.numero)+'</td><td>'+cqEsc(x.cliente||'')+'</td><td>'+cqEsc(x.usuario||'—')+'</td><td>'+cqEsc(x.vendedor||'—')+'</td><td>'+
+      (x.nErros>0?(x.erros||[]).map(function(e){return '<div class="err">✖ <b>'+cqEsc(e.campo)+'</b>'+(e.msg?' — '+cqEsc(e.msg):'')+'</div>';}).join(''):'<span class="ok">✔ Sem erros</span>')+'</td></tr>';}).join('')+'</table>';
+  cqPdfAbrir(c);
 }
 
 function renderModuloVazio(num){
