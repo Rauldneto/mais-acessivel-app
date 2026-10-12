@@ -3057,11 +3057,19 @@ function cqPdfAbrir(corpo){
     '@page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#1c1917;font-size:11px;margin:0}'+
     'h1{font-size:20px;margin:0 0 2px;color:#b45309}.sub{color:#78716c;font-size:10.5px;margin-bottom:12px}'+
     '.filtros{background:#fafaf9;border:1px solid #e7e5e4;border-radius:6px;padding:8px 10px;margin-bottom:12px;font-size:10.5px}'+
-    '.tiles{display:flex;gap:8px;margin-bottom:12px}.tile{flex:1;border:1px solid #e7e5e4;border-top:3px solid #57534e;border-radius:6px;padding:8px}.tile b{display:block;font-size:18px}'+
+    '.tiles{display:flex;gap:8px;margin-bottom:12px;page-break-inside:avoid}.tile{flex:1;border:1px solid #e7e5e4;border-top:3px solid #57534e;border-radius:6px;padding:8px}.tile b{display:block;font-size:18px}'+
     'h2{font-size:13px;margin:14px 0 6px;border-bottom:2px solid #e7e5e4;padding-bottom:3px}'+
     'table{width:100%;border-collapse:collapse;margin-bottom:8px}th{background:#f5f5f4;text-align:left;font-size:9.5px;text-transform:uppercase;color:#57534e}th,td{padding:5px 6px;border-bottom:1px solid #e7e5e4;vertical-align:top}'+
     'tr{page-break-inside:avoid}.err{color:#b91c1c}.ok{color:#15803d;font-weight:bold}.av{color:#b45309}.num{font-weight:bold;white-space:nowrap}'+
     '.rod{margin-top:14px;color:#a8a29e;font-size:9.5px;text-align:right}'+
+    '.grupo{margin:14px 0 6px;font-size:12.5px;font-weight:bold;color:#b45309;border-left:4px solid #d97706;padding:3px 8px;background:#fff7ed;page-break-after:avoid}'+
+    '.card{border:1px solid #e7e5e4;border-radius:8px;margin:0 0 9px;page-break-inside:avoid;overflow:hidden}.card.bad{border-left:5px solid #dc2626}.card.good{border-left:5px solid #16a34a}'+
+    '.ch{display:flex;align-items:center;gap:10px;background:#fafaf9;padding:7px 10px;border-bottom:1px solid #e7e5e4}.ch>div:first-child{flex:1}'+
+    '.nº{font-size:13px;font-weight:bold;color:#b45309}.cli{font-weight:bold}.meta{color:#78716c;font-size:10px;white-space:nowrap}'+
+    '.badge{font-size:9.5px;font-weight:bold;padding:3px 8px;border-radius:10px;white-space:nowrap}.bad .badge{background:#fee2e2;color:#b91c1c}.good .badge{background:#dcfce7;color:#15803d}'+
+    '.cb{padding:6px 10px 8px}table.fix{margin:0}table.fix th{background:#fef2f2;color:#991b1b}table.fix td{font-size:10.5px}td.k{color:#b91c1c;font-weight:bold;text-align:center}'+
+    '.box{display:inline-block;width:12px;height:12px;border:1.5px solid #57534e;border-radius:2px}.lemb{margin-top:5px;font-size:10px;color:#92400e;background:#fffbeb;border-radius:4px;padding:4px 7px}'+
+    'table.resumo{width:auto;min-width:60%}'+
     '</style></head><body><h1>'+CQ_PDF_TITULO+'</h1><div class="sub">Mais Acessível · gerado em '+agora.toLocaleDateString('pt-BR')+' às '+agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+
     (STATE&&STATE.usuarioLogado?' por '+cqEsc(STATE.usuarioLogado):'')+'</div>'+corpo+
     '<div class="rod">'+CQ_PDF_TITULO+' · Mais Acessível</div></body></html>');
@@ -3069,21 +3077,46 @@ function cqPdfAbrir(corpo){
   setTimeout(function(){w.focus();w.print();},400);
 }
 function cqPdfConferencia(){
+  // Tudo no PDF segue os filtros da tela (situação, período, vendedor, só pendências)
+  var base=CQ.itens.filter(function(i){return !CQ.vend||(i.vendedor||'(sem vendedor)')===CQ.vend;});
   var L=CQ._lista||[];
   var per={'0':'Hoje','7':'Últimos 7 dias','15':'Últimos 15 dias','30':'Últimos 30 dias','60':'Últimos 60 dias','90':'Últimos 90 dias'}[CQ.periodo]||CQ.periodo;
   var sit=(CQ_SITS.filter(function(o){return o[0]===CQ.sitPesq;})[0]||['',''])[1];
-  var comErro=CQ.itens.filter(function(i){return i.falha||(i.erros&&i.erros.length);});
-  var c='<div class="filtros"><b>Filtros:</b> Período: '+cqEsc(per)+' · Situação: '+cqEsc(sit)+(CQ.vend?' · Vendedor: '+cqEsc(CQ.vend):'')+(CQ.soPend?' · Só cotações com pendência':' · Todas as cotações')+'</div>';
-  c+='<div class="tiles"><div class="tile"><b>'+CQ.itens.length+'</b>cotações conferidas</div><div class="tile" style="border-top-color:#16a34a"><b>'+(CQ.itens.length-comErro.length)+'</b>completas</div><div class="tile" style="border-top-color:#dc2626"><b>'+comErro.length+'</b>com pendências</div></div>';
-  var pv={};comErro.forEach(function(i){var v=i.vendedor||'(sem vendedor)';var o=pv[v]||(pv[v]={n:0,e:0,t:{}});o.n++;(i.erros||[]).forEach(function(e){o.e++;o.t[e.campo]=(o.t[e.campo]||0)+1;});});
-  var vs=Object.keys(pv).sort(function(a,b){return pv[b].n-pv[a].n;});
-  if(vs.length){c+='<h2>Pendências por vendedor</h2><table><tr><th>Vendedor</th><th>Cotações com pendência</th><th>Total de erros</th><th>Erro mais comum</th></tr>'+
-    vs.map(function(v){var o=pv[v];var top=Object.keys(o.t).sort(function(a,b){return o.t[b]-o.t[a];})[0];return '<tr><td>'+cqEsc(v)+'</td><td>'+o.n+'</td><td>'+o.e+'</td><td>'+(top?cqEsc(top)+' ('+o.t[top]+')':'—')+'</td></tr>';}).join('')+'</table>';}
-  c+='<h2>Cotações ('+L.length+')</h2><table><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Vendedor</th><th>Situação</th><th>Pendências</th></tr>'+
-    L.map(function(i){var dt=(i.data||'').split('-').reverse().join('/');
-      var pend=i.falha?'<span class="av">Não consegui ler: '+cqEsc(i.falha)+'</span>':(i.erros&&i.erros.length?i.erros.map(function(e){return '<div class="err">✖ <b>'+cqEsc(e.campo)+'</b>'+(e.msg?' — '+cqEsc(e.msg):'')+'</div>';}).join(''):'<span class="ok">✔ Completa</span>')+
-        (i.avisos||[]).map(function(e){return '<div class="av">⚠ '+cqEsc(e.campo)+' — '+cqEsc(e.msg)+'</div>';}).join('');
-      return '<tr><td class="num">'+cqEsc(i.numero)+'</td><td>'+dt+'</td><td>'+cqEsc(i.cliente)+'</td><td>'+cqEsc(i.vendedor||'—')+'</td><td>'+cqEsc(i.situacao)+'</td><td>'+pend+'</td></tr>';}).join('')+'</table>';
+  var comErro=base.filter(function(i){return i.falha||(i.erros&&i.erros.length);});
+  var totErros=base.reduce(function(a,i){return a+((i.erros||[]).length);},0);
+  var c='<div class="filtros"><b>Filtros:</b> Período: '+cqEsc(per)+' · Situação: '+cqEsc(sit)+' · Vendedor: '+(CQ.vend?'<b>'+cqEsc(CQ.vend)+'</b>':'todos')+(CQ.soPend?' · Só cotações com pendência':' · Todas as cotações')+'</div>';
+  c+='<div class="tiles"><div class="tile"><b>'+base.length+'</b>cotações conferidas</div><div class="tile" style="border-top-color:#16a34a"><b>'+(base.length-comErro.length)+'</b>completas</div><div class="tile" style="border-top-color:#dc2626"><b>'+comErro.length+'</b>com pendências</div><div class="tile" style="border-top-color:#dc2626"><b>'+totErros+'</b>itens a corrigir</div></div>';
+  // erros mais comuns (no recorte filtrado)
+  var te={};comErro.forEach(function(i){(i.erros||[]).forEach(function(e){te[e.campo]=(te[e.campo]||0)+1;});});
+  var tk=Object.keys(te).sort(function(a,b){return te[b]-te[a];});
+  if(tk.length)c+='<h2>O que mais está faltando</h2><table class="resumo"><tr><th>Campo</th><th style="width:90px;text-align:center">Cotações</th></tr>'+tk.map(function(k){return '<tr><td>'+cqEsc(k)+'</td><td style="text-align:center"><b>'+te[k]+'</b></td></tr>';}).join('')+'</table>';
+  if(!CQ.vend){
+    var pv={};comErro.forEach(function(i){var v=i.vendedor||'(sem vendedor)';var o=pv[v]||(pv[v]={n:0,e:0});o.n++;o.e+=(i.erros||[]).length;});
+    var vs=Object.keys(pv).sort(function(a,b){return pv[b].n-pv[a].n;});
+    if(vs.length)c+='<h2>Pendências por vendedor</h2><table class="resumo"><tr><th>Vendedor</th><th style="width:150px;text-align:center">Cotações com pendência</th><th style="width:110px;text-align:center">Itens a corrigir</th></tr>'+
+      vs.map(function(v){return '<tr><td>'+cqEsc(v)+'</td><td style="text-align:center"><b>'+pv[v].n+'</b></td><td style="text-align:center">'+pv[v].e+'</td></tr>';}).join('')+'</table>';
+  }
+  // cartões das cotações (agrupados por vendedor quando não há filtro de vendedor)
+  var ord=L.slice().sort(function(a,b){return (a.vendedor||'').localeCompare(b.vendedor||'')||(parseInt(b.numero,10)-parseInt(a.numero,10));});
+  c+='<h2>Cotações — o que corrigir ('+ord.length+')</h2>';
+  var atual=null;
+  ord.forEach(function(i){
+    var v=i.vendedor||'(sem vendedor)';
+    if(!CQ.vend&&v!==atual){atual=v;c+='<div class="grupo">👤 '+cqEsc(v)+'</div>';}
+    var dt=(i.data||'').split('-').reverse().join('/');
+    var n=(i.erros||[]).length,bad=i.falha||n;
+    c+='<div class="card '+(bad?'bad':'good')+'"><div class="ch"><div><span class="nº">Nº '+cqEsc(i.numero)+'</span> <span class="cli">'+cqEsc(i.cliente)+'</span></div>'+
+       '<div class="meta">'+dt+' · '+cqEsc(i.situacao||'')+(CQ.vend?'':' · '+cqEsc(v))+(i.total?' · R$ '+cqEsc(/^\d+(\.\d+)?$/.test(String(i.total))?Number(i.total).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):i.total):'')+'</div>'+
+       '<div class="badge">'+(i.falha?'NÃO LIDA':n?n+' A CORRIGIR':'✔ COMPLETA')+'</div></div>';
+    if(i.falha)c+='<div class="cb"><div class="av">Não consegui ler esta proposta: '+cqEsc(i.falha)+'</div></div>';
+    else if(n){
+      c+='<div class="cb"><table class="fix"><tr><th style="width:24px">#</th><th style="width:34%">Campo</th><th>Como corrigir</th><th style="width:44px;text-align:center">Feito</th></tr>'+
+        i.erros.map(function(e,k){return '<tr><td class="k">'+(k+1)+'</td><td><b>'+cqEsc(e.campo)+'</b></td><td>'+cqEsc(e.msg||'Preencher')+'</td><td style="text-align:center"><span class="box"></span></td></tr>';}).join('')+'</table>'+
+        ((i.avisos||[]).length?'<div class="lemb"><b>Lembretes:</b> '+i.avisos.map(function(e){return cqEsc(e.campo)+(e.msg?' ('+cqEsc(e.msg)+')':'');}).join(' · ')+'</div>':'')+'</div>';
+    }
+    c+='</div>';
+  });
+  if(!ord.length)c+='<div class="card good"><div class="cb">Nenhuma cotação com esses filtros.</div></div>';
   cqPdfAbrir(c);
 }
 function cqPdfRelatorio(){
