@@ -1,5 +1,5 @@
 <!-- v5.4-1785154153 -->
-<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro -->
+<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj -->
 <!-- ANTES DE PUBLICAR QUALQUER MUDANCA NESTE ARQUIVO: busque a versao atual em producao via GitHub API,
      confirme que os marcadores acima (nomes de funcao) ainda existem, e aplique a mudanca por cima dela -
      NUNCA sobrescreva com uma copia local antiga. Um commit em 21/08/2026 (f0ebfff) reverteu por engano
@@ -5921,7 +5921,9 @@ var FIN_ORIGEM='Goiânia/GO';
 
 function finHoje(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function finNorm(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');}
-function finNoBling(nome){
+function finNoBling(nome,cnpj){
+  var dg=String(cnpj||'').replace(/\D/g,'');
+  if(dg.length===14){for(var k=0;k<FIN_TRANSP_BLING.length;k++){if(FIN_TRANSP_BLING[k][1]===dg) return FIN_TRANSP_BLING[k];}}
   var n=finNorm(nome); if(!n) return null;
   for(var i=0;i<FIN_TRANSP_BLING.length;i++){var b=finNorm(FIN_TRANSP_BLING[i][0]); if(b===n||b.indexOf(n)>=0||n.indexOf(b)>=0) return FIN_TRANSP_BLING[i];}
   return null;
@@ -5998,9 +6000,9 @@ function abrirLancarFinanceiro(c,onSaved){
   document.body.appendChild(ov);
   function $(id){return box.querySelector('#'+id);}
   $('finFrete').value=prev.frete||c.frete||'CIF';
-  var camposCad=[['nome','Nome (razão social) *'],['fantasia','Fantasia'],['cnpj','CNPJ *'],['ie','Inscrição estadual'],['cep','CEP *'],['uf','UF'],['endereco','Endereço'],['numero','Número'],['compl','Complemento'],['email','E-mail'],['celular','Celular'],['fone','Fone']];
+  var camposCad=[['cnpj','CNPJ *'],['nome','Nome (razão social) *'],['fantasia','Fantasia'],['ie','Inscrição estadual'],['cep','CEP *'],['uf','UF'],['endereco','Endereço'],['numero','Número'],['compl','Complemento'],['email','E-mail'],['celular','Celular'],['fone','Fone']];
   var cad=prev.cadastro||{};
-  $('finCadWarn').innerHTML='<div style="font-weight:700;margin-bottom:4px">Adicionar cadastro no Bling — transportadora ainda não cadastrada</div><div style="font-size:11px;color:#666;margin-bottom:4px">Pessoa Jurídica · Contribuinte 9 - Não contribuinte · Tipo de contato: Transportador</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'+camposCad.map(function(k){return '<div><label style="'+L+'">'+k[1]+'</label><input data-cad="'+k[0]+'" style="'+I+'" value="'+esc(cad[k[0]]||'')+'"></div>';}).join('')+'</div>';
+  $('finCadWarn').innerHTML='<div style="font-weight:700;margin-bottom:4px">Adicionar cadastro no Bling — transportadora ainda não cadastrada</div><div style="font-size:11px;color:#666;margin-bottom:4px">Pessoa Jurídica · Contribuinte 9 - Não contribuinte · Tipo de contato: Transportador</div><div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><button id="finBuscaCnpj" type="button" style="padding:7px 12px;border:none;background:#2563eb;color:#fff;border-radius:6px;font-weight:700;cursor:pointer;font-size:12px">🔍 Buscar dados pelo CNPJ</button><span id="finCnpjMsg" style="font-size:12px;color:#555">Digite o CNPJ: os dados são preenchidos automaticamente.</span></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'+camposCad.map(function(k){return '<div><label style="'+L+'">'+k[1]+'</label><input data-cad="'+k[0]+'" style="'+I+'" value="'+esc(cad[k[0]]||'')+'"></div>';}).join('')+'</div>';
   function histAuto(){return finGerarHistorico(c,{frete:$('finFrete').value,material:$('finMat').value.trim(),nf:$('finNF').value.trim(),despacho:$('finDesp').value,obs:$('finObs').value.trim()});}
   var histEditado=!!prev.historico;
   $('finHist').value=prev.historico||histAuto();
@@ -6011,7 +6013,7 @@ function abrirLancarFinanceiro(c,onSaved){
   }
   function checaCad(){
     var nome=$('finFornecedor').value.trim();
-    $('finCadWarn').style.display=(nome&&!finNoBling(nome))?'block':'none';
+    $('finCadWarn').style.display=(nome&&!finNoBling(nome,(box.querySelector('[data-cad=cnpj]')||{}).value))?'block':'none';
     var cn=box.querySelector('[data-cad=nome]'); if(cn&&!cn.value) cn.value=nome;
   }
   function atualizaHist(){ if(!histEditado) $('finHist').value=histAuto(); }
@@ -6026,6 +6028,40 @@ function abrirLancarFinanceiro(c,onSaved){
   if(prev.fornecedor){$('finFornecedor').value=prev.fornecedor;$('finValor').value=prev.valor||'';checaCad();}
   else if(top3.length){aplicaVencedor();}
   if($('finFrete').value==='FOB') $('finFobWarn').style.display='block';
+  function cadEl(k){return box.querySelector('[data-cad='+k+']');}
+  function soDig(v){return String(v||'').replace(/\D/g,'');}
+  function fmtCnpj(d){return d.length===14?d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5'):d;}
+  function fmtCep(d){return d.length===8?d.replace(/^(\d{5})(\d{3})$/,'$1-$2'):d;}
+  function msg(t,cor){var m=$('finCnpjMsg');m.textContent=t;m.style.color=cor||'#555';}
+  var _buscando=false;
+  function buscarCnpj(){
+    var d=soDig(cadEl('cnpj').value);
+    if(d.length!==14){msg('CNPJ precisa ter 14 números.','#b91c1c');return;}
+    if(_buscando) return; _buscando=true; msg('Buscando...','#555');
+    var fontes=['https://brasilapi.com.br/api/cnpj/v1/'+d,'https://minhareceita.org/'+d];
+    function tenta(i){
+      if(i>=fontes.length){_buscando=false;msg('Não consegui consultar o CNPJ agora. Preencha os campos à mão.','#b91c1c');return;}
+      fetch(fontes[i]).then(function(r){ if(r.status===404){throw new Error('404');} if(!r.ok) throw new Error('HTTP'); return r.json(); })
+      .then(function(j){
+        _buscando=false;
+        var tel=String(j.ddd_telefone_1||'').replace(/\D/g,'');
+        function set(k,v){var el=cadEl(k); if(el&&v!=null&&String(v).trim()!=='') el.value=String(v).trim();}
+        set('cnpj',fmtCnpj(d)); set('nome',j.razao_social); set('fantasia',j.nome_fantasia);
+        set('cep',fmtCep(soDig(j.cep))); set('uf',j.uf);
+        set('endereco',[j.descricao_tipo_de_logradouro,j.logradouro].filter(Boolean).join(' ')); set('numero',j.numero); set('compl',j.complemento);
+        set('email',String(j.email||'').toLowerCase()); set('fone',tel);
+        var ativa=(j.situacao_cadastral===2||/ativa/i.test(j.descricao_situacao_cadastral||''));
+        var ja=FIN_TRANSP_BLING.filter(function(b){return b[1]===d;})[0];
+        if(ja){ $('finFornecedor').value=ja[0]; msg('✅ Esta transportadora já está cadastrada no Bling ('+ja[0]+').','#166534'); checaCad(); return; }
+        msg(ativa?'✅ Dados preenchidos. Confira antes de salvar.':'⚠ Dados preenchidos, mas a situação cadastral NÃO está ativa ('+(j.descricao_situacao_cadastral||'verifique')+').',ativa?'#166534':'#b45309');
+        var fn=$('finFornecedor'); if(!fn.value.trim()&&j.razao_social) fn.value=j.razao_social;
+      })
+      .catch(function(e){ if(String(e&&e.message)==='404'){_buscando=false;msg('CNPJ não encontrado na Receita.','#b91c1c');} else tenta(i+1); });
+    }
+    tenta(0);
+  }
+  $('finBuscaCnpj').onclick=buscarCnpj;
+  cadEl('cnpj').addEventListener('input',function(){ if(soDig(this.value).length===14) buscarCnpj(); });
   function fechar(){ov.remove();}
   $('finX').onclick=fechar; $('finCancel').onclick=fechar;
   $('finSave').onclick=function(){
@@ -6037,7 +6073,7 @@ function abrirLancarFinanceiro(c,onSaved){
       categoria:$('finCat').value,documento:$('finDoc').value.trim(),juros:$('finJuros').value.trim(),multa:$('finMulta').value.trim(),ocorrencia:$('finOcor').value
     };
     var r=box.querySelector('input[name=finWin]:checked'); d.vencedor=r?parseInt(r.value,10):null;
-    var existeBling=finNoBling(d.fornecedor); d.fornecedorBling=existeBling?{nome:existeBling[0],cnpj:existeBling[1]}:null;
+    var existeBling=finNoBling(d.fornecedor,(box.querySelector('[data-cad=cnpj]')||{}).value); d.fornecedorBling=existeBling?{nome:existeBling[0],cnpj:existeBling[1]}:null;
     var cadObj={}; box.querySelectorAll('[data-cad]').forEach(function(el){cadObj[el.getAttribute('data-cad')]=el.value.trim();});
     if(!existeBling) d.cadastro=cadObj;
     var erros=[];
