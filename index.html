@@ -1,5 +1,5 @@
 <!-- v5.4-1785154153 -->
-<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material -->
+<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material | fin-sem-nro-documento -->
 <!-- ANTES DE PUBLICAR QUALQUER MUDANCA NESTE ARQUIVO: busque a versao atual em producao via GitHub API,
      confirme que os marcadores acima (nomes de funcao) ainda existem, e aplique a mudanca por cima dela -
      NUNCA sobrescreva com uma copia local antiga. Um commit em 21/08/2026 (f0ebfff) reverteu por engano
@@ -5989,7 +5989,6 @@ function abrirLancarFinanceiro(c,onSaved){
    '<div><label style="'+L+'">Forma de pagamento *</label><select id="finForma" style="'+I+'"><option value="">Selecione...</option>'+opts(FIN_FORMAS,prev.forma||'',true)+'</select></div>'+
    '<div><label style="'+L+'">Conta financeira (portador) *</label><select id="finConta" style="'+I+'"><option value="">Selecione...</option>'+opts(FIN_CONTAS,prev.conta||'',true)+'</select></div>'+
    '<div><label style="'+L+'">Categoria *</label><select id="finCat" style="'+I+'">'+opts(FIN_CATEGORIAS,prev.categoria||FIN_CATEGORIAS[0],false)+'</select></div>'+
-   '<div><label style="'+L+'">Nº do documento *</label><input id="finDoc" style="'+I+'" value="'+esc(prev.documento||'')+'"></div>'+
    '<div><label style="'+L+'">Juros %</label><input id="finJuros" style="'+I+'" value="'+esc(prev.juros||'')+'"></div>'+
    '<div><label style="'+L+'">Multa %</label><input id="finMulta" style="'+I+'" value="'+esc(prev.multa||'')+'"></div></div></div>'+
    '<div style="margin-top:8px"><label style="'+L+'">Ocorrência</label><select id="finOcor" style="'+I+';max-width:200px">'+opts(FIN_OCORRENCIAS,prev.ocorrencia||'Única',false)+'</select></div>'+
@@ -6020,8 +6019,6 @@ function abrirLancarFinanceiro(c,onSaved){
   ['finNF','finObs','finDesp'].forEach(function(id){$(id).addEventListener('input',atualizaHist);$(id).addEventListener('change',atualizaHist);});
   $('finHist').addEventListener('input',function(){histEditado=true;});
   $('finRegen').onclick=function(){histEditado=false;$('finHist').value=histAuto();};
-  $('finNF').addEventListener('input',function(){ if(!$('finDoc').dataset.touched) $('finDoc').value=this.value; });
-  $('finDoc').addEventListener('input',function(){this.dataset.touched='1';});
   box.querySelectorAll('input[name=finWin]').forEach(function(r){r.addEventListener('change',function(){aplicaVencedor();atualizaHist();});});
   if(prev.fornecedor){$('finFornecedor').value=prev.fornecedor;$('finValor').value=prev.valor||'';checaCad();}
   else if(top3.length){aplicaVencedor();}
@@ -6069,7 +6066,7 @@ function abrirLancarFinanceiro(c,onSaved){
       frete:$('finFrete').value,nf:$('finNF').value.trim(),despacho:$('finDesp').value,obs:$('finObs').value.trim(),
       historico:$('finHist').value.trim(),forma:$('finForma').value,formaNome:$('finForma').selectedOptions[0]?$('finForma').selectedOptions[0].textContent:'',
       conta:$('finConta').value,contaNome:$('finConta').selectedOptions[0]?$('finConta').selectedOptions[0].textContent:'',
-      categoria:$('finCat').value,documento:$('finDoc').value.trim(),juros:$('finJuros').value.trim(),multa:$('finMulta').value.trim(),ocorrencia:$('finOcor').value
+      categoria:$('finCat').value,documento:$('finNF').value.trim(),juros:$('finJuros').value.trim(),multa:$('finMulta').value.trim(),ocorrencia:$('finOcor').value
     };
     var r=box.querySelector('input[name=finWin]:checked'); d.vencedor=r?parseInt(r.value,10):null;
     var existeBling=finNoBling(d.fornecedor,(box.querySelector('[data-cad=cnpj]')||{}).value); d.fornecedorBling=existeBling?{nome:existeBling[0],cnpj:existeBling[1]}:null;
@@ -6081,7 +6078,7 @@ function abrirLancarFinanceiro(c,onSaved){
     if(!d.emissao) erros.push('Emissão'); if(!d.competencia) erros.push('Competência'); if(!d.vencimento) erros.push('Vencimento');
     if(!d.nf) erros.push('Nº NF'); if(!d.despacho) erros.push('Despacho');
     if(!d.historico) erros.push('Histórico'); if(!d.forma) erros.push('Forma de pagamento'); if(!d.conta) erros.push('Conta financeira');
-    if(!d.categoria) erros.push('Categoria'); if(!d.documento) erros.push('Nº do documento');
+    if(!d.categoria) erros.push('Categoria');
     if(!existeBling){ if(!cadObj.nome) erros.push('Cadastro: Nome'); if(!cadObj.cnpj) erros.push('Cadastro: CNPJ'); if(!cadObj.cep) erros.push('Cadastro: CEP'); }
     if(erros.length){var e=$('finErr'); e.style.display='block'; e.textContent='Preencha: '+erros.join(', '); return;}
     var agora=Date.now();
