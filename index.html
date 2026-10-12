@@ -1,5 +1,5 @@
 <!-- v5.4-1785154153 -->
-<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro -->
+<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro -->
 <!-- ANTES DE PUBLICAR QUALQUER MUDANCA NESTE ARQUIVO: busque a versao atual em producao via GitHub API,
      confirme que os marcadores acima (nomes de funcao) ainda existem, e aplique a mudanca por cima dela -
      NUNCA sobrescreva com uma copia local antiga. Um commit em 21/08/2026 (f0ebfff) reverteu por engano
@@ -6079,7 +6079,15 @@ function renderSalvas(){
 
   function buildList(filter){
     listEl.innerHTML='';
-    var dados=filter ? SAVED.filter(function(s){return s.id.toString().includes(filter);}) : SAVED;
+    var dados0=filter ? SAVED.filter(function(s){return s.id.toString().includes(filter);}) : SAVED;
+    // Mais nova primeiro: as salvas mais recentemente (_savedAt) no topo; as antigas, por nº da cotação decrescente.
+    var dados=dados0.slice().sort(function(x,y){
+      var tx=Number(x&&x._savedAt)||0, ty=Number(y&&y._savedAt)||0;
+      if(tx!==ty) return ty-tx;
+      var nx=parseFloat(x&&x.id), ny=parseFloat(y&&y.id);
+      if(!isNaN(nx)&&!isNaN(ny)&&nx!==ny) return ny-nx;
+      return String(y&&y.id).localeCompare(String(x&&x.id));
+    });
     if(!dados.length){
       listEl.innerHTML='<div style="padding:20px;text-align:center;color:#888;font-size:13px">Nenhuma cotação encontrada.</div>';
       return;
