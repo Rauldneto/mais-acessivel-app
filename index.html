@@ -1,5 +1,5 @@
 <!-- v5.4-1785154153 -->
-<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete -->
+<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material -->
 <!-- ANTES DE PUBLICAR QUALQUER MUDANCA NESTE ARQUIVO: busque a versao atual em producao via GitHub API,
      confirme que os marcadores acima (nomes de funcao) ainda existem, e aplique a mudanca por cima dela -
      NUNCA sobrescreva com uma copia local antiga. Um commit em 21/08/2026 (f0ebfff) reverteu por engano
@@ -5938,7 +5938,6 @@ function finStatusLabel(c){
 }
 function finGerarHistorico(c,d){
   var partes=['Frete '+(d.frete||'CIF'),FIN_ORIGEM+' → '+(c.destCity||'—')+'/'+(c.destUF||'—')];
-  if(d.material) partes.push(d.material);
   if(d.nf) partes.push('NF '+d.nf);
   partes.push('Orçamento '+c.id);
   if(d.despacho){var dt=new Date(d.despacho); if(!isNaN(dt)) partes.push('Despacho '+dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}));}
@@ -5981,8 +5980,7 @@ function abrirLancarFinanceiro(c,onSaved){
    '<div><label style="'+L+'">Nº NF *</label><input id="finNF" style="'+I+'" value="'+esc(prev.nf||'')+'"></div>'+
    '<div><label style="'+L+'">Despacho (data e hora) *</label><input id="finDesp" type="datetime-local" style="'+I+'" value="'+esc(prev.despacho||'')+'"></div></div>'+
    '<div id="finFobWarn" style="display:none;margin-top:6px;border:1px solid #fca5a5;background:#fef2f2;border-radius:6px;padding:8px;font-size:12px;color:#991b1b">⚠ Frete FOB: normalmente o cliente paga a transportadora. Confirme que a empresa realmente pagará este frete.</div>'+
-   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
-   '<div><label style="'+L+'">Material *</label><input id="finMat" style="'+I+'" value="'+esc(prev.material||'')+'" placeholder="ex.: piso tátil"></div>'+
+   '<div style="display:grid;grid-template-columns:1fr;gap:10px">'+
    '<div><label style="'+L+'">Observações</label><input id="finObs" style="'+I+'" value="'+esc(prev.obs||'')+'"></div></div>'+
    '<div style="display:flex;align-items:center;margin-top:8px"><label style="'+L+';flex:1;margin:0">Histórico * (máx. 2000)</label><button id="finRegen" type="button" style="font-size:11px;border:1px solid #c8c8c4;background:#f3f3f1;border-radius:5px;padding:3px 8px;cursor:pointer">↻ Regerar texto</button></div>'+
    '<textarea id="finHist" maxlength="2000" rows="3" style="'+I+';margin-top:3px"></textarea>'+
@@ -6003,7 +6001,7 @@ function abrirLancarFinanceiro(c,onSaved){
   var camposCad=[['cnpj','CNPJ *'],['nome','Nome (razão social) *'],['fantasia','Fantasia'],['ie','Inscrição estadual'],['cep','CEP *'],['uf','UF'],['endereco','Endereço'],['numero','Número'],['compl','Complemento'],['email','E-mail'],['celular','Celular'],['fone','Fone']];
   var cad=prev.cadastro||{};
   $('finCadWarn').innerHTML='<div style="font-weight:700;margin-bottom:4px">Adicionar cadastro no Bling — transportadora ainda não cadastrada</div><div style="font-size:11px;color:#666;margin-bottom:4px">Pessoa Jurídica · Contribuinte 9 - Não contribuinte · Tipo de contato: Transportador</div><div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><button id="finBuscaCnpj" type="button" style="padding:7px 12px;border:none;background:#2563eb;color:#fff;border-radius:6px;font-weight:700;cursor:pointer;font-size:12px">🔍 Buscar dados pelo CNPJ</button><span id="finCnpjMsg" style="font-size:12px;color:#555">Digite o CNPJ: os dados são preenchidos automaticamente.</span></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'+camposCad.map(function(k){return '<div><label style="'+L+'">'+k[1]+'</label><input data-cad="'+k[0]+'" style="'+I+'" value="'+esc(cad[k[0]]||'')+'"></div>';}).join('')+'</div>';
-  function histAuto(){return finGerarHistorico(c,{frete:$('finFrete').value,material:$('finMat').value.trim(),nf:$('finNF').value.trim(),despacho:$('finDesp').value,obs:$('finObs').value.trim()});}
+  function histAuto(){return finGerarHistorico(c,{frete:$('finFrete').value,nf:$('finNF').value.trim(),despacho:$('finDesp').value,obs:$('finObs').value.trim()});}
   var histEditado=!!prev.historico;
   $('finHist').value=prev.historico||histAuto();
   function aplicaVencedor(){
@@ -6019,7 +6017,7 @@ function abrirLancarFinanceiro(c,onSaved){
   function atualizaHist(){ if(!histEditado) $('finHist').value=histAuto(); }
   $('finFornecedor').addEventListener('input',checaCad);
   $('finFrete').addEventListener('change',function(){$('finFobWarn').style.display=this.value==='FOB'?'block':'none';atualizaHist();});
-  ['finNF','finMat','finObs','finDesp'].forEach(function(id){$(id).addEventListener('input',atualizaHist);$(id).addEventListener('change',atualizaHist);});
+  ['finNF','finObs','finDesp'].forEach(function(id){$(id).addEventListener('input',atualizaHist);$(id).addEventListener('change',atualizaHist);});
   $('finHist').addEventListener('input',function(){histEditado=true;});
   $('finRegen').onclick=function(){histEditado=false;$('finHist').value=histAuto();};
   $('finNF').addEventListener('input',function(){ if(!$('finDoc').dataset.touched) $('finDoc').value=this.value; });
@@ -6068,7 +6066,7 @@ function abrirLancarFinanceiro(c,onSaved){
   $('finSave').onclick=function(){
     var d={
       fornecedor:$('finFornecedor').value.trim(),valor:$('finValor').value.trim(),emissao:$('finEmissao').value,competencia:$('finCompet').value,vencimento:$('finVenc').value,
-      frete:$('finFrete').value,nf:$('finNF').value.trim(),despacho:$('finDesp').value,material:$('finMat').value.trim(),obs:$('finObs').value.trim(),
+      frete:$('finFrete').value,nf:$('finNF').value.trim(),despacho:$('finDesp').value,obs:$('finObs').value.trim(),
       historico:$('finHist').value.trim(),forma:$('finForma').value,formaNome:$('finForma').selectedOptions[0]?$('finForma').selectedOptions[0].textContent:'',
       conta:$('finConta').value,contaNome:$('finConta').selectedOptions[0]?$('finConta').selectedOptions[0].textContent:'',
       categoria:$('finCat').value,documento:$('finDoc').value.trim(),juros:$('finJuros').value.trim(),multa:$('finMulta').value.trim(),ocorrencia:$('finOcor').value
@@ -6081,7 +6079,7 @@ function abrirLancarFinanceiro(c,onSaved){
     if(!d.fornecedor) erros.push('Fornecedor');
     if(!(parseFloat(d.valor.replace(',','.'))>0)) erros.push('Valor');
     if(!d.emissao) erros.push('Emissão'); if(!d.competencia) erros.push('Competência'); if(!d.vencimento) erros.push('Vencimento');
-    if(!d.nf) erros.push('Nº NF'); if(!d.despacho) erros.push('Despacho'); if(!d.material) erros.push('Material');
+    if(!d.nf) erros.push('Nº NF'); if(!d.despacho) erros.push('Despacho');
     if(!d.historico) erros.push('Histórico'); if(!d.forma) erros.push('Forma de pagamento'); if(!d.conta) erros.push('Conta financeira');
     if(!d.categoria) erros.push('Categoria'); if(!d.documento) erros.push('Nº do documento');
     if(!existeBling){ if(!cadObj.nome) erros.push('Cadastro: Nome'); if(!cadObj.cnpj) erros.push('Cadastro: CNPJ'); if(!cadObj.cep) erros.push('Cadastro: CEP'); }
