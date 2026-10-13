@@ -3323,14 +3323,16 @@ function esDescPara(uc){
   return (ant&&isFinite(ant.desc))?ant.desc:((ES.cfg&&isFinite(+ES.cfg.descPadrao)&&ES.cfg.descPadrao!=='')?+ES.cfg.descPadrao:17);
 }
 async function esLerPdf(file){
-  ES.lendo=true;ES.erro='';ES.salvo=false;ES.chave='';ES.arquivo=file.name;ES.lote=null;esDraw();
+  ES.lendo=true;ES.erro='';ES.dup=null;ES.salvo=false;ES.chave='';ES.arquivo=file.name;ES.lote=null;esDraw();
   try{
-    var x=await esExtrair(file),d=x.d;ES.pdfB64=x.b64;
+    var x=await esExtrair(file),d=x.d;
+    var dup=esJaCarregada(d);
+    if(dup){ES.dup=dup;ES.dados=null;ES.pdfB64=null;ES.lendo=false;esDraw();return;}
+    ES.pdfB64=x.b64;
     ES.dados=d;ES.vencCli=d.venc||'';ES.desc=esDescPara(d.uc);
     ES.cobrarGeradora=false;ES.pdfSalvo='';
     await esSalvarScee(d);
     if(d.scee&&d.scee.ehGeradora){try{await esUnificarUsina();}catch(e){}}
-    if(ES.hist&&ES.hist[esChave(d)])d.avisos.unshift('ℹ️ Já existe uma cobrança salva de '+d.ref+' para esta UC. Ao salvar, ela será atualizada (os pagamentos já confirmados são mantidos).');
   }catch(e){ES.erro=e.message||String(e);ES.dados=null;ES.pdfB64=null;}
   ES.lendo=false;esDraw();
 }
@@ -3353,9 +3355,13 @@ async function esLote(files){
   for(var c2=0;c2<it.length;c2++){if(it[c2].d){try{await esCanon(it[c2].d);}catch(e){}}}
   // grava em ordem de mês, para o desconto e os saldos seguirem a sequência
   it.sort(function(a,b){return (a.d?esRefNum(a.d.ref):0)-(b.d?esRefNum(b.d.ref):0);});
-  ES.lote.fase='salvando';ES.lote.feitos=0;esDraw();
+  ES.lote.fase='salvando';ES.lote.feitos=0;ES.dup=null;esDraw();
+  var vistos={};
   for(var j=0;j<it.length;j++){
     var x2=it[j];
+    if(x2.d){var kd=esChave(x2.d),dp=esJaCarregada(x2.d);
+      if(dp||vistos[kd]){x2.dup=dp||{noLote:true};x2.st='já carregada';x2.cob='dup';x2.b64=null;ES.lote.feitos=j+1;esDraw();continue;}
+      vistos[kd]=1;}
     if(x2.d){
       x2.temPdf=await esSalvarScee(x2.d,x2.b64,x2.arquivo);x2.b64=null;
       x2.st=x2.d.sceeSalvo?'salva':'erro ao salvar';
@@ -3395,17 +3401,18 @@ function esHtmlLote(){
       '<span>✅ <b>'+cnt(function(x){return x.st==='salva';})+'</b> salva(s)</span>'+
       '<span>🧾 <b>'+cnt(function(x){return x.cob==='criada';})+'</b> cobrança(s) criada(s)</span>'+
       '<span>🏭 <b>'+cnt(function(x){return x.cob==='usina';})+'</b> da usina</span>'+
+      (cnt(function(x){return x.cob==='dup';})?'<span style="color:#57534e">🔁 <b>'+cnt(function(x){return x.cob==='dup';})+'</b> já carregada(s) – ignorada(s)</span>':'')+
       (cnt(function(x){return x.cob==='pendente';})?'<span style="color:#b45309">👤 <b>'+cnt(function(x){return x.cob==='pendente';})+'</b> aguardando cadastro do cliente</span>':'')+
       (cnt(function(x){return x.st==='erro'||x.cob==='erro';})?'<span style="color:#b91c1c">❌ <b>'+cnt(function(x){return x.st==='erro'||x.cob==='erro';})+'</b> com erro</span>':'')+'</div>';
   }
-  var COB={criada:['🧾 Cobrança criada','#15803d'],existia:['Já existia (mantida)','#57534e'],usina:['🏭 Usina (sem cobrança)','#1d4ed8'],pendente:['👤 Cadastre o cliente','#b45309'],semunit:['Sem valor unitário: abra e confira','#b91c1c'],erro:['❌ Erro ao criar','#b91c1c']};
+  var COB={dup:['🔁 Já carregada – ignorada','#78716c'],criada:['🧾 Cobrança criada','#15803d'],existia:['Já existia (mantida)','#57534e'],usina:['🏭 Usina (sem cobrança)','#1d4ed8'],pendente:['👤 Cadastre o cliente','#b45309'],semunit:['Sem valor unitário: abra e confira','#b91c1c'],erro:['❌ Erro ao criar','#b91c1c']};
   h+='<div style="overflow-x:auto;margin-top:12px"><table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:760px"><tr style="color:#78716c;font-size:10.5px;text-transform:uppercase;text-align:left"><th style="padding:6px 8px">Arquivo</th><th style="padding:6px 8px">Ref.</th><th style="padding:6px 8px">Casa / UC</th><th style="padding:6px 8px">Dados</th><th style="padding:6px 8px">Cobrança</th><th></th></tr>';
   it.forEach(function(x,i){
     var d=x.d,c=x.cob&&COB[x.cob];
     h+='<tr style="border-top:1px solid #f5f5f4"><td style="padding:7px 8px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esEsc(x.arquivo)+'">'+esEsc(x.arquivo)+'</td>'+
       '<td style="padding:7px 8px;font-weight:800;color:#d97706">'+(d?esEsc(d.ref):'—')+'</td>'+
       '<td style="padding:7px 8px">'+(d?(d.scee&&d.scee.ehGeradora?'🏭 Usina geradora':(esCad(d.uc)?'👤 '+esEsc(esNome(d)):'<span style="color:#b45309">⚠️ sem cadastro</span>'))+'<div style="font-size:11px;color:#a8a29e">UC '+esEsc(d.uc)+'</div>':'—')+'</td>'+
-      '<td style="padding:7px 8px;color:'+(x.st==='salva'?'#15803d':x.st==='erro'||x.st==='erro ao salvar'?'#b91c1c':'#78716c')+'">'+(x.st==='salva'?'✅ salva':esEsc(x.st))+(x.erro?'<div style="font-size:11px">'+esEsc(x.erro)+'</div>':'')+'</td>'+
+      '<td style="padding:7px 8px;color:'+(x.st==='salva'?'#15803d':x.st==='erro'||x.st==='erro ao salvar'?'#b91c1c':'#78716c')+'">'+(x.st==='salva'?'✅ salva':x.dup?'🔁 '+(x.dup.noLote?'repetida neste lote':'já carregada'+(x.dup.quando?' em '+esEsc(x.dup.quando):'')+(x.dup.por?' por '+esEsc(x.dup.por):'')):esEsc(x.st))+(x.erro?'<div style="font-size:11px">'+esEsc(x.erro)+'</div>':'')+'</td>'+
       '<td style="padding:7px 8px;font-weight:700;color:'+(c?c[1]:'#a8a29e')+'">'+(c?c[0]:'—')+'</td>'+
       '<td style="padding:7px 8px;text-align:right">'+(d&&L.fase==='fim'?'<button data-es-lote-abrir="'+i+'" style="'+ES_BTN_SM+'">Abrir</button>':'')+'</td></tr>';
   });
@@ -3485,13 +3492,25 @@ async function esPagar(k,tipo){
   esDraw();
 }
 async function esExcluir(k){
-  if(!confirm('Excluir esta cobrança e o PDF da fatura? Não dá para desfazer.'))return;
+  if(!confirm('Excluir esta fatura por completo (cobrança, pagamentos, dados de geração/rateio e PDF)? Não dá para desfazer.\nDepois você pode carregá-la de novo.'))return;
+  await esApagarFatura(k);
+}
+async function esApagarFatura(k){
   try{
     await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_PATH+'/'+k+'.json',{method:'DELETE'});
+    await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_SCEE_PATH+'/'+k+'.json',{method:'DELETE'});
     await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_PDF_PATH+'/'+k+'.json',{method:'DELETE'});
-    delete ES.hist[k];if(ES.chave===k){ES.chave='';ES.salvo=false;}
+    if(ES.hist)delete ES.hist[k];if(ES.scee)delete ES.scee[k];if(ES.chave===k){ES.chave='';ES.salvo=false;}
   }catch(e){alert('Erro ao excluir.');}
   esDraw();
+}
+// fatura já carregada? (mesma casa, já com a UC atual, e mesmo mês de referência)
+function esJaCarregada(d){
+  if(!d||!d.uc||!d.ref)return null;
+  var k=esChave(d),sc=ES.scee&&ES.scee[k],hc=ES.hist&&ES.hist[k];
+  if(!sc&&!hc)return null;
+  var up=((sc&&sc.uploads)||(hc&&hc.uploads)||[]),u=up[0]||{},em=u.em||(sc&&sc.criadoEm)||(hc&&hc.criadoEm);
+  return {k:k,uc:d.uc,ref:d.ref,nome:(d.scee&&d.scee.ehGeradora)?'Usina geradora':esNome(d),quando:em?new Date(em).toLocaleDateString('pt-BR'):'',por:u.por||(hc&&hc.salvoPor)||'',temCob:!!hc};
 }
 async function esVerPdf(k){
   var w=window.open('','_blank');
@@ -3662,6 +3681,9 @@ function esHtmlNova(){
      '<span style="font-weight:800;color:#92400e">'+(ES.lendo?'Lendo a fatura...':'Clique ou arraste os PDFs das faturas aqui')+'</span><span style="font-size:12px;color:#a16207">Pode ser uma só ou várias de uma vez (ex.: todas de 2026)</span>'+
      (ES.arquivo&&!ES.lendo?'<span style="font-size:12px;color:#a16207">'+esEsc(ES.arquivo)+'</span>':'')+
      '<input id="esFile" type="file" accept="application/pdf,.pdf" multiple style="display:none"></label>'+
+     (ES.dup?'<div style="margin-top:12px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:12px 14px;font-size:13px">🔁 <b>Esta fatura já foi carregada</b>: '+esEsc(ES.dup.nome)+' – UC '+esEsc(ES.dup.uc)+' – <b>'+esEsc(ES.dup.ref)+'</b>'+(ES.dup.quando?', em '+esEsc(ES.dup.quando):'')+(ES.dup.por?' por '+esEsc(ES.dup.por):'')+'. Nada foi alterado.'+
+       '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">'+(ES.dup.temCob?'<button data-es-abrir="'+esEsc(ES.dup.k)+'" style="'+esBtn('#d97706','#fff')+';padding:6px 12px">Abrir a que já está salva</button>':'<button data-es-aba="ger" style="'+esBtn('#d97706','#fff')+';padding:6px 12px">Ver em Geração e rateio</button>')+'</div>'+
+       '<div style="margin-top:6px;font-size:12px;color:#a16207">Para substituir, exclua a fatura antiga (🗑) e carregue de novo.</div></div>':'')+
      (ES.erro?'<div style="margin-top:12px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:10px;padding:10px 12px;font-size:13px">❌ '+esEsc(ES.erro)+'</div>':'')+
      '</div>';
   var d=ES.dados;if(!d)return h+(ES.lote?esHtmlLote():'');
@@ -3879,7 +3901,7 @@ function esLigar(root){
   if(b=document.getElementById('esSalvar'))b.onclick=esSalvar;
   if(b=document.getElementById('esFatura'))b.onclick=function(){
     var r=esMontarReg(ES.dados),rec=ES.chave&&ES.hist&&ES.hist[ES.chave];if(rec)r.pagoCliente=rec.pagoCliente;esFaturaCliente(r);};
-  if(b=document.getElementById('esLimpar'))b.onclick=function(){ES.dados=null;ES.erro='';ES.arquivo='';ES.salvo=false;ES.chave='';ES.pdfB64=null;esDraw();};
+  if(b=document.getElementById('esLimpar'))b.onclick=function(){ES.dados=null;ES.erro='';ES.dup=null;ES.arquivo='';ES.salvo=false;ES.chave='';ES.pdfB64=null;esDraw();};
   if(b=document.getElementById('esCopiar'))b.onclick=function(){
     var t=esResumoTexto(esMontarReg(ES.dados)),self=this;
     (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){self.textContent='✅ Copiado!';setTimeout(function(){self.textContent='📋 Copiar resumo (WhatsApp)';},1500);}).catch(function(){prompt('Copie o resumo:',t);});
@@ -4015,9 +4037,8 @@ async function esSalvarScee(d,b64,arq){
   return !!reg.temPdf;
 }
 async function esExcluirScee(k){
-  if(!confirm('Excluir os dados de geração/rateio desta fatura?'))return;
-  try{await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_SCEE_PATH+'/'+k+'.json',{method:'DELETE'});delete ES.scee[k];}catch(e){alert('Erro ao excluir.');}
-  esDraw();
+  if(!confirm('Excluir esta fatura por completo (dados de geração/rateio, PDF'+(ES.hist&&ES.hist[k]?', cobrança e pagamentos':'')+')? Não dá para desfazer.\nDepois você pode carregá-la de novo.'))return;
+  await esApagarFatura(k);
 }
 function esPctDe(sc,ucG){var r=(sc&&sc.rateio)||[];for(var i=0;i<r.length;i++)if(!ucG||esAl(r[i].uc)===ucG)return r[i].pct;return null;}
 function esKwhDe(lista,ucG){var t=0,ok=false;(lista||[]).forEach(function(x){if(!ucG||esAl(x.uc)===ucG){t+=+x.kwh||0;ok=true;}});return ok?t:null;}
