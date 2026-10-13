@@ -3577,7 +3577,7 @@ async function esApagarFatura(k){
 function esJaCarregada(d){
   if(!d||!d.uc||!d.ref)return null;
   var k=esChave(d),sc=ES.scee&&ES.scee[k],hc=ES.hist&&ES.hist[k];
-  if(!sc&&!hc)return null;
+  if(!sc)return null; // só a cobrança existe: deixa carregar para completar os dados de geração (a cobrança é mantida)
   var up=((sc&&sc.uploads)||(hc&&hc.uploads)||[]),u=up[0]||{},em=u.em||(sc&&sc.criadoEm)||(hc&&hc.criadoEm);
   return {k:k,uc:d.uc,ref:d.ref,nome:(d.scee&&d.scee.ehGeradora)?'Usina geradora':esNome(d),quando:em?new Date(em).toLocaleDateString('pt-BR'):'',por:u.por||(hc&&hc.salvoPor)||'',temCob:!!hc};
 }
