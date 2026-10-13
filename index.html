@@ -4532,6 +4532,59 @@ async function esUnificarUsina(){
   if(feito&&STATE.modulo==='mod11')esDraw();
 }
 
+// ---- revisão das faturas já carregadas ----
+// cria as cobranças que faltam (casas com cliente cadastrado), relendo o PDF salvo
+async function esGerarFaltantes(ucK){
+  var criadas=0;
+  var cobradas={};esLista().forEach(function(x){cobradas[esAl(x.uc)]=1;});
+  var ks=Object.keys(ES.scee||{});
+  for(var i=0;i<ks.length;i++){
+    var k=ks[i],rec=ES.scee[k],u=esAl(rec.uc);
+    if(ucK&&u!==ucK)continue;
+    if(ES.hist&&ES.hist[k])continue;
+    if(!rec.temPdf||!esCad(rec.uc))continue;
+    if(rec.ehGeradora&&!cobradas[u])continue;            // usina só se você já cobra ela
+    var d=null;try{d=await esLerPdfSalvo(k);}catch(e){}
+    if(!d)continue;
+    await esCanon(d);
+    if(esChave(d)!==k)continue;
+    var it={d:d,arquivo:d._arquivo,temPdf:true,forcar:!!rec.ehGeradora};
+    await esCobrancaAuto(it);if(it.cob==='criada')criadas++;
+    if(ES.rev){ES.rev.criadas=(ES.rev.criadas||0)+(it.cob==='criada'?1:0);}
+  }
+  return criadas;
+}
+async function esRevisar(){
+  if(ES.rev&&ES.rev.rodando)return;
+  ES.rev={rodando:true,status:'Lendo os PDFs salvos...',criadas:0};esDraw();
+  var bogus=function(k){return /^20\d{11}_/.test(k);};
+  var ks=Object.keys(ES.scee||{}).filter(function(k){return ES.scee[k].temPdf;});
+  var lidos=[],movidas=0,vinc=0,erros=0;
+  for(var i=0;i<ks.length;i++){
+    ES.rev.status='Lendo PDF '+(i+1)+' de '+ks.length+'...';esDraw();
+    try{var d=await esLerPdfSalvo(ks[i]);if(d)lidos.push({k:ks[i],d:d,bruta:esUcK(d.uc)});}catch(e){erros++;}
+  }
+  // 1) aprende: fatura que já está numa casa certa, mas cujo número lido é outro -> é o número antigo dessa casa
+  for(var a=0;a<lidos.length;a++){
+    var L1=lidos[a],ucK=L1.k.split('_')[0];
+    if(bogus(L1.k)||!L1.bruta||L1.bruta===ucK||esAl(L1.bruta)===ucK)continue;
+    if(ES.alias&&ES.alias[L1.bruta])continue;
+    try{await esMigrarUc(L1.bruta,ucK,esUcFmt(ucK),'revisão: número lido no PDF salvo');vinc++;}catch(e){erros++;}
+  }
+  // 2) move o que está no número errado para a casa certa
+  for(var b2=0;b2<lidos.length;b2++){
+    var L2=lidos[b2],uc2=L2.k.split('_')[0],certo=esAl(L2.bruta);
+    if(!certo||certo===uc2||!ES.scee[L2.k])continue;
+    ES.rev.status='Corrigindo '+L2.d.ref+'...';esDraw();
+    try{await esMigrarUc(uc2,certo,esUcFmt(certo),'revisão: UC lida errado');movidas++;}catch(e){erros++;}
+  }
+  // 3) cobranças que faltam
+  ES.rev.status='Criando cobranças que faltam...';esDraw();
+  var cri=0;try{cri=await esGerarFaltantes();}catch(e){erros++;}
+  ES.rev={rodando:false,status:'✅ Revisão feita: '+lidos.length+' PDF(s) relido(s), '+movidas+' fatura(s) corrigida(s), '+vinc+' número(s) antigo(s) aprendido(s), '+cri+' cobrança(s) criada(s)'+(erros?', '+erros+' erro(s)':'')+'.'};
+  esDraw();
+}
+
 function renderModuloVazio(num){
   var wrap=document.createElement('div');
   wrap.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;color:#888;text-align:center;gap:14px';
@@ -11173,56 +11226,3 @@ function novaConsultaMod5(){
 </script>
 </body>
 </html>
-
-// ---- revisão das faturas já carregadas ----
-// cria as cobranças que faltam (casas com cliente cadastrado), relendo o PDF salvo
-async function esGerarFaltantes(ucK){
-  var criadas=0;
-  var cobradas={};esLista().forEach(function(x){cobradas[esAl(x.uc)]=1;});
-  var ks=Object.keys(ES.scee||{});
-  for(var i=0;i<ks.length;i++){
-    var k=ks[i],rec=ES.scee[k],u=esAl(rec.uc);
-    if(ucK&&u!==ucK)continue;
-    if(ES.hist&&ES.hist[k])continue;
-    if(!rec.temPdf||!esCad(rec.uc))continue;
-    if(rec.ehGeradora&&!cobradas[u])continue;            // usina só se você já cobra ela
-    var d=null;try{d=await esLerPdfSalvo(k);}catch(e){}
-    if(!d)continue;
-    await esCanon(d);
-    if(esChave(d)!==k)continue;
-    var it={d:d,arquivo:d._arquivo,temPdf:true,forcar:!!rec.ehGeradora};
-    await esCobrancaAuto(it);if(it.cob==='criada')criadas++;
-    if(ES.rev){ES.rev.criadas=(ES.rev.criadas||0)+(it.cob==='criada'?1:0);}
-  }
-  return criadas;
-}
-async function esRevisar(){
-  if(ES.rev&&ES.rev.rodando)return;
-  ES.rev={rodando:true,status:'Lendo os PDFs salvos...',criadas:0};esDraw();
-  var bogus=function(k){return /^20\d{11}_/.test(k);};
-  var ks=Object.keys(ES.scee||{}).filter(function(k){return ES.scee[k].temPdf;});
-  var lidos=[],movidas=0,vinc=0,erros=0;
-  for(var i=0;i<ks.length;i++){
-    ES.rev.status='Lendo PDF '+(i+1)+' de '+ks.length+'...';esDraw();
-    try{var d=await esLerPdfSalvo(ks[i]);if(d)lidos.push({k:ks[i],d:d,bruta:esUcK(d.uc)});}catch(e){erros++;}
-  }
-  // 1) aprende: fatura que já está numa casa certa, mas cujo número lido é outro -> é o número antigo dessa casa
-  for(var a=0;a<lidos.length;a++){
-    var L1=lidos[a],ucK=L1.k.split('_')[0];
-    if(bogus(L1.k)||!L1.bruta||L1.bruta===ucK||esAl(L1.bruta)===ucK)continue;
-    if(ES.alias&&ES.alias[L1.bruta])continue;
-    try{await esMigrarUc(L1.bruta,ucK,esUcFmt(ucK),'revisão: número lido no PDF salvo');vinc++;}catch(e){erros++;}
-  }
-  // 2) move o que está no número errado para a casa certa
-  for(var b2=0;b2<lidos.length;b2++){
-    var L2=lidos[b2],uc2=L2.k.split('_')[0],certo=esAl(L2.bruta);
-    if(!certo||certo===uc2||!ES.scee[L2.k])continue;
-    ES.rev.status='Corrigindo '+L2.d.ref+'...';esDraw();
-    try{await esMigrarUc(uc2,certo,esUcFmt(certo),'revisão: UC lida errado');movidas++;}catch(e){erros++;}
-  }
-  // 3) cobranças que faltam
-  ES.rev.status='Criando cobranças que faltam...';esDraw();
-  var cri=0;try{cri=await esGerarFaltantes();}catch(e){erros++;}
-  ES.rev={rodando:false,status:'✅ Revisão feita: '+lidos.length+' PDF(s) relido(s), '+movidas+' fatura(s) corrigida(s), '+vinc+' número(s) antigo(s) aprendido(s), '+cri+' cobrança(s) criada(s)'+(erros?', '+erros+' erro(s)':'')+'.'};
-  esDraw();
-}
