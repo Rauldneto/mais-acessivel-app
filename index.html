@@ -3146,8 +3146,9 @@ function cqPdfRelatorio(){
 var FIREBASE_ENERGIA_PATH='energiaSolar';
 var FIREBASE_ENERGIA_PDF_PATH='energiaSolarPdf';
 var FIREBASE_ENERGIA_CFG_PATH='energiaSolarConfig';
-var FIREBASE_ENERGIA_CLI_PATH='energiaSolarClientes'; // cadastro do cliente de cada casa, chave = nº da UC (só dígitos)
-var ES={aba:'nova',dados:null,pdfB64:null,erro:'',lendo:false,desc:17,vencCli:'',hist:null,histCarregando:false,cfg:null,cfgOk:false,salvo:false,chave:'',arquivo:'',fCli:'',fSit:'',relDe:'',relAte:'',relCli:'',cli:null,editCli:'',cliCtx:{}};
+var FIREBASE_ENERGIA_CLI_PATH='energiaSolarClientes';
+var FIREBASE_ENERGIA_SCEE_PATH='energiaSolarScee'; // dados SCEE de TODA fatura carregada (geração, excedente, saldo, rateio, histórico do gráfico) // cadastro do cliente de cada casa, chave = nº da UC (só dígitos)
+var ES={aba:'nova',dados:null,pdfB64:null,erro:'',lendo:false,desc:17,vencCli:'',hist:null,histCarregando:false,cfg:null,cfgOk:false,salvo:false,chave:'',arquivo:'',fCli:'',fSit:'',relDe:'',relAte:'',relCli:'',cli:null,editCli:'',cliCtx:{},scee:null,pdfSalvo:'',cobrarGeradora:false,gerBase:'eq'};
 function esUcK(uc){return String(uc||'').replace(/\D/g,'');}
 function esCad(uc){return (ES.cli&&ES.cli[esUcK(uc)])||null;}
 function esNome(r){var c=esCad(r.uc);return c&&c.nome?c.nome:(r.cliente||'');}
@@ -3229,7 +3230,47 @@ function esParse(L){
   if(m)d.avisos.push('⚠️ A fatura avisa '+m[1]+' conta vencida (mês '+m[2].trim()+') no valor de '+esBRL(esNum(m[3]))+'. Ela NÃO está somada aqui.');
   m=txt.match(/SUSPENS[ÃA]O DO FORNECIMENTO OCORRER[ÁA] AP[ÓO]S O DIA (\d{2}\/\d{2}\/\d{4})/i);
   if(m)d.avisos.push('⚠️ Risco de corte de energia após '+m[1]+'.');
+  d.scee=esParseScee(txt,L,d);
   return d;
+}
+
+// Informações do SCEE (mensagens importantes) + medidores
+function esParseScee(txt,L,d){
+  var t2=txt.replace(/\s*\|\s*/g,' ').replace(/\n/g,' '),m,sc={};
+  var seg=function(re){var x=t2.match(re);return x?x[1]:'';};
+  var lista=function(str){var out=[],re=/UC\s*(\d+)\s*:\s*([\d.]+,\d+)/g,x;while(x=re.exec(str))out.push({uc:x[1].replace(/^0+/,''),kwh:esNum(x[2])});return out;};
+  m=t2.match(/GERA[ÇC][ÃA]O CICLO\s*\((\d{1,2}\/\d{4})\)/i);sc.ciclo=m?m[1]:'';
+  sc.geracao=lista(seg(/GERA[ÇC][ÃA]O CICLO[^:]*KWH:(.*?)(?:EXCEDENTE|CR[ÉE]DITO RECEBIDO|SALDO KWH|CADASTRO|$)/i));
+  sc.excedente=lista(seg(/EXCEDENTE RECEBIDO KWH:(.*?)(?:CR[ÉE]DITO RECEBIDO|SALDO KWH|CADASTRO|$)/i));
+  sc.credito=isFinite(d.creditoRecebido)?d.creditoRecebido:null;
+  sc.saldo=isFinite(d.saldoKwh)?d.saldoKwh:null;
+  m=t2.match(/EXPIRAR EM 30 DIAS KWH:\s*([\d.]+,\d+)/i);sc.expira30=m?esNum(m[1]):null;
+  m=t2.match(/EXPIRAR EM 60 DIAS KWH:\s*([\d.]+,\d+)/i);sc.expira60=m?esNum(m[1]):null;
+  sc.rateio=[];var rs=seg(/CADASTRO RATEIO GERA[ÇC][ÃA]O:(.*?)(?:PER[ÍI]ODO DE REFER|NOTIFICA|INFORMA|$)/i),re2=/UC\s*(\d+)\s*=\s*([\d.,]+)\s*%/g;
+  while(m=re2.exec(rs))sc.rateio.push({uc:m[1].replace(/^0+/,''),pct:esNum(m[2])});
+  m=t2.match(/Tipo de fornecimento:\s*(MONOF|BIF|TRIF)/i);
+  var tf=m?m[1].toUpperCase():'MONOF';sc.fornecimento={MONOF:'Monofásico',BIF:'Bifásico',TRIF:'Trifásico'}[tf];sc.minimo={MONOF:30,BIF:50,TRIF:100}[tf];
+  (L||[]).forEach(function(r){
+    var i=r.findIndex(function(c){return /^ENERGIA (ATIVA|GERA[ÇC][ÃA]O)/i.test(c);});if(i<0)return;
+    var j=r.findIndex(function(c,k){return k>i&&/^\d+,\d{6}$/.test(c);});if(j<0)return;
+    var v=esNum(r[j+1]);if(!isFinite(v))return;
+    if(/ATIVA/i.test(r[i]))sc.consumoMedido=v;else sc.geracaoMedida=v;
+  });
+  sc.ehGeradora=sc.geracao.some(function(g){return g.uc===esUcK(d.uc);});
+  return sc;
+}
+// Gráfico "CONSUMO (kWh)": pares Ativo/Injetado — 1º par = MÉDIA, depois os meses do mais novo ao mais antigo
+function esRefMenos(ref,n){var p=String(ref||'').split('/'),i=ES_MESES.indexOf(p[0]);if(i<0)return '';var t=(+p[1])*12+i-n;return ES_MESES[((t%12)+12)%12]+'/'+Math.floor(t/12);}
+function esGrafico(ct,ref){
+  var it=ct.items.filter(function(i){return (i.str||'').trim();});
+  var hd=it.find(function(i){return /CONSUMO FATURADO/i.test(i.str);});if(!hd)return null;
+  var hx=hd.transform[4],hy=hd.transform[5];
+  var nums=it.filter(function(i){var x=i.transform[4],y=i.transform[5];return /^\d[\d.]*,\d{2}$/.test(i.str.trim())&&y<hy-1&&y>hy-260&&x>hx&&x<hx+160&&(i.height||0)<4.5;})
+    .sort(function(a,b){return b.transform[5]-a.transform[5];}).map(function(i){return esNum(i.str.trim());});
+  if(nums.length<2)return null;
+  var par=nums.length%2===0,passo=par?2:1,out={media:{cons:nums[0],inj:par?nums[1]:null},meses:[]};
+  for(var k=passo,n=0;k<nums.length;k+=passo,n++)out.meses.push({ref:esRefMenos(ref,n),cons:nums[k],inj:par?nums[k+1]:null});
+  return out;
 }
 
 // Cálculo da cobrança
@@ -3268,13 +3309,17 @@ async function esLerPdf(file){
     ES.pdfB64=esB64(buf);
     var pdf=await pdfjsLib.getDocument({data:buf.slice(0)}).promise;
     var L=[];
-    for(var p=1;p<=pdf.numPages;p++){var pg=await pdf.getPage(p);L=L.concat(esLinhasDoConteudo(await pg.getTextContent()));}
+    var graf=null;
+    for(var p=1;p<=pdf.numPages;p++){var pg=await pdf.getPage(p);var ct=await pg.getTextContent();L=L.concat(esLinhasDoConteudo(ct));if(p===1)ES._ct1=ct;}
     var d=esParse(L);
+    try{d.scee.hist=esGrafico(ES._ct1,d.ref);}catch(e){d.scee.hist=null;}ES._ct1=null;
     if(!d.itens.length)throw new Error('Não encontrei os itens da fatura neste PDF. É uma fatura da Equatorial Goiás?');
     ES.dados=d;ES.vencCli=d.venc||'';
     // desconto: o último usado para esta UC, senão o padrão da configuração
     var ant=esLista().filter(function(h){return h.uc===d.uc;}).sort(function(a,b){return esRefNum(b.ref)-esRefNum(a.ref);})[0];
     ES.desc=(ant&&isFinite(ant.desc))?ant.desc:((ES.cfg&&isFinite(+ES.cfg.descPadrao)&&ES.cfg.descPadrao!=='')?+ES.cfg.descPadrao:17);
+    ES.cobrarGeradora=false;ES.pdfSalvo='';
+    await esSalvarScee(d);
     if(ES.hist&&ES.hist[esChave(d)])d.avisos.unshift('ℹ️ Já existe uma cobrança salva de '+d.ref+' para esta UC. Ao salvar, ela será atualizada (os pagamentos já confirmados são mantidos).');
   }catch(e){ES.erro=e.message||String(e);ES.dados=null;ES.pdfB64=null;}
   ES.lendo=false;esDraw();
@@ -3285,6 +3330,7 @@ async function esCarregar(){
   ES.histCarregando=true;
   try{var r=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_PATH+'.json');ES.hist=(r.ok?await r.json():null)||{};}catch(e){ES.hist={};}
   try{var r2=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_CFG_PATH+'.json');ES.cfg=(r2.ok?await r2.json():null)||{};}catch(e){ES.cfg={};}
+  try{var r4=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_SCEE_PATH+'.json');ES.scee=(r4.ok?await r4.json():null)||{};}catch(e){ES.scee={};}
   try{var r3=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_CLI_PATH+'.json');ES.cli=(r3.ok?await r3.json():null)||{};}catch(e){ES.cli={};}
   ES.histCarregando=false;if(STATE.modulo==='mod11')esDraw();
 }
@@ -3305,7 +3351,9 @@ async function esSalvar(){
   reg.criadoEm=ant.criadoEm||agora;reg.atualizadoEm=agora;reg.salvoPor=STATE.loginUser||'';
   reg.temPdf=!!ant.temPdf;reg.uploads=ant.uploads||[];
   try{
-    if(ES.pdfB64){
+    if(ES.pdfSalvo===k){
+      reg.temPdf=true;reg.uploads=reg.uploads.concat([{arquivo:ES.arquivo||'fatura.pdf',em:agora,por:STATE.loginUser||''}]);ES.pdfSalvo='';
+    }else if(ES.pdfB64){
       var rp=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_PDF_PATH+'/'+k+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:ES.arquivo||'fatura.pdf',b64:ES.pdfB64,em:agora})});
       if(!rp.ok)throw new Error('PDF: HTTP '+rp.status);
       reg.temPdf=true;reg.uploads=reg.uploads.concat([{arquivo:ES.arquivo||'fatura.pdf',em:agora,por:STATE.loginUser||''}]);
@@ -3369,6 +3417,7 @@ function esAbrirHist(k){
   var h=ES.hist[k];if(!h)return;
   ES.dados={uc:h.uc,cliente:h.cliente,doc:h.doc,endereco:h.endereco,ref:h.ref,venc:h.venc,leitAnt:h.leitAnt,leitAtu:h.leitAtu,dias:h.dias,kwh:h.kwh,unit:h.unit,totalPagar:h.totalFatura,
     itens:h.itens||[],avisos:h.avisos||[],saldoKwh:h.saldoKwh==null?NaN:h.saldoKwh,geracaoCiclo:h.geracaoCiclo==null?NaN:h.geracaoCiclo};
+  var sc0=ES.scee&&ES.scee[k];if(sc0)ES.dados.scee=sc0;
   ES.desc=h.desc;ES.vencCli=h.vencCli||h.venc||'';ES.salvo=true;ES.chave=k;ES.erro='';ES.arquivo='';ES.pdfB64=null;ES.aba='nova';
   esDraw();window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -3490,7 +3539,7 @@ var ES_BTN_SM='background:#fff;color:#1c1917;border:1.5px solid #e7e5e4;padding:
 
 function esDraw(){
   var root=document.getElementById('esRoot');if(!root)return;
-  var abas=[['nova','📄 Nova cobrança'],['hist','📚 Histórico por cliente'],['cli','👥 Clientes'],['rel','📈 Relatório de ganhos']];
+  var abas=[['nova','📄 Nova cobrança'],['hist','📚 Histórico por cliente'],['cli','👥 Clientes'],['ger','⚡ Geração e rateio'],['rel','📈 Relatório de ganhos']];
   if(STATE.roleLogado==='admin')abas.push(['cfg','⚙️ Configurar']);
   var h='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">';
   abas.forEach(function(a){var at=ES.aba===a[0];h+='<button data-es-aba="'+a[0]+'" style="'+esBtn(at?'#d97706':'#fff',at?'#fff':'#57534e',at?'none':'1.5px solid #e7e5e4')+';border-radius:20px">'+a[1]+'</button>';});
@@ -3499,6 +3548,7 @@ function esDraw(){
   else if(ES.aba==='rel')h+=esHtmlRel();
   else if(ES.aba==='cfg')h+=esHtmlCfg();
   else if(ES.aba==='cli')h+=esHtmlClientes();
+  else if(ES.aba==='ger')h+=esHtmlGer();
   else h+=esHtmlNova();
   h+='<style>#esRoot table td,#esRoot table th{font-family:\'Segoe UI\',sans-serif}</style>';
   root.innerHTML=h;
@@ -3524,6 +3574,14 @@ function esHtmlNova(){
      '<div style="font-size:12.5px;color:#78716c;margin-top:2px">UC <b>'+esEsc(d.uc||'—')+'</b>'+(d.endereco?' · '+esEsc(d.endereco):'')+'</div>'+
      '<div style="font-size:12.5px;color:#78716c;margin-top:2px">'+(d.leitAnt?'Leitura '+esEsc(d.leitAnt)+' a '+esEsc(d.leitAtu)+(d.dias?' ('+d.dias+' dias)':''):'')+(d.venc?' · Venc. Equatorial '+esEsc(d.venc):'')+'</div></div>'+
      '<div style="text-align:right"><div style="font-size:11px;color:#a8a29e;font-weight:700;letter-spacing:.5px">REFERÊNCIA</div><div style="font-size:22px;font-weight:900;color:#d97706">'+esEsc(d.ref||'—')+'</div></div></div>';
+  h+=esHtmlSceeBox(d);
+  if(d.scee&&d.scee.ehGeradora&&!ES.cobrarGeradora){
+    h+='<div style="margin-top:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 14px;font-size:13px;color:#1e3a8a">🏭 <b>Esta é a fatura da usina geradora.</b> Ela não gera cobrança para cliente. Os dados de geração, excedente, saldo e rateio já foram salvos na aba <b>⚡ Geração e rateio</b>.</div>'+
+       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button data-es-aba="ger" style="'+esBtn('#d97706','#fff')+'">⚡ Ver geração e rateio</button>'+
+       '<button id="esCobrarGer" style="'+esBtn('#fff','#57534e','1.5px solid #e7e5e4')+'">Cobrar esta fatura mesmo assim</button>'+
+       '<button id="esLimpar" style="'+esBtn('#fff','#78716c','1.5px solid #e7e5e4')+';margin-left:auto">✕ Limpar</button></div></div>';
+    return h;
+  }
   var cadN=esCad(d.uc);
   if(!cadN||ES.editCli===esUcK(d.uc))h+='<div style="margin-top:12px;background:#fefce8;border:2px solid #facc15;border-radius:12px;padding:14px 16px">'+
      '<div style="font-size:14px;font-weight:800;color:#854d0e">👤 '+(cadN?'Editar cliente desta casa':'Quem é o cliente desta casa?')+'</div>'+
@@ -3727,6 +3785,9 @@ function esLigar(root){
     (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){self.textContent='✅ Copiado!';setTimeout(function(){self.textContent='📋 Copiar resumo (WhatsApp)';},1500);}).catch(function(){prompt('Copie o resumo:',t);});
   };
   if(b=document.getElementById('esCfgSalvar'))b.onclick=esSalvarCfg;
+  if(b=document.getElementById('esCobrarGer'))b.onclick=function(){ES.cobrarGeradora=true;esDraw();};
+  if(b=document.getElementById('esGerBase'))b.onchange=function(){ES.gerBase=b.value;esDraw();};
+  root.querySelectorAll('[data-es-scee-del]').forEach(function(x){x.onclick=function(){esExcluirScee(x.getAttribute('data-es-scee-del'));};});
   root.querySelectorAll('[data-es-cli-salvar]').forEach(function(x){x.onclick=function(){esSalvarCli(x.getAttribute('data-es-cli-salvar'));};});
   root.querySelectorAll('[data-es-cli-edit]').forEach(function(x){x.onclick=function(){ES.editCli=x.getAttribute('data-es-cli-edit');esDraw();};});
   root.querySelectorAll('[data-es-cli-cancel]').forEach(function(x){x.onclick=function(){ES.editCli='';esDraw();};});
@@ -3745,6 +3806,7 @@ function esLigar(root){
 // ---- cadastro do cliente de cada casa (chave = UC) ----
 function esHtmlCliTopo(d){
   var c=esCad(d.uc);
+  if(d.scee&&d.scee.ehGeradora&&!ES.cobrarGeradora)return '<div style="font-size:16px;font-weight:800;color:#1c1917">🏭 Usina geradora</div><div style="font-size:12.5px;color:#78716c">Titular na Equatorial: '+esEsc(d.cliente||'—')+'</div>';
   if(!c)return '<div style="font-size:16px;font-weight:800;color:#b45309">⚠️ Cliente não cadastrado</div><div style="font-size:12.5px;color:#78716c">Titular na Equatorial: '+esEsc(d.cliente||'—')+'</div>';
   return '<div style="font-size:16px;font-weight:800;color:#1c1917">👤 '+esEsc(c.nome)+
     ' <button data-es-cli-edit="'+esUcK(d.uc)+'" style="'+ES_BTN_SM+';padding:3px 8px;font-size:11px">✏️ editar</button></div>'+
@@ -3812,6 +3874,156 @@ function esHtmlClientes(){
     }
     h+='</div>';
   });
+  return h;
+}
+
+// ---- dados SCEE de toda fatura (salvos no upload) ----
+async function esSalvarScee(d){
+  if(!d||!d.uc||!d.ref||!d.scee)return;
+  var k=esChave(d),ant=(ES.scee||{})[k]||{},agora=Date.now();
+  var reg=JSON.parse(JSON.stringify(d.scee));
+  reg.uc=d.uc;reg.ref=d.ref;reg.titular=d.cliente||'';reg.endereco=d.endereco||'';reg.leitAnt=d.leitAnt||'';reg.leitAtu=d.leitAtu||'';reg.dias=d.dias||0;
+  reg.injecaoKwh=d.kwh||0;reg.totalFatura=isFinite(d.totalPagar)?d.totalPagar:null;
+  reg.criadoEm=ant.criadoEm||agora;reg.atualizadoEm=agora;
+  reg.uploads=(ant.uploads||[]).concat([{arquivo:ES.arquivo||'fatura.pdf',em:agora,por:STATE.loginUser||''}]);
+  try{
+    if(ES.pdfB64){
+      var rp=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_PDF_PATH+'/'+k+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome:ES.arquivo||'fatura.pdf',b64:ES.pdfB64,em:agora})});
+      if(rp.ok){ES.pdfSalvo=k;ES.pdfB64=null;reg.temPdf=true;}
+    }
+    var r=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_SCEE_PATH+'/'+k+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(reg)});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    ES.scee=ES.scee||{};ES.scee[k]=reg;d.sceeSalvo=true;
+  }catch(e){d.avisos.push('Não consegui salvar os dados de geração/rateio desta fatura ('+e.message+'). Envie de novo.');}
+}
+async function esExcluirScee(k){
+  if(!confirm('Excluir os dados de geração/rateio desta fatura?'))return;
+  try{await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_SCEE_PATH+'/'+k+'.json',{method:'DELETE'});delete ES.scee[k];}catch(e){alert('Erro ao excluir.');}
+  esDraw();
+}
+function esPctDe(sc,ucG){var r=(sc&&sc.rateio)||[];for(var i=0;i<r.length;i++)if(!ucG||r[i].uc===ucG)return r[i].pct;return null;}
+function esKwhDe(lista,ucG){var t=0,ok=false;(lista||[]).forEach(function(x){if(!ucG||x.uc===ucG){t+=+x.kwh||0;ok=true;}});return ok?t:null;}
+
+function esHtmlSceeBox(d){
+  var sc=d.scee;if(!sc)return '';
+  var it=[];
+  var ger=esKwhDe(sc.geracao),exc=esKwhDe(sc.excedente),pct=esPctDe(sc);
+  if(ger!=null)it.push(['☀️ Geração do ciclo'+(sc.ciclo?' ('+sc.ciclo+')':''),esFmt(ger,2)+' kWh']);
+  if(exc!=null)it.push(['📥 Excedente recebido',esFmt(exc,2)+' kWh']);
+  if(sc.credito!=null)it.push(['🔌 Crédito usado',esFmt(sc.credito,2)+' kWh']);
+  if(sc.saldo!=null)it.push(['🏦 Saldo de créditos',esFmt(sc.saldo,2)+' kWh']);
+  if(pct!=null)it.push(['📊 Rateio desta UC',esFmt(pct,2).replace(',00','')+'%']);
+  if(sc.consumoMedido!=null)it.push(['⚡ Consumo medido',esFmt(sc.consumoMedido,0)+' kWh']);
+  if(sc.hist&&sc.hist.media)it.push(['📈 Consumo médio',esFmt(sc.hist.media.cons,2)+' kWh']);
+  if(!it.length)return '';
+  var avisoExp=(sc.expira30||sc.expira60)?'<div style="font-size:12px;color:#b91c1c;margin-top:6px">⚠️ Créditos a expirar: '+esFmt(sc.expira30||0,2)+' kWh em 30 dias, '+esFmt(sc.expira60||0,2)+' kWh em 60 dias.</div>':'';
+  return '<div style="margin-top:12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 12px">'+
+    '<div style="font-size:11px;font-weight:800;color:#0369a1;letter-spacing:.4px;text-transform:uppercase;margin-bottom:6px">Informações SCEE da fatura'+(d.sceeSalvo||(ES.scee&&ES.scee[esChave(d)])?' <span style="color:#15803d;text-transform:none;letter-spacing:0">· ✓ salvas em Geração e rateio</span>':'')+'</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px 14px">'+
+    it.map(function(x){return '<div><div style="font-size:11px;color:#0c4a6e">'+x[0]+'</div><div style="font-size:15px;font-weight:800;color:#0f172a">'+x[1]+'</div></div>';}).join('')+'</div>'+avisoExp+'</div>';
+}
+
+// ---- sub-aba Geração e rateio ----
+function esHtmlGer(){
+  var card=ES_CARD,th='padding:6px 8px;text-align:right',td='padding:7px 8px;text-align:right;border-top:1px solid #f5f5f4;white-space:nowrap';
+  if(ES.histCarregando)return '<div style="'+card+';font-size:13px;color:#a8a29e">Carregando...</div>';
+  var S=Object.keys(ES.scee||{}).map(function(k){var x=ES.scee[k];x._k=k;return x;});
+  var h='<div style="'+card+'"><h2 style="margin:0;font-size:18px">⚡ Geração e rateio</h2><p style="margin:4px 0 0;font-size:12.5px;color:#78716c">Dados das "mensagens importantes" (SCEE) de todas as faturas que você carregou: a da usina e as das casas. Cada fatura enviada atualiza esta página.</p></div>';
+  if(!S.length)return h+'<div style="'+card+';font-size:13px;color:#a8a29e">Nenhuma fatura carregada ainda. Envie as faturas em "Nova cobrança".</div>';
+  var desc=function(a,b){return esRefNum(b.ref)-esRefNum(a.ref);};
+  var ger=S.filter(function(x){return x.ehGeradora;}).sort(desc);
+  var ucG=ger.length?esUcK(ger[0].uc):'';
+  if(!ucG)S.forEach(function(x){if(!ucG&&x.rateio&&x.rateio[0])ucG=x.rateio[0].uc;});
+  var ult=ger[0];
+  // nome das UCs
+  var nomeUc=function(uc,rec){var c=esCad(uc);if(esUcK(uc)===ucG)return '🏭 Usina geradora'+(c&&c.casa?' – '+esEsc(c.casa):'');return c?'👤 '+esEsc(c.nome)+(c.casa?' <span style="color:#78716c;font-size:11.5px">('+esEsc(c.casa)+')</span>':''):'<span style="color:#b45309">⚠️ '+esEsc((rec&&rec.titular)||'sem cadastro')+'</span>';};
+  // KPIs
+  var kpi=function(t,v,sub,cor){return '<div style="'+card+';margin:0;padding:14px 16px"><div style="font-size:11px;color:#78716c;font-weight:800;letter-spacing:.4px;text-transform:uppercase">'+t+'</div><div style="font-size:21px;font-weight:900;color:'+(cor||'#1c1917')+';margin-top:4px">'+v+'</div>'+(sub?'<div style="font-size:11.5px;color:#a8a29e;margin-top:2px">'+sub+'</div>':'')+'</div>';};
+  var totGer=ger.reduce(function(s,x){return s+(esKwhDe(x.geracao,ucG)||0);},0);
+  if(ult){
+    var gU=esKwhDe(ult.geracao,ucG)||0,excU=gU-(ult.credito||0);
+    h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px">'+
+      kpi('☀️ Geração '+esEsc(ult.ref),esFmt(gU,2)+' kWh','Excedente p/ rateio: '+esFmt(excU,2)+' kWh','#92400e')+
+      kpi('📈 Geração média',ult.hist&&ult.hist.media&&ult.hist.media.inj!=null?esFmt(ult.hist.media.inj,2)+' kWh':'—','Média dos últimos 13 meses (Equatorial)')+
+      kpi('🏦 Saldo de créditos',ult.saldo!=null?esFmt(ult.saldo,2)+' kWh':'—',(ult.expira30||ult.expira60)?'A expirar: '+esFmt((ult.expira30||0)+(ult.expira60||0),2)+' kWh':'Nada a expirar em 60 dias',ult.saldo?'#15803d':'')+
+      kpi('🔋 Total injetado',esFmt(totGer,2)+' kWh','Soma de '+ger.length+' fatura(s) da usina carregada(s)')+'</div>';
+  }else h+='<div style="'+card+';background:#fff7ed;border-color:#fed7aa;font-size:13px;color:#9a3412">⚠️ Ainda não há fatura da <b>usina geradora</b> carregada. Envie a fatura da Fazenda Poção para ver geração, saldo e calcular o rateio.</div>';
+  // ciclos da usina
+  if(ger.length){
+    h+='<div style="'+card+'"><div style="font-size:15px;font-weight:800;margin-bottom:4px">🏭 Ciclos da usina</div><div style="font-size:12px;color:#78716c;margin-bottom:10px">Excedente = geração − consumo compensado da própria usina. O excedente é dividido pelo rateio: a parte da usina vai para o saldo e o resto vai para as casas.</div>'+
+      '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:760px"><tr style="color:#78716c;font-size:11px;text-transform:uppercase"><th style="padding:6px 8px;text-align:left">Ref.</th><th style="'+th+'">Geração</th><th style="'+th+'">Consumo usina</th><th style="'+th+'">Excedente</th><th style="'+th+'">Fica na usina</th><th style="'+th+'">Vai p/ casas</th><th style="'+th+'">Rateio usina</th><th style="'+th+'">Saldo</th><th></th></tr>';
+    var T={g:0,c:0,e:0,u:0,ca:0};
+    ger.forEach(function(x){
+      var g=esKwhDe(x.geracao,ucG)||0,c=x.credito||0,e=Math.max(0,g-c),u=esKwhDe(x.excedente,ucG),ca=u!=null?e-u:null;
+      T.g+=g;T.c+=c;T.e+=e;T.u+=u||0;T.ca+=ca||0;
+      h+='<tr><td style="padding:7px 8px;font-weight:800;color:#d97706;border-top:1px solid #f5f5f4">'+esEsc(x.ref)+'</td><td style="'+td+';font-weight:800">'+esFmt(g,2)+'</td><td style="'+td+'">'+esFmt(c,2)+'</td><td style="'+td+'">'+esFmt(e,2)+'</td>'+
+        '<td style="'+td+'">'+(u!=null?esFmt(u,2):'—')+'</td><td style="'+td+';color:#15803d;font-weight:700">'+(ca!=null?esFmt(ca,2):'—')+'</td><td style="'+td+'">'+(esPctDe(x,ucG)!=null?esFmt(esPctDe(x,ucG),2).replace(',00','')+'%':'—')+'</td><td style="'+td+'">'+(x.saldo!=null?esFmt(x.saldo,2):'—')+'</td>'+
+        '<td style="'+td+'">'+(x.temPdf?'<button data-es-pdf="'+esEsc(x._k)+'" style="'+ES_BTN_SM+'" title="PDF">📄</button> ':'')+(STATE.roleLogado==='admin'?'<button data-es-scee-del="'+esEsc(x._k)+'" style="'+ES_BTN_SM+';color:#ef4444;border-color:#fecaca">🗑</button>':'')+'</td></tr>';
+    });
+    var tt='padding:7px 8px;text-align:right;border-top:2px solid #e7e5e4;font-weight:900;white-space:nowrap';
+    h+='<tr><td style="padding:7px 8px;border-top:2px solid #e7e5e4;font-weight:900">Total</td><td style="'+tt+'">'+esFmt(T.g,2)+'</td><td style="'+tt+'">'+esFmt(T.c,2)+'</td><td style="'+tt+'">'+esFmt(T.e,2)+'</td><td style="'+tt+'">'+esFmt(T.u,2)+'</td><td style="'+tt+';color:#15803d">'+esFmt(T.ca,2)+'</td><td style="'+tt+'"></td><td style="'+tt+'"></td><td style="'+tt+'"></td></tr></table></div></div>';
+  }
+  // última fatura de cada UC
+  var porUc={};S.forEach(function(x){var k=esUcK(x.uc);(porUc[k]=porUc[k]||[]).push(x);});
+  Object.keys(porUc).forEach(function(k){porUc[k].sort(desc);});
+  var mediaCons=function(lst){var r=lst[0];if(r.hist&&r.hist.media&&r.hist.media.cons!=null)return r.hist.media.cons;var v=lst.filter(function(x){return x.consumoMedido!=null;}).map(function(x){return x.consumoMedido;});return v.length?v.reduce(function(a,b){return a+b;},0)/v.length:null;};
+  // ---- cálculo do rateio ----
+  if(ult){
+    var bases={eq:ult.hist&&ult.hist.media?ult.hist.media.inj:null,car:ger.length?totGer/ger.length:null,ult:esKwhDe(ult.geracao,ucG)};
+    if(bases[ES.gerBase]==null)ES.gerBase=bases.eq!=null?'eq':'car';
+    var base=bases[ES.gerBase]||0;
+    var lstG=porUc[ucG]||[],mG=lstG.length?mediaCons(lstG):null,minG=lstG.length?(lstG[0].minimo||30):30;
+    var usoG=mG!=null?Math.max(0,mG-minG):0,excB=Math.max(0,base-usoG);
+    h+='<div style="'+card+'"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-end"><div><div style="font-size:15px;font-weight:800">📊 Rateio necessário pela média de consumo</div>'+
+      '<div style="font-size:12px;color:#78716c;margin-top:2px;max-width:620px">Cada casa precisa compensar o consumo médio menos a taxa mínima (30 kWh mono, 50 bi, 100 tri), que é cobrada de qualquer jeito. O % é calculado sobre o excedente médio da usina.</div></div>'+
+      '<label style="font-size:12px;color:#57534e;font-weight:600">Base de geração<select id="esGerBase" style="'+ES_INP+';margin-top:4px;width:auto">'+
+      [['eq','Média Equatorial (13 meses)'],['car','Média das faturas carregadas'],['ult','Último ciclo']].filter(function(o){return bases[o[0]]!=null;}).map(function(o){return '<option value="'+o[0]+'"'+(ES.gerBase===o[0]?' selected':'')+'>'+o[1]+' – '+esFmt(bases[o[0]],0)+' kWh</option>';}).join('')+'</select></label></div>'+
+      '<div style="display:flex;gap:18px;flex-wrap:wrap;margin:12px 0;font-size:13px;background:#fafaf9;border-radius:10px;padding:10px 12px">'+
+      '<span>Geração base: <b>'+esFmt(base,2)+' kWh</b></span><span>− Consumo médio da usina compensado: <b>'+esFmt(usoG,2)+' kWh</b></span><span>= Excedente médio p/ rateio: <b style="color:#92400e">'+esFmt(excB,2)+' kWh</b></span></div>';
+    h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:800px"><tr style="color:#78716c;font-size:11px;text-transform:uppercase"><th style="padding:6px 8px;text-align:left">Casa</th><th style="'+th+'">Fornec.</th><th style="'+th+'">Consumo médio</th><th style="'+th+'">A compensar</th><th style="'+th+'">kWh/mês</th><th style="'+th+'">% atual</th><th style="'+th+'">% necessário</th><th style="'+th+'">Diferença</th></tr>';
+    var soma=0,somaAt=0,somaKwh=0,semMedia=[];
+    Object.keys(porUc).filter(function(k){return k!==ucG;}).sort(function(a,b){return (mediaCons(porUc[b])||0)-(mediaCons(porUc[a])||0);}).forEach(function(k){
+      var lst=porUc[k],r=lst[0],mc=mediaCons(lst),mn=r.minimo||30,pa=esPctDe(r,ucG);
+      if(mc==null){semMedia.push(k);}
+      var prec=mc!=null?Math.max(0,mc-mn):0,pn=excB?prec/excB*100:0,pnA=Math.ceil(pn*10)/10;
+      soma+=pnA;somaKwh+=prec;if(pa!=null)somaAt+=pa;
+      var dif=pa!=null?pnA-pa:null;
+      h+='<tr><td style="padding:7px 8px;border-top:1px solid #f5f5f4">'+nomeUc(r.uc,r)+'<div style="font-size:11px;color:#a8a29e">UC '+esEsc(r.uc)+' · últ. fatura '+esEsc(r.ref)+'</div></td>'+
+        '<td style="'+td+'">'+esEsc((r.fornecimento||'').slice(0,4))+'. ('+mn+')</td><td style="'+td+'">'+(mc!=null?esFmt(mc,2):'—')+'</td><td style="'+td+'">'+esFmt(prec,2)+'</td>'+
+        '<td style="'+td+'">'+(pa!=null?esFmt(excB*pa/100,0):'—')+'</td><td style="'+td+'">'+(pa!=null?esFmt(pa,2).replace(',00','')+'%':'—')+'</td>'+
+        '<td style="'+td+';font-weight:900;color:#92400e">'+esFmt(pnA,1)+'%</td>'+
+        '<td style="'+td+';font-weight:700;color:'+(dif==null?'#a8a29e':Math.abs(dif)<0.5?'#15803d':dif>0?'#b91c1c':'#1d4ed8')+'">'+(dif==null?'—':(dif>0?'+':'')+esFmt(dif,1)+' p.p.')+'</td></tr>';
+    });
+    var resto=100-soma,paG=esPctDe(ult,ucG);
+    h+='<tr style="background:#fffbeb"><td style="padding:7px 8px;border-top:1px solid #f5f5f4">'+nomeUc(ult.uc,ult)+'<div style="font-size:11px;color:#a8a29e">UC '+esEsc(ult.uc)+' · fica com o que sobra (vai para o saldo)</div></td>'+
+      '<td style="'+td+'">'+esEsc((ult.fornecimento||'').slice(0,4))+'. ('+minG+')</td><td style="'+td+'">'+(mG!=null?esFmt(mG,2):'—')+'</td><td style="'+td+';color:#a8a29e">compensado antes</td><td style="'+td+'">'+(paG!=null?esFmt(excB*paG/100,0):'—')+'</td>'+
+      '<td style="'+td+'">'+(paG!=null?esFmt(paG,2).replace(',00','')+'%':'—')+'</td><td style="'+td+';font-weight:900;color:'+(resto<0?'#b91c1c':'#92400e')+'">'+esFmt(Math.max(0,resto),1)+'%</td>'+
+      '<td style="'+td+'">'+(paG!=null?((Math.max(0,resto)-paG>0?'+':'')+esFmt(Math.max(0,resto)-paG,1)+' p.p.'):'—')+'</td></tr>';
+    h+='<tr><td colspan="4" style="padding:8px;border-top:2px solid #e7e5e4;font-weight:900">Soma das casas</td><td style="padding:8px;text-align:right;border-top:2px solid #e7e5e4;font-weight:900">'+esFmt(somaKwh,0)+' kWh</td><td style="padding:8px;text-align:right;border-top:2px solid #e7e5e4;font-weight:900">'+esFmt(somaAt,1)+'%</td><td style="padding:8px;text-align:right;border-top:2px solid #e7e5e4;font-weight:900;color:'+(soma>100?'#b91c1c':'#92400e')+'">'+esFmt(soma,1)+'%</td><td style="border-top:2px solid #e7e5e4"></td></tr></table></div>';
+    if(soma>100)h+='<div style="margin-top:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px 12px;font-size:13px;color:#991b1b">❌ A usina não cobre a média de todas as casas: faltam <b>'+esFmt(somaKwh-excB,0)+' kWh/mês</b>. Mesmo com 100% do excedente para as casas, o rateio somaria '+esFmt(soma,1)+'%. O saldo de '+esFmt(ult.saldo||0,0)+' kWh da usina pode cobrir a diferença por um tempo, mas só se for transferido no rateio.</div>';
+    else h+='<div style="margin-top:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 12px;font-size:13px;color:#14532d">✅ Para cobrir a média de consumo das casas carregadas, elas precisam de <b>'+esFmt(soma,1)+'%</b> do excedente. Sobram <b>'+esFmt(resto,1)+'%</b> (≈ '+esFmt(excB*resto/100,0)+' kWh/mês) para a usina, que vão para o saldo'+(ult.saldo?' (hoje com '+esFmt(ult.saldo,0)+' kWh)':'')+'.</div>';
+    if(semMedia.length)h+='<div style="margin-top:8px;font-size:12px;color:#b45309">⚠️ '+semMedia.length+' casa(s) sem consumo médio na fatura; o cálculo considerou 0 para elas.</div>';
+    h+='<div style="margin-top:8px;font-size:11.5px;color:#a8a29e">Só entram no cálculo as casas com fatura carregada. Arredondado para cima em 0,1%. A mudança do rateio é pedida à Equatorial e passa a valer nos ciclos seguintes.</div></div>';
+  }
+  // créditos por casa (todas as faturas)
+  h+='<div style="'+card+'"><div style="font-size:15px;font-weight:800;margin-bottom:10px">🏠 Créditos por casa (todas as faturas carregadas)</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:760px"><tr style="color:#78716c;font-size:11px;text-transform:uppercase"><th style="padding:6px 8px;text-align:left">Casa</th><th style="'+th+'">Faturas</th><th style="'+th+'">Excedente recebido</th><th style="'+th+'">Crédito usado (injetado)</th><th style="'+th+'">Consumo medido</th><th style="'+th+'">Saldo atual</th><th style="'+th+'">Rateio atual</th></tr>';
+  Object.keys(porUc).sort(function(a,b){return a===ucG?-1:b===ucG?1:0;}).forEach(function(k){
+    var lst=porUc[k],r=lst[0],ex=0,cr=0,cm=0;lst.forEach(function(x){ex+=esKwhDe(x.excedente,ucG)||0;cr+=x.credito||0;cm+=x.consumoMedido||0;});
+    h+='<tr><td style="padding:7px 8px;border-top:1px solid #f5f5f4">'+nomeUc(r.uc,r)+'<div style="font-size:11px;color:#a8a29e">UC '+esEsc(r.uc)+' · '+lst.map(function(x){return esEsc(x.ref);}).join(', ')+'</div></td>'+
+      '<td style="'+td+'">'+lst.length+'</td><td style="'+td+'">'+esFmt(ex,2)+'</td><td style="'+td+';font-weight:800">'+esFmt(cr,2)+'</td><td style="'+td+'">'+esFmt(cm,0)+'</td><td style="'+td+'">'+(r.saldo!=null?esFmt(r.saldo,2):'—')+'</td><td style="'+td+'">'+(esPctDe(r,ucG)!=null?esFmt(esPctDe(r,ucG),2).replace(',00','')+'%':'—')+'</td></tr>';
+  });
+  h+='</table></div></div>';
+  // gráfico 13 meses da usina
+  if(ult&&ult.hist&&ult.hist.meses&&ult.hist.meses.length){
+    var ms=ult.hist.meses.slice().reverse(),mx=Math.max.apply(null,ms.map(function(m){return Math.max(m.cons||0,m.inj||0);}))||1;
+    h+='<div style="'+card+'"><div style="font-size:15px;font-weight:800;margin-bottom:2px">📅 Últimos 13 meses da usina (fatura '+esEsc(ult.ref)+')</div><div style="font-size:12px;color:#78716c;margin-bottom:10px"><span style="display:inline-block;width:10px;height:10px;background:#d97706;border-radius:2px"></span> Injetado (geração) &nbsp; <span style="display:inline-block;width:10px;height:10px;background:#a8a29e;border-radius:2px"></span> Consumo da usina</div>';
+    ms.forEach(function(m){
+      h+='<div style="display:grid;grid-template-columns:70px 1fr 150px;gap:8px;align-items:center;font-size:12px;margin-bottom:5px"><b style="color:#57534e">'+esEsc(m.ref)+'</b>'+
+        '<div><div style="height:9px;width:'+Math.round((m.inj||0)/mx*100)+'%;background:#d97706;border-radius:3px;margin-bottom:2px"></div><div style="height:6px;width:'+Math.round((m.cons||0)/mx*100)+'%;background:#a8a29e;border-radius:3px"></div></div>'+
+        '<span style="text-align:right;color:#57534e"><b style="color:#92400e">'+esFmt(m.inj||0,0)+'</b> / '+esFmt(m.cons||0,0)+' kWh</span></div>';
+    });
+    h+='</div>';
+  }
   return h;
 }
 
