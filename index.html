@@ -3237,9 +3237,11 @@ function esParse(L){
   var d={itens:[],avisos:[]};
   var txt=L.map(function(c){return c.join(' | ');}).join('\n');
   var m;
-  m=txt.match(/\d\.\d{3}\.\d{3}\.\d{3}-\d{2}/);d.uc=m?m[0]:'';
+  d.uc='';
+  for(var q0=0;q0<L.length;q0++){var r0=L[q0];if(/^PERDAS DE TRANSFORMA/i.test(r0[0]||'')){var lc=r0[r0.length-1];if(r0.length>1&&/^[\d.\-]{6,}$/.test(lc)&&!/^20\d{11}$/.test(lc.replace(/\D/g,'')))d.uc=lc;break;}}
+  if(!d.uc){m=txt.match(/\d\.\d{3}\.\d{3}\.\d{3}-\d{2}/);d.uc=m?m[0]:'';}
   m=txt.match(/UC (\d{6,})/);d.ucEndereco=m?m[1]:'';
-  if(!d.uc){for(var q=0;q<L.length&&!d.uc;q++){var rq=L[q];for(var w=1;w<rq.length;w++){if(/^(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\/\d{4}$/.test(rq[w])&&/^[\d.\-]{6,}$/.test(rq[w-1])&&/\d{6}/.test(rq[w-1].replace(/\D/g,''))){d.uc=rq[w-1];break;}}}}
+  if(!d.uc){for(var q=0;q<L.length&&!d.uc;q++){var rq=L[q];for(var w=1;w<rq.length;w++){if(/^(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\/\d{4}$/.test(rq[w])&&/^[\d.\-]{6,}$/.test(rq[w-1])&&/\d{6}/.test(rq[w-1].replace(/\D/g,''))&&!/^20\d{11}$/.test(rq[w-1].replace(/\D/g,''))){d.uc=rq[w-1];break;}}}}
   if(!d.uc&&d.ucEndereco)d.uc=d.ucEndereco;
   for(var i=0;i<L.length;i++){
     var c=L[i];
@@ -3362,17 +3364,28 @@ function esLista(){return ES.hist?Object.keys(ES.hist).map(function(k){var x=ES.
 
 // ---- leitura do PDF ----
 async function esExtrair(file){
+  var buf=await file.arrayBuffer(),b64=esB64(buf);
+  var d=await esParseBuf(buf);
+  await esCanon(d);
+  return {d:d,b64:b64};
+}
+async function esParseBuf(buf){
   if(typeof pdfjsLib==='undefined')throw new Error('Biblioteca de PDF não carregou.');
   pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  var buf=await file.arrayBuffer(),b64=esB64(buf);
   var pdf=await pdfjsLib.getDocument({data:buf.slice(0)}).promise;
   var L=[],ct1=null;
   for(var p=1;p<=pdf.numPages;p++){var pg=await pdf.getPage(p);var ct=await pg.getTextContent();L=L.concat(esLinhasDoConteudo(ct));if(p===1)ct1=ct;}
   var d=esParse(L);
   try{d.scee.hist=esGrafico(ct1,d.ref);}catch(e){d.scee.hist=null;}
   if(!d.itens.length)throw new Error('Não encontrei os itens da fatura neste PDF. É uma fatura da Equatorial Goiás?');
-  await esCanon(d);
-  return {d:d,b64:b64};
+  d.ucBruta=d.uc;
+  return d;
+}
+async function esLerPdfSalvo(k){
+  var r=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_PDF_PATH+'/'+k+'.json');var p=r.ok?await r.json():null;
+  if(!p||!p.b64)return null;
+  var bin=atob(p.b64),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+  var d=await esParseBuf(u.buffer);d._arquivo=p.nome||'fatura.pdf';return d;
 }
 function esDescPara(uc){
   var ant=esLista().filter(function(h){return h.uc===uc;}).sort(function(a,b){return esRefNum(b.ref)-esRefNum(a.ref);})[0];
@@ -3430,7 +3443,7 @@ async function esLote(files){
 }
 async function esCobrancaAuto(item){
   var d=item.d,k=esChave(d);
-  if(d.scee&&d.scee.ehGeradora){item.cob='usina';return;}
+  if(d.scee&&d.scee.ehGeradora&&!item.forcar){item.cob='usina';return;}
   if(ES.hist&&ES.hist[k]){item.cob='existia';return;}
   if(!esCad(d.uc)){item.cob='pendente';return;}
   if(!isFinite(+d.unit)||!+d.unit){item.cob='semunit';return;}
@@ -3813,6 +3826,7 @@ function esHtmlHist(){
      ucs.map(function(u){return '<option value="'+esEsc(u)+'"'+(ES.fCli===u?' selected':'')+'>'+esEsc(esNome(porUc[u][0]))+(esCasa(porUc[u][0])?' – '+esEsc(esCasa(porUc[u][0])):'')+' – UC '+esEsc(u)+'</option>';}).join('')+'</select></label>'+
      '<label style="font-size:12px;color:#57534e;font-weight:600">Mostrar<select id="esFSit" style="'+ES_INP+';margin-top:4px">'+
      [['','Todas'],['cli','Cliente não pagou'],['eq','Equatorial não paga'],['ok','Tudo pago'],['disp','Não cobradas']].map(function(o){return '<option value="'+o[0]+'"'+(ES.fSit===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></label>'+
+     (STATE.roleLogado==='admin'?'<div style="width:100%;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid #f5f5f4;padding-top:10px"><button id="esRevisar" '+(ES.rev&&ES.rev.rodando?'disabled ':'')+'style="'+esBtn('#fff','#1c1917','1.5px solid #e7e5e4')+'">'+(ES.rev&&ES.rev.rodando?'⏳ Revisando...':'🔧 Revisar faturas carregadas')+'</button><span style="font-size:12px;color:#57534e">'+(ES.rev?esEsc(ES.rev.status):'Relê os PDFs salvos, corrige UCs lidas errado, junta tudo na casa certa e cria as cobranças que faltam.')+'</span></div>':'')+
      '<div style="font-size:12.5px;color:#57534e;text-align:right">A receber dos clientes: <b style="color:#b91c1c">'+esBRL(penCli.reduce(function(s,x){return s+(+x.pagar||0);},0))+'</b> ('+penCli.length+')<br>'+
      'Faturas Equatorial em aberto: <b style="color:#b91c1c">'+esBRL(penEq.reduce(function(s,x){return s+(+x.totalFatura||0);},0))+'</b> ('+penEq.length+')</div></div></div>';
   ucs.forEach(function(u){
@@ -3965,6 +3979,7 @@ function esLigar(root){
   };
   if(b=document.getElementById('esCfgSalvar'))b.onclick=esSalvarCfg;
   if(b=document.getElementById('esCobrarGer'))b.onclick=function(){ES.cobrarGeradora=true;esDraw();};
+  if(b=document.getElementById('esRevisar'))b.onclick=esRevisar;
   if(b=document.getElementById('esLoteFechar'))b.onclick=function(){ES.lote=null;esDraw();};
   if(b=document.getElementById('esLoteVoltar'))b.onclick=function(){ES.dados=null;ES.chave='';esDraw();};
   root.querySelectorAll('[data-es-lote-abrir]').forEach(function(x){x.onclick=function(){
@@ -4035,6 +4050,7 @@ async function esSalvarCli(k){
     if(!r.ok)throw new Error('HTTP '+r.status);
     ES.cli=ES.cli||{};ES.cli[k]=reg;ES.editCli='';
     if(ES.lote)for(var i=0;i<ES.lote.itens.length;i++){var it=ES.lote.itens[i];if(it.cob==='pendente'&&it.d&&esUcK(it.d.uc)===k)await esCobrancaAuto(it);}
+    try{await esGerarFaltantes(k);}catch(e){}
   }catch(e){alert('Não consegui salvar o cliente: '+e.message);}
   esDraw();
 }
@@ -4502,7 +4518,9 @@ async function esVincular(oldK,paraK){
   var ajusta=function(d){if(d&&esUcK(d.uc)===esUcK(oldK)){d.ucOriginal=d.uc;d.uc=fmt;['geracao','excedente','rateio'].forEach(function(f){((d.scee&&d.scee[f])||[]).forEach(function(x){x.uc=esAl(x.uc);});});return true;}return false;};
   if(ajusta(ES.dados)){var k2=esChave(ES.dados);if(ES.hist&&ES.hist[k2]){ES.chave=k2;ES.salvo=true;}else{ES.chave='';ES.salvo=false;}if(ES.pdfSalvo)ES.pdfSalvo=k2;}
   if(ES.lote)for(var i=0;i<ES.lote.itens.length;i++){var it=ES.lote.itens[i];if(ajusta(it.d)&&it.cob==='pendente')await esCobrancaAuto(it);}
-  ES.editCli='';esDraw();
+  ES.editCli='';
+  try{await esGerarFaltantes(esAl(paraK));}catch(e){}
+  esDraw();
 }
 // só existe uma usina: se ela aparecer com dois números, junta no mais recente
 async function esUnificarUsina(){
@@ -11155,3 +11173,56 @@ function novaConsultaMod5(){
 </script>
 </body>
 </html>
+
+// ---- revisão das faturas já carregadas ----
+// cria as cobranças que faltam (casas com cliente cadastrado), relendo o PDF salvo
+async function esGerarFaltantes(ucK){
+  var criadas=0;
+  var cobradas={};esLista().forEach(function(x){cobradas[esAl(x.uc)]=1;});
+  var ks=Object.keys(ES.scee||{});
+  for(var i=0;i<ks.length;i++){
+    var k=ks[i],rec=ES.scee[k],u=esAl(rec.uc);
+    if(ucK&&u!==ucK)continue;
+    if(ES.hist&&ES.hist[k])continue;
+    if(!rec.temPdf||!esCad(rec.uc))continue;
+    if(rec.ehGeradora&&!cobradas[u])continue;            // usina só se você já cobra ela
+    var d=null;try{d=await esLerPdfSalvo(k);}catch(e){}
+    if(!d)continue;
+    await esCanon(d);
+    if(esChave(d)!==k)continue;
+    var it={d:d,arquivo:d._arquivo,temPdf:true,forcar:!!rec.ehGeradora};
+    await esCobrancaAuto(it);if(it.cob==='criada')criadas++;
+    if(ES.rev){ES.rev.criadas=(ES.rev.criadas||0)+(it.cob==='criada'?1:0);}
+  }
+  return criadas;
+}
+async function esRevisar(){
+  if(ES.rev&&ES.rev.rodando)return;
+  ES.rev={rodando:true,status:'Lendo os PDFs salvos...',criadas:0};esDraw();
+  var bogus=function(k){return /^20\d{11}_/.test(k);};
+  var ks=Object.keys(ES.scee||{}).filter(function(k){return ES.scee[k].temPdf;});
+  var lidos=[],movidas=0,vinc=0,erros=0;
+  for(var i=0;i<ks.length;i++){
+    ES.rev.status='Lendo PDF '+(i+1)+' de '+ks.length+'...';esDraw();
+    try{var d=await esLerPdfSalvo(ks[i]);if(d)lidos.push({k:ks[i],d:d,bruta:esUcK(d.uc)});}catch(e){erros++;}
+  }
+  // 1) aprende: fatura que já está numa casa certa, mas cujo número lido é outro -> é o número antigo dessa casa
+  for(var a=0;a<lidos.length;a++){
+    var L1=lidos[a],ucK=L1.k.split('_')[0];
+    if(bogus(L1.k)||!L1.bruta||L1.bruta===ucK||esAl(L1.bruta)===ucK)continue;
+    if(ES.alias&&ES.alias[L1.bruta])continue;
+    try{await esMigrarUc(L1.bruta,ucK,esUcFmt(ucK),'revisão: número lido no PDF salvo');vinc++;}catch(e){erros++;}
+  }
+  // 2) move o que está no número errado para a casa certa
+  for(var b2=0;b2<lidos.length;b2++){
+    var L2=lidos[b2],uc2=L2.k.split('_')[0],certo=esAl(L2.bruta);
+    if(!certo||certo===uc2||!ES.scee[L2.k])continue;
+    ES.rev.status='Corrigindo '+L2.d.ref+'...';esDraw();
+    try{await esMigrarUc(uc2,certo,esUcFmt(certo),'revisão: UC lida errado');movidas++;}catch(e){erros++;}
+  }
+  // 3) cobranças que faltam
+  ES.rev.status='Criando cobranças que faltam...';esDraw();
+  var cri=0;try{cri=await esGerarFaltantes();}catch(e){erros++;}
+  ES.rev={rodando:false,status:'✅ Revisão feita: '+lidos.length+' PDF(s) relido(s), '+movidas+' fatura(s) corrigida(s), '+vinc+' número(s) antigo(s) aprendido(s), '+cri+' cobrança(s) criada(s)'+(erros?', '+erros+' erro(s)':'')+'.'};
+  esDraw();
+}
