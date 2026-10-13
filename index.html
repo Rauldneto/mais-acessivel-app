@@ -3605,7 +3605,7 @@ function esFaturaCliente(r){
     '.rod{margin-top:22px;font-size:11px;color:#a8a29e;text-align:center}.bar{max-width:760px;margin:16px auto 0;text-align:right}.bar button{background:#d97706;color:#fff;border:none;padding:10px 18px;border-radius:8px;font-weight:800;cursor:pointer;font-size:14px}'+
     '@media print{body{background:#fff}.pg{box-shadow:none;margin:0;max-width:none;padding:10px 6px}.bar{display:none}}</style></head><body>'+
     '<div class="bar"><button onclick="print()">🖨️ Imprimir / salvar PDF</button></div><div class="pg">'+
-    (pago?'<div class="carimbo">PAGO<small>'+esEsc(pago.data)+'</small></div>':'')+
+    (pago?(pago.dispensado?'<div class="carimbo" style="border-color:#78716c;color:#78716c">NÃO COBRADO<small style="color:#78716c">'+esEsc(pago.motivo||'')+'</small></div>':'<div class="carimbo">PAGO<small>'+esEsc(pago.data)+'</small></div>'):'')+
     '<div class="top"><div class="emi"><b>☀️ '+esEsc(cfg.nome||'Energia Solar')+'</b>'+(cfg.doc?'<div>CPF/CNPJ: '+esEsc(cfg.doc)+'</div>':'')+(cfg.fone?'<div>'+esEsc(cfg.fone)+'</div>':'')+'</div>'+
     '<div class="num"><div class="t">FATURA DE ENERGIA SOLAR</div><div class="n">'+esEsc(esNumFatura(r))+'</div><div>Emissão: '+esHoje()+'</div></div></div>'+
     (function(){var cd=esCad(r.uc)||{};return '<div class="box"><div><div class="lbl">Cliente</div><b>'+esEsc(esNome(r))+'</b>'+(cd.doc?'<br>CPF/CNPJ: '+esEsc(cd.doc):'')+(cd.fone?'<br>'+esEsc(cd.fone):'')+'<div class="lbl" style="margin-top:8px">Imóvel</div>'+(cd.casa?esEsc(cd.casa)+'<br>':'')+'UC '+esEsc(r.uc)+(r.endereco?'<br><small>'+esEsc(r.endereco)+'</small>':'')+(r.cliente&&r.cliente!==esNome(r)?'<br><small>Titular da conta Equatorial: '+esEsc(r.cliente)+'</small>':'')+'</div>';})()+
@@ -3756,16 +3756,16 @@ function esHtmlHist(){
      '<label style="font-size:12px;color:#57534e;font-weight:600;min-width:260px">Cliente / UC<select id="esFCli" style="'+ES_INP+';margin-top:4px"><option value="">Todos os clientes ('+ucs.length+')</option>'+
      ucs.map(function(u){return '<option value="'+esEsc(u)+'"'+(ES.fCli===u?' selected':'')+'>'+esEsc(esNome(porUc[u][0]))+(esCasa(porUc[u][0])?' – '+esEsc(esCasa(porUc[u][0])):'')+' – UC '+esEsc(u)+'</option>';}).join('')+'</select></label>'+
      '<label style="font-size:12px;color:#57534e;font-weight:600">Mostrar<select id="esFSit" style="'+ES_INP+';margin-top:4px">'+
-     [['','Todas'],['cli','Cliente não pagou'],['eq','Equatorial não paga'],['ok','Tudo pago']].map(function(o){return '<option value="'+o[0]+'"'+(ES.fSit===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></label>'+
+     [['','Todas'],['cli','Cliente não pagou'],['eq','Equatorial não paga'],['ok','Tudo pago'],['disp','Não cobradas']].map(function(o){return '<option value="'+o[0]+'"'+(ES.fSit===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></label>'+
      '<div style="font-size:12.5px;color:#57534e;text-align:right">A receber dos clientes: <b style="color:#b91c1c">'+esBRL(penCli.reduce(function(s,x){return s+(+x.pagar||0);},0))+'</b> ('+penCli.length+')<br>'+
      'Faturas Equatorial em aberto: <b style="color:#b91c1c">'+esBRL(penEq.reduce(function(s,x){return s+(+x.totalFatura||0);},0))+'</b> ('+penEq.length+')</div></div></div>';
   ucs.forEach(function(u){
     if(ES.fCli&&ES.fCli!==u)return;
     var regs=porUc[u].filter(function(x){
-      if(ES.fSit==='cli')return !x.pagoCliente;if(ES.fSit==='eq')return !x.pagoEquatorial;if(ES.fSit==='ok')return x.pagoCliente&&x.pagoEquatorial;return true;
+      if(ES.fSit==='cli')return !x.pagoCliente;if(ES.fSit==='eq')return !x.pagoEquatorial;if(ES.fSit==='ok')return x.pagoCliente&&x.pagoEquatorial;if(ES.fSit==='disp')return (x.pagoCliente&&x.pagoCliente.dispensado)||(x.pagoEquatorial&&x.pagoEquatorial.dispensado);return true;
     }).sort(function(a,b){return esRefNum(b.ref)-esRefNum(a.ref);});
     if(!regs.length)return;
-    var tot=porUc[u].reduce(function(s,x){s.kwh+=+x.kwh||0;s.lucro+=+x.valorEnergia||0;if(!x.pagoCliente)s.rec+=+x.pagar||0;return s;},{kwh:0,lucro:0,rec:0});
+    var tot=porUc[u].reduce(function(s,x){if(x.pagoCliente&&x.pagoCliente.dispensado)return s;s.kwh+=+x.kwh||0;s.lucro+=+x.valorEnergia||0;if(!x.pagoCliente)s.rec+=+x.pagar||0;return s;},{kwh:0,lucro:0,rec:0});
     h+='<div style="'+ES_CARD+'"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start;margin-bottom:10px">'+
        '<div><div style="font-size:15px;font-weight:800">👤 '+esEsc(esNome(porUc[u][0]))+(esCad(u)?'':' <span style="font-size:11px;color:#b45309;background:#fef3c7;padding:2px 8px;border-radius:10px">sem cadastro</span>')+'</div>'+(esCasa(porUc[u][0])?'<div style="font-size:12.5px;color:#57534e">🏠 '+esEsc(esCasa(porUc[u][0]))+'</div>':'')+'<div style="font-size:12px;color:#78716c">'+(porUc[u][0].endereco?esEsc(porUc[u][0].endereco)+'<br>':'')+'UC '+esEsc(u)+' · '+porUc[u].length+' cobrança(s)</div></div>'+
        '<div style="font-size:12px;color:#57534e;text-align:right">'+esFmt(tot.kwh,2)+' kWh vendidos · Ganho total <b style="color:#92400e">'+esBRL(tot.lucro)+'</b><br>A receber: <b style="color:'+(tot.rec?'#b91c1c':'#15803d')+'">'+esBRL(tot.rec)+'</b></div></div>'+
@@ -3776,9 +3776,9 @@ function esHtmlHist(){
       var tip=ult?'PDF enviado por '+(ult.por||'?')+' em '+new Date(ult.em).toLocaleString('pt-BR')+(up.length>1?' ('+up.length+' envios)':''):'';
       h+='<tr style="border-top:1px solid #f5f5f4"><td style="padding:8px;font-weight:800;color:#d97706;white-space:nowrap" title="'+esEsc(tip)+'">'+esEsc(x.ref)+(up.length>1?' <span style="font-size:10px;color:#a8a29e">×'+up.length+'</span>':'')+'</td>'+
          '<td style="padding:8px;text-align:right">'+esFmt(x.kwh,2)+'</td>'+
-         '<td style="padding:8px;text-align:right;color:#92400e;font-weight:700;white-space:nowrap">'+esBRL(x.valorEnergia)+'</td>'+
+         '<td style="padding:8px;text-align:right;color:#92400e;font-weight:700;white-space:nowrap;'+(x.pagoCliente&&x.pagoCliente.dispensado?'text-decoration:line-through;color:#a8a29e':'')+'">'+esBRL(x.valorEnergia)+'</td>'+
          '<td style="padding:8px;text-align:right;white-space:nowrap">'+esBRL(x.totalFatura)+'</td>'+
-         '<td style="padding:8px;text-align:right;white-space:nowrap;font-weight:800">'+esBRL(x.pagar)+'</td>'+
+         '<td style="padding:8px;text-align:right;white-space:nowrap;font-weight:800;'+(x.pagoCliente&&x.pagoCliente.dispensado?'text-decoration:line-through;color:#a8a29e':'')+'">'+esBRL(x.pagar)+'</td>'+
          '<td style="padding:8px">'+esCampoPg(x,'pagoEquatorial')+'</td><td style="padding:8px">'+esCampoPg(x,'pagoCliente')+'</td>'+
          '<td style="padding:8px;text-align:right;white-space:nowrap">'+
            '<button data-es-abrir="'+esEsc(x._k)+'" style="'+ES_BTN_SM+'" title="Abrir cálculo">Abrir</button> '+
@@ -3801,11 +3801,12 @@ function esFiltrarRel(){
 function esTotais(L){
   return L.reduce(function(t,x){
     var en=+x.valorEnergia||0,pg=+x.pagar||0;
+    if(!x.pagoEquatorial)t.eqAberto+=+x.totalFatura||0;
+    if(x.pagoCliente&&x.pagoCliente.dispensado){t.disp+=pg;t.nDisp++;return t;}
     t.n++;t.kwh+=+x.kwh||0;t.lucro+=en;t.fat+=pg;t.eq+=+x.totalFatura||0;
     t.desc+=(+x.valorCheio||esR((+x.kwh||0)*(+x.unit||0),2))-en;t.eco+=+x.economia||0;
     if(x.pagoCliente){t.rec+=pg;t.lucroRec+=en;}else t.aRec+=pg;
-    if(!x.pagoEquatorial)t.eqAberto+=+x.totalFatura||0;
-    return t;},{n:0,kwh:0,lucro:0,fat:0,eq:0,desc:0,eco:0,rec:0,lucroRec:0,aRec:0,eqAberto:0});
+    return t;},{n:0,kwh:0,lucro:0,fat:0,eq:0,desc:0,eco:0,rec:0,lucroRec:0,aRec:0,eqAberto:0,disp:0,nDisp:0});
 }
 function esHtmlRel(){
   var todos=esLista(),ucs={};todos.forEach(function(x){ucs[x.uc]=esNome(x)+(esCasa(x)?' – '+esCasa(x):'');});
@@ -3822,7 +3823,7 @@ function esHtmlRel(){
   var kpi=function(t,v,cor,sub){return '<div style="'+ES_CARD+';margin:0;padding:14px 16px"><div style="font-size:11px;color:#78716c;font-weight:800;letter-spacing:.4px;text-transform:uppercase">'+t+'</div><div style="font-size:22px;font-weight:900;color:'+cor+';margin-top:4px">'+v+'</div>'+(sub?'<div style="font-size:11.5px;color:#a8a29e;margin-top:2px">'+sub+'</div>':'')+'</div>';};
   h+='<div id="esRelArea"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px">'+
      kpi('💰 Ganho no período',esBRL(T.lucro),'#92400e','Recebido: '+esBRL(T.lucroRec))+
-     kpi('⚡ kWh vendidos',esFmt(T.kwh,2),'#1c1917',T.n+' cobrança(s)')+
+     kpi('⚡ kWh vendidos',esFmt(T.kwh,2),'#1c1917',T.n+' cobrança(s)'+(T.nDisp?' · 🚫 '+T.nDisp+' não cobrada(s): '+esBRL(T.disp):''))+
      kpi('🧾 Faturado aos clientes',esBRL(T.fat),'#1c1917','Inclui '+esBRL(T.eq)+' de Equatorial')+
      kpi('✅ Recebido',esBRL(T.rec),'#15803d','A receber: '+esBRL(T.aRec))+
      kpi('🎁 Desconto concedido',esBRL(T.desc),'#57534e','Economia dos clientes: '+esBRL(T.eco))+
@@ -3854,7 +3855,7 @@ function esRelCsv(){
   var L=esFiltrarRel();if(!L.length){alert('Nada para exportar no período.');return;}
   var n=function(v,d){return (isFinite(+v)?(+v):0).toFixed(d).replace('.',',');};
   var linhas=[['Referencia','Cliente','Imovel','Titular Equatorial','UC','kWh','Valor unit','Desconto %','Valor unit c/ desc','Ganho (energia)','Fatura Equatorial','Total cliente','Valor real','Economia cliente','Venc. cliente','Cliente pagou em','Equatorial paga em']];
-  L.forEach(function(x){linhas.push([x.ref,esNome(x),esCasa(x),x.cliente,x.uc,n(x.kwh,2),n(x.unit,6),n(x.desc,2),n(x.unitDesc,6),n(x.valorEnergia,2),n(x.totalFatura,2),n(x.pagar,2),n(x.real,2),n(x.economia,2),x.vencCli||'',x.pagoCliente?x.pagoCliente.data:'',x.pagoEquatorial?x.pagoEquatorial.data:'']);});
+  L.forEach(function(x){linhas.push([x.ref,esNome(x),esCasa(x),x.cliente,x.uc,n(x.kwh,2),n(x.unit,6),n(x.desc,2),n(x.unitDesc,6),n(x.valorEnergia,2),n(x.totalFatura,2),n(x.pagar,2),n(x.real,2),n(x.economia,2),x.vencCli||'',x.pagoCliente?(x.pagoCliente.dispensado?'nao cobrado'+(x.pagoCliente.motivo?' ('+x.pagoCliente.motivo+')':''):x.pagoCliente.data):'',x.pagoEquatorial?(x.pagoEquatorial.dispensado?'nao pago'+(x.pagoEquatorial.motivo?' ('+x.pagoEquatorial.motivo+')':''):x.pagoEquatorial.data):'']);});
   var csv='﻿'+linhas.map(function(l){return l.map(function(c){c=String(c==null?'':c);return /[;"\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;}).join(';');}).join('\r\n');
   var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download='energia-solar_'+ES.relDe+'_a_'+ES.relAte+'.csv';document.body.appendChild(a);a.click();a.remove();
@@ -3915,6 +3916,8 @@ function esLigar(root){
     ES.dados=d;ES.chave=hrec?k:'';ES.salvo=!!hrec;ES.desc=hrec?hrec.desc:esDescPara(d.uc);ES.vencCli=hrec?(hrec.vencCli||d.venc):(d.venc||'');ES.arquivo=it.arquivo;ES.pdfB64=null;ES.pdfSalvo=hrec?'':(it.temPdf?k:'');ES.cobrarGeradora=false;
     esDraw();window.scrollTo({top:0,behavior:'smooth'});};});
   root.querySelectorAll('[data-es-pgdata]').forEach(function(x){x.onchange=function(){esPagarData(x.getAttribute('data-k'),x.getAttribute('data-es-pgdata'),x.value);};});
+  root.querySelectorAll('[data-es-pgnao]').forEach(function(x){x.onclick=function(){esNaoCobrar(x.getAttribute('data-k'),x.getAttribute('data-es-pgnao'));};});
+  root.querySelectorAll('[data-es-pgdesf]').forEach(function(x){x.onclick=function(){var k=x.getAttribute('data-k'),t=x.getAttribute('data-es-pgdesf');if(confirm('Desfazer? A fatura volta a ficar pendente.'))esPagarStatus(k,t,null);};});
   root.querySelectorAll('[data-es-pghoje]').forEach(function(x){x.onclick=function(){var t=new Date();esPagarData(x.getAttribute('data-k'),x.getAttribute('data-es-pghoje'),t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'));};});
   if(b=document.getElementById('esGerBase'))b.onchange=function(){ES.gerBase=b.value;esDraw();};
   [['esGCli','gCli'],['esGDe','gDe'],['esGAte','gAte']].forEach(function(p){var el=document.getElementById(p[0]);if(el)el.onchange=function(){ES[p[1]]=el.value;esDraw();};});
@@ -4317,11 +4320,31 @@ async function esSalvarKwp(){
 // ---- datas de pagamento (Equatorial e cliente) ----
 function esCampoPg(rec,tipo){
   var p=rec[tipo],venc=tipo==='pagoEquatorial'?rec.venc:(rec.vencCli||rec.venc),k=esEsc(rec._k||'');
-  var vencido=!p&&esVencido(venc),cor=p?'#15803d':vencido?'#b91c1c':'#78716c';
   if(!rec._k)return '<span style="font-size:12px;color:#a8a29e">salve para registrar</span>';
+  var nao=tipo==='pagoEquatorial'?'Não pagar':'Não cobrar';
+  if(p&&p.dispensado)return '<div style="min-width:150px"><div style="font-size:10.5px;font-weight:800;color:#57534e">🚫 '+(tipo==='pagoEquatorial'?'Não será paga':'Não cobrado')+'</div>'+
+    '<div style="display:flex;gap:4px;margin-top:3px;align-items:center;flex-wrap:wrap"><span title="Marcado por '+esEsc(p.por||'')+(p.em?' em '+esEsc(new Date(p.em).toLocaleDateString('pt-BR')):'')+'" style="font-size:12px;background:#f5f5f4;border:1.5px dashed #a8a29e;border-radius:6px;padding:4px 8px;color:#57534e;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esEsc(p.motivo||'sem motivo')+'</span>'+
+    '<button data-es-pgdesf="'+tipo+'" data-k="'+k+'" style="'+ES_BTN_SM+';padding:3px 7px;font-size:11px">Desfazer</button></div></div>';
+  var vencido=!p&&esVencido(venc),cor=p?'#15803d':vencido?'#b91c1c':'#78716c';
   return '<div style="min-width:150px"><div style="font-size:10.5px;font-weight:800;color:'+cor+'">'+(p?'✔ Pago':vencido?'⚠️ Vencido':'⏳ Pendente')+(venc?' <span style="font-weight:500;color:#a8a29e">· venc. '+esEsc(venc)+'</span>':'')+'</div>'+
-    '<div style="display:flex;gap:4px;margin-top:3px;align-items:center"><input type="date" data-es-pgdata="'+tipo+'" data-k="'+k+'" value="'+(p?esBrParaIso(p.data):'')+'" title="'+(p?'Registrado por '+esEsc(p.por||'')+'. Apague a data para desfazer.':'Escolha a data do pagamento')+'" style="padding:4px 6px;border:1.5px solid '+(p?'#86efac':vencido?'#fca5a5':'#e7e5e4')+';background:'+(p?'#f0fdf4':'#fff')+';border-radius:6px;font-family:inherit;font-size:12px">'+
-    (p?'':'<button data-es-pghoje="'+tipo+'" data-k="'+k+'" style="'+ES_BTN_SM+';padding:3px 7px;font-size:11px">Hoje</button>')+'</div></div>';
+    '<div style="display:flex;gap:4px;margin-top:3px;align-items:center;flex-wrap:wrap"><input type="date" data-es-pgdata="'+tipo+'" data-k="'+k+'" value="'+(p?esBrParaIso(p.data):'')+'" title="'+(p?'Registrado por '+esEsc(p.por||'')+'. Apague a data para desfazer.':'Escolha a data do pagamento')+'" style="padding:4px 6px;border:1.5px solid '+(p?'#86efac':vencido?'#fca5a5':'#e7e5e4')+';background:'+(p?'#f0fdf4':'#fff')+';border-radius:6px;font-family:inherit;font-size:12px">'+
+    (p?'':'<button data-es-pghoje="'+tipo+'" data-k="'+k+'" style="'+ES_BTN_SM+';padding:3px 7px;font-size:11px">Hoje</button><button data-es-pgnao="'+tipo+'" data-k="'+k+'" title="'+nao+' esta fatura" style="'+ES_BTN_SM+';padding:3px 7px;font-size:11px;color:#57534e">🚫 '+nao+'</button>')+'</div></div>';
+}
+async function esPagarStatus(k,tipo,novo){
+  var rec=ES.hist&&ES.hist[k];if(!rec)return;
+  try{
+    var r=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_PATH+'/'+k+'/'+tipo+'.json',novo?{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(novo)}:{method:'DELETE'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    rec[tipo]=novo;
+  }catch(e){alert('Não consegui registrar: '+e.message);}
+  esDraw();
+}
+async function esNaoCobrar(k,tipo){
+  var rec=ES.hist&&ES.hist[k];if(!rec)return;
+  var txt=tipo==='pagoEquatorial'?'Marcar a fatura Equatorial de '+rec.ref+' como "não será paga"?':'Não cobrar o cliente na fatura de '+rec.ref+' ('+esBRL(rec.pagar)+')?\nEla sai do "a receber" e do ganho no relatório.';
+  var mot=prompt(txt+'\n\nMotivo (opcional): ex. cortesia, acerto com outro serviço, mês de teste...','');
+  if(mot===null)return;
+  await esPagarStatus(k,tipo,{dispensado:true,motivo:mot.trim(),por:STATE.loginUser||'',em:Date.now()});
 }
 async function esPagarData(k,tipo,iso){
   var rec=ES.hist&&ES.hist[k];if(!rec)return;
