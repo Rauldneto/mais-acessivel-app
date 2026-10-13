@@ -3054,6 +3054,8 @@ function cqPdfAbrir(corpo){
   var w=window.open('','_blank');
   if(!w){alert('O navegador bloqueou a janela de impressão. Libere pop-ups para este site e tente de novo.');return;}
   var agora=new Date();
+  var hdrImg=document.querySelector('header img[src^="data:image"]');
+  var logo=hdrImg?hdrImg.src:(typeof LOGO_MAIS_ACESSIVEL_B64!=='undefined'?LOGO_MAIS_ACESSIVEL_B64:'');
   w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+CQ_PDF_TITULO+'</title><style>'+
     '@page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#1c1917;font-size:11px;margin:0}'+
     'h1{font-size:20px;margin:0 0 2px;color:#b45309}.sub{color:#78716c;font-size:10.5px;margin-bottom:12px}'+
@@ -3063,6 +3065,9 @@ function cqPdfAbrir(corpo){
     'table{width:100%;border-collapse:collapse;margin-bottom:8px}th{background:#f5f5f4;text-align:left;font-size:9.5px;text-transform:uppercase;color:#57534e}th,td{padding:5px 6px;border-bottom:1px solid #e7e5e4;vertical-align:top}'+
     'tr{page-break-inside:avoid}.err{color:#b91c1c}.ok{color:#15803d;font-weight:bold}.av{color:#b45309}.num{font-weight:bold;white-space:nowrap}'+
     '.rod{margin-top:14px;color:#a8a29e;font-size:9.5px;text-align:right}'+
+    '.cab{display:flex;align-items:center;gap:16px;padding-bottom:10px;border-bottom:3px solid #f59e0b;margin-bottom:12px}.cab img{height:58px}'+
+    '.emp{flex:1;font-size:9.5px;color:#57534e;line-height:1.55}.emp b.rs{display:block;font-size:11.5px;color:#2D3061}'+
+    '.doc{text-align:right}.doc h1{margin:0;font-size:17px;color:#2D3061;text-transform:uppercase;letter-spacing:.3px}.doc .sub{margin:2px 0 0}'+
     '.grupo{margin:14px 0 6px;font-size:12.5px;font-weight:bold;color:#b45309;border-left:4px solid #d97706;padding:3px 8px;background:#fff7ed;page-break-after:avoid}'+
     '.card{border:1px solid #e7e5e4;border-radius:8px;margin:0 0 9px;page-break-inside:avoid;overflow:hidden}.card.bad{border-left:5px solid #dc2626}.card.good{border-left:5px solid #16a34a}'+
     '.ch{display:flex;align-items:center;gap:10px;background:#fafaf9;padding:7px 10px;border-bottom:1px solid #e7e5e4}.ch>div:first-child{flex:1}'+
@@ -3071,9 +3076,11 @@ function cqPdfAbrir(corpo){
     '.cb{padding:6px 10px 8px}table.fix{margin:0}table.fix th{background:#fef2f2;color:#991b1b}table.fix td{font-size:10.5px}td.k{color:#b91c1c;font-weight:bold;text-align:center}'+
     '.box{display:inline-block;width:12px;height:12px;border:1.5px solid #57534e;border-radius:2px}.lemb{margin-top:5px;font-size:10px;color:#92400e;background:#fffbeb;border-radius:4px;padding:4px 7px}'+
     'table.resumo{width:auto;min-width:60%}'+
-    '</style></head><body><h1>'+CQ_PDF_TITULO+'</h1><div class="sub">Mais Acessível · gerado em '+agora.toLocaleDateString('pt-BR')+' às '+agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+
-    (STATE&&STATE.usuarioLogado?' por '+cqEsc(STATE.usuarioLogado):'')+'</div>'+corpo+
-    '<div class="rod">'+CQ_PDF_TITULO+' · Mais Acessível</div></body></html>');
+    '</style></head><body><div class="cab">'+(logo?'<img src="'+logo+'" alt="Mais Acessível">':'')+
+    '<div class="emp"><b class="rs">JDFER COMÉRCIO E SERVIÇOS LTDA — Mais Acessível</b>CNPJ 35.017.646/0001-66<br>Rua FL-42, Qd. 12 Lt. 03 Sl. 02/03 · Goiânia - GO · CEP 74595-286<br>contato@maisacessivel.com.br</div>'+
+    '<div class="doc"><h1>'+CQ_PDF_TITULO+'</h1><div class="sub">Emitido em '+agora.toLocaleDateString('pt-BR')+' às '+agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+
+    (STATE&&STATE.usuarioLogado?'<br>por '+cqEsc(STATE.usuarioLogado):'')+'</div></div></div>'+corpo+
+    '<div class="rod">'+CQ_PDF_TITULO+' · Mais Acessível — Tudo para Acessibilidade · CNPJ 35.017.646/0001-66</div></body></html>');
   w.document.close();
   setTimeout(function(){w.focus();w.print();},400);
 }
