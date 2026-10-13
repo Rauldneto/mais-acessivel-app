@@ -3142,11 +3142,16 @@ function cqPdfRelatorio(){
 // ===================== MÓDULO ENERGIA SOLAR (mod11) =====================
 // Lê a fatura da Equatorial (PDF) e monta a cobrança da energia injetada (SCEE):
 // kWh injetados × (valor unit. do consumo não compensado − desconto%) + total da fatura Equatorial.
-// Firebase: energiaSolar/{uc_ref} (cobranças + pagamentos), energiaSolarPdf/{uc_ref} (PDF base64), energiaSolarConfig (dados da fatura do cliente)
+// Firebase: energiaSolar/{uc_ref} (cobranças + pagamentos), energiaSolarPdf/{uc_ref} (PDF base64), energiaSolarConfig (dados da fatura do cliente), energiaSolarClientes/{uc} (quem é o cliente de cada casa)
 var FIREBASE_ENERGIA_PATH='energiaSolar';
 var FIREBASE_ENERGIA_PDF_PATH='energiaSolarPdf';
 var FIREBASE_ENERGIA_CFG_PATH='energiaSolarConfig';
-var ES={aba:'nova',dados:null,pdfB64:null,erro:'',lendo:false,desc:17,vencCli:'',hist:null,histCarregando:false,cfg:null,cfgOk:false,salvo:false,chave:'',arquivo:'',fCli:'',fSit:'',relDe:'',relAte:'',relCli:''};
+var FIREBASE_ENERGIA_CLI_PATH='energiaSolarClientes'; // cadastro do cliente de cada casa, chave = nº da UC (só dígitos)
+var ES={aba:'nova',dados:null,pdfB64:null,erro:'',lendo:false,desc:17,vencCli:'',hist:null,histCarregando:false,cfg:null,cfgOk:false,salvo:false,chave:'',arquivo:'',fCli:'',fSit:'',relDe:'',relAte:'',relCli:'',cli:null,editCli:'',cliCtx:{}};
+function esUcK(uc){return String(uc||'').replace(/\D/g,'');}
+function esCad(uc){return (ES.cli&&ES.cli[esUcK(uc)])||null;}
+function esNome(r){var c=esCad(r.uc);return c&&c.nome?c.nome:(r.cliente||'');}
+function esCasa(r){var c=esCad(r.uc);return c&&c.casa?c.casa:'';}
 function esEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function esNum(s){if(s==null)return NaN;s=String(s).replace(/R\$|\*/g,'').trim();if(!/^-?[\d.]*\d(,\d+)?$/.test(s))return NaN;return parseFloat(s.replace(/\./g,'').replace(',','.'));}
 function esR(n,d){var f=Math.pow(10,d);return Math.round((n+(n<0?-1:1)*1e-9)*f)/f;}
@@ -3280,6 +3285,7 @@ async function esCarregar(){
   ES.histCarregando=true;
   try{var r=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_PATH+'.json');ES.hist=(r.ok?await r.json():null)||{};}catch(e){ES.hist={};}
   try{var r2=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_CFG_PATH+'.json');ES.cfg=(r2.ok?await r2.json():null)||{};}catch(e){ES.cfg={};}
+  try{var r3=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_CLI_PATH+'.json');ES.cli=(r3.ok?await r3.json():null)||{};}catch(e){ES.cli={};}
   ES.histCarregando=false;if(STATE.modulo==='mod11')esDraw();
 }
 function esMontarReg(d){
@@ -3293,6 +3299,7 @@ function esMontarReg(d){
 async function esSalvar(){
   var d=ES.dados;if(!d)return;
   if(!d.uc||!d.ref){alert('Faltam a UC ou a referência da fatura.');return;}
+  if(!esCad(d.uc)){alert('Cadastre primeiro o cliente desta casa (quadro amarelo acima).');return;}
   var k=esChave(d),ant=(ES.hist||{})[k]||{},reg=esMontarReg(d),agora=Date.now();
   reg.pagoEquatorial=ant.pagoEquatorial||null;reg.pagoCliente=ant.pagoCliente||null;
   reg.criadoEm=ant.criadoEm||agora;reg.atualizadoEm=agora;reg.salvoPor=STATE.loginUser||'';
@@ -3368,7 +3375,7 @@ function esAbrirHist(k){
 
 // ---- textos e linhas do demonstrativo ----
 function esResumoTexto(r){
-  return '☀️ *Energia solar – '+(r.ref||'')+'*\n'+(r.cliente||'')+' – UC '+(r.uc||'')+'\n'+
+  return '☀️ *Energia solar – '+(r.ref||'')+'*\n'+esNome(r)+(esCasa(r)?' ('+esCasa(r)+')':'')+'\n'+
     (r.leitAnt?'Leitura: '+r.leitAnt+' a '+r.leitAtu+'\n':'')+'\n'+
     'Energia injetada: '+esFmt(r.kwh,2)+' kWh\n'+
     'Valor unit. c/ desconto ('+esFmt(r.desc,0)+'%): R$ '+esFmt(r.unitDesc,6)+'\n'+
@@ -3413,7 +3420,7 @@ function esFaturaCliente(r){
   });
   if(Math.abs(net)>=0.01)itensEq+=tr('Diferença SCEE',esBRL(net));
   var pago=r.pagoCliente;
-  var html='<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Fatura '+esEsc(esNumFatura(r))+' – '+esEsc(r.cliente)+'</title><style>'+
+  var html='<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Fatura '+esEsc(esNumFatura(r))+' – '+esEsc(esNome(r))+'</title><style>'+
     '*{box-sizing:border-box}body{font-family:"Segoe UI",Arial,sans-serif;color:#1c1917;margin:0;background:#f5f5f4}'+
     '.pg{max-width:760px;margin:24px auto;background:#fff;padding:34px 38px;border-radius:10px;box-shadow:0 2px 14px rgba(0,0,0,.08);position:relative}'+
     '.top{display:flex;justify-content:space-between;gap:20px;border-bottom:3px solid #d97706;padding-bottom:16px}'+
@@ -3434,7 +3441,7 @@ function esFaturaCliente(r){
     (pago?'<div class="carimbo">PAGO<small>'+esEsc(pago.data)+'</small></div>':'')+
     '<div class="top"><div class="emi"><b>☀️ '+esEsc(cfg.nome||'Energia Solar')+'</b>'+(cfg.doc?'<div>CPF/CNPJ: '+esEsc(cfg.doc)+'</div>':'')+(cfg.fone?'<div>'+esEsc(cfg.fone)+'</div>':'')+'</div>'+
     '<div class="num"><div class="t">FATURA DE ENERGIA SOLAR</div><div class="n">'+esEsc(esNumFatura(r))+'</div><div>Emissão: '+esHoje()+'</div></div></div>'+
-    '<div class="box"><div><div class="lbl">Cliente</div><b>'+esEsc(r.cliente)+'</b>'+(r.doc?'<br>CPF/CNPJ: '+esEsc(r.doc):'')+'<br>UC '+esEsc(r.uc)+(r.endereco?'<br><small>'+esEsc(r.endereco)+'</small>':'')+'</div>'+
+    (function(){var cd=esCad(r.uc)||{};return '<div class="box"><div><div class="lbl">Cliente</div><b>'+esEsc(esNome(r))+'</b>'+(cd.doc?'<br>CPF/CNPJ: '+esEsc(cd.doc):'')+(cd.fone?'<br>'+esEsc(cd.fone):'')+'<div class="lbl" style="margin-top:8px">Imóvel</div>'+(cd.casa?esEsc(cd.casa)+'<br>':'')+'UC '+esEsc(r.uc)+(r.endereco?'<br><small>'+esEsc(r.endereco)+'</small>':'')+(r.cliente&&r.cliente!==esNome(r)?'<br><small>Titular da conta Equatorial: '+esEsc(r.cliente)+'</small>':'')+'</div>';})()+
     '<div><div class="lbl">Referência</div><b style="font-size:17px">'+esEsc(r.ref)+'</b>'+(r.leitAnt?'<br>Leitura: '+esEsc(r.leitAnt)+' a '+esEsc(r.leitAtu)+(r.dias?' ('+r.dias+' dias)':''):'')+
       '<div class="lbl" style="margin-top:8px">Vencimento</div><b style="font-size:17px;color:#b91c1c">'+esEsc(r.vencCli||r.venc||'—')+'</b></div></div>'+
     '<h3>1. Energia solar fornecida</h3><table>'+
@@ -3483,7 +3490,7 @@ var ES_BTN_SM='background:#fff;color:#1c1917;border:1.5px solid #e7e5e4;padding:
 
 function esDraw(){
   var root=document.getElementById('esRoot');if(!root)return;
-  var abas=[['nova','📄 Nova cobrança'],['hist','📚 Histórico por cliente'],['rel','📈 Relatório de ganhos']];
+  var abas=[['nova','📄 Nova cobrança'],['hist','📚 Histórico por cliente'],['cli','👥 Clientes'],['rel','📈 Relatório de ganhos']];
   if(STATE.roleLogado==='admin')abas.push(['cfg','⚙️ Configurar']);
   var h='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">';
   abas.forEach(function(a){var at=ES.aba===a[0];h+='<button data-es-aba="'+a[0]+'" style="'+esBtn(at?'#d97706':'#fff',at?'#fff':'#57534e',at?'none':'1.5px solid #e7e5e4')+';border-radius:20px">'+a[1]+'</button>';});
@@ -3491,6 +3498,7 @@ function esDraw(){
   if(ES.aba==='hist')h+=esHtmlHist();
   else if(ES.aba==='rel')h+=esHtmlRel();
   else if(ES.aba==='cfg')h+=esHtmlCfg();
+  else if(ES.aba==='cli')h+=esHtmlClientes();
   else h+=esHtmlNova();
   h+='<style>#esRoot table td,#esRoot table th{font-family:\'Segoe UI\',sans-serif}</style>';
   root.innerHTML=h;
@@ -3512,10 +3520,15 @@ function esHtmlNova(){
   var rec=ES.chave&&ES.hist&&ES.hist[ES.chave];
   if(rec){r.pagoCliente=rec.pagoCliente;r.pagoEquatorial=rec.pagoEquatorial;r._k=ES.chave;}
   h+='<div style="'+ES_CARD+'"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">'+
-     '<div><div style="font-size:16px;font-weight:800;color:#1c1917">'+esEsc(d.cliente||'—')+'</div>'+
+     '<div>'+esHtmlCliTopo(d)+
      '<div style="font-size:12.5px;color:#78716c;margin-top:2px">UC <b>'+esEsc(d.uc||'—')+'</b>'+(d.endereco?' · '+esEsc(d.endereco):'')+'</div>'+
      '<div style="font-size:12.5px;color:#78716c;margin-top:2px">'+(d.leitAnt?'Leitura '+esEsc(d.leitAnt)+' a '+esEsc(d.leitAtu)+(d.dias?' ('+d.dias+' dias)':''):'')+(d.venc?' · Venc. Equatorial '+esEsc(d.venc):'')+'</div></div>'+
      '<div style="text-align:right"><div style="font-size:11px;color:#a8a29e;font-weight:700;letter-spacing:.5px">REFERÊNCIA</div><div style="font-size:22px;font-weight:900;color:#d97706">'+esEsc(d.ref||'—')+'</div></div></div>';
+  var cadN=esCad(d.uc);
+  if(!cadN||ES.editCli===esUcK(d.uc))h+='<div style="margin-top:12px;background:#fefce8;border:2px solid #facc15;border-radius:12px;padding:14px 16px">'+
+     '<div style="font-size:14px;font-weight:800;color:#854d0e">👤 '+(cadN?'Editar cliente desta casa':'Quem é o cliente desta casa?')+'</div>'+
+     '<div style="font-size:12.5px;color:#713f12;margin:4px 0 10px">A conta está em nome de <b>'+esEsc(d.cliente||'—')+'</b>. Informe quem usa este imóvel. O cadastro fica ligado à UC e ao endereço, e nas próximas faturas desta casa o cliente aparece sozinho.</div>'+
+     esFormCli(d.uc,d.endereco,d.cliente)+'</div>';
   if(d.avisos&&d.avisos.length)h+='<div style="margin-top:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#9a3412;line-height:1.6">'+d.avisos.map(esEsc).join('<br>')+'</div>';
   h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:14px">'+
      '<label style="font-size:12px;color:#57534e;font-weight:600">Energia injetada (kWh)<input id="esKwh" type="number" step="0.01" value="'+r.kwh+'" style="'+ES_INP+';margin-top:4px"></label>'+
@@ -3557,11 +3570,11 @@ function esHtmlHist(){
   var L=esLista();
   if(!L.length)return h+'<div style="font-size:13px;color:#a8a29e">Nenhuma cobrança salva ainda. Envie uma fatura em "Nova cobrança" e clique em Salvar.</div></div>';
   var porUc={};L.forEach(function(x){(porUc[x.uc]=porUc[x.uc]||[]).push(x);});
-  var ucs=Object.keys(porUc).sort(function(a,b){return (porUc[a][0].cliente||'').localeCompare(porUc[b][0].cliente||'');});
+  var ucs=Object.keys(porUc).sort(function(a,b){return esNome(porUc[a][0]).localeCompare(esNome(porUc[b][0]));});
   var penCli=L.filter(function(x){return !x.pagoCliente;}),penEq=L.filter(function(x){return !x.pagoEquatorial;});
   h+='<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between">'+
      '<label style="font-size:12px;color:#57534e;font-weight:600;min-width:260px">Cliente / UC<select id="esFCli" style="'+ES_INP+';margin-top:4px"><option value="">Todos os clientes ('+ucs.length+')</option>'+
-     ucs.map(function(u){return '<option value="'+esEsc(u)+'"'+(ES.fCli===u?' selected':'')+'>'+esEsc(porUc[u][0].cliente)+' – UC '+esEsc(u)+'</option>';}).join('')+'</select></label>'+
+     ucs.map(function(u){return '<option value="'+esEsc(u)+'"'+(ES.fCli===u?' selected':'')+'>'+esEsc(esNome(porUc[u][0]))+(esCasa(porUc[u][0])?' – '+esEsc(esCasa(porUc[u][0])):'')+' – UC '+esEsc(u)+'</option>';}).join('')+'</select></label>'+
      '<label style="font-size:12px;color:#57534e;font-weight:600">Mostrar<select id="esFSit" style="'+ES_INP+';margin-top:4px">'+
      [['','Todas'],['cli','Cliente não pagou'],['eq','Equatorial não paga'],['ok','Tudo pago']].map(function(o){return '<option value="'+o[0]+'"'+(ES.fSit===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></label>'+
      '<div style="font-size:12.5px;color:#57534e;text-align:right">A receber dos clientes: <b style="color:#b91c1c">'+esBRL(penCli.reduce(function(s,x){return s+(+x.pagar||0);},0))+'</b> ('+penCli.length+')<br>'+
@@ -3574,7 +3587,7 @@ function esHtmlHist(){
     if(!regs.length)return;
     var tot=porUc[u].reduce(function(s,x){s.kwh+=+x.kwh||0;s.lucro+=+x.valorEnergia||0;if(!x.pagoCliente)s.rec+=+x.pagar||0;return s;},{kwh:0,lucro:0,rec:0});
     h+='<div style="'+ES_CARD+'"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start;margin-bottom:10px">'+
-       '<div><div style="font-size:15px;font-weight:800">👤 '+esEsc(porUc[u][0].cliente)+'</div><div style="font-size:12px;color:#78716c">UC '+esEsc(u)+' · '+porUc[u].length+' cobrança(s)</div></div>'+
+       '<div><div style="font-size:15px;font-weight:800">👤 '+esEsc(esNome(porUc[u][0]))+(esCad(u)?'':' <span style="font-size:11px;color:#b45309;background:#fef3c7;padding:2px 8px;border-radius:10px">sem cadastro</span>')+'</div>'+(esCasa(porUc[u][0])?'<div style="font-size:12.5px;color:#57534e">🏠 '+esEsc(esCasa(porUc[u][0]))+'</div>':'')+'<div style="font-size:12px;color:#78716c">'+(porUc[u][0].endereco?esEsc(porUc[u][0].endereco)+'<br>':'')+'UC '+esEsc(u)+' · '+porUc[u].length+' cobrança(s)</div></div>'+
        '<div style="font-size:12px;color:#57534e;text-align:right">'+esFmt(tot.kwh,2)+' kWh vendidos · Ganho total <b style="color:#92400e">'+esBRL(tot.lucro)+'</b><br>A receber: <b style="color:'+(tot.rec?'#b91c1c':'#15803d')+'">'+esBRL(tot.rec)+'</b></div></div>'+
        '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:820px"><tr style="text-align:left;color:#78716c;font-size:11px;text-transform:uppercase;letter-spacing:.3px">'+
        '<th style="padding:6px 8px">Ref.</th><th style="padding:6px 8px;text-align:right">kWh</th><th style="padding:6px 8px;text-align:right">Ganho</th><th style="padding:6px 8px;text-align:right">Fat. Equatorial</th><th style="padding:6px 8px;text-align:right">Cliente paga</th><th style="padding:6px 8px">Pagamentos</th><th></th></tr>';
@@ -3615,7 +3628,7 @@ function esTotais(L){
     return t;},{n:0,kwh:0,lucro:0,fat:0,eq:0,desc:0,eco:0,rec:0,lucroRec:0,aRec:0,eqAberto:0});
 }
 function esHtmlRel(){
-  var todos=esLista(),ucs={};todos.forEach(function(x){ucs[x.uc]=x.cliente;});
+  var todos=esLista(),ucs={};todos.forEach(function(x){ucs[x.uc]=esNome(x)+(esCasa(x)?' – '+esCasa(x):'');});
   var L=esFiltrarRel(),T=esTotais(L);
   var h='<div style="'+ES_CARD+'"><h2 style="margin:0 0 12px;font-size:18px">📈 Relatório de ganhos</h2>'+
      '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">'+
@@ -3652,7 +3665,7 @@ function esHtmlRel(){
   h+='<div style="'+ES_CARD+'"><div style="font-size:15px;font-weight:800;margin-bottom:10px">Por cliente</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:640px">'+
      '<tr style="color:#78716c;font-size:11px;text-transform:uppercase"><th style="padding:6px 8px;text-align:left">Cliente</th><th style="'+th+'">Meses</th><th style="'+th+'">kWh</th><th style="'+th+'">Ganho</th><th style="'+th+'">Recebido</th><th style="'+th+'">A receber</th></tr>';
   Object.keys(cl).sort(function(a,b){return esTotais(cl[b]).lucro-esTotais(cl[a]).lucro;}).forEach(function(u){var t=esTotais(cl[u]);
-    h+='<tr><td style="padding:8px;border-top:1px solid #f5f5f4">'+esEsc(cl[u][0].cliente)+'<div style="font-size:11px;color:#a8a29e">UC '+esEsc(u)+'</div></td><td style="'+td+'">'+t.n+'</td><td style="'+td+'">'+esFmt(t.kwh,2)+'</td>'+
+    h+='<tr><td style="padding:8px;border-top:1px solid #f5f5f4">'+esEsc(esNome(cl[u][0]))+'<div style="font-size:11px;color:#a8a29e">'+(esCasa(cl[u][0])?esEsc(esCasa(cl[u][0]))+' · ':'')+'UC '+esEsc(u)+'</div></td><td style="'+td+'">'+t.n+'</td><td style="'+td+'">'+esFmt(t.kwh,2)+'</td>'+
        '<td style="'+td+';font-weight:800;color:#92400e">'+esBRL(t.lucro)+'</td><td style="'+td+';color:#15803d">'+esBRL(t.rec)+'</td><td style="'+td+';color:'+(t.aRec?'#b91c1c':'#a8a29e')+'">'+esBRL(t.aRec)+'</td></tr>';});
   h+='</table></div></div></div>';
   return h;
@@ -3660,8 +3673,8 @@ function esHtmlRel(){
 function esRelCsv(){
   var L=esFiltrarRel();if(!L.length){alert('Nada para exportar no período.');return;}
   var n=function(v,d){return (isFinite(+v)?(+v):0).toFixed(d).replace('.',',');};
-  var linhas=[['Referencia','Cliente','UC','kWh','Valor unit','Desconto %','Valor unit c/ desc','Ganho (energia)','Fatura Equatorial','Total cliente','Valor real','Economia cliente','Venc. cliente','Cliente pagou em','Equatorial paga em']];
-  L.forEach(function(x){linhas.push([x.ref,x.cliente,x.uc,n(x.kwh,2),n(x.unit,6),n(x.desc,2),n(x.unitDesc,6),n(x.valorEnergia,2),n(x.totalFatura,2),n(x.pagar,2),n(x.real,2),n(x.economia,2),x.vencCli||'',x.pagoCliente?x.pagoCliente.data:'',x.pagoEquatorial?x.pagoEquatorial.data:'']);});
+  var linhas=[['Referencia','Cliente','Imovel','Titular Equatorial','UC','kWh','Valor unit','Desconto %','Valor unit c/ desc','Ganho (energia)','Fatura Equatorial','Total cliente','Valor real','Economia cliente','Venc. cliente','Cliente pagou em','Equatorial paga em']];
+  L.forEach(function(x){linhas.push([x.ref,esNome(x),esCasa(x),x.cliente,x.uc,n(x.kwh,2),n(x.unit,6),n(x.desc,2),n(x.unitDesc,6),n(x.valorEnergia,2),n(x.totalFatura,2),n(x.pagar,2),n(x.real,2),n(x.economia,2),x.vencCli||'',x.pagoCliente?x.pagoCliente.data:'',x.pagoEquatorial?x.pagoEquatorial.data:'']);});
   var csv='﻿'+linhas.map(function(l){return l.map(function(c){c=String(c==null?'':c);return /[;"\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c;}).join(';');}).join('\r\n');
   var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download='energia-solar_'+ES.relDe+'_a_'+ES.relAte+'.csv';document.body.appendChild(a);a.click();a.remove();
@@ -3714,6 +3727,10 @@ function esLigar(root){
     (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){self.textContent='✅ Copiado!';setTimeout(function(){self.textContent='📋 Copiar resumo (WhatsApp)';},1500);}).catch(function(){prompt('Copie o resumo:',t);});
   };
   if(b=document.getElementById('esCfgSalvar'))b.onclick=esSalvarCfg;
+  root.querySelectorAll('[data-es-cli-salvar]').forEach(function(x){x.onclick=function(){esSalvarCli(x.getAttribute('data-es-cli-salvar'));};});
+  root.querySelectorAll('[data-es-cli-edit]').forEach(function(x){x.onclick=function(){ES.editCli=x.getAttribute('data-es-cli-edit');esDraw();};});
+  root.querySelectorAll('[data-es-cli-cancel]').forEach(function(x){x.onclick=function(){ES.editCli='';esDraw();};});
+  root.querySelectorAll('[data-es-cli-del]').forEach(function(x){x.onclick=function(){esExcluirCli(x.getAttribute('data-es-cli-del'));};});
   if(b=document.getElementById('esRelCsv'))b.onclick=esRelCsv;
   if(b=document.getElementById('esRelPrint'))b.onclick=esRelPrint;
   [['esFCli','fCli'],['esFSit','fSit'],['esRelDe','relDe'],['esRelAte','relAte'],['esRelCli','relCli']].forEach(function(p){
@@ -3723,6 +3740,79 @@ function esLigar(root){
   root.querySelectorAll('[data-es-pdf]').forEach(function(x){x.onclick=function(){esVerPdf(x.getAttribute('data-es-pdf'));};});
   root.querySelectorAll('[data-es-del]').forEach(function(x){x.onclick=function(){esExcluir(x.getAttribute('data-es-del'));};});
   root.querySelectorAll('[data-es-pg]').forEach(function(x){x.onclick=function(){esPagar(x.getAttribute('data-k'),x.getAttribute('data-es-pg'));};});
+}
+
+// ---- cadastro do cliente de cada casa (chave = UC) ----
+function esHtmlCliTopo(d){
+  var c=esCad(d.uc);
+  if(!c)return '<div style="font-size:16px;font-weight:800;color:#b45309">⚠️ Cliente não cadastrado</div><div style="font-size:12.5px;color:#78716c">Titular na Equatorial: '+esEsc(d.cliente||'—')+'</div>';
+  return '<div style="font-size:16px;font-weight:800;color:#1c1917">👤 '+esEsc(c.nome)+
+    ' <button data-es-cli-edit="'+esUcK(d.uc)+'" style="'+ES_BTN_SM+';padding:3px 8px;font-size:11px">✏️ editar</button></div>'+
+    (c.casa?'<div style="font-size:13px;color:#57534e;margin-top:2px">🏠 '+esEsc(c.casa)+'</div>':'')+
+    '<div style="font-size:12px;color:#a8a29e;margin-top:2px">'+(c.fone?esEsc(c.fone)+' · ':'')+'Titular na Equatorial: '+esEsc(d.cliente||'—')+'</div>';
+}
+function esFormCli(uc,endereco,titular){
+  var k=esUcK(uc),c=esCad(uc)||{};
+  ES.cliCtx[k]={uc:uc,endereco:endereco||c.endereco||'',titular:titular||c.titular||''};
+  var f=function(campo,lbl,ph,w){return '<label style="font-size:12px;color:#57534e;font-weight:600'+(w?';grid-column:1/-1':'')+'">'+lbl+'<input id="esCli_'+campo+'_'+k+'" value="'+esEsc(c[campo]||'')+'" placeholder="'+esEsc(ph)+'" style="'+ES_INP+';margin-top:4px"></label>';};
+  // mesmo endereço já cadastrado em outra UC?
+  var igual='';
+  if(!c.nome&&endereco&&ES.cli)Object.keys(ES.cli).forEach(function(o){var x=ES.cli[o];if(o!==k&&x.endereco&&x.endereco===endereco)igual='ℹ️ Este mesmo endereço já está cadastrado para <b>'+esEsc(x.nome)+'</b> (UC '+esEsc(x.uc)+'). Confira se é a mesma casa.';});
+  return (igual?'<div style="font-size:12px;color:#1e40af;background:#eff6ff;border-radius:8px;padding:8px 10px;margin-bottom:10px">'+igual+'</div>':'')+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">'+
+    f('nome','Nome do cliente *','Ex.: José da Silva')+
+    f('casa','Identificação da casa','Ex.: Casa do caseiro, Sede, Casa 2...')+
+    f('doc','CPF / CNPJ','')+
+    f('fone','Telefone / WhatsApp','(62) 9....')+
+    f('obs','Observação','',true)+'</div>'+
+    '<div style="font-size:11.5px;color:#a8a29e;margin-top:8px">📍 UC '+esEsc(uc)+(ES.cliCtx[k].endereco?' · '+esEsc(ES.cliCtx[k].endereco):'')+'</div>'+
+    '<div style="display:flex;gap:8px;margin-top:10px"><button data-es-cli-salvar="'+k+'" style="'+esBtn('#d97706','#fff')+'">💾 '+(c.nome?'Salvar alterações':'Cadastrar cliente')+'</button>'+
+    (c.nome?'<button data-es-cli-cancel="1" style="'+esBtn('#fff','#78716c','1.5px solid #e7e5e4')+'">Cancelar</button>':'')+'</div>';
+}
+async function esSalvarCli(k){
+  var g=function(c){var el=document.getElementById('esCli_'+c+'_'+k);return el?el.value.trim():'';};
+  var nome=g('nome');if(!nome){alert('Informe o nome do cliente.');return;}
+  var ctx=ES.cliCtx[k]||{},ant=(ES.cli||{})[k]||{},agora=Date.now();
+  var reg={uc:ctx.uc||ant.uc||k,nome:nome,casa:g('casa'),doc:g('doc'),fone:g('fone'),obs:g('obs'),endereco:ctx.endereco||ant.endereco||'',titular:ctx.titular||ant.titular||'',
+    criadoEm:ant.criadoEm||agora,atualizadoEm:agora,por:STATE.loginUser||''};
+  try{
+    var r=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_CLI_PATH+'/'+k+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(reg)});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    ES.cli=ES.cli||{};ES.cli[k]=reg;ES.editCli='';
+  }catch(e){alert('Não consegui salvar o cliente: '+e.message);}
+  esDraw();
+}
+async function esExcluirCli(k){
+  if(!confirm('Remover o cadastro deste cliente? As cobranças continuam salvas, mas voltam a aparecer com o nome do titular da conta.'))return;
+  try{await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_CLI_PATH+'/'+k+'.json',{method:'DELETE'});delete ES.cli[k];}catch(e){alert('Erro ao remover.');}
+  esDraw();
+}
+function esHtmlClientes(){
+  if(ES.histCarregando)return '<div style="'+ES_CARD+';font-size:13px;color:#a8a29e">Carregando...</div>';
+  var mapa={};
+  Object.keys(ES.cli||{}).forEach(function(k){var c=ES.cli[k];mapa[k]={uc:c.uc,endereco:c.endereco,titular:c.titular,regs:[]};});
+  esLista().forEach(function(x){var k=esUcK(x.uc);mapa[k]=mapa[k]||{uc:x.uc,endereco:x.endereco,titular:x.cliente,regs:[]};mapa[k].regs.push(x);if(!mapa[k].endereco)mapa[k].endereco=x.endereco;});
+  var ks=Object.keys(mapa).sort(function(a,b){var A=esCad(mapa[a].uc),B=esCad(mapa[b].uc);if(!!A!==!!B)return A?1:-1;return ((A||{}).nome||'').localeCompare((B||{}).nome||'');});
+  var h='<div style="'+ES_CARD+'"><h2 style="margin:0;font-size:18px">👥 Clientes (casas)</h2><p style="margin:4px 0 0;font-size:12.5px;color:#78716c">Cada casa é identificada pela UC e pelo endereço que vêm na fatura da Equatorial. As casas novas aparecem aqui assim que você envia a primeira fatura delas.</p></div>';
+  if(!ks.length)return h+'<div style="'+ES_CARD+';font-size:13px;color:#a8a29e">Nenhuma casa ainda. Envie uma fatura em "Nova cobrança".</div>';
+  ks.forEach(function(k){
+    var m=mapa[k],c=esCad(m.uc),ab=m.regs.filter(function(x){return !x.pagoCliente;}).reduce(function(s,x){return s+(+x.pagar||0);},0);
+    h+='<div style="'+ES_CARD+(c?'':';border:2px solid #facc15;background:#fefce8')+'">';
+    if(!c||ES.editCli===k){
+      h+='<div style="font-size:14px;font-weight:800;color:'+(c?'#1c1917':'#854d0e')+';margin-bottom:8px">'+(c?'✏️ Editar cliente':'⚠️ Casa sem cliente cadastrado')+(m.titular?' <span style="font-weight:500;font-size:12px;color:#78716c">· titular na Equatorial: '+esEsc(m.titular)+'</span>':'')+'</div>'+esFormCli(m.uc,m.endereco,m.titular);
+    }else{
+      h+='<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">'+
+        '<div><div style="font-size:15px;font-weight:800">👤 '+esEsc(c.nome)+'</div>'+(c.casa?'<div style="font-size:13px;color:#57534e">🏠 '+esEsc(c.casa)+'</div>':'')+
+        '<div style="font-size:12px;color:#78716c;margin-top:2px">'+[c.doc?'CPF/CNPJ '+esEsc(c.doc):'',c.fone?esEsc(c.fone):''].filter(Boolean).join(' · ')+'</div>'+
+        '<div style="font-size:12px;color:#a8a29e;margin-top:2px">📍 UC '+esEsc(m.uc)+(m.endereco?' · '+esEsc(m.endereco):'')+(m.titular?'<br>Titular na Equatorial: '+esEsc(m.titular):'')+'</div>'+
+        (c.obs?'<div style="font-size:12px;color:#57534e;margin-top:4px">📝 '+esEsc(c.obs)+'</div>':'')+'</div>'+
+        '<div style="text-align:right;font-size:12px;color:#57534e">'+m.regs.length+' cobrança(s)<br>A receber: <b style="color:'+(ab?'#b91c1c':'#15803d')+'">'+esBRL(ab)+'</b>'+
+        '<div style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end"><button data-es-cli-edit="'+k+'" style="'+ES_BTN_SM+'">✏️ Editar</button>'+
+        (STATE.roleLogado==='admin'?'<button data-es-cli-del="'+k+'" style="'+ES_BTN_SM+';color:#ef4444;border-color:#fecaca">🗑</button>':'')+'</div></div></div>';
+    }
+    h+='</div>';
+  });
+  return h;
 }
 
 function renderModuloVazio(num){
