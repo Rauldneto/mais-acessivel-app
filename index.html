@@ -2811,6 +2811,8 @@ function renderModuloNav(){
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
     var permitidas=STATE.abasPermitidas.map(function(a){return MAPA_IDS[a]||a;});
+    // Frete e Cotações (check das cotações): todos os colaboradores veem sempre
+    ['frete','mod10'].forEach(function(x){if(permitidas.indexOf(x)<0)permitidas.push(x);});
     MODULOS=TODOS_MODULOS.filter(function(m){return permitidas.indexOf(m.id)>=0;});
     // Se modulo atual nao esta permitido, ir para o primeiro permitido
     if(MODULOS.length>0 && permitidas.indexOf(STATE.modulo)<0){
@@ -2833,7 +2835,7 @@ function renderModuloNav(){
     btn.onclick=function(){
       var user=STATE.usuarios&&STATE.usuarios[STATE.loginUser];
       var abas=user&&user.abas;
-      if(abas&&abas.length>0&&abas.indexOf(m.id)===-1&&STATE.roleLogado!=='admin'){alert('Voce nao tem acesso a esta aba.');return;}
+      if(abas&&abas.length>0&&abas.indexOf(m.id)===-1&&['frete','mod10'].indexOf(m.id)<0&&STATE.roleLogado!=='admin'){alert('Voce nao tem acesso a esta aba.');return;}
       STATE.modulo=m.id;
       if(m.id==='frete') STATE.tab='cotacao';
       else if(m.id==='mod2') STATE.tabCredito='analise';
