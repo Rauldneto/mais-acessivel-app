@@ -981,7 +981,7 @@ function renderAdmin(){
   var divAbas=document.createElement('div');
   divAbas.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap';
   divAbas.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso &agrave;s abas:</span>';
-  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod8',label:'Produtos'},{id:'mod9',label:'Clientes'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod10',label:'Cotações (conferência)'},{id:'mod11',label:'Energia solar'},{id:'mod12',label:'Leilão de imóveis'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
+  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod8',label:'Produtos'},{id:'mod9',label:'Clientes'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod10',label:'Cotações (conferência)'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
     var lbl=document.createElement('label');
     lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
     var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=false;
@@ -2816,6 +2816,12 @@ function renderModuloNav(){
     if(MODULOS.length>0 && permitidas.indexOf(STATE.modulo)<0){
       STATE.modulo=MODULOS[0].id;
     }
+  }
+  // Abas pessoais (Energia solar e Leilão de imóveis): só o administrador vê, nunca colaboradores
+  var ABAS_SO_ADMIN=['mod11','mod12'];
+  if(STATE.roleLogado!=='admin'){
+    MODULOS=MODULOS.filter(function(m){return ABAS_SO_ADMIN.indexOf(m.id)<0;});
+    if(ABAS_SO_ADMIN.indexOf(STATE.modulo)>=0&&MODULOS.length)STATE.modulo=MODULOS[0].id;
   }
   var bar=document.createElement('div');
   bar.style.cssText='background:#2d2d2d;display:flex;align-items:center;gap:2px;padding:0 18px;border-bottom:2px solid #d97706;overflow-x:auto';
@@ -7082,9 +7088,9 @@ function renderApp(){
     main.appendChild(renderModeloEmTeste());
   } else if(STATE.modulo==='mod10'){
     main.appendChild(renderCotacoesCheck());
-  } else if(STATE.modulo==='mod11'){
+  } else if(STATE.modulo==='mod11'&&STATE.roleLogado==='admin'){
     main.appendChild(renderEnergiaSolar());
-  } else if(STATE.modulo==='mod12'){
+  } else if(STATE.modulo==='mod12'&&STATE.roleLogado==='admin'){
     main.appendChild(renderLeilaoImoveis());
   }
   wrap.appendChild(main);
