@@ -3024,15 +3024,22 @@ function fpCss(){
   '.fp-bar input[type=search]{font:inherit;font-size:13px;padding:7px 10px;border:1px solid #d6d3d1;border-radius:6px;min-width:240px;flex:1;max-width:380px}'+
   '.fp-chip{font:inherit;font-size:12px;cursor:pointer;border-radius:999px;border:1px solid #e7e5e4;background:#fff;color:#44403c;padding:5px 11px}'+
   '.fp-chip.on{background:#d97706;border-color:#d97706;color:#fff;font-weight:700}'+
-  '.fp-tw{overflow-x:auto;border:1px solid #e7e5e4;border-radius:12px;background:#fff}'+
-  '.fp-t{border-collapse:collapse;width:100%;min-width:1380px;font-size:12px}'+
+  '.fp-tw{overflow:auto;max-height:calc(100vh - 150px);border:1px solid #e7e5e4;border-radius:12px;background:#fff;scrollbar-width:auto}'+
+  '.fp-tw::-webkit-scrollbar{height:12px;width:10px}.fp-tw::-webkit-scrollbar-thumb{background:#d6d3d1;border-radius:6px}.fp-tw::-webkit-scrollbar-track{background:#f5f5f4}'+
+  '.fp-nav{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:11px;color:#a8a29e}'+
+  '.fp-t{border-collapse:collapse;width:100%;min-width:1080px;font-size:12px}'+
+  '.fp-t th.act,.fp-t td.act{position:sticky;right:0;background:#fff;z-index:1;box-shadow:-6px 0 8px -6px rgba(0,0,0,.18);text-align:center}'+
+  '.fp-t th.act{background:#f5f5f4;z-index:2}'+
+  '.fp-t tr:hover td.act{background:#fffbf3}'+
+  '.fp-t td .fp-mu{white-space:nowrap}.fp-t td.l .fp-mu{white-space:normal}'+
+  '.fp-t .stk input{display:block;margin-left:auto}.fp-t .stk input+input{margin-top:3px}'+
   '.fp-t th{position:sticky;top:0;background:#f5f5f4;color:#57534e;font-weight:700;font-size:11px;text-align:right;padding:8px 6px;border-bottom:1px solid #e7e5e4;white-space:nowrap}'+
-  '.fp-t th:first-child,.fp-t td:first-child{text-align:left;position:sticky;left:0;background:#fff;z-index:1;min-width:230px;max-width:280px}'+
+  '.fp-t th:first-child,.fp-t td:first-child{text-align:left;position:sticky;left:0;background:#fff;z-index:1;min-width:200px;max-width:240px}'+
   '.fp-t th:first-child{background:#f5f5f4;z-index:2}'+
   '.fp-t td{padding:7px 6px;border-bottom:1px solid #f0efee;text-align:right;vertical-align:middle;font-family:\'Segoe UI\',sans-serif;font-size:12px;color:#1a1a1a}'+
   '.fp-t tr:hover td{background:#fffbf3}'+
   '.fp-t td.l{text-align:left}'+
-  '.fp-t input{width:66px;font:inherit;font-size:12px;text-align:right;padding:4px 5px;border:1px solid #d6d3d1;border-radius:5px;background:#fff}'+
+  '.fp-t input{width:60px;font:inherit;font-size:12px;text-align:right;padding:4px 5px;border:1px solid #d6d3d1;border-radius:5px;background:#fff}'+
   '.fp-t input.ed{border-color:#d97706;background:#fff8eb}'+
   '.fp-t input.falta{border-color:#dc2626;background:#fef2f2}'+
   '.fp-nm{font-weight:600;color:#1c1917;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
@@ -3181,11 +3188,13 @@ function fpDraw(){
       '<select id="fpOrd" class="fp-btn" aria-label="Ordenar"><option value="cod">Ordem da planilha</option><option value="nome">Nome</option><option value="var">Maior variação de custo</option><option value="mg">Menor margem</option><option value="data">Compra mais recente</option></select>'+
       '<span style="flex:1"></span><button type="button" class="fp-btn fp-pri" id="fpAplTodos">✔ Aplicar preço atualizado nos filtrados</button></div>'+
       '<div class="fp-bar" id="fpChips"></div>'+
-      '<div class="fp-tw"><table class="fp-t"><thead><tr>'+
-      '<th>Produto</th><th style="text-align:left">Última compra</th><th>Custo planilha</th><th>Custo NF</th><th>IPI/ajuste %</th><th>ST %</th><th>Frete da NF (R$)</th>'+
-      '<th>Custo total</th><th>% Lucro</th><th>Preço tabela</th><th>Preço atualizado</th><th>Margem real</th><th>Sugerido (alvo)</th><th></th>'+
+      '<div class="fp-nav"><button type="button" class="fp-btn" id="fpEsq" style="padding:2px 9px" aria-label="Rolar para a esquerda">◀</button><button type="button" class="fp-btn" id="fpDir" style="padding:2px 9px" aria-label="Rolar para a direita">▶</button><span>Role para os lados com ◀ ▶, com Shift + roda do mouse ou pela barra embaixo da tabela</span></div>'+
+      '<div class="fp-tw" id="fpTw"><table class="fp-t"><thead><tr>'+
+      '<th>Produto</th><th style="text-align:left">Última compra</th><th>Custo</th><th title="IPI / ajuste da NF (em cima) e ST (embaixo)">IPI / ST %</th><th>Frete da NF (R$)</th>'+
+      '<th>Custo total</th><th>% Lucro</th><th>Preço tabela</th><th>Preço atualizado</th><th>Margem real</th><th>Sugerido (alvo)</th><th class="act">Aplicar</th>'+
       '</tr></thead><tbody id="fpTb"></tbody></table></div><div id="fpMais" style="margin-top:10px;text-align:center"></div>';
     fpLigaAbas();
+    var tw=fpEl('fpTw');fpEl('fpEsq').onclick=function(){tw.scrollBy({left:-400,behavior:'smooth'});};fpEl('fpDir').onclick=function(){tw.scrollBy({left:400,behavior:'smooth'});};
     var q=fpEl('fpQ');q.value=FP.q;q.oninput=function(){FP.q=q.value;FP.lim=150;fpDrawTable();fpDrawKpis();};
     var o=fpEl('fpOrd');o.value=FP.ord;o.onchange=function(){FP.ord=o.value;fpDrawTable();};
     fpEl('fpAplTodos').onclick=fpAplicarFiltrados;
@@ -3259,7 +3268,7 @@ function fpPill(m,alvo){var cl=m<0?'fp-bad':(m<alvo?'fp-warn':'fp-ok');return '<
 function fpDrawTable(){
   var tb=fpEl('fpTb');if(!tb)return;
   var L=fpFiltrados(),vis=L.slice(0,FP.lim);
-  tb.innerHTML=vis.length?vis.map(fpLinha).join(''):'<tr><td colspan="14" class="l" style="padding:20px;color:#78716c">Nenhum produto neste filtro.</td></tr>';
+  tb.innerHTML=vis.length?vis.map(fpLinha).join(''):'<tr><td colspan="12" class="l" style="padding:20px;color:#78716c">Nenhum produto neste filtro.</td></tr>';
   var mais=fpEl('fpMais');
   mais.innerHTML=L.length>FP.lim?'<button type="button" class="fp-btn" id="fpMaisB">Mostrar mais ('+(L.length-FP.lim)+' restantes)</button>':'<span class="fp-mu">'+L.length+' produto(s)</span>';
   var mb=fpEl('fpMaisB');if(mb)mb.onclick=function(){FP.lim+=300;fpDrawTable();};
@@ -3269,7 +3278,7 @@ function fpDrawTable(){
 }
 function fpLinha(p){
   var c=p._c,nf=p.nf,ed=p.ed||{},k=fpEsc(p._k);
-  function inp(campo,val,dec,cls){var v=val==null||!isFinite(val)?'':(+val).toFixed(dec);return '<input type="text" inputmode="decimal" data-k="'+k+'" data-c="'+campo+'" value="'+v+'" class="'+(ed[campo]!=null&&ed[campo]!==''?'ed ':'')+(cls||'')+'" aria-label="'+campo+' '+fpEsc(p.cod)+'">';}
+  function inp(campo,val,dec,cls){var v=val==null||!isFinite(val)?'':(+val).toFixed(dec);return '<input type="text" inputmode="decimal" data-k="'+k+'" data-c="'+campo+'" value="'+v+'" class="'+(ed[campo]!=null&&ed[campo]!==''?'ed ':'')+(cls||'')+'" title="'+({ajuste:'IPI / ajuste da NF %',st:'ST %',custo:'Custo unitário',freteNF:'Frete total da NF (R$)',lucro:'% de lucro sobre o custo'}[campo]||campo)+'" aria-label="'+campo+' '+fpEsc(p.cod)+'">';}
   var compra=nf?
     '<div><b>NF '+fpEsc(nf.nf)+'</b> · '+fpDt(nf.data)+' <span class="fp-tag '+(nf.fob?'fp-warn':'fp-ok')+'">'+(nf.fob?'FOB':'CIF')+'</span></div>'+
     '<div class="fp-mu" style="max-width:190px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+fpEsc(nf.forn+' — '+nf.desc)+'">'+fpEsc(nf.forn)+' · '+fpN(nf.qtd,0)+' '+fpEsc(nf.un)+'</div>'+
@@ -3283,10 +3292,8 @@ function fpLinha(p){
   return '<tr>'+
     '<td><div class="fp-nm" title="'+fpEsc(p.nome)+'">'+fpEsc(p.nome)+'</div><div class="fp-mu">'+fpEsc(p.cod||'sem código')+(c.src==='nf'?'<span class="fp-tag fp-ok">custo NF</span>':'<span class="fp-tag fp-neu">custo planilha</span>')+'</div></td>'+
     '<td class="l">'+compra+'</td>'+
-    '<td>'+fpR((p.pl||{}).custo)+'</td>'+
-    '<td>'+inp('custo',c.custo,2)+varTxt+'</td>'+
-    '<td>'+inp('ajuste',c.ajuste,2)+'</td>'+
-    '<td>'+inp('st',c.st,2)+'</td>'+
+    '<td>'+inp('custo',c.custo,2)+varTxt+'<div class="fp-mu" title="Custo da planilha">plan. '+fpR((p.pl||{}).custo)+'</div></td>'+
+    '<td class="stk">'+inp('ajuste',c.ajuste,2)+inp('st',c.st,2)+'</td>'+
     '<td>'+freteCell+'</td>'+
     '<td><b>'+fpR(c.bruto)+'</b><div class="fp-mu" title="Custo líquido: custo total menos créditos">líq. '+fpR(c.liq)+'</div></td>'+
     '<td>'+inp('lucro',c.lucro,1)+'</td>'+
@@ -3294,7 +3301,7 @@ function fpLinha(p){
     '<td><b>'+fpR(c.precoNovo)+'</b>'+difTxt+'</td>'+
     '<td>'+fpPill(c.margemNovo,c.alvo)+'<div class="fp-mu" title="Margem do preço da tabela">hoje '+fpP(c.margemAtual)+'</div></td>'+
     '<td>'+fpR(c.precoSug)+'<div class="fp-mu">mín. '+fpR(c.precoMin)+'</div></td>'+
-    '<td style="white-space:nowrap"><button type="button" class="fp-btn fp-pri" style="padding:4px 8px" data-apl="novo" data-k="'+k+'" title="Gravar o preço atualizado como preço de tabela">✔ Aplicar</button> '+
+    '<td class="act" style="white-space:nowrap"><button type="button" class="fp-btn fp-pri" style="padding:4px 8px" data-apl="novo" data-k="'+k+'" title="Gravar o preço atualizado como preço de tabela">✔ Aplicar</button> '+
     '<button type="button" class="fp-btn" style="padding:4px 8px" data-apl="sug" data-k="'+k+'" title="Gravar o preço sugerido (lucro alvo)">Sug.</button></td>'+
   '</tr>';
 }
