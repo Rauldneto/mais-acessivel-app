@@ -981,7 +981,7 @@ function renderAdmin(){
   var divAbas=document.createElement('div');
   divAbas.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap';
   divAbas.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso &agrave;s abas:</span>';
-  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod8',label:'Produtos'},{id:'mod9',label:'Clientes'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod10',label:'Cotações (conferência)'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'}].forEach(function(ab){
+  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod8',label:'Produtos'},{id:'mod9',label:'Clientes'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod10',label:'Cotações (conferência)'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'},{id:'ext',label:'🧩 Botão Extensão'}].forEach(function(ab){
     var lbl=document.createElement('label');
     lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
     var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=false;
@@ -2845,10 +2845,11 @@ function renderModuloNav(){
     {id:'mod4',  icon:'🧾', label:'Cotação avulsa'},
     {id:'mod11', icon:'☀️', label:'Energia solar'},
     {id:'mod12', icon:'🏠', label:'Leilão de imóveis'},
+    {id:'mod13', icon:'💲', label:'Formação de preço'},
     {id:'mod5',  icon:'🧪', label:'Modelo em Teste'}
   ];
   // Mapeamento id antigo -> novo
-  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12'};
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13'};
   // Admin ve tudo; outros so veem abas permitidas
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
@@ -2861,8 +2862,8 @@ function renderModuloNav(){
       STATE.modulo=MODULOS[0].id;
     }
   }
-  // Abas pessoais (Energia solar e Leilão de imóveis): só o administrador vê, nunca colaboradores
-  var ABAS_SO_ADMIN=['mod11','mod12'];
+  // Abas só do administrador: Energia solar e Leilão (pessoais) e Formação de preço (mostra custos)
+  var ABAS_SO_ADMIN=['mod11','mod12','mod13'];
   if(STATE.roleLogado!=='admin'){
     MODULOS=MODULOS.filter(function(m){return ABAS_SO_ADMIN.indexOf(m.id)<0;});
     if(ABAS_SO_ADMIN.indexOf(STATE.modulo)>=0&&MODULOS.length)STATE.modulo=MODULOS[0].id;
@@ -2889,6 +2890,350 @@ function renderModuloNav(){
     bar.appendChild(btn);
   });
   return bar;
+}
+
+// ===================== MÓDULO FORMAÇÃO DE PREÇO (mod13) =====================
+// Tabela de preços em linhas, atualizada pela última NF de compra (Bling).
+// Dados ficam no Firebase em formacaoPreco/ (nunca no código, o repositório é público):
+//   params            -> impostos/despesas/lucro alvo globais
+//   meta              -> período das NFs carregadas
+//   produtos/{k}      -> cod, nome, pl (planilha), nf (última compra), hist, ed (edições), aprovado
+//   historico/{k}/{id}-> cada preço aplicado
+// Cálculo: custo total = custo + IPI/ajuste da NF + ST + frete rateado pelo valor da NF.
+//   Preço atualizado = custo total x (1 + %Lucro)  (mesmo método da planilha)
+//   Margem real = (preço x (1 - ICMS - PIS/COFINS - Desp.F+V) - custo líquido) / preço
+//   Preço sugerido = custo líquido / (1 - (ICMS + PIS/COFINS + Desp.F+V + lucro alvo))  (markup divisor)
+var FP={dados:null,carregando:false,erro:'',q:'',filtro:'todos',ord:'cod',lim:150,root:null,salvando:0,toast:''};
+var FP_FILTROS=[
+  {id:'todos',l:'Todos'},
+  {id:'comnf',l:'🧾 Com NF'},
+  {id:'mudou',l:'📈 Custo mudou'},
+  {id:'frete',l:'🚚 Informar frete'},
+  {id:'conferir',l:'⚠️ Conferir'},
+  {id:'baixa',l:'🔻 Margem abaixo do alvo'},
+  {id:'semnf',l:'📄 Sem NF no período'}
+];
+function fpCss(){
+  if(document.getElementById('fpCss'))return;
+  var st=document.createElement('style');st.id='fpCss';
+  st.textContent=
+  '.fp-wrap{padding:16px 18px 60px;max-width:1500px;margin:0 auto}'+
+  '.fp-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px}'+
+  '.fp-head h2{margin:0;font-size:20px;color:#1c1917}'+
+  '.fp-sub{font-size:12px;color:#78716c;margin-top:2px}'+
+  '.fp-btn{font:inherit;font-size:12px;cursor:pointer;border-radius:6px;border:1px solid #ddd;background:#fff;color:#333;padding:6px 11px;white-space:nowrap}'+
+  '.fp-btn:hover{background:#fafaf9}'+
+  '.fp-pri{background:#d97706;border-color:#d97706;color:#fff;font-weight:700}.fp-pri:hover{background:#b45309}'+
+  '.fp-card{background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:12px 14px;margin-bottom:12px}'+
+  '.fp-params{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}'+
+  '.fp-params label{display:block;font-size:11px;font-weight:600;color:#78716c;margin-bottom:3px}'+
+  '.fp-params input[type=number]{width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:6px 8px;border:1px solid #d6d3d1;border-radius:6px}'+
+  '.fp-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}'+
+  '.fp-kpi{background:#fafaf9;border-radius:10px;padding:10px 12px;cursor:pointer;border:1.5px solid transparent}'+
+  '.fp-kpi.on{border-color:#d97706;background:#fff8eb}'+
+  '.fp-kpi .l{font-size:11px;color:#78716c}.fp-kpi .v{font-size:20px;font-weight:700;color:#1c1917}'+
+  '.fp-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px}'+
+  '.fp-bar input[type=search]{font:inherit;font-size:13px;padding:7px 10px;border:1px solid #d6d3d1;border-radius:6px;min-width:240px;flex:1;max-width:380px}'+
+  '.fp-chip{font:inherit;font-size:12px;cursor:pointer;border-radius:999px;border:1px solid #e7e5e4;background:#fff;color:#44403c;padding:5px 11px}'+
+  '.fp-chip.on{background:#d97706;border-color:#d97706;color:#fff;font-weight:700}'+
+  '.fp-tw{overflow-x:auto;border:1px solid #e7e5e4;border-radius:12px;background:#fff}'+
+  '.fp-t{border-collapse:collapse;width:100%;min-width:1380px;font-size:12px}'+
+  '.fp-t th{position:sticky;top:0;background:#f5f5f4;color:#57534e;font-weight:700;font-size:11px;text-align:right;padding:8px 6px;border-bottom:1px solid #e7e5e4;white-space:nowrap}'+
+  '.fp-t th:first-child,.fp-t td:first-child{text-align:left;position:sticky;left:0;background:#fff;z-index:1;min-width:230px;max-width:280px}'+
+  '.fp-t th:first-child{background:#f5f5f4;z-index:2}'+
+  '.fp-t td{padding:7px 6px;border-bottom:1px solid #f0efee;text-align:right;vertical-align:middle;font-family:\'Segoe UI\',sans-serif;font-size:12px;color:#1a1a1a}'+
+  '.fp-t tr:hover td{background:#fffbf3}'+
+  '.fp-t td.l{text-align:left}'+
+  '.fp-t input{width:66px;font:inherit;font-size:12px;text-align:right;padding:4px 5px;border:1px solid #d6d3d1;border-radius:5px;background:#fff}'+
+  '.fp-t input.ed{border-color:#d97706;background:#fff8eb}'+
+  '.fp-t input.falta{border-color:#dc2626;background:#fef2f2}'+
+  '.fp-nm{font-weight:600;color:#1c1917;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+  '.fp-mu{font-size:11px;color:#a8a29e}'+
+  '.fp-tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:4px}'+
+  '.fp-pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap}'+
+  '.fp-ok{background:#dcfce7;color:#166534}.fp-warn{background:#fef3c7;color:#92400e}.fp-bad{background:#fee2e2;color:#991b1b}.fp-neu{background:#f5f5f4;color:#57534e}'+
+  '.fp-toast{position:sticky;bottom:12px;margin-top:10px;background:#1c1917;color:#fff;padding:9px 14px;border-radius:8px;font-size:13px;display:inline-block}'+
+  '.fp-info summary{cursor:pointer;font-size:13px;font-weight:700;color:#44403c}'+
+  '.fp-info p,.fp-info li{font-size:12px;color:#57534e;line-height:1.6}';
+  document.head.appendChild(st);
+}
+function fpEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function fpR(v){return (isFinite(v)?v:0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});}
+function fpN(v,d){return (isFinite(v)?v:0).toLocaleString('pt-BR',{minimumFractionDigits:d==null?2:d,maximumFractionDigits:d==null?2:d});}
+function fpP(v){return (isFinite(v)?v:0).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';}
+function fpDt(s){if(!s)return '';var p=String(s).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0].slice(2):s;}
+function fpNum(v){if(v===''||v==null)return null;var n=parseFloat(String(v).replace(/\./g,'').replace(',','.'));if(String(v).indexOf(',')<0)n=parseFloat(v);return isFinite(n)?n:null;}
+function fpParams(){var p=(FP.dados&&FP.dados.params)||{};return {icms:+p.icms||0,pisCofins:+p.pisCofins||0,despFV:+p.despFV||0,credIcms:!!p.credIcms,credPisCofins:+p.credPisCofins||0,lucroAlvo:+p.lucroAlvo||0};}
+function fpVal(a,b){return a!=null&&a!==''?+a:b;}
+function fpCalc(p){
+  var P=fpParams(),ed=p.ed||{},nf=p.nf||null,pl=p.pl||{};
+  var usarNF=ed.usarNF!=null?!!ed.usarNF:!!(nf&&!nf.conferir);
+  var src=usarNF&&nf?'nf':'pl';
+  var custo=fpVal(ed.custo,src==='nf'?nf.valor:pl.custo);
+  var ajuste=fpVal(ed.ajuste,src==='nf'?nf.ajuste:pl.ipi);
+  var st=fpVal(ed.st,pl.st||0);
+  var freteNF=ed.freteNF!=null&&ed.freteNF!==''?+ed.freteNF:(src==='nf'?(nf.freteNF>0?nf.freteNF:null):(pl.frete||0));
+  var prodNF=fpVal(ed.prodNF,src==='nf'?nf.prodNF:pl.totNF);
+  var freteFalta=src==='nf'&&nf.fob&&freteNF==null;
+  var freteUnit=freteNF&&prodNF?custo*freteNF/prodNF:0;
+  var comIpi=custo*(1+ajuste/100);
+  var bruto=comIpi+custo*st/100+freteUnit;
+  var credIcms=P.credIcms&&src==='nf'?(nf.icmsUnit||0):0;
+  var credPC=(comIpi+freteUnit)*P.credPisCofins/100;
+  var liq=bruto-credIcms-credPC;
+  var lucro=fpVal(ed.lucro,pl.lucro||0);
+  var precoNovo=bruto*(1+lucro/100);
+  var desp=P.icms+P.pisCofins+P.despFV;
+  var alvo=fpVal(ed.lucroAlvo,P.lucroAlvo);
+  var div=1-(desp+alvo)/100,divMin=1-desp/100;
+  var precoSug=div>0?liq/div:0,precoMin=divMin>0?liq/divMin:0;
+  var precoAtual=p.aprovado&&p.aprovado.preco?+p.aprovado.preco:(pl.preco||0);
+  function mg(pr){return pr>0?(pr*divMin-liq)/pr*100:0;}
+  return {src:src,usarNF:usarNF,custo:custo,ajuste:ajuste,st:st,freteNF:freteNF,prodNF:prodNF,freteFalta:freteFalta,freteUnit:freteUnit,
+    bruto:bruto,liq:liq,lucro:lucro,precoNovo:precoNovo,precoSug:precoSug,precoMin:precoMin,precoAtual:precoAtual,alvo:alvo,
+    margemAtual:mg(precoAtual),margemNovo:mg(precoNovo),varCusto:pl.custo?(custo/pl.custo-1)*100:0,varPreco:precoAtual?(precoNovo/precoAtual-1)*100:0};
+}
+function fpLista(){
+  if(!FP.dados||!FP.dados.produtos)return [];
+  var out=[];var pr=FP.dados.produtos;
+  Object.keys(pr).forEach(function(k){var p=pr[k];if(!p||!p.nome)return;p._k=k;p._c=fpCalc(p);out.push(p);});
+  return out;
+}
+function fpPassa(p,f){
+  var c=p._c;
+  if(f==='comnf')return !!p.nf;
+  if(f==='semnf')return !p.nf;
+  if(f==='mudou')return c.src==='nf'&&Math.abs(c.varCusto)>=0.5;
+  if(f==='frete')return c.freteFalta;
+  if(f==='conferir')return !!(p.nf&&p.nf.conferir);
+  if(f==='baixa')return c.margemNovo<c.alvo;
+  return true;
+}
+function fpCarregar(){
+  FP.carregando=true;FP.erro='';fpDraw();
+  fetch(FIREBASE_DB+'/formacaoPreco.json').then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+  .then(function(d){FP.dados=d||null;FP.carregando=false;fpDraw();})
+  .catch(function(e){FP.carregando=false;FP.erro='Não foi possível carregar a base de preços ('+e.message+'). Verifique a internet e clique em Recarregar.';fpDraw();});
+}
+function fpSalvar(path,data,metodo){
+  FP.salvando++;fpDrawStatus();
+  return fetch(FIREBASE_DB+'/formacaoPreco/'+path+'.json',{method:metodo||'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
+  .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+  .catch(function(e){FP.erro='Não foi possível salvar ('+e.message+'). A alteração ficou só nesta tela.';fpDraw();})
+  .finally(function(){FP.salvando--;fpDrawStatus();});
+}
+function fpToast(msg){FP.toast=msg;var t=fpEl('fpToast');if(t)t.innerHTML='<div class="fp-toast" role="status">'+fpEsc(msg)+'</div>';clearTimeout(FP._tt);FP._tt=setTimeout(function(){FP.toast='';var t2=fpEl('fpToast');if(t2)t2.innerHTML='';},3500);}
+function fpEl(id){return FP.root?FP.root.querySelector('#'+id):null;}
+function renderFormacaoPreco(){
+  fpCss();
+  var wrap=document.createElement('div');wrap.className='fp-wrap';
+  wrap.innerHTML=
+    '<div class="fp-head"><div><h2>💲 Formação de preço</h2><div class="fp-sub" id="fpMeta">Carregando…</div></div><span style="flex:1"></span>'+
+    '<span class="fp-mu" id="fpStatus"></span>'+
+    '<button type="button" class="fp-btn" id="fpReload">🔄 Recarregar</button>'+
+    '<button type="button" class="fp-btn" id="fpXls">⬇️ Exportar Excel</button>'+
+    '<button type="button" class="fp-btn" id="fpImp">📥 Importar base</button><input type="file" id="fpFile" accept=".json" style="display:none"></div>'+
+    '<div id="fpErr"></div>'+
+    '<div id="fpBody"></div><div id="fpToast"></div>';
+  FP.root=wrap;
+  wrap.querySelector('#fpReload').onclick=fpCarregar;
+  wrap.querySelector('#fpXls').onclick=fpExportar;
+  var fi=wrap.querySelector('#fpFile');
+  wrap.querySelector('#fpImp').onclick=function(){fi.click();};
+  fi.onchange=function(){var f=fi.files[0];if(!f)return;f.text().then(function(t){var d=JSON.parse(t);if(!d||!d.produtos)throw new Error('Arquivo sem produtos');
+      if(FP.dados&&FP.dados.produtos&&!confirm('Substituir a base atual de formação de preço pelos dados deste arquivo? As edições feitas na tela serão mantidas quando o código do produto for o mesmo.'))return;
+      var old=(FP.dados&&FP.dados.produtos)||{};Object.keys(d.produtos).forEach(function(k){if(old[k]){if(old[k].ed)d.produtos[k].ed=old[k].ed;if(old[k].aprovado)d.produtos[k].aprovado=old[k].aprovado;}});
+      if(FP.dados&&FP.dados.params)d.params=FP.dados.params;
+      return fpSalvar('',d,'PUT').then(function(){FP.dados=d;fpDraw();fpToast('Base importada: '+Object.keys(d.produtos).length+' produtos');});})
+    .catch(function(e){FP.erro='Não foi possível importar: '+e.message;fpDraw();});fi.value='';};
+  if(!FP.dados&&!FP.carregando)fpCarregar();
+  setTimeout(fpDraw,0);
+  return wrap;
+}
+function fpDrawStatus(){var s=fpEl('fpStatus');if(s)s.textContent=FP.salvando?'☁️ Salvando…':(FP.dados?'☁️ Salvo':'');}
+function fpDraw(){
+  if(!FP.root||!document.body.contains(FP.root))return;
+  fpDrawStatus();
+  fpEl('fpErr').innerHTML=FP.erro?'<div class="fp-card" role="alert" style="border-color:#fecaca;background:#fef2f2;color:#991b1b;display:flex;gap:8px;align-items:center"><span>⚠️</span><div style="flex:1">'+fpEsc(FP.erro)+'</div><button type="button" class="fp-btn" id="fpErrX">Fechar</button></div>':'';
+  var ex=fpEl('fpErrX');if(ex)ex.onclick=function(){FP.erro='';fpDraw();};
+  var body=fpEl('fpBody'),meta=fpEl('fpMeta');
+  if(FP.carregando){meta.textContent='Carregando base…';body.innerHTML='<div class="fp-card">⏳ Carregando produtos e últimas compras…</div>';return;}
+  if(!FP.dados||!FP.dados.produtos){meta.textContent='Base ainda não carregada';
+    body.innerHTML='<div class="fp-card"><b>Comece pela base de preços</b><p style="font-size:13px;color:#57534e;margin:6px 0 0">A base junta a sua planilha de preços com as últimas NFs de compra do Bling. Use <b>📥 Importar base</b> para carregar o arquivo <code>base-formacao-preco.json</code>.</p></div>';return;}
+  var m=FP.dados.meta||{};
+  meta.textContent=Object.keys(FP.dados.produtos).length+' produtos · NFs de compra de '+fpDt(m.nfDe)+' a '+fpDt(m.nfAte)+' ('+(m.qtdNF||0)+' notas) · base gerada em '+fpDt(m.geradoEm);
+  if(!fpEl('fpParams')){
+    body.innerHTML=
+      '<details class="fp-card fp-info"><summary>ℹ️ Como o preço é calculado</summary>'+
+      '<ul><li><b>Custo NF</b>: valor unitário da última compra no Bling. Caixas (ex.: CX 12) são convertidas para unidade.</li>'+
+      '<li><b>IPI/ajuste</b>: diferença entre o total da NF e a soma dos produtos (IPI, ST destacada ou desconto da nota).</li>'+
+      '<li><b>Frete</b>: se a NF trouxe frete (CIF), ele já vem preenchido. Se é FOB, o campo fica vermelho para você informar o valor do CT-e. O frete é rateado pelo valor dos produtos da nota.</li>'+
+      '<li><b>Preço atualizado</b>: custo total × (1 + %Lucro), o mesmo método da sua planilha.</li>'+
+      '<li><b>Margem real</b>: o que sobra do preço depois de ICMS, PIS/COFINS, despesas e do custo líquido (custo menos créditos).</li>'+
+      '<li><b>Preço sugerido</b>: markup divisor = custo líquido ÷ (1 − impostos − despesas − lucro alvo).</li></ul></details>'+
+      '<div class="fp-card"><div style="font-size:13px;font-weight:700;margin-bottom:8px">⚙️ Parâmetros (valem para todos os produtos)</div><div class="fp-params" id="fpParams"></div></div>'+
+      '<div class="fp-kpis" id="fpKpis"></div>'+
+      '<div class="fp-bar"><input type="search" id="fpQ" placeholder="Buscar por código, nome ou fornecedor" aria-label="Buscar produto">'+
+      '<select id="fpOrd" class="fp-btn" aria-label="Ordenar"><option value="cod">Ordem da planilha</option><option value="nome">Nome</option><option value="var">Maior variação de custo</option><option value="mg">Menor margem</option><option value="data">Compra mais recente</option></select>'+
+      '<span style="flex:1"></span><button type="button" class="fp-btn fp-pri" id="fpAplTodos">✔ Aplicar preço atualizado nos filtrados</button></div>'+
+      '<div class="fp-bar" id="fpChips"></div>'+
+      '<div class="fp-tw"><table class="fp-t"><thead><tr>'+
+      '<th>Produto</th><th style="text-align:left">Última compra</th><th>Custo planilha</th><th>Custo NF</th><th>IPI/ajuste %</th><th>ST %</th><th>Frete da NF (R$)</th>'+
+      '<th>Custo total</th><th>% Lucro</th><th>Preço tabela</th><th>Preço atualizado</th><th>Margem real</th><th>Sugerido (alvo)</th><th></th>'+
+      '</tr></thead><tbody id="fpTb"></tbody></table></div><div id="fpMais" style="margin-top:10px;text-align:center"></div>';
+    var q=fpEl('fpQ');q.value=FP.q;q.oninput=function(){FP.q=q.value;FP.lim=150;fpDrawTable();fpDrawKpis();};
+    var o=fpEl('fpOrd');o.value=FP.ord;o.onchange=function(){FP.ord=o.value;fpDrawTable();};
+    fpEl('fpAplTodos').onclick=fpAplicarFiltrados;
+  }
+  fpDrawParams();fpDrawKpis();fpDrawChips();fpDrawTable();
+}
+function fpDrawParams(){
+  var P=fpParams(),el=fpEl('fpParams');if(!el)return;
+  function inp(id,l,v,dica){return '<div><label for="fpP_'+id+'" title="'+fpEsc(dica)+'">'+l+'</label><input type="number" step="0.01" id="fpP_'+id+'" value="'+v+'"></div>';}
+  el.innerHTML=inp('icms','ICMS saída %',P.icms,'Alíquota efetiva de ICMS sobre a venda')+
+    inp('pisCofins','PIS/COFINS saída %',P.pisCofins,'Lucro Real não cumulativo: 1,65% + 7,6%')+
+    inp('despFV','Desp. fixas + variáveis %',P.despFV,'Despesas da empresa sobre o faturamento')+
+    inp('credPisCofins','Crédito PIS/COFINS compra %',P.credPisCofins,'Crédito sobre custo + IPI + frete. Coloque 0 se não aproveita')+
+    inp('lucroAlvo','Lucro alvo sobre a venda %',P.lucroAlvo,'Usado no preço sugerido e no filtro de margem baixa')+
+    '<div><label for="fpP_credIcms">Crédito de ICMS da entrada</label><select id="fpP_credIcms" class="fp-btn" style="width:100%"><option value="0">Não abater (ICMS saída já é efetivo)</option><option value="1">Abater crédito da NF</option></select></div>';
+  fpEl('fpP_credIcms').value=P.credIcms?'1':'0';
+  ['icms','pisCofins','despFV','credPisCofins','lucroAlvo'].forEach(function(k){
+    fpEl('fpP_'+k).onchange=function(e){var v=fpNum(e.target.value);if(v==null){e.target.value=P[k];return;}FP.dados.params=FP.dados.params||{};FP.dados.params[k]=v;fpSalvar('params',FP.dados.params);fpDrawKpis();fpDrawTable();};
+  });
+  fpEl('fpP_credIcms').onchange=function(e){FP.dados.params=FP.dados.params||{};FP.dados.params.credIcms=e.target.value==='1';fpSalvar('params',FP.dados.params);fpDrawKpis();fpDrawTable();};
+}
+function fpDrawKpis(){
+  var el=fpEl('fpKpis');if(!el)return;
+  var L=fpLista(),n={todos:L.length};
+  FP_FILTROS.forEach(function(f){if(f.id!=='todos')n[f.id]=L.filter(function(p){return fpPassa(p,f.id);}).length;});
+  var cards=[['comnf','🧾 Com NF no período'],['mudou','📈 Custo mudou'],['frete','🚚 Frete a informar'],['conferir','⚠️ Para conferir'],['baixa','🔻 Margem abaixo do alvo']];
+  el.innerHTML=cards.map(function(c){return '<div class="fp-kpi'+(FP.filtro===c[0]?' on':'')+'" data-f="'+c[0]+'" role="button" tabindex="0"><div class="l">'+c[1]+'</div><div class="v">'+n[c[0]]+'</div></div>';}).join('');
+  el.querySelectorAll('[data-f]').forEach(function(d){d.onclick=function(){FP.filtro=FP.filtro===d.dataset.f?'todos':d.dataset.f;FP.lim=150;fpDrawKpis();fpDrawChips();fpDrawTable();};});
+}
+function fpDrawChips(){
+  var el=fpEl('fpChips');if(!el)return;
+  el.innerHTML=FP_FILTROS.map(function(f){return '<button type="button" class="fp-chip'+(FP.filtro===f.id?' on':'')+'" data-f="'+f.id+'" aria-pressed="'+(FP.filtro===f.id)+'">'+f.l+'</button>';}).join('');
+  el.querySelectorAll('[data-f]').forEach(function(b){b.onclick=function(){FP.filtro=b.dataset.f;FP.lim=150;fpDrawKpis();fpDrawChips();fpDrawTable();};});
+}
+function fpFiltrados(){
+  var q=FP.q.trim().toLowerCase();
+  var L=fpLista().filter(function(p){
+    if(!fpPassa(p,FP.filtro))return false;
+    if(!q)return true;
+    return (p.cod+' '+p.nome+' '+(p.nf?p.nf.forn+' '+p.nf.nf:'')).toLowerCase().indexOf(q)>=0;
+  });
+  var o=FP.ord;
+  L.sort(function(a,b){
+    if(o==='nome')return a.nome.localeCompare(b.nome);
+    if(o==='var')return Math.abs(b._c.varCusto)-Math.abs(a._c.varCusto);
+    if(o==='mg')return a._c.margemNovo-b._c.margemNovo;
+    if(o==='data')return String(b.nf?b.nf.data:'').localeCompare(String(a.nf?a.nf.data:''));
+    return (a.ordem||0)-(b.ordem||0);
+  });
+  return L;
+}
+function fpPill(m,alvo){var cl=m<0?'fp-bad':(m<alvo?'fp-warn':'fp-ok');return '<span class="fp-pill '+cl+'" title="Margem real sobre a venda">'+fpP(m)+'</span>';}
+function fpDrawTable(){
+  var tb=fpEl('fpTb');if(!tb)return;
+  var L=fpFiltrados(),vis=L.slice(0,FP.lim);
+  tb.innerHTML=vis.length?vis.map(fpLinha).join(''):'<tr><td colspan="14" class="l" style="padding:20px;color:#78716c">Nenhum produto neste filtro.</td></tr>';
+  var mais=fpEl('fpMais');
+  mais.innerHTML=L.length>FP.lim?'<button type="button" class="fp-btn" id="fpMaisB">Mostrar mais ('+(L.length-FP.lim)+' restantes)</button>':'<span class="fp-mu">'+L.length+' produto(s)</span>';
+  var mb=fpEl('fpMaisB');if(mb)mb.onclick=function(){FP.lim+=300;fpDrawTable();};
+  tb.querySelectorAll('input[data-k]').forEach(function(i){i.onchange=fpEditar;});
+  tb.querySelectorAll('button[data-apl]').forEach(function(b){b.onclick=function(){fpAplicar(b.dataset.k,b.dataset.apl);};});
+  tb.querySelectorAll('button[data-src]').forEach(function(b){b.onclick=function(){fpTrocarFonte(b.dataset.k);};});
+}
+function fpLinha(p){
+  var c=p._c,nf=p.nf,ed=p.ed||{},k=fpEsc(p._k);
+  function inp(campo,val,dec,cls){var v=val==null||!isFinite(val)?'':(+val).toFixed(dec);return '<input type="text" inputmode="decimal" data-k="'+k+'" data-c="'+campo+'" value="'+v+'" class="'+(ed[campo]!=null&&ed[campo]!==''?'ed ':'')+(cls||'')+'" aria-label="'+campo+' '+fpEsc(p.cod)+'">';}
+  var compra=nf?
+    '<div><b>NF '+fpEsc(nf.nf)+'</b> · '+fpDt(nf.data)+' <span class="fp-tag '+(nf.fob?'fp-warn':'fp-ok')+'">'+(nf.fob?'FOB':'CIF')+'</span></div>'+
+    '<div class="fp-mu" style="max-width:190px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+fpEsc(nf.forn+' — '+nf.desc)+'">'+fpEsc(nf.forn)+' · '+fpN(nf.qtd,0)+' '+fpEsc(nf.un)+'</div>'+
+    (nf.conferir?'<div style="color:#b45309;font-size:11px;max-width:200px;white-space:normal" title="'+fpEsc(nf.desc)+'">⚠️ '+fpEsc(nf.conferir)+'</div>':'')+
+    '<button type="button" class="fp-btn" style="padding:2px 7px;font-size:11px;margin-top:3px" data-src="1" data-k="'+k+'">'+(c.src==='nf'?'Usar planilha':'Usar NF')+'</button>'
+    :'<span class="fp-mu">Sem compra no período</span>';
+  var varTxt=c.src==='nf'&&Math.abs(c.varCusto)>=0.5?'<div style="font-size:11px;font-weight:700;color:'+(c.varCusto>0?'#dc2626':'#16a34a')+'">'+(c.varCusto>0?'▲ ':'▼ ')+fpP(Math.abs(c.varCusto))+'</div>':'';
+  var freteCell=inp('freteNF',c.freteNF,2,c.freteFalta?'falta':'')+'<div class="fp-mu">'+(c.freteFalta?'informar (FOB)':(c.freteUnit?fpR(c.freteUnit)+'/un':'sem frete'))+'</div>';
+  var difTxt=c.precoAtual?'<div style="font-size:11px;color:'+(c.varPreco>0.5?'#dc2626':(c.varPreco<-0.5?'#16a34a':'#a8a29e'))+'">'+(Math.abs(c.varPreco)<0.5?'igual':(c.varPreco>0?'+':'')+fpP(c.varPreco))+'</div>':'';
+  var apr=p.aprovado?'<div class="fp-mu" title="Aplicado por '+fpEsc(p.aprovado.por||'')+'">✔ '+fpDt(p.aprovado.em)+'</div>':'';
+  return '<tr>'+
+    '<td><div class="fp-nm" title="'+fpEsc(p.nome)+'">'+fpEsc(p.nome)+'</div><div class="fp-mu">'+fpEsc(p.cod||'sem código')+(c.src==='nf'?'<span class="fp-tag fp-ok">custo NF</span>':'<span class="fp-tag fp-neu">custo planilha</span>')+'</div></td>'+
+    '<td class="l">'+compra+'</td>'+
+    '<td>'+fpR((p.pl||{}).custo)+'</td>'+
+    '<td>'+inp('custo',c.custo,2)+varTxt+'</td>'+
+    '<td>'+inp('ajuste',c.ajuste,2)+'</td>'+
+    '<td>'+inp('st',c.st,2)+'</td>'+
+    '<td>'+freteCell+'</td>'+
+    '<td><b>'+fpR(c.bruto)+'</b><div class="fp-mu" title="Custo líquido: custo total menos créditos">líq. '+fpR(c.liq)+'</div></td>'+
+    '<td>'+inp('lucro',c.lucro,1)+'</td>'+
+    '<td>'+fpR(c.precoAtual)+apr+'</td>'+
+    '<td><b>'+fpR(c.precoNovo)+'</b>'+difTxt+'</td>'+
+    '<td>'+fpPill(c.margemNovo,c.alvo)+'<div class="fp-mu" title="Margem do preço da tabela">hoje '+fpP(c.margemAtual)+'</div></td>'+
+    '<td>'+fpR(c.precoSug)+'<div class="fp-mu">mín. '+fpR(c.precoMin)+'</div></td>'+
+    '<td style="white-space:nowrap"><button type="button" class="fp-btn fp-pri" style="padding:4px 8px" data-apl="novo" data-k="'+k+'" title="Gravar o preço atualizado como preço de tabela">✔ Aplicar</button> '+
+    '<button type="button" class="fp-btn" style="padding:4px 8px" data-apl="sug" data-k="'+k+'" title="Gravar o preço sugerido (lucro alvo)">Sug.</button></td>'+
+  '</tr>';
+}
+function fpEditar(e){
+  var i=e.target,k=i.dataset.k,campo=i.dataset.c,p=FP.dados.produtos[k];if(!p)return;
+  var v=i.value.trim()===''?null:fpNum(i.value);
+  if(i.value.trim()!==''&&v==null){i.value='';return;}
+  p.ed=p.ed||{};
+  if(v==null)delete p.ed[campo];else p.ed[campo]=v;
+  var tem=Object.keys(p.ed).length>0;
+  fpSalvar('produtos/'+k+'/ed',tem?p.ed:null,tem?'PUT':'DELETE');
+  fpDrawKpis();fpDrawTable();
+}
+function fpTrocarFonte(k){
+  var p=FP.dados.produtos[k];if(!p||!p.nf)return;
+  var c=fpCalc(p);p.ed=p.ed||{};p.ed.usarNF=c.src!=='nf';
+  ['custo','ajuste','freteNF','prodNF'].forEach(function(x){delete p.ed[x];});
+  fpSalvar('produtos/'+k+'/ed',p.ed,'PUT');fpDrawKpis();fpDrawTable();
+}
+function fpRegistro(p,tipo){
+  var c=fpCalc(p),preco=tipo==='sug'?c.precoSug:c.precoNovo;
+  return {preco:Math.round(preco*100)/100,anterior:Math.round(c.precoAtual*100)/100,custo:Math.round(c.custo*10000)/10000,custoTotal:Math.round(c.bruto*10000)/10000,
+    margem:Math.round((preco>0?(preco*(1-(fpParams().icms+fpParams().pisCofins+fpParams().despFV)/100)-c.liq)/preco*100:0)*10)/10,
+    origem:tipo==='sug'?'sugerido':'atualizado',fonte:c.src==='nf'&&p.nf?('NF '+p.nf.nf):'planilha',em:new Date().toISOString(),por:STATE.usuarioLogado||''};
+}
+function fpAplicar(k,tipo){
+  var p=FP.dados.produtos[k];if(!p)return;
+  if(fpCalc(p).freteFalta){fpToast('Informe o frete da NF (FOB) antes de aplicar o preço de '+p.nome.slice(0,40));return;}
+  var reg=fpRegistro(p,tipo);
+  if(!(reg.preco>0)){fpToast('Preço inválido para '+p.nome);return;}
+  p.aprovado=reg;
+  fpSalvar('produtos/'+k+'/aprovado',reg,'PUT');
+  fpSalvar('historico/'+k,reg,'POST');
+  fpToast('✔ '+p.nome.slice(0,40)+': '+fpR(reg.anterior)+' → '+fpR(reg.preco));
+  fpDrawKpis();fpDrawTable();
+}
+function fpAplicarFiltrados(){
+  var T=fpFiltrados(),semFrete=T.filter(function(p){return p._c.freteFalta;}).length;
+  var L=T.filter(function(p){return p._c.precoNovo>0&&!p._c.freteFalta;});
+  if(!L.length){fpToast(semFrete?'Informe o frete das NFs FOB antes de aplicar.':'Nenhum produto no filtro.');return;}
+  if(!confirm('Aplicar o preço atualizado em '+L.length+' produto(s) do filtro atual?'+(semFrete?' '+semFrete+' produto(s) com frete FOB a informar ficam de fora.':'')+' O preço anterior fica guardado no histórico.'))return;
+  var lote={},hist={};
+  L.forEach(function(p){var r=fpRegistro(p,'novo');p.aprovado=r;lote['produtos/'+p._k+'/aprovado']=r;});
+  FP.salvando++;fpDrawStatus();
+  fetch(FIREBASE_DB+'/formacaoPreco.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(lote)})
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);
+      L.forEach(function(p){fpSalvar('historico/'+p._k,p.aprovado,'POST');});
+      fpToast('✔ Preço atualizado aplicado em '+L.length+' produto(s)');})
+    .catch(function(e){FP.erro='Não foi possível aplicar em lote ('+e.message+').';fpDraw();})
+    .finally(function(){FP.salvando--;fpDrawStatus();fpDrawKpis();fpDrawTable();});
+}
+function fpExportar(){
+  if(!FP.dados||!FP.dados.produtos){fpToast('Carregue a base primeiro.');return;}
+  var rows=fpFiltrados().map(function(p){var c=p._c,nf=p.nf||{};return {
+    'Código':p.cod,'Produto':p.nome,'Fonte do custo':c.src==='nf'?'NF':'Planilha',
+    'NF':nf.nf||'','Data NF':fpDt(nf.data),'Fornecedor':nf.forn||'','Frete por conta':p.nf?(nf.fob?'FOB':'CIF'):'',
+    'Custo planilha':(p.pl||{}).custo||0,'Custo NF/usado':+c.custo.toFixed(4),'Var. custo %':+c.varCusto.toFixed(1),'IPI/ajuste %':+c.ajuste.toFixed(2),'ST %':+c.st.toFixed(2),
+    'Frete NF (R$)':c.freteNF==null?'':c.freteNF,'Frete unit.':+c.freteUnit.toFixed(4),'Custo total':+c.bruto.toFixed(4),'Custo líquido':+c.liq.toFixed(4),
+    '% Lucro':c.lucro,'Preço tabela':+c.precoAtual.toFixed(2),'Preço atualizado':+c.precoNovo.toFixed(2),'Margem real %':+c.margemNovo.toFixed(1),
+    'Preço sugerido':+c.precoSug.toFixed(2),'Preço mínimo':+c.precoMin.toFixed(2),'Conferir':nf.conferir||''};});
+  lcXlsx().then(function(){var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Formação de preço');XLSX.writeFile(wb,'formacao-preco-'+new Date().toISOString().slice(0,10)+'.xlsx');})
+    .catch(function(e){FP.erro=e.message;fpDraw();});
 }
 
 // ===================== MÓDULO LEILÃO DE IMÓVEIS (mod12) =====================
@@ -7295,6 +7640,8 @@ function renderApp(){
     main.appendChild(renderEnergiaSolar());
   } else if(STATE.modulo==='mod12'&&STATE.roleLogado==='admin'){
     main.appendChild(renderLeilaoImoveis());
+  } else if(STATE.modulo==='mod13'&&STATE.roleLogado==='admin'){
+    main.appendChild(renderFormacaoPreco());
   }
   wrap.appendChild(main);
   if(STATE.showConfigPanel && STATE.roleLogado==='admin'){
@@ -7430,7 +7777,7 @@ function renderHeader(){
       <span class="badge">📍 Goiânia — GO</span>
       <span style="font-family:monospace;font-size:11px;color:#888">35.017.646/0001-66</span>
       <span id="syncBadge" style="display:none;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;margin-right:8px;vertical-align:middle">↻ Sincronizado!</span>
-      <button class="btn-out" id="btnExtensao" style="border-color:#fdba74;color:#c2410c">🧩 Extensão</button>
+      ${(STATE.roleLogado==='admin'||(STATE.abasPermitidas&&STATE.abasPermitidas.indexOf('ext')>=0)) ? '<button class="btn-out" id="btnExtensao" style="border-color:#fdba74;color:#c2410c">🧩 Extensão</button>' : ''}
       <button class="btn-out" id="btnAtualizar" title="Baixa a versão mais nova do app (limpa o cache)" style="border-color:#86efac;color:#15803d">🔄 Atualizar</button>
       ${STATE.roleLogado==='admin' ? '<button class="btn-out" id="btnConfig" style="border-color:#fde68a;color:#92400e">⚙️ Configurações</button>' : ''}
       <button class="btn-out" id="btnSair">🔒 Sair</button>
