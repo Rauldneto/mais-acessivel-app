@@ -2991,7 +2991,7 @@ function renderModuloNav(){
 //   Preço atualizado = custo total x (1 + %Lucro)  (mesmo método da planilha)
 //   Margem real = (preço x (1 - ICMS - PIS/COFINS - Desp.F+V) - custo líquido) / preço
 //   Preço sugerido = custo líquido / (1 - (ICMS + PIS/COFINS + Desp.F+V + lucro alvo))  (markup divisor)
-var FP={dados:null,carregando:false,erro:'',q:'',filtro:'todos',ord:'cod',lim:150,root:null,salvando:0,toast:''};
+var FP={aba:'tabela',_rend:'',dados:null,carregando:false,erro:'',q:'',filtro:'todos',ord:'cod',lim:150,root:null,salvando:0,toast:''};
 var FP_FILTROS=[
   {id:'todos',l:'Todos'},
   {id:'comnf',l:'🧾 Com NF'},
@@ -3051,7 +3051,7 @@ function fpN(v,d){return (isFinite(v)?v:0).toLocaleString('pt-BR',{minimumFracti
 function fpP(v){return (isFinite(v)?v:0).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';}
 function fpDt(s){if(!s)return '';var p=String(s).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0].slice(2):s;}
 function fpNum(v){if(v===''||v==null)return null;var n=parseFloat(String(v).replace(/\./g,'').replace(',','.'));if(String(v).indexOf(',')<0)n=parseFloat(v);return isFinite(n)?n:null;}
-function fpParams(){var p=(FP.dados&&FP.dados.params)||{};return {icms:+p.icms||0,pisCofins:+p.pisCofins||0,despFV:+p.despFV||0,credIcms:!!p.credIcms,credPisCofins:+p.credPisCofins||0,lucroAlvo:+p.lucroAlvo||0};}
+function fpParams(){var p=(FP.dados&&FP.dados.params)||{};return {icms:+p.icms||0,pisCofins:+p.pisCofins||0,despFV:+p.despFV||0,credUF:(p.credUF&&typeof p.credUF==='object')?p.credUF:{},credPisCofins:+p.credPisCofins||0,lucroAlvo:+p.lucroAlvo||0};}
 function fpVal(a,b){return a!=null&&a!==''?+a:b;}
 function fpCalc(p){
   var P=fpParams(),ed=p.ed||{},nf=p.nf||null,pl=p.pl||{};
@@ -3066,7 +3066,8 @@ function fpCalc(p){
   var freteUnit=freteNF&&prodNF?custo*freteNF/prodNF:0;
   var comIpi=custo*(1+ajuste/100);
   var bruto=comIpi+custo*st/100+freteUnit;
-  var credIcms=P.credIcms&&src==='nf'?(nf.icmsUnit||0):0;
+  var ufCred=src==='nf'&&nf.uf&&nf.icmsAliq>0?P.credUF[nf.uf]:null;
+  var credIcms=ufCred!=null?custo*(+ufCred)/100:0;
   var credPC=(comIpi+freteUnit)*P.credPisCofins/100;
   var liq=bruto-credIcms-credPC;
   var lucro=fpVal(ed.lucro,pl.lucro||0);
@@ -3150,16 +3151,31 @@ function fpDraw(){
     body.innerHTML='<div class="fp-card"><b>Comece pela base de preços</b><p style="font-size:13px;color:#57534e;margin:6px 0 0">A base junta a sua planilha de preços com as últimas NFs de compra do Bling. Use <b>📥 Importar base</b> para carregar o arquivo <code>base-formacao-preco.json</code>.</p></div>';return;}
   var m=FP.dados.meta||{};
   meta.textContent=Object.keys(FP.dados.produtos).length+' produtos · NFs de compra de '+fpDt(m.nfDe)+' a '+fpDt(m.nfAte)+' ('+(m.qtdNF||0)+' notas) · base gerada em '+fpDt(m.geradoEm);
-  if(!fpEl('fpParams')){
-    body.innerHTML=
-      '<details class="fp-card fp-info"><summary>ℹ️ Como o preço é calculado</summary>'+
-      '<ul><li><b>Custo NF</b>: valor unitário da última compra no Bling. Caixas (ex.: CX 12) são convertidas para unidade.</li>'+
-      '<li><b>IPI/ajuste</b>: diferença entre o total da NF e a soma dos produtos (IPI, ST destacada ou desconto da nota).</li>'+
-      '<li><b>Frete</b>: se a NF trouxe frete (CIF), ele já vem preenchido. Se é FOB, o campo fica vermelho para você informar o valor do CT-e. O frete é rateado pelo valor dos produtos da nota.</li>'+
-      '<li><b>Preço atualizado</b>: custo total × (1 + %Lucro), o mesmo método da sua planilha.</li>'+
-      '<li><b>Margem real</b>: o que sobra do preço depois de ICMS, PIS/COFINS, despesas e do custo líquido (custo menos créditos).</li>'+
-      '<li><b>Preço sugerido</b>: markup divisor = custo líquido ÷ (1 − impostos − despesas − lucro alvo).</li></ul></details>'+
-      '<div class="fp-card"><div style="font-size:13px;font-weight:700;margin-bottom:8px">⚙️ Parâmetros (valem para todos os produtos)</div><div class="fp-params" id="fpParams"></div></div>'+
+  var abas='<div class="fp-bar" style="border-bottom:2px solid #e7e5e4;padding-bottom:0;margin-bottom:14px;gap:0">'+
+    [['tabela','📋 Tabela de preços'],['param','⚙️ Parâmetros']].map(function(t){var on=FP.aba===t[0];
+      return '<button type="button" data-aba="'+t[0]+'" style="font:inherit;font-size:13px;font-weight:'+(on?'700':'500')+';cursor:pointer;border:none;background:none;padding:8px 16px;margin-bottom:-2px;border-bottom:3px solid '+(on?'#d97706':'transparent')+';color:'+(on?'#b45309':'#78716c')+'">'+t[1]+'</button>';}).join('')+'</div>';
+  if(FP.aba==='param'){
+    if(FP._rend!=='param'||!fpEl('fpParams')){FP._rend='param';
+      body.innerHTML=abas+
+        '<div class="fp-card"><div style="font-size:14px;font-weight:700;margin-bottom:10px">⚙️ Impostos, despesas e lucro (valem para todos os produtos)</div><div class="fp-params" id="fpParams"></div></div>'+
+        '<div class="fp-card"><div style="font-size:14px;font-weight:700">🗺️ Crédito de ICMS por estado do fornecedor</div>'+
+        '<p style="font-size:12px;color:#57534e;margin:4px 0 10px">Preencha o % de crédito de ICMS que vocês aproveitam nas compras de cada estado. Ele é abatido do custo (sobre o valor do produto na NF) dos itens comprados daquele estado. Deixe em branco para não abater. Itens isentos/sem ICMS destacado na NF não geram crédito.</p>'+
+        '<div class="fp-params" id="fpUF" style="grid-template-columns:repeat(auto-fill,minmax(120px,1fr))"></div></div>'+
+        '<details class="fp-card fp-info" open><summary>ℹ️ Como o preço é calculado</summary>'+
+        '<ul><li><b>Custo NF</b>: valor unitário da última compra no Bling. Caixas (ex.: CX 12) são convertidas para unidade.</li>'+
+        '<li><b>IPI/ajuste</b>: diferença entre o total da NF e a soma dos produtos (IPI, ST destacada ou desconto da nota).</li>'+
+        '<li><b>Frete</b>: se a NF trouxe frete (CIF), ele já vem preenchido. Se é FOB, o campo fica vermelho para você informar o valor do CT-e. O frete é rateado pelo valor dos produtos da nota.</li>'+
+        '<li><b>Custo líquido</b>: custo total menos o crédito de ICMS do estado (tabela acima) e o crédito de PIS/COFINS.</li>'+
+        '<li><b>Preço atualizado</b>: custo total × (1 + %Lucro), o mesmo método da sua planilha.</li>'+
+        '<li><b>Margem real</b>: o que sobra do preço depois de ICMS, PIS/COFINS, despesas e do custo líquido.</li>'+
+        '<li><b>Preço sugerido</b>: markup divisor = custo líquido ÷ (1 − impostos − despesas − lucro alvo).</li></ul></details>';
+      fpLigaAbas();
+    }
+    fpDrawParams();fpDrawUF();return;
+  }
+  if(FP._rend!=='tabela'||!fpEl('fpTb')){FP._rend='tabela';
+    body.innerHTML=abas+
+      '<div id="fpResumo" style="font-size:12px;color:#78716c;margin:-4px 0 10px"></div>'+
       '<div class="fp-kpis" id="fpKpis"></div>'+
       '<div class="fp-bar"><input type="search" id="fpQ" placeholder="Buscar por código, nome ou fornecedor" aria-label="Buscar produto">'+
       '<select id="fpOrd" class="fp-btn" aria-label="Ordenar"><option value="cod">Ordem da planilha</option><option value="nome">Nome</option><option value="var">Maior variação de custo</option><option value="mg">Menor margem</option><option value="data">Compra mais recente</option></select>'+
@@ -3169,26 +3185,45 @@ function fpDraw(){
       '<th>Produto</th><th style="text-align:left">Última compra</th><th>Custo planilha</th><th>Custo NF</th><th>IPI/ajuste %</th><th>ST %</th><th>Frete da NF (R$)</th>'+
       '<th>Custo total</th><th>% Lucro</th><th>Preço tabela</th><th>Preço atualizado</th><th>Margem real</th><th>Sugerido (alvo)</th><th></th>'+
       '</tr></thead><tbody id="fpTb"></tbody></table></div><div id="fpMais" style="margin-top:10px;text-align:center"></div>';
+    fpLigaAbas();
     var q=fpEl('fpQ');q.value=FP.q;q.oninput=function(){FP.q=q.value;FP.lim=150;fpDrawTable();fpDrawKpis();};
     var o=fpEl('fpOrd');o.value=FP.ord;o.onchange=function(){FP.ord=o.value;fpDrawTable();};
     fpEl('fpAplTodos').onclick=fpAplicarFiltrados;
   }
-  fpDrawParams();fpDrawKpis();fpDrawChips();fpDrawTable();
+  fpDrawResumo();fpDrawKpis();fpDrawChips();fpDrawTable();
+}
+function fpLigaAbas(){FP.root.querySelectorAll('[data-aba]').forEach(function(b){b.onclick=function(){FP.aba=b.dataset.aba;FP._rend='';fpDraw();};});}
+function fpDrawResumo(){
+  var el=fpEl('fpResumo');if(!el)return;var P=fpParams(),n=Object.keys(P.credUF).filter(function(u){return P.credUF[u]!=null;}).length;
+  function pc(v){return (+v||0).toLocaleString('pt-BR',{maximumFractionDigits:2})+'%';}
+  el.innerHTML='Parâmetros: ICMS '+pc(P.icms)+' · PIS/COFINS '+pc(P.pisCofins)+' · Desp. F+V '+pc(P.despFV)+' · Créd. PIS/COFINS '+pc(P.credPisCofins)+' · Lucro alvo '+pc(P.lucroAlvo)+' · Créd. ICMS: '+(n?n+' estado(s) preenchido(s)':'nenhum estado')+' <a href="#" id="fpIrParam" style="color:#b45309">alterar</a>';
+  fpEl('fpIrParam').onclick=function(e){e.preventDefault();FP.aba='param';FP._rend='';fpDraw();};
 }
 function fpDrawParams(){
   var P=fpParams(),el=fpEl('fpParams');if(!el)return;
-  function inp(id,l,v,dica){return '<div><label for="fpP_'+id+'" title="'+fpEsc(dica)+'">'+l+'</label><input type="number" step="0.01" id="fpP_'+id+'" value="'+v+'"></div>';}
-  el.innerHTML=inp('icms','ICMS saída %',P.icms,'Alíquota efetiva de ICMS sobre a venda')+
-    inp('pisCofins','PIS/COFINS saída %',P.pisCofins,'Lucro Real não cumulativo: 1,65% + 7,6%')+
-    inp('despFV','Desp. fixas + variáveis %',P.despFV,'Despesas da empresa sobre o faturamento')+
-    inp('credPisCofins','Crédito PIS/COFINS compra %',P.credPisCofins,'Crédito sobre custo + IPI + frete. Coloque 0 se não aproveita')+
-    inp('lucroAlvo','Lucro alvo sobre a venda %',P.lucroAlvo,'Usado no preço sugerido e no filtro de margem baixa')+
-    '<div><label for="fpP_credIcms">Crédito de ICMS da entrada</label><select id="fpP_credIcms" class="fp-btn" style="width:100%"><option value="0">Não abater (ICMS saída já é efetivo)</option><option value="1">Abater crédito da NF</option></select></div>';
-  fpEl('fpP_credIcms').value=P.credIcms?'1':'0';
+  function inp(id,l,v,dica){return '<div><label for="fpP_'+id+'" title="'+fpEsc(dica)+'">'+l+'</label><input type="number" step="0.01" id="fpP_'+id+'" value="'+v+'"><div class="fp-mu" style="margin-top:2px">'+fpEsc(dica)+'</div></div>';}
+  el.innerHTML=inp('icms','ICMS saída %',P.icms,'Alíquota efetiva sobre a venda')+
+    inp('pisCofins','PIS/COFINS saída %',P.pisCofins,'Lucro Real: 1,65% + 7,6%')+
+    inp('despFV','Desp. fixas + variáveis %',P.despFV,'Despesas sobre o faturamento')+
+    inp('credPisCofins','Crédito PIS/COFINS compra %',P.credPisCofins,'Sobre custo + IPI + frete. 0 se não aproveita')+
+    inp('lucroAlvo','Lucro alvo sobre a venda %',P.lucroAlvo,'Preço sugerido e filtro de margem');
   ['icms','pisCofins','despFV','credPisCofins','lucroAlvo'].forEach(function(k){
-    fpEl('fpP_'+k).onchange=function(e){var v=fpNum(e.target.value);if(v==null){e.target.value=P[k];return;}FP.dados.params=FP.dados.params||{};FP.dados.params[k]=v;fpSalvar('params',FP.dados.params);fpDrawKpis();fpDrawTable();};
+    fpEl('fpP_'+k).onchange=function(e){var v=fpNum(e.target.value);if(v==null){e.target.value=P[k];return;}FP.dados.params=FP.dados.params||{};FP.dados.params[k]=v;fpSalvar('params',FP.dados.params);fpToast('Parâmetro salvo');};
   });
-  fpEl('fpP_credIcms').onchange=function(e){FP.dados.params=FP.dados.params||{};FP.dados.params.credIcms=e.target.value==='1';fpSalvar('params',FP.dados.params);fpDrawKpis();fpDrawTable();};
+}
+var FP_UFS=['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
+function fpDrawUF(){
+  var el=fpEl('fpUF');if(!el)return;var P=fpParams();
+  var vistos={};fpLista().forEach(function(p){if(p.nf&&p.nf.uf){var u=p.nf.uf;vistos[u]=vistos[u]||{n:0,al:{}};vistos[u].n++;if(p.nf.icmsAliq)vistos[u].al[p.nf.icmsAliq]=1;}});
+  var ordem=FP_UFS.slice().sort(function(a,b){return (vistos[b]?vistos[b].n:0)-(vistos[a]?vistos[a].n:0)||a.localeCompare(b);});
+  el.innerHTML=ordem.map(function(u){var v=P.credUF[u],vi=vistos[u];
+    var al=vi?Object.keys(vi.al).map(function(x){return x+'%';}).join(', '):'';var dica=vi?vi.n+' produto(s) · NF: '+(al||'sem ICMS'):'sem compras no período';
+    return '<div><label for="fpUF_'+u+'"'+(vi?' style="color:#b45309"':'')+'>'+u+'</label><input type="number" step="0.01" min="0" max="30" id="fpUF_'+u+'" data-uf="'+u+'" value="'+(v==null?'':v)+'" placeholder="—"><div class="fp-mu" style="margin-top:2px">'+fpEsc(dica)+'</div></div>';}).join('');
+  el.querySelectorAll('input[data-uf]').forEach(function(i){i.onchange=function(){
+    var u=i.dataset.uf,t=i.value.trim(),v=t===''?null:fpNum(t);
+    if(t!==''&&(v==null||v<0||v>30)){i.value=P.credUF[u]==null?'':P.credUF[u];fpToast('Informe um % entre 0 e 30');return;}
+    FP.dados.params=FP.dados.params||{};var c=FP.dados.params.credUF||{};if(v==null)delete c[u];else c[u]=v;FP.dados.params.credUF=c;
+    fpSalvar('params/credUF',c,'PUT');fpToast('Crédito de ICMS de '+u+(v==null?' removido':' = '+fpP(v)));};});
 }
 function fpDrawKpis(){
   var el=fpEl('fpKpis');if(!el)return;
