@@ -329,17 +329,19 @@ async function fbSaveHistoricoAnalise(cnpj,registro){
   try{
     var chave=fbHistChaveCnpj(cnpj);
     if(!chave) return;
-    var id='a_'+Date.now();
-    await fetch(FIREBASE_DB+'/'+FIREBASE_HISTORICO_PATH+'/'+chave+'/'+id+'.json',{
+    // REGRA: 1 analise por CNPJ. Sempre sobrescreve a mesma entrada ('atual').
+    // Historico legado (a_<timestamp>) e preservado quando ja existir, mas novas
+    // analises nao criam entradas duplicadas.
+    await fetch(FIREBASE_DB+'/'+FIREBASE_HISTORICO_PATH+'/'+chave+'/atual.json',{
       method:'PUT',headers:{'Content-Type':'application/json'},
       body:JSON.stringify(registro)
     });
-    // Limpa registros com mais de 3 anos (retenção mínima)
+    // RETENCAO: apaga analises com mais de 1 ano (todas as entradas sob este CNPJ).
     var r=await fetch(FIREBASE_DB+'/'+FIREBASE_HISTORICO_PATH+'/'+chave+'.json');
     if(r.ok){
       var todos=await r.json();
       if(todos){
-        var limite=new Date();limite.setFullYear(limite.getFullYear()-3);
+        var limite=new Date();limite.setFullYear(limite.getFullYear()-1);
         Object.entries(todos).forEach(function(e){
           var k=e[0],v=e[1];
           if(v&&v.timestamp&&new Date(v.timestamp)<limite){
@@ -349,6 +351,40 @@ async function fbSaveHistoricoAnalise(cnpj,registro){
       }
     }
   }catch(e){}
+}
+
+// Limpeza global: percorre TODOS os CNPJs e apaga chaves cuja analise tem >1 ano.
+// Chamada 1x por sessao quando a aba Modelo em Teste abre.
+async function fbLimparHistoricoExpirado(){
+  try{
+    var r=await fetch(FIREBASE_DB+'/'+FIREBASE_HISTORICO_PATH+'.json');
+    if(!r.ok) return;
+    var todos=await r.json();
+    if(!todos) return;
+    var limite=new Date();limite.setFullYear(limite.getFullYear()-1);
+    Object.entries(todos).forEach(function(e){
+      var chaveCnpj=e[0], entradas=e[1];
+      if(!entradas) return;
+      Object.entries(entradas).forEach(function(ee){
+        var k=ee[0],v=ee[1];
+        if(v&&v.timestamp&&new Date(v.timestamp)<limite){
+          fetch(FIREBASE_DB+'/'+FIREBASE_HISTORICO_PATH+'/'+chaveCnpj+'/'+k+'.json',{method:'DELETE'}).catch(function(){});
+        }
+      });
+    });
+  }catch(e){}
+}
+
+// Retorna a analise MAIS RECENTE de um CNPJ (ou null)
+async function fbGetAnaliseMaisRecente(cnpj){
+  try{
+    var entradas=await fbGetHistoricoAnalise(cnpj);
+    if(!entradas) return null;
+    var lista=Object.values(entradas).filter(function(v){return v&&v.timestamp;});
+    if(!lista.length) return null;
+    lista.sort(function(a,b){return new Date(b.timestamp)-new Date(a.timestamp);});
+    return lista[0];
+  }catch(e){return null;}
 }
 
 // Inicializa admin padrão se não existir
@@ -10247,6 +10283,12 @@ function renderModeloEmTeste(){
   var wrap=document.createElement('div');
   wrap.style.cssText='padding:0 0 60px 0';
 
+  // Limpeza unica por sessao: apaga analises com mais de 1 ano
+  if(!window._mod5LimpezaFeita){
+    window._mod5LimpezaFeita=true;
+    try{ if(typeof fbLimparHistoricoExpirado==='function') fbLimparHistoricoExpirado(); }catch(e){}
+  }
+
   var S={
     checks:[],negado:false,protestoDiretor:false,
     mE:0,mS:0,nS:1,sit:'',
@@ -10470,10 +10512,42 @@ function renderModeloEmTeste(){
     var inp=q('#m5inp');
     var raw=inp.value.replace(/\D/g,'');
     if(raw.length!==14){alert('CNPJ inv\u00e1lido.');return;}
-    limpar();
     var pb=q('#m5pb');
-    pb.textContent='Consultando Receita Federal...';
+    pb.textContent='Verificando hist\u00f3rico...';
     (async function(){
+      // CHECAGEM DE DUPLICIDADE: 1 analise por CNPJ
+      try{
+        var existente=await fbGetAnaliseMaisRecente(raw);
+        if(existente){
+          var qtDias=existente.timestamp?Math.floor((Date.now()-new Date(existente.timestamp))/(1000*60*60*24)):'?';
+          var autor=existente.responsavel||'desconhecido';
+          var dt=existente.dataHora||'data desconhecida';
+          var cond=(existente.condicao_pagamento||'').toUpperCase();
+          var opc=prompt(
+            '\u26a0\ufe0f  AN\u00c1LISE J\u00c1 EXISTENTE PARA ESTE CNPJ\n\n'
+            +'Empresa: '+(existente.empresa||'(sem nome)')+'\n'
+            +'Realizada por: '+autor+'\n'
+            +'Em: '+dt+' ('+qtDias+' dias atr\u00e1s)\n'
+            +'Resultado: '+(cond||'n\u00e3o informado')+'\n\n'
+            +'O que voc\u00ea deseja fazer?\n\n'
+            +'  1 = Ver a an\u00e1lise existente (abre no Hist\u00f3rico)\n'
+            +'  2 = Atualizar/refazer esta an\u00e1lise (sobrescreve a atual)\n'
+            +'  3 = Cancelar\n\n'
+            +'Digite 1, 2 ou 3:'
+          );
+          if(opc===null||opc.trim()==='3'||opc.trim()===''){
+            pb.textContent='Opera\u00e7\u00e3o cancelada. Digite outro CNPJ ou escolha "Ver hist\u00f3rico".';
+            return;
+          }
+          if(opc.trim()==='1'){
+            pb.innerHTML='<span style="color:#0f766e"><i class="ti ti-history"></i> V\u00e1 para a aba <b>Clientes \u2192 Hist\u00f3rico</b> para visualizar a an\u00e1lise anterior.</span>';
+            return;
+          }
+          // opc === '2' -> prossegue (vai sobrescrever ao salvar)
+        }
+      }catch(e){/* se falhar o check, segue normal */}
+      limpar();
+      pb.textContent='Consultando Receita Federal...';
       try{
         var r=await fetch('https://publica.cnpj.ws/cnpj/'+raw);
         if(!r.ok)throw new Error('CNPJ n\u00e3o encontrado ('+r.status+')');
