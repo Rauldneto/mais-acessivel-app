@@ -318,10 +318,25 @@ async function fbGetHistoricoAnalise(cnpj){
   }catch(e){return null;}
 }
 
+// OTIMIZACAO: cache em memoria. Evita baixar todo o historico (44MB!) a cada abertura
+// da aba Historico. O cache dura 5 min e e invalidado quando qualquer analise e salva/apagada.
+window._fbHistCache = null;
+window._fbHistCacheTS = 0;
+window.fbInvalidarHistCache = function(){ window._fbHistCache=null; window._fbHistCacheTS=0; };
+
 async function fbGetTodoHistoricoAnalise(){
   try{
+    var agora=Date.now();
+    // Cache valido por 5 minutos
+    if(window._fbHistCache && (agora-window._fbHistCacheTS)<300000){
+      return window._fbHistCache;
+    }
     var r=await fetch(FIREBASE_DB+'/'+FIREBASE_HISTORICO_PATH+'.json');
-    return r.ok?await r.json():null;
+    if(!r.ok) return null;
+    var dados=await r.json();
+    window._fbHistCache=dados;
+    window._fbHistCacheTS=agora;
+    return dados;
   }catch(e){return null;}
 }
 
@@ -329,6 +344,8 @@ async function fbSaveHistoricoAnalise(cnpj,registro){
   try{
     var chave=fbHistChaveCnpj(cnpj);
     if(!chave) return;
+    // Invalida o cache do historico para proxima leitura refletir a mudanca
+    if(window.fbInvalidarHistCache) window.fbInvalidarHistCache();
     // REGRA: 1 analise por CNPJ. Sempre sobrescreve a mesma entrada ('atual').
     // Historico legado (a_<timestamp>) e preservado quando ja existir, mas novas
     // analises nao criam entradas duplicadas.
@@ -610,7 +627,7 @@ var TRANS_DATA = TRANS.map(function(t){return Object.assign({},t,{triangulacao:f
 })();
 
 // ── FIREBASE REALTIME DATABASE ─────────────────────────────────
-var FIREBASE_DB = 'https://maisacessivel-v20-default-rtdb.firebaseio.com';
+var FIREBASE_DB = 'https://maisacessivel-1d0ad-default-rtdb.firebaseio.com';
 
 function fbPut(key, data) {
   fetch(FIREBASE_DB + '/' + key + '.json', {
@@ -10283,11 +10300,9 @@ function renderModeloEmTeste(){
   var wrap=document.createElement('div');
   wrap.style.cssText='padding:0 0 60px 0';
 
-  // Limpeza unica por sessao: apaga analises com mais de 1 ano
-  if(!window._mod5LimpezaFeita){
-    window._mod5LimpezaFeita=true;
-    try{ if(typeof fbLimparHistoricoExpirado==='function') fbLimparHistoricoExpirado(); }catch(e){}
-  }
+  // OTIMIZACAO: a limpeza automatica de analises >1 ano foi REMOVIDA porque
+  // baixava todo o historico (44MB) toda vez que a aba abria, estourando a cota.
+  // A limpeza acontece sob demanda via botao "Limpar expirados" no Historico.
 
   var S={
     checks:[],negado:false,protestoDiretor:false,
