@@ -10515,35 +10515,49 @@ function renderModeloEmTeste(){
     var pb=q('#m5pb');
     pb.textContent='Verificando hist\u00f3rico...';
     (async function(){
-      // CHECAGEM DE DUPLICIDADE: 1 analise por CNPJ
+      // CHECAGEM DE DUPLICIDADE: 1 analise por CNPJ (modal HTML, nao prompt nativo)
       try{
         var existente=await fbGetAnaliseMaisRecente(raw);
         if(existente){
-          var qtDias=existente.timestamp?Math.floor((Date.now()-new Date(existente.timestamp))/(1000*60*60*24)):'?';
-          var autor=existente.responsavel||'desconhecido';
-          var dt=existente.dataHora||'data desconhecida';
-          var cond=(existente.condicao_pagamento||'').toUpperCase();
-          var opc=prompt(
-            '\u26a0\ufe0f  AN\u00c1LISE J\u00c1 EXISTENTE PARA ESTE CNPJ\n\n'
-            +'Empresa: '+(existente.empresa||'(sem nome)')+'\n'
-            +'Realizada por: '+autor+'\n'
-            +'Em: '+dt+' ('+qtDias+' dias atr\u00e1s)\n'
-            +'Resultado: '+(cond||'n\u00e3o informado')+'\n\n'
-            +'O que voc\u00ea deseja fazer?\n\n'
-            +'  1 = Ver a an\u00e1lise existente (abre no Hist\u00f3rico)\n'
-            +'  2 = Atualizar/refazer esta an\u00e1lise (sobrescreve a atual)\n'
-            +'  3 = Cancelar\n\n'
-            +'Digite 1, 2 ou 3:'
-          );
-          if(opc===null||opc.trim()==='3'||opc.trim()===''){
+          var escolha=await new Promise(function(resolve){
+            var qtDias=existente.timestamp?Math.floor((Date.now()-new Date(existente.timestamp))/(1000*60*60*24)):'?';
+            var autor=existente.responsavel||'desconhecido';
+            var dt=existente.dataHora||'data desconhecida';
+            var cond=(existente.condicao_pagamento||'').toUpperCase();
+            var ov=document.createElement('div');
+            ov.id='m5-modal-dup';
+            ov.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+            ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden">'
+              +'<div style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;padding:16px 20px;display:flex;align-items:center;gap:10px">'
+              +'<i class="ti ti-alert-triangle" style="font-size:22px"></i>'
+              +'<div style="font-size:15px;font-weight:700">An\u00e1lise j\u00e1 existente para este CNPJ</div></div>'
+              +'<div style="padding:18px 20px">'
+              +'<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#78350f;line-height:1.7">'
+              +'<b>Empresa:</b> '+(existente.empresa||'(sem nome)')+'<br>'
+              +'<b>Realizada por:</b> '+autor+'<br>'
+              +'<b>Em:</b> '+dt+' ('+qtDias+' dias atr\u00e1s)<br>'
+              +'<b>Resultado:</b> '+(cond||'n\u00e3o informado')
+              +'</div>'
+              +'<p style="font-size:13px;color:#334155;margin-bottom:14px;line-height:1.6">O que deseja fazer?</p>'
+              +'<div style="display:flex;flex-direction:column;gap:8px">'
+              +'<button data-op="1" style="background:#f1f5f9;color:#0f766e;border:1.5px solid #99f6e4;border-radius:8px;padding:12px 14px;font-size:13px;font-weight:600;cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px"><i class="ti ti-history" style="font-size:16px"></i> Ver a an\u00e1lise existente no Hist\u00f3rico</button>'
+              +'<button data-op="2" style="background:#f1f5f9;color:#d97706;border:1.5px solid #fcd34d;border-radius:8px;padding:12px 14px;font-size:13px;font-weight:600;cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px"><i class="ti ti-refresh" style="font-size:16px"></i> Atualizar / refazer esta an\u00e1lise (sobrescreve)</button>'
+              +'<button data-op="3" style="background:#fff;color:#64748b;border:1.5px solid #cbd5e1;border-radius:8px;padding:12px 14px;font-size:13px;font-weight:600;cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px"><i class="ti ti-x" style="font-size:16px"></i> Cancelar</button>'
+              +'</div></div></div>';
+            document.body.appendChild(ov);
+            ov.querySelectorAll('[data-op]').forEach(function(b){
+              b.onclick=function(){var op=b.getAttribute('data-op'); ov.remove(); resolve(op);};
+            });
+          });
+          if(escolha==='3'){
             pb.textContent='Opera\u00e7\u00e3o cancelada. Digite outro CNPJ ou escolha "Ver hist\u00f3rico".';
             return;
           }
-          if(opc.trim()==='1'){
+          if(escolha==='1'){
             pb.innerHTML='<span style="color:#0f766e"><i class="ti ti-history"></i> V\u00e1 para a aba <b>Clientes \u2192 Hist\u00f3rico</b> para visualizar a an\u00e1lise anterior.</span>';
             return;
           }
-          // opc === '2' -> prossegue (vai sobrescrever ao salvar)
+          // escolha === '2' -> prossegue (vai sobrescrever ao salvar)
         }
       }catch(e){/* se falhar o check, segue normal */}
       limpar();
