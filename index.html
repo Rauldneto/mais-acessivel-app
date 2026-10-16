@@ -10515,9 +10515,13 @@ function renderModeloEmTeste(){
     var pb=q('#m5pb');
     pb.textContent='Verificando hist\u00f3rico...';
     (async function(){
-      // CHECAGEM DE DUPLICIDADE: 1 analise por CNPJ (modal HTML, nao prompt nativo)
+      // CHECAGEM DE DUPLICIDADE: 1 analise por CNPJ (modal HTML, nao prompt nativo).
+      // Com timeout de 5s - se Firebase travar, segue a consulta sem bloquear.
       try{
-        var existente=await fbGetAnaliseMaisRecente(raw);
+        var existente=await Promise.race([
+          fbGetAnaliseMaisRecente(raw),
+          new Promise(function(resolve){setTimeout(function(){resolve(null);},5000);})
+        ]);
         if(existente){
           var escolha=await new Promise(function(resolve){
             var qtDias=existente.timestamp?Math.floor((Date.now()-new Date(existente.timestamp))/(1000*60*60*24)):'?';
