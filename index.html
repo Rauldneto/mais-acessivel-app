@@ -224,14 +224,29 @@ function hashSimple(str){
   return (h>>>0).toString(16);
 }
 
+// OTIMIZACAO: cache de usuarios por 10 min. Antes era baixado dezenas de vezes por dia.
+// Invalidado automaticamente ao salvar/deletar usuario.
+window._fbUsersCache=null;
+window._fbUsersCacheTS=0;
+window.fbInvalidarUsersCache=function(){window._fbUsersCache=null;window._fbUsersCacheTS=0;};
+
 async function fbGetUsers(){
   try{
+    var agora=Date.now();
+    if(window._fbUsersCache && (agora-window._fbUsersCacheTS)<600000){
+      return window._fbUsersCache;
+    }
     var r=await fetch(FIREBASE_DB+'/'+FIREBASE_USERS_PATH+'.json');
-    return r.ok?await r.json():null;
+    if(!r.ok) return null;
+    var dados=await r.json();
+    window._fbUsersCache=dados;
+    window._fbUsersCacheTS=agora;
+    return dados;
   }catch(e){return null;}
 }
 
 async function fbSaveUser(id,data){
+  if(window.fbInvalidarUsersCache) window.fbInvalidarUsersCache();
   await fetch(FIREBASE_DB+'/'+FIREBASE_USERS_PATH+'/'+id+'.json',{
     method:'PUT',headers:{'Content-Type':'application/json'},
     body:JSON.stringify(data)
@@ -239,6 +254,7 @@ async function fbSaveUser(id,data){
 }
 
 async function fbDeleteUser(id){
+  if(window.fbInvalidarUsersCache) window.fbInvalidarUsersCache();
   await fetch(FIREBASE_DB+'/'+FIREBASE_USERS_PATH+'/'+id+'.json',{method:'DELETE'});
 }
 
@@ -2724,6 +2740,9 @@ function renderHistoricoCredito(){
 
   var todosRegistros=[];
 
+  // OTIMIZACAO: nao baixa mais TUDO (44MB). Usa cache em memoria com validade de 5 min
+  // (ja implementado em fbGetTodoHistoricoAnalise). Nas proximas versoes, migrar para
+  // listagem shallow + download sob demanda ao clicar no CNPJ.
   async function carregar(){
     var todoHist=await fbGetTodoHistoricoAnalise();
     todosRegistros=[];
