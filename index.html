@@ -3066,6 +3066,20 @@ var DSP={root:null,tela:null,listas:null,cfg:null,desp:{},carregado:false,sel:nu
 var DSP_CFG_PADRAO={cartoes:[{formaId:'3677778',fechamento:'',vencimento:''},{formaId:'6642716',fechamento:'',vencimento:''}],padrao:{pix:'3639534',dinheiro:'3750430'},contaPorForma:{}};
 if((location.hash||'')==='#financeiro'){STATE.modulo='mod14';}
 if((location.hash||'')==='#celular'){STATE.modulo='mod14';DSP.forcarMob=true;}
+if((location.hash||'')==='#compartilhado'){STATE.modulo='mod14';DSP.forcarMob=true;DSP.compartilhado=true;DSP.mtela='enviar';history.replaceState(null,'',location.pathname+'#celular');}
+// Registra o service worker que recebe comprovantes compartilhados (Android: Compartilhar -> Despesas)
+try{if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js',{scope:'./'}).catch(function(){});}catch(_e){}
+async function dspPegarCompartilhado(){
+  DSP.compartilhado=false;
+  try{if(!('caches' in window))return;var c=await caches.open('dsp-compartilhado');var ks=await c.keys();if(!ks.length)return;
+    var arqs=[],txt='';
+    for(var i=0;i<ks.length;i++){var r=await c.match(ks[i]);if(!r)continue;
+      if(/\/texto$/.test(ks[i].url)){txt=await r.text();continue;}
+      var bl=await r.blob();var nome=decodeURIComponent(r.headers.get('X-Nome')||'comprovante');arqs.push(new File([bl],nome,{type:bl.type||r.headers.get('Content-Type')||'image/jpeg'}));}
+    await Promise.all(ks.map(function(k){return c.delete(k);}));
+    if(arqs.length){DSP.fotosNovas=[];await dspAddArquivos(arqs);DSP.msg='Comprovante recebido pelo compartilhar. Confira e toque em Enviar.';DSP.msgTipo='ok';DSP.obsCompart=txt&&!/^https?:/.test(txt)?txt:'';dspDraw();}
+  }catch(e){DSP.msg='Não consegui receber o arquivo compartilhado. Tente pela Galeria.';DSP.msgTipo='err';dspDraw();}
+}
 
 function dspEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function dspEl(id){return document.getElementById(id);}
@@ -3104,6 +3118,30 @@ function dspVencSugerido(em,formaId){
     return {v:'',dica:'Cadastre o fechamento deste cartão em Configurações, ou informe a data.'};}
   if(dspEhPix(formaId)){var u=dspDiaUtil(em);return {v:u,dica:u!==em?'Pix fora de dia útil: vence no próximo dia útil':''};}
   return {v:em,dica:''};
+}
+// ---------- duplicados (comparação local, sem IA) ----------
+async function dspHash(b64){try{var buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(b64));return Array.from(new Uint8Array(buf)).slice(0,12).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return '';}}
+function dspNumDoc(s){var d=String(s||'').replace(/\D/g,'').replace(/^0+/,'');return d.length>=4?d:'';}
+function dspPalavra(s){var w=dspNorm(s).replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(x){return x.length>2&&['ltda','comercio','com','posto','supermercado','auto','servicos','eireli','me','epp','the'].indexOf(x)<0;});return w[0]||'';}
+function dspDias(a,b){if(!a||!b)return 99;return Math.abs((new Date(a+'T12:00:00')-new Date(b+'T12:00:00'))/864e5);}
+function dspDuplicados(id){
+  var d=DSP.desp[id];if(!d)return [];var out=[];
+  Object.keys(DSP.desp).forEach(function(k){if(k===id)return;var o=DSP.desp[k];if(!o)return;var motivo='';
+    if(d.fotoHash&&o.fotoHash&&d.fotoHash===o.fotoHash)motivo='mesma foto';
+    else{var nd=dspNumDoc(d.numeroDocumento),no=dspNumDoc(o.numeroDocumento);
+      var mesmoForn=(d.fornecedor&&o.fornecedor&&((d.fornecedor.doc&&d.fornecedor.doc===o.fornecedor.doc)||(dspPalavra(d.fornecedor.nome)&&dspPalavra(d.fornecedor.nome)===dspPalavra(o.fornecedor.nome))))||(d.contato&&o.contato&&String(d.contato.id)===String(o.contato.id));
+      var mesmoValor=d.valor>0&&o.valor>0&&Math.abs(d.valor-o.valor)<0.005;
+      if(nd&&nd===no&&(mesmoForn||mesmoValor))motivo='mesmo nº de documento';
+      else if(mesmoValor&&mesmoForn&&dspDias(d.emissao,o.emissao)<=1)motivo='mesmo fornecedor, valor e data';}
+    if(motivo)out.push({id:k,motivo:motivo,status:o.status,nome:(o.contato&&o.contato.nome)||(o.fornecedor&&o.fornecedor.nome)||'',valor:o.valor,emissao:o.emissao,lancadoEm:o.lancadoEm,blingId:o.blingId});});
+  return out;
+}
+function dspDupHtml(id,curto){
+  var L=dspDuplicados(id);if(!L.length)return '';
+  if(curto)return '<span class="fin-chip err">⚠️ possível duplicado</span>';
+  return '<div class="fin-msg err" style="display:block"><b>⚠️ Possível lançamento duplicado</b>'+L.map(function(x){
+    return '<div style="margin-top:4px">'+dspEsc(x.motivo)+': '+dspEsc(x.nome)+(x.valor>0?' · R$ '+dspMoney(x.valor):'')+' · '+dspBr(x.emissao)+' — '+(x.status==='lancado'?'<b>já lançado no Bling'+(x.blingId?' (ID '+dspEsc(x.blingId)+')':'')+'</b>':'ainda pendente')+(x.status!=='lancado'?' <button type="button" class="fin-sw" data-dup="'+x.id+'">abrir</button>':'')+'</div>';}).join('')+
+    '<div style="margin-top:6px;font-weight:400">Se for a mesma despesa, exclua esta. Se forem compras diferentes, pode seguir.</div></div>';
 }
 function dspFaltas(d){var f=[];if(!d.contato)f.push('Fornecedor no Bling');if(!(d.valor>0))f.push('Valor');if(!d.historico)f.push('Histórico');if(!d.formaId)f.push('Forma de pagamento');if(!d.vencimento)f.push('Vencimento');return f;}
 
@@ -3207,7 +3245,7 @@ async function dspEnviar(){
   var obs=(dspEl('dspObs')||{}).value||'';
   var item={fotos:DSP.fotosNovas.slice(),obs:obs.trim(),ts:Date.now()};
   DSP.enviando=true;DSP.msg='Enviando…';DSP.msgTipo='info';dspDraw();
-  try{var id=await dspSubir(item);DSP.fotosNovas=[];DSP.ultimoEnvio=id;DSP.msg='';dspDraw();dspLerDespesa(id,item.fotos,item.obs);}
+  try{var id=await dspSubir(item);DSP.fotosNovas=[];DSP.obsCompart='';DSP.ultimoEnvio=id;DSP.msg='';dspDraw();dspLerDespesa(id,item.fotos,item.obs);}
   catch(e){var f=dspFilaLer();f.push(item);if(dspFilaGravar(f)){DSP.fotosNovas=[];DSP.msg='Sem conexão agora. A foto ficou guardada neste celular e sobe sozinha quando a internet voltar.';DSP.msgTipo='warn';}
     else{DSP.msg='Sem conexão e sem espaço para guardar no celular. Tente de novo quando a internet voltar.';DSP.msgTipo='err';}}
   DSP.enviando=false;dspDraw();
@@ -3215,6 +3253,7 @@ async function dspEnviar(){
 async function dspSubir(item){
   var agora=Date.now();
   var doc={status:'lendo',criadoEm:item.ts||agora,atualizadoEm:agora,criadoPor:STATE.usuarioLogado||'',origem:dspMobile()?'celular':'computador',obs:item.obs||'',nFotos:item.fotos.length,emissao:dspIso(new Date(item.ts||agora))};
+  doc.fotoHash=item.fotos[0]?await dspHash(item.fotos[0]):'';
   var r=await dspFb('despesas',{method:'POST',body:doc});var id=r.name;
   await dspFb('fotos/'+id,{method:'PUT',body:item.fotos});
   DSP.desp[id]=doc;return id;
@@ -3451,7 +3490,7 @@ function dspHtmlListaItens(lista){
     var nome=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||(lendo?'Lendo comprovante…':'Fornecedor não identificado');
     return '<button type="button" class="'+cls+'" data-id="'+d.id+'"><span class="t">'+dspEsc(nome)+'</span><span class="v">'+(d.valor>0?'R$ '+dspMoney(d.valor):'')+'</span>'+
       '<span class="m">'+dspEsc(dspBr(d.emissao))+(d.formaId?' · '+dspEsc(dspFormaNome(d.formaId)):'')+(d.criadoPor?' · '+dspEsc(d.criadoPor):'')+'</span>'+
-      '<span class="m">'+(lendo?'<span class="fin-chip">⏳ lendo</span>':(d.leituraErro?'<span class="fin-chip err">leitura falhou</span>':'')+(falta.length?falta.map(function(x){return '<span class="fin-chip warn">'+dspEsc(x)+'</span>';}).join(''):'<span class="fin-chip ok">Pronto para lançar</span>'))+'</span></button>';
+      '<span class="m">'+(lendo?'<span class="fin-chip">⏳ lendo</span>':(d.leituraErro?'<span class="fin-chip err">leitura falhou</span>':'')+(falta.length?falta.map(function(x){return '<span class="fin-chip warn">'+dspEsc(x)+'</span>';}).join(''):'<span class="fin-chip ok">Pronto para lançar</span>'))+(lendo?'':dspDupHtml(d.id,true))+'</span></button>';
   }).join('');
 }
 function dspBindLista(){DSP.root.querySelectorAll('.fin-it[data-id]').forEach(function(b){b.onclick=function(){if(DSP.form&&DSP.form._editado)dspSalvarForm(true);dspAbrir(b.dataset.id);};});}
@@ -3479,7 +3518,7 @@ function dspHtmlFormCard(f,mob,ext){
   function tag(k){return f.incertos?(unc[k]?'<span class="fin-tag unc">conferir</span>':'<span class="fin-tag">lido</span>'):'';}
   function rd(k){return f.incertos&&!f._toq?' fin-read':'';}
   var vs=dspVencSugerido(f.emissao,f.formaId);
-  var h='<div class="fin-card">'+
+  var h='<div class="fin-card">'+(lendo?'':dspDupHtml(DSP.sel,false))+
    (lendo?'<div class="fin-msg info">⏳ A IA está lendo este comprovante. Os campos se preenchem sozinhos em alguns segundos.</div>':'')+
    (f.leituraErro?'<div class="fin-msg warn">'+dspEsc(f.leituraErro)+'</div>':'')+
    (f.obs?'<div class="fin-msg info">Observação de quem enviou: '+dspEsc(f.obs)+'</div>':'')+
@@ -3509,11 +3548,13 @@ function dspHtmlFormCard(f,mob,ext){
       ['Data da compra',dspBr(f.emissao)],['Vencimento',dspBr(f.vencimento)],['Competência',dspBr(f.competencia)],['Nº documento',f.numeroDocumento||'—'],['Histórico',f.historico]];
     h+='<div class="fin-rev" id="dspRev"><b style="font-size:16px">Confirme antes de lançar</b><dl>'+rows.map(function(r){return '<dt>'+r[0]+'</dt><dd>'+dspEsc(r[1])+'</dd>';}).join('')+'</dl>'+
       (f.parcelas>1?'<p class="fin-mu" style="margin:0">Parcelado: o Bling divide o valor total nas parcelas a partir deste vencimento.</p>':'')+
-      '<div class="fin-act" style="margin-top:0"><button type="button" class="fin-btn" id="fVoltar">Voltar e editar</button><button type="button" class="fin-btn pri" id="fLancar"'+(ext?'':' disabled')+'>Confirmar e lançar no Contas a Pagar</button></div></div>';
+      (dspDuplicados(DSP.sel).length?'<div class="fin-msg err" style="margin:0">⚠️ Esta despesa parece duplicada. Confira o aviso no topo antes de lançar.</div>':'')+
+      '<div class="fin-act" style="margin-top:0"><button type="button" class="fin-btn" id="fVoltar">Voltar e editar</button><button type="button" class="fin-btn pri" id="fLancar"'+(ext?'':' disabled')+'>'+(dspDuplicados(DSP.sel).length?'Lançar mesmo assim':'Confirmar e lançar no Contas a Pagar')+'</button></div></div>';
   }
   return h;
 }
 function dspBindConferencia(){
+  DSP.root.querySelectorAll('[data-dup]').forEach(function(b){b.onclick=function(e){e.preventDefault();if(DSP.form&&DSP.form._editado)dspSalvarForm(true);if(DSP.mob)dspMobAbrir(b.dataset.dup);else dspAbrir(b.dataset.dup);};});
   dspBindLista();var ic=dspEl('dspIrCap');if(ic)ic.onclick=function(){DSP.tela='captura';dspDraw();};
   if(!DSP.sel||!dspEl('fNome'))return;var f=DSP.form;
   if(f.nFotos)dspVerFotos(DSP.sel,dspEl('dspFotos'));
@@ -3638,6 +3679,7 @@ function renderFinanceiroMobile(){
   if(!dspTelaCel()&&!(window.matchMedia&&window.matchMedia('(max-width: 760px)').matches))wrap.classList.add('pc');
   else{var f=window.innerWidth/Math.min(screen.width||window.innerWidth,screen.height||window.innerWidth);if(f>1.25){wrap.style.zoom=f.toFixed(3);wrap.style.minHeight=(window.innerHeight/f)+'px';}}
   if(!DSP.mtela)DSP.mtela='enviar';
+  if(DSP.compartilhado)setTimeout(dspPegarCompartilhado,50);
   if(!DSP.carregado)dspCarregar();else setTimeout(dspDraw,0);
   dspFilaEnviar();
   if(!DSP.poll)DSP.poll=setInterval(function(){if(STATE.modulo==='mod14'&&!document.hidden&&DSP.root&&document.body.contains(DSP.root))dspCarregar(true);},30000);
@@ -3696,7 +3738,7 @@ function dspMobEnviar(){
   } else {
     h+='<div class="dm-lbl">'+DSP.fotosNovas.length+' imagem(ns) desta despesa</div><div class="dm-thumbs">'+DSP.fotosNovas.map(function(b,i){return '<div><img src="data:image/jpeg;base64,'+b+'" alt=""><button type="button" data-rm="'+i+'" aria-label="Remover">×</button></div>';}).join('')+
       (DSP.fotosNovas.length<4?'<label for="dmMais"><span>＋</span>Mais uma</label><input id="dmMais" type="file" accept="image/*" capture="environment" hidden>':'')+'</div>'+
-      '<div><div class="dm-lbl">Observação (opcional)</div><input class="dm-in" id="dspObs" placeholder="Ex.: almoço equipe · obra Jardim Goiás"></div>'+
+      '<div><div class="dm-lbl">Observação (opcional)</div><input class="dm-in" id="dspObs" value="'+dspEsc(DSP.obsCompart||'')+'" placeholder="Ex.: almoço equipe · obra Jardim Goiás"></div>'+
       '<p class="fin-mu" style="margin:0">Nota e comprovante da mesma compra podem ir juntos.</p>';
   }
   if(fila)h+='<div class="fin-msg warn">'+fila+' comprovante(s) aguardando internet neste celular. <button type="button" class="fin-sw" id="dspFila">Enviar agora</button></div>';
@@ -3705,6 +3747,7 @@ function dspMobEnviar(){
     h+='<div class="dm-ok"><b>'+(lendo?'⏳ Enviado. Lendo o comprovante…':'✅ Enviado e lido')+'</b>'+
       (lendo?'<span class="fin-mu">Pode guardar o celular. Fica pendente para conferir.</span>':
        '<span style="font-size:14px">'+dspEsc((u.fornecedor&&u.fornecedor.nome)||'Fornecedor não identificado')+(u.valor>0?' · <b style="color:inherit">R$ '+dspMoney(u.valor)+'</b>':'')+(u.formaId?' · '+dspEsc(dspFormaNome(u.formaId)):'')+'</span>'+
+       (dspDuplicados(DSP.ultimoEnvio).length?'<span class="fin-chip err" style="justify-self:start">⚠️ Parece duplicado de outra despesa</span>':'')+
        '<button type="button" class="dm-btn" id="dmVerUlt" style="min-height:44px;font-size:15px">Conferir agora</button>')+'</div>';}
   return h;
 }
@@ -3715,7 +3758,7 @@ function dspMobLista(L,vazioT,vazioD,lanc){
     var nome=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||(lendo?'Lendo comprovante…':'Fornecedor não identificado');
     var cls=lanc?'pronto':(lendo?'lendo':(falta.length?'falta':'pronto'));
     var chips=lanc?'<span class="fin-chip ok">Lançado'+(d.blingId?' · ID '+dspEsc(d.blingId):'')+'</span>':lendo?'<span class="fin-chip">⏳ lendo</span>':
-      (d.leituraErro?'<span class="fin-chip err">leitura falhou</span>':'')+(falta.length?falta.map(function(x){return '<span class="fin-chip warn">'+dspEsc(x)+'</span>';}).join(''):'<span class="fin-chip ok">Pronto para lançar no PC</span>');
+      (d.leituraErro?'<span class="fin-chip err">leitura falhou</span>':'')+(falta.length?falta.map(function(x){return '<span class="fin-chip warn">'+dspEsc(x)+'</span>';}).join(''):'<span class="fin-chip ok">Pronto para lançar no PC</span>')+(lendo?'':dspDupHtml(d.id,true));
     return (lanc?'<div':'<button type="button" data-id="'+d.id+'"')+' class="dm-card '+cls+'"><div class="l1"><span class="n">'+dspEsc(nome)+'</span><span class="v">'+(d.valor>0?'R$ '+dspMoney(d.valor):'—')+'</span></div>'+
       '<div class="m">'+dspEsc(dspBr(lanc?d.vencimento:d.emissao))+(lanc?' (venc.)':'')+(d.formaId?' · '+dspEsc(dspFormaNome(d.formaId)):'')+'</div><div class="c">'+chips+'</div>'+(lanc?'</div>':'</button>');
   }).join('');
