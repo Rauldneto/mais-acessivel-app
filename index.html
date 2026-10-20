@@ -3302,7 +3302,7 @@ async function dspLancar(){
 async function dspExcluir(){
   if(!DSP.sel)return;if(!confirm('Excluir esta despesa do app? (Nada é apagado no Bling.)'))return;
   var id=DSP.sel;try{await dspFb('despesas/'+id,{method:'DELETE'});await dspFb('fotos/'+id,{method:'DELETE'});}catch(e){}
-  delete DSP.desp[id];DSP.sel=null;DSP.form=null;DSP.msg='Despesa excluída do app.';DSP.msgTipo='ok';dspDraw();
+  delete DSP.desp[id];DSP.sel=null;DSP.form=null;if(DSP.mob)DSP.mtela='pend';DSP.msg='Despesa excluída do app.';DSP.msgTipo='ok';dspDraw();
 }
 async function dspVerFotos(id,alvo){
   alvo.innerHTML='<div class="fin-mu">Carregando fotos…</div>';
@@ -3381,7 +3381,7 @@ function dspCss(){
 // ---------- render ----------
 function renderFinanceiro(){
   dspCss();
-  var wrap=document.createElement('div');wrap.className='fin-wrap';DSP.root=wrap;
+  var wrap=document.createElement('div');wrap.className='fin-wrap';DSP.root=wrap;DSP.mob=false;
   if(!DSP.tela)DSP.tela=dspMobile()?'captura':'conferencia';
   window.postMessage({source:'ma-app',type:'ping'},'*');
   if(!DSP.carregado)dspCarregar();else setTimeout(dspDraw,0);
@@ -3398,6 +3398,7 @@ function dspMsgHtml(){return DSP.msg?'<div class="fin-msg '+(DSP.msgTipo||'info'
 function dspDraw(){
   if(!DSP.root||!document.body.contains(DSP.root))return;
   if(DSP.form&&dspEl('fNome'))dspLerCampos();
+  if(DSP.mob){dspDrawMob();return;}
   var h=dspTabs()+dspMsgHtml();
   if(!DSP.carregado)h+='<div class="fin-card fin-mu">Carregando despesas…</div>';
   else if(DSP.tela==='captura')h+=dspHtmlCaptura();
@@ -3409,7 +3410,7 @@ function dspDraw(){
   DSP.root.querySelectorAll('.fin-tabs [data-t]').forEach(function(b){b.onclick=function(){if(DSP.form&&DSP.form._editado)dspSalvarForm(true);DSP.tela=b.dataset.t;DSP.msg='';DSP.revisao=null;dspDraw();};});
   if(DSP.carregado){if(DSP.tela==='captura')dspBindCaptura();else if(DSP.tela==='conferencia')dspBindConferencia();else if(DSP.tela==='config')dspBindConfig();else dspBindLancados();}
 }
-function dspDrawLista(){var l=dspEl('dspPendList');if(l){l.innerHTML=dspHtmlListaItens();dspBindLista();}var b=DSP.root&&DSP.root.querySelector('.fin-tabs [data-t="conferencia"]');if(b){var n=dspLista('pend').length;b.innerHTML='🧾 Conferência'+(n?' <span class="fin-badge">'+n+'</span>':'');}}
+function dspDrawLista(){if(DSP.mob)return;var l=dspEl('dspPendList');if(l){l.innerHTML=dspHtmlListaItens();dspBindLista();}var b=DSP.root&&DSP.root.querySelector('.fin-tabs [data-t="conferencia"]');if(b){var n=dspLista('pend').length;b.innerHTML='🧾 Conferência'+(n?' <span class="fin-badge">'+n+'</span>':'');}}
 
 // Captura (celular)
 function dspHtmlCaptura(){
@@ -3465,12 +3466,17 @@ function dspHtmlConferencia(){
     '<p class="fin-mu" style="margin-top:10px">Também dá para enviar daqui: <button type="button" class="fin-sw" id="dspIrCap">anexar comprovante</button></p></div><div id="dspForm">';
   var f=DSP.sel&&DSP.desp[DSP.sel]?dspFormAtual():null;
   if(!f){h+='<div class="fin-empty"><b>Escolha uma despesa</b>Clique em um item da lista para conferir e lançar.</div></div></div>';return h;}
+  h+=dspHtmlFormCard(f,false,ext);
+  h+='</div></div></div>';
+  return h;
+}
+function dspHtmlFormCard(f,mob,ext){
   var lendo=DSP.desp[DSP.sel].status==='lendo'||DSP.lendo[DSP.sel];
   var unc={};(f.incertos||[]).forEach(function(k){unc[k]=1;});
   function tag(k){return f.incertos?(unc[k]?'<span class="fin-tag unc">conferir</span>':'<span class="fin-tag">lido</span>'):'';}
   function rd(k){return f.incertos&&!f._toq?' fin-read':'';}
   var vs=dspVencSugerido(f.emissao,f.formaId);
-  h+='<div class="fin-card">'+
+  var h='<div class="fin-card">'+
    (lendo?'<div class="fin-msg info">⏳ A IA está lendo este comprovante. Os campos se preenchem sozinhos em alguns segundos.</div>':'')+
    (f.leituraErro?'<div class="fin-msg warn">'+dspEsc(f.leituraErro)+'</div>':'')+
    (f.obs?'<div class="fin-msg info">Observação de quem enviou: '+dspEsc(f.obs)+'</div>':'')+
@@ -3478,7 +3484,7 @@ function dspHtmlConferencia(){
    '<div class="fin-sec"><p class="fin-st">Fornecedor '+(f.contato?'<span class="fin-chip ok">No Bling: '+dspEsc(f.contato.nome)+'</span>':'<span class="fin-chip warn">Não vinculado ao Bling</span>')+'</p>'+
     '<div class="fin-g"><div class="fin-f fin-c4"><label for="fNome">Nome / razão social '+tag('fornecedor_nome')+'</label><input class="fin-in'+rd()+'" id="fNome" value="'+dspEsc(f.fornecedor.nome)+'"></div>'+
     '<div class="fin-f fin-c2"><label for="fDoc">CPF/CNPJ '+tag('fornecedor_documento')+'</label><input class="fin-in'+rd()+'" id="fDoc" inputmode="numeric" value="'+dspEsc(dspDoc(f.fornecedor.doc))+'"></div></div>'+
-    '<div><button type="button" class="fin-btn sm" id="fBuscar">'+(f.contato?'Trocar fornecedor':'Buscar no Bling')+'</button> <span id="fForStatus"></span></div></div>'+
+    (ext?'<div><button type="button" class="fin-btn sm" id="fBuscar">'+(f.contato?'Trocar fornecedor':'Buscar no Bling')+'</button> <span id="fForStatus"></span></div>':(f.contato?'':'<p class="fin-mu" style="margin:0">O vínculo com o cadastro do Bling é feito no computador.</p>'))+'</div>'+
    '<div class="fin-sec"><p class="fin-st">Pagamento</p><div class="fin-g">'+
     '<div class="fin-f fin-c3"><label for="fForma">Forma de pagamento '+(f.incertos&&!f.formaId?'<span class="fin-tag unc">escolher</span>':'')+'</label><select id="fForma">'+dspOpts(dspListas().formas,f.formaId,'Selecione')+'</select></div>'+
     '<div class="fin-f fin-c3"><label for="fConta">Conta financeira</label><select id="fConta">'+dspOpts(dspListas().contas,f.contaId,'Selecione')+'</select></div>'+
@@ -3492,9 +3498,9 @@ function dspHtmlConferencia(){
     '<div class="fin-f fin-c4"><label for="fNum">Nº do documento '+tag('numero_documento')+'</label><input class="fin-in'+rd()+'" id="fNum" value="'+dspEsc(f.numeroDocumento||'')+'"></div>'+
     '<div class="fin-f fin-c6"><label for="fHist">Histórico '+tag('historico')+'</label><textarea id="fHist" class="'+rd().trim()+'" rows="2" placeholder="Ex.: Combustível Strada · visita obra Jardim Goiás">'+dspEsc(f.historico||'')+'</textarea></div></div></div>'+
    ((f.itens&&f.itens.length)?'<div class="fin-sec"><p class="fin-st">Itens lidos <span class="fin-tag">para conferência</span></p><div style="overflow-x:auto"><table class="fin-tbl"><tr><th>Descrição</th><th style="text-align:right">Qtd</th><th style="text-align:right">Valor</th></tr>'+f.itens.map(function(i){return '<tr><td>'+dspEsc(i.descricao)+'</td><td class="n">'+dspEsc(i.quantidade||'')+'</td><td class="n">'+dspMoney(i.valor)+'</td></tr>';}).join('')+'</table></div></div>':'')+
-   '<div class="fin-act"><button type="button" class="fin-btn dan" id="fExcluir">Excluir</button>'+(f.nFotos?'<button type="button" class="fin-btn" id="fReler">Ler de novo</button>':'')+
-   '<button type="button" class="fin-btn" id="fSalvar">Salvar e terminar depois</button><button type="button" class="fin-btn pri" id="fRevisar">Revisar e lançar</button></div>';
-  if(DSP.revisao){
+   (mob?'</div>':'<div class="fin-act"><button type="button" class="fin-btn dan" id="fExcluir">Excluir</button>'+(f.nFotos?'<button type="button" class="fin-btn" id="fReler">Ler de novo</button>':'')+
+   '<button type="button" class="fin-btn" id="fSalvar">Salvar e terminar depois</button><button type="button" class="fin-btn pri" id="fRevisar">Revisar e lançar</button></div>');
+  if(DSP.revisao&&!mob){
     var catN=dspCatNome(f.categoria);
     var rows=[['Valor','R$ '+dspMoney(f.valor)+(f.parcelas>1?' em '+f.parcelas+'x':'')],['Fornecedor',f.contato.nome],['Forma de pagamento',dspFormaNome(f.formaId)],['Conta financeira',dspContaNome(f.contaId)||'—'],['Categoria',catN||'Sem categoria'],
       ['Data da compra',dspBr(f.emissao)],['Vencimento',dspBr(f.vencimento)],['Competência',dspBr(f.competencia)],['Nº documento',f.numeroDocumento||'—'],['Histórico',f.historico]];
@@ -3502,7 +3508,6 @@ function dspHtmlConferencia(){
       (f.parcelas>1?'<p class="fin-mu" style="margin:0">Parcelado: o Bling divide o valor total nas parcelas a partir deste vencimento.</p>':'')+
       '<div class="fin-act" style="margin-top:0"><button type="button" class="fin-btn" id="fVoltar">Voltar e editar</button><button type="button" class="fin-btn pri" id="fLancar"'+(ext?'':' disabled')+'>Confirmar e lançar no Contas a Pagar</button></div></div>';
   }
-  h+='</div></div></div>';
   return h;
 }
 function dspBindConferencia(){
@@ -3516,10 +3521,10 @@ function dspBindConferencia(){
   dspEl('fEm').addEventListener('change',function(){if(!dspEl('fComp').dataset.toq)dspEl('fComp').value=dspEl('fEm').value;reVenc();});
   dspEl('fComp').addEventListener('input',function(){dspEl('fComp').dataset.toq='1';});
   dspEl('fForma').addEventListener('change',function(){var id=dspEl('fForma').value;dspEl('fParcW').hidden=!dspEhCredito(id);var c=dspContaSugerida(id);if(c)dspEl('fConta').value=c;delete dspEl('fVenc').dataset.toq;reVenc();});
-  dspEl('fBuscar').onclick=dspBuscarFornecedor;
-  dspEl('fSalvar').onclick=async function(){await dspSalvarForm(false);dspDraw();};
-  dspEl('fRevisar').onclick=dspRevisar;
-  dspEl('fExcluir').onclick=dspExcluir;
+  var bb=dspEl('fBuscar');if(bb)bb.onclick=dspBuscarFornecedor;
+  var sv=dspEl('fSalvar');if(sv)sv.onclick=async function(){sv.disabled=true;await dspSalvarForm(false);dspDraw();};
+  var rv=dspEl('fRevisar');if(rv)rv.onclick=dspRevisar;
+  var ex=dspEl('fExcluir');if(ex)ex.onclick=dspExcluir;
   var rl=dspEl('fReler');if(rl)rl.onclick=function(){DSP.form=null;dspLerDespesa(DSP.sel,null,DSP.desp[DSP.sel].obs);};
   var vt=dspEl('fVoltar');if(vt)vt.onclick=function(){DSP.revisao=null;dspDraw();};
   var la=dspEl('fLancar');if(la)la.onclick=dspLancar;
@@ -3576,6 +3581,130 @@ function dspAvisoGlobal(){
     dspCss();document.body.appendChild(b);setTimeout(function(){if(b.parentNode)b.remove();},60000);}).catch(function(){});
 }
 
+
+
+// ---------- TELA DO CELULAR (layout próprio, sem cabeçalho e menu do app) ----------
+function dspUsarMobile(){return STATE.modulo==='mod14'&&STATE.roleLogado==='admin'&&dspMobile()&&!DSP.modoPc;}
+function dspMobCss(){
+  if(dspEl('dspMobCss'))return;var st=document.createElement('style');st.id='dspMobCss';
+  st.textContent=
+  '.dm{min-height:100vh;background:#f2f2f7;color:#1c1c1e;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))}'+
+  '.dm [hidden]{display:none!important}'+
+  '.dm{overflow-x:hidden}.dm .fin-f{min-width:0}.dm select{width:100%;max-width:100%;min-width:0}.dm .fin-card{min-width:0;overflow:hidden}'+
+  '.dm-top{position:sticky;top:0;z-index:20;background:#0a7d6b;color:#fff;display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 12px}'+
+  '.dm-top h1{margin:0;font-size:19px;font-weight:800;flex:1;letter-spacing:-.2px}.dm-top small{display:block;font-size:12px;font-weight:500;opacity:.85}'+
+  '.dm-top button{border:none;background:rgba(255,255,255,.18);color:#fff;font:inherit;font-size:13px;font-weight:700;border-radius:999px;padding:7px 12px;cursor:pointer}'+
+  '.dm-back{background:none!important;padding:4px 6px 4px 0!important;font-size:16px!important}'+
+  '.dm-body{padding:16px;display:grid;gap:14px}'+
+  '.dm-cam{display:flex;flex-direction:column;align-items:center;gap:12px;padding:26px 16px 22px;background:#fff;border-radius:20px;border:1px solid #e5e5ea}'+
+  '.dm-cam label.big{width:150px;height:150px;border-radius:50%;background:#0a7d6b;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-size:15px;font-weight:800;box-shadow:0 10px 26px rgba(10,125,107,.35);cursor:pointer}'+
+  '.dm-cam label.big span{font-size:46px;line-height:1}'+
+  '.dm-cam label.sec{font-size:15px;font-weight:700;color:#0a7d6b;padding:10px 16px;border-radius:12px;background:#e6f3f1;cursor:pointer}'+
+  '.dm-cam p{margin:0;font-size:13px;color:#636366;text-align:center;max-width:280px}'+
+  '.dm-thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.dm-thumbs div{position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;background:#fff;border:1px solid #e5e5ea}'+
+  '.dm-thumbs img{width:100%;height:100%;object-fit:cover}.dm-thumbs button{position:absolute;top:5px;right:5px;width:28px;height:28px;border-radius:50%;border:none;background:rgba(0,0,0,.65);color:#fff;font-size:16px}'+
+  '.dm-thumbs label{aspect-ratio:1;border-radius:12px;border:2px dashed #b9c9c6;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#0a7d6b;font-weight:700;font-size:13px;gap:2px;cursor:pointer}.dm-thumbs label span{font-size:26px}'+
+  '.dm-in{font:inherit;font-size:16px;width:100%;box-sizing:border-box;border:1px solid #d1d1d6;border-radius:12px;padding:12px;background:#fff;color:#1c1c1e}'+
+  '.dm-lbl{font-size:13px;font-weight:700;color:#636366;margin:0 2px 6px}'+
+  '.dm-cta{position:fixed;left:0;right:0;bottom:calc(62px + env(safe-area-inset-bottom,0px));padding:10px 16px;background:linear-gradient(rgba(242,242,247,0),#f2f2f7 30%);z-index:15}'+
+  '.dm-cta button,.dm-btn{width:100%;min-height:54px;border:none;border-radius:14px;background:#0a7d6b;color:#fff;font:inherit;font-size:17px;font-weight:800;cursor:pointer}'+
+  '.dm-cta button:disabled{opacity:.6}'+
+  '.dm-cta.dupla{bottom:0;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:auto 1fr;gap:10px}.dm-cta .sec{background:#fff;color:#c0392b;border:1px solid #f3c2bd;padding:0 16px;width:auto}'+
+  '.dm-h{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#636366;margin:6px 4px -4px}'+
+  '.dm-card{background:#fff;border-radius:16px;border:1px solid #e5e5ea;padding:14px;display:grid;gap:6px;text-align:left;font:inherit;color:inherit;width:100%;cursor:pointer}'+
+  '.dm-card .l1{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.dm-card .n{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}'+
+  '.dm-card .v{font-weight:800;font-size:17px;font-variant-numeric:tabular-nums;white-space:nowrap}.dm-card .m{font-size:13px;color:#636366}.dm-card .c{display:flex;gap:5px;flex-wrap:wrap}'+
+  '.dm-card.pronto{border-left:5px solid #34c759}.dm-card.falta{border-left:5px solid #ff9500}.dm-card.lendo{border-left:5px solid #8e8e93}'+
+  '.dm-ok{background:#e7f6ec;border-radius:16px;padding:14px;display:grid;gap:8px}.dm-ok b{font-size:15px;color:#166534}'+
+  '.dm-tab{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(255,255,255,.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid #e5e5ea;display:grid;grid-template-columns:repeat(3,1fr);box-sizing:border-box;height:calc(62px + env(safe-area-inset-bottom,0px));padding:6px 6px env(safe-area-inset-bottom,0px)}'+
+  '.dm-tab::before,.dm-tab::after{content:none!important;display:none!important}'+
+  '.dm-tab button{border:none;background:none;font:inherit;font-size:11.5px;font-weight:700;color:#8e8e93;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px;cursor:pointer;position:relative}'+
+  '.dm-tab button span{font-size:22px;line-height:1.1}.dm-tab button.on{color:#0a7d6b}'+
+  '.dm-tab i{position:absolute;top:0;left:calc(50% + 6px);background:#ff3b30;color:#fff;font-style:normal;font-size:11px;font-weight:800;min-width:18px;height:18px;border-radius:999px;display:grid;place-items:center;padding:0 4px}'+
+  '.dm .fin-card{border-radius:16px}.dm .fin-in,.dm select,.dm textarea{font-size:16px!important;padding:11px 12px!important;border-radius:11px!important}'+
+  '.dm .fin-g{grid-template-columns:repeat(2,minmax(0,1fr))}.dm .fin-c2,.dm .fin-c3,.dm .fin-c4,.dm .fin-c6{grid-column:span 2}.dm .fin-c2.h{grid-column:span 1}'+
+  '.dm .fin-fotos img{height:auto;width:100%;max-height:340px;object-fit:contain;background:#fafafa}.dm .fin-fotos{flex-direction:column}'+
+  '.dm .fin-msg{margin:0}';
+  document.head.appendChild(st);
+}
+function renderFinanceiroMobile(){
+  dspCss();dspMobCss();
+  var wrap=document.createElement('div');wrap.className='dm';DSP.root=wrap;DSP.mob=true;
+  if(!DSP.mtela)DSP.mtela='enviar';
+  if(!DSP.carregado)dspCarregar();else setTimeout(dspDraw,0);
+  dspFilaEnviar();
+  if(!DSP.poll)DSP.poll=setInterval(function(){if(STATE.modulo==='mod14'&&!document.hidden&&DSP.root&&document.body.contains(DSP.root))dspCarregar(true);},30000);
+  return wrap;
+}
+function dspDrawMob(){
+  var n=dspLista('pend').length,t=DSP.mtela,h='';
+  var titulo={enviar:'Enviar comprovante',pend:'Pendentes',lanc:'Lançados',item:'Conferir despesa'}[t];
+  h+='<div class="dm-top">'+(t==='item'?'<button type="button" class="dm-back" id="dmVoltar">‹</button>':'')+'<h1>'+titulo+'<small>Financeiro · '+dspEsc(STATE.usuarioLogado||'')+'</small></h1>'+(t==='item'?'':'<button type="button" id="dmApp">App completo</button>')+'</div>';
+  h+='<div class="dm-body">'+dspMsgHtml();
+  if(!DSP.carregado)h+='<div class="fin-card fin-mu">Carregando…</div>';
+  else if(t==='enviar')h+=dspMobEnviar();
+  else if(t==='pend')h+=dspMobLista(dspLista('pend'),'Nenhuma pendência','Tudo o que você enviar fica aqui até ser lançado no computador.');
+  else if(t==='lanc')h+=dspMobLista(dspLista('lancado').slice(0,40),'Nada lançado ainda','As despesas lançadas no Bling aparecem aqui.',true);
+  else h+=dspMobItem();
+  h+='</div>';
+  if(t==='enviar'&&DSP.fotosNovas.length)h+='<div class="dm-cta"><button type="button" id="dspEnviar"'+(DSP.enviando?' disabled':'')+'>'+(DSP.enviando?'Enviando…':'Enviar '+(DSP.fotosNovas.length>1?DSP.fotosNovas.length+' imagens':'para conferência'))+'</button></div>';
+  if(t==='item'&&DSP.form)h+='<div class="dm-cta dupla"><button type="button" class="sec" id="fExcluir">Excluir</button><button type="button" id="dmSalvar">Salvar</button></div>';
+  if(t!=='item')h+='<div class="dm-tab" role="tablist" aria-label="Telas do financeiro">'+[['enviar','📷','Enviar'],['pend','🧾','Pendentes'],['lanc','✅','Lançados']].map(function(x){return '<button type="button" data-m="'+x[0]+'" class="'+(t===x[0]?'on':'')+'"><span>'+x[1]+'</span>'+x[2]+(x[0]==='pend'&&n?'<i>'+n+'</i>':'')+'</button>';}).join('')+'</div>';
+  h+='<div id="dspZoom" hidden></div>';
+  DSP.root.innerHTML=h;
+  DSP.root.querySelectorAll('.dm-tab [data-m]').forEach(function(b){b.onclick=function(){DSP.mtela=b.dataset.m;DSP.msg='';dspDraw();window.scrollTo(0,0);};});
+  var ap=dspEl('dmApp');if(ap)ap.onclick=function(){DSP.modoPc=true;DSP.mob=false;DSP.root=null;STATE.modulo='frete';STATE.tab='cotacao';render();};
+  var vt=dspEl('dmVoltar');if(vt)vt.onclick=function(){if(DSP.form&&DSP.form._editado)dspSalvarForm(true);DSP.mtela='pend';DSP.sel=null;DSP.form=null;DSP.msg='';dspDraw();window.scrollTo(0,0);};
+  if(!DSP.carregado)return;
+  if(t==='enviar'){
+    ['dspCam','dspArq','dmMais'].forEach(function(id){var el=dspEl(id);if(el)el.onchange=function(e){dspAddArquivos([].slice.call(e.target.files));e.target.value='';};});
+    DSP.root.querySelectorAll('[data-rm]').forEach(function(b){b.onclick=function(){DSP.fotosNovas.splice(+b.dataset.rm,1);dspDraw();};});
+    var en=dspEl('dspEnviar');if(en)en.onclick=dspEnviar;var fl=dspEl('dspFila');if(fl)fl.onclick=dspFilaEnviar;
+    var vu=dspEl('dmVerUlt');if(vu)vu.onclick=function(){dspMobAbrir(DSP.ultimoEnvio);};
+  }
+  DSP.root.querySelectorAll('.dm-card[data-id]').forEach(function(b){b.onclick=function(){dspMobAbrir(b.dataset.id);};});
+  if(t==='item'&&DSP.form){dspBindConferencia();var sv=dspEl('dmSalvar');if(sv)sv.onclick=async function(){sv.disabled=true;sv.textContent='Salvando…';var ok=await dspSalvarForm(true);
+    if(ok){DSP.msg='Salvo. O lançamento no Bling é feito na Conferência do computador.';DSP.msgTipo='ok';DSP.mtela='pend';DSP.sel=null;DSP.form=null;}dspDraw();window.scrollTo(0,0);};}
+}
+function dspMobAbrir(id){if(!id||!DSP.desp[id])return;DSP.sel=id;DSP.form=null;DSP.msg='';DSP.mtela='item';dspDraw();window.scrollTo(0,0);}
+function dspMobEnviar(){
+  var h='',fila=dspFilaLer().length;
+  if(!DSP.fotosNovas.length){
+    h+='<div class="dm-cam"><label class="big" for="dspCam"><span>📷</span>Tirar foto</label><input id="dspCam" type="file" accept="image/*" capture="environment" hidden>'+
+      '<label class="sec" for="dspArq">🖼️ Galeria ou PDF</label><input id="dspArq" type="file" accept="image/*,application/pdf" multiple hidden>'+
+      '<p>Nota, cupom ou comprovante do Pix/cartão. A leitura é automática e fica pendente para você conferir.</p></div>';
+  } else {
+    h+='<div class="dm-lbl">'+DSP.fotosNovas.length+' imagem(ns) desta despesa</div><div class="dm-thumbs">'+DSP.fotosNovas.map(function(b,i){return '<div><img src="data:image/jpeg;base64,'+b+'" alt=""><button type="button" data-rm="'+i+'" aria-label="Remover">×</button></div>';}).join('')+
+      (DSP.fotosNovas.length<4?'<label for="dmMais"><span>＋</span>Mais uma</label><input id="dmMais" type="file" accept="image/*" capture="environment" hidden>':'')+'</div>'+
+      '<div><div class="dm-lbl">Observação (opcional)</div><input class="dm-in" id="dspObs" placeholder="Ex.: almoço equipe · obra Jardim Goiás"></div>'+
+      '<p class="fin-mu" style="margin:0">Nota e comprovante da mesma compra podem ir juntos.</p>';
+  }
+  if(fila)h+='<div class="fin-msg warn">'+fila+' comprovante(s) aguardando internet neste celular. <button type="button" class="fin-sw" id="dspFila">Enviar agora</button></div>';
+  var u=DSP.ultimoEnvio&&DSP.desp[DSP.ultimoEnvio];
+  if(u&&!DSP.fotosNovas.length){var lendo=u.status==='lendo'||DSP.lendo[DSP.ultimoEnvio];
+    h+='<div class="dm-ok"><b>'+(lendo?'⏳ Enviado. Lendo o comprovante…':'✅ Enviado e lido')+'</b>'+
+      (lendo?'<span class="fin-mu">Pode guardar o celular. Fica pendente para conferir.</span>':
+       '<span style="font-size:14px">'+dspEsc((u.fornecedor&&u.fornecedor.nome)||'Fornecedor não identificado')+(u.valor>0?' · <b style="color:inherit">R$ '+dspMoney(u.valor)+'</b>':'')+(u.formaId?' · '+dspEsc(dspFormaNome(u.formaId)):'')+'</span>'+
+       '<button type="button" class="dm-btn" id="dmVerUlt" style="min-height:44px;font-size:15px">Conferir agora</button>')+'</div>';}
+  return h;
+}
+function dspMobLista(L,vazioT,vazioD,lanc){
+  if(!L.length)return '<div class="fin-empty"><b>'+vazioT+'</b>'+vazioD+'</div>';
+  return L.map(function(d){
+    var lendo=!lanc&&(d.status==='lendo'||DSP.lendo[d.id]);var falta=lanc||lendo?[]:dspFaltas(d);
+    var nome=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||(lendo?'Lendo comprovante…':'Fornecedor não identificado');
+    var cls=lanc?'pronto':(lendo?'lendo':(falta.length?'falta':'pronto'));
+    var chips=lanc?'<span class="fin-chip ok">Lançado'+(d.blingId?' · ID '+dspEsc(d.blingId):'')+'</span>':lendo?'<span class="fin-chip">⏳ lendo</span>':
+      (d.leituraErro?'<span class="fin-chip err">leitura falhou</span>':'')+(falta.length?falta.map(function(x){return '<span class="fin-chip warn">'+dspEsc(x)+'</span>';}).join(''):'<span class="fin-chip ok">Pronto para lançar no PC</span>');
+    return (lanc?'<div':'<button type="button" data-id="'+d.id+'"')+' class="dm-card '+cls+'"><div class="l1"><span class="n">'+dspEsc(nome)+'</span><span class="v">'+(d.valor>0?'R$ '+dspMoney(d.valor):'—')+'</span></div>'+
+      '<div class="m">'+dspEsc(dspBr(lanc?d.vencimento:d.emissao))+(lanc?' (venc.)':'')+(d.formaId?' · '+dspEsc(dspFormaNome(d.formaId)):'')+'</div><div class="c">'+chips+'</div>'+(lanc?'</div>':'</button>');
+  }).join('');
+}
+function dspMobItem(){
+  var f=DSP.sel&&DSP.desp[DSP.sel]?dspFormAtual():null;
+  if(!f)return '<div class="fin-empty"><b>Despesa não encontrada</b>Volte para a lista de pendentes.</div>';
+  return '<div id="dspForm">'+dspHtmlFormCard(f,true,false)+'</div>';
+}
 
 // ===================== MÓDULO FORMAÇÃO DE PREÇO (mod13) =====================
 // Tabela de preços em linhas, atualizada pela última NF de compra (Bling).
@@ -8915,6 +9044,8 @@ async function lcUpload(file){
   }
 }
 function renderApp(){
+  if(STATE.modulo!=='mod14'&&typeof DSP!=='undefined')DSP.modoPc=false;
+  if(typeof dspUsarMobile==='function'&&dspUsarMobile())return renderFinanceiroMobile();
   var wrap=document.createElement('div');
   // header
   wrap.appendChild(renderHeader());
