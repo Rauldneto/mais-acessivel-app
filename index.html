@@ -3078,7 +3078,8 @@ function dspMoney(n){return (n>0||n===0)&&isFinite(n)?Number(n).toLocaleString('
 function dspParseMoney(s){s=String(s||'').trim().replace(/[R$\s]/g,'');if(!s)return null;if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');var n=Number(s);return isFinite(n)?n:null;}
 function dspBr(iso){return iso?String(iso).split('-').reverse().join('/'):'';}
 function dspDoc(d){d=dspDig(d);if(d.length===14)return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');if(d.length===11)return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4');return d;}
-function dspMobile(){return window.matchMedia&&window.matchMedia('(max-width: 760px)').matches;}
+function dspTelaCel(){var sw=Math.min(screen.width||9999,screen.height||9999);return (navigator.maxTouchPoints>0||'ontouchstart' in window)&&sw<=760;}
+function dspMobile(){return (window.matchMedia&&window.matchMedia('(max-width: 760px)').matches)||dspTelaCel();}
 function dspFb(path,opt){opt=opt||{};return fetch(FIREBASE_DB+'/financeiro/'+path+'.json',{method:opt.method||'GET',headers:opt.body?{'Content-Type':'application/json'}:undefined,body:opt.body?JSON.stringify(opt.body):undefined})
   .then(function(r){if(!r.ok)throw new Error('Firebase '+r.status);return r.json();});}
 function dspListas(){return DSP.listas||DSP_LISTAS_PADRAO;}
@@ -3592,10 +3593,10 @@ function dspMobCss(){
   st.textContent=
   '.dm{min-height:100vh;background:#f2f2f7;color:#1c1c1e;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))}'+
   '.dm [hidden]{display:none!important}'+
-  '@media(min-width:761px){.dm{max-width:430px;margin:0 auto;box-shadow:0 0 0 1px #e5e5ea,0 10px 40px rgba(0,0,0,.12)}.dm-cta,.dm-tab{max-width:430px;margin:0 auto}}'+
+  '.dm.pc{max-width:430px;margin:0 auto;box-shadow:0 0 0 1px #e5e5ea,0 10px 40px rgba(0,0,0,.12)}.dm.pc .dm-cta,.dm.pc .dm-tab{max-width:430px;margin:0 auto}'+
   '.dm{overflow-x:hidden}.dm .fin-f{min-width:0}.dm select{width:100%;max-width:100%;min-width:0}.dm .fin-card{min-width:0;overflow:hidden}'+
   '.dm-top{position:sticky;top:0;z-index:20;background:#0a7d6b;color:#fff;display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 12px}'+
-  '.dm-top h1{margin:0;font-size:19px;font-weight:800;flex:1;letter-spacing:-.2px}.dm-top small{display:block;font-size:12px;font-weight:500;opacity:.85}'+
+  '.dm-top{box-shadow:0 2px 10px rgba(0,0,0,.12)}.dm-top h1{margin:0;font-size:21px;font-weight:800;flex:1;letter-spacing:-.2px}.dm-top small{display:block;font-size:12px;font-weight:500;opacity:.85}'+
   '.dm-top button{border:none;background:rgba(255,255,255,.18);color:#fff;font:inherit;font-size:13px;font-weight:700;border-radius:999px;padding:7px 12px;cursor:pointer}'+
   '.dm-back{background:none!important;padding:4px 6px 4px 0!important;font-size:16px!important}'+
   '.dm-body{padding:16px;display:grid;gap:14px}'+
@@ -3633,11 +3634,26 @@ function dspMobCss(){
 function renderFinanceiroMobile(){
   dspCss();dspMobCss();
   var wrap=document.createElement('div');wrap.className='dm';DSP.root=wrap;DSP.mob=true;
+  dspModoApp(true);
+  if(!dspTelaCel()&&!(window.matchMedia&&window.matchMedia('(max-width: 760px)').matches))wrap.classList.add('pc');
+  else{var f=window.innerWidth/Math.min(screen.width||window.innerWidth,screen.height||window.innerWidth);if(f>1.25){wrap.style.zoom=f.toFixed(3);wrap.style.minHeight=(window.innerHeight/f)+'px';}}
   if(!DSP.mtela)DSP.mtela='enviar';
   if(!DSP.carregado)dspCarregar();else setTimeout(dspDraw,0);
   dspFilaEnviar();
   if(!DSP.poll)DSP.poll=setInterval(function(){if(STATE.modulo==='mod14'&&!document.hidden&&DSP.root&&document.body.contains(DSP.root))dspCarregar(true);},30000);
   return wrap;
+}
+function dspModoApp(on){
+  var hd=document.head;function meta(n,c){var m=hd.querySelector('meta[name="'+n+'"]');if(!m){m=document.createElement('meta');m.name=n;hd.appendChild(m);}m.content=c;return m;}
+  if(on){
+    meta('theme-color','#0a7d6b');meta('apple-mobile-web-app-capable','yes');meta('mobile-web-app-capable','yes');meta('apple-mobile-web-app-title','Despesas');
+    var v=hd.querySelector('meta[name="viewport"]');if(v){if(!v.dataset.orig)v.dataset.orig=v.content;v.content='width=device-width,initial-scale=1,viewport-fit=cover';}
+    if(!hd.querySelector('link[rel="manifest"]')){var l=document.createElement('link');l.rel='manifest';l.href='despesas.webmanifest';hd.appendChild(l);}
+    if(!hd.querySelector('link[rel="apple-touch-icon"]')){var a=document.createElement('link');a.rel='apple-touch-icon';a.href='despesas-192.png';hd.appendChild(a);}
+    document.body.style.background='#f2f2f7';
+  } else {
+    var t=hd.querySelector('meta[name="theme-color"]');if(t)t.remove();document.body.style.background='';
+  }
 }
 function dspDrawMob(){
   var n=dspLista('pend').length,t=DSP.mtela,h='';
@@ -9050,6 +9066,7 @@ async function lcUpload(file){
 function renderApp(){
   if(STATE.modulo!=='mod14'&&typeof DSP!=='undefined')DSP.modoPc=false;
   if(typeof dspUsarMobile==='function'&&dspUsarMobile())return renderFinanceiroMobile();
+  if(typeof dspModoApp==='function'&&typeof DSP!=='undefined'&&DSP.mob===false)dspModoApp(false);
   var wrap=document.createElement('div');
   // header
   wrap.appendChild(renderHeader());
