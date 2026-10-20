@@ -3065,6 +3065,7 @@ var DSP={root:null,tela:null,listas:null,cfg:null,desp:{},carregado:false,sel:nu
   enviando:false,lendo:{},ext:null,poll:null,ultimoEnvio:null,mostrarFoto:null,avisoVisto:false};
 var DSP_CFG_PADRAO={cartoes:[{formaId:'3677778',fechamento:'',vencimento:''},{formaId:'6642716',fechamento:'',vencimento:''}],padrao:{pix:'3639534',dinheiro:'3750430'},contaPorForma:{}};
 if((location.hash||'')==='#financeiro'){STATE.modulo='mod14';}
+if((location.hash||'')==='#celular'){STATE.modulo='mod14';DSP.forcarMob=true;}
 
 function dspEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function dspEl(id){return document.getElementById(id);}
@@ -3392,7 +3393,7 @@ function renderFinanceiro(){
 function dspTabs(){
   var n=dspLista('pend').length;
   var t=[['captura','📷 Captura'],['conferencia','🧾 Conferência'+(n?' <span class="fin-badge">'+n+'</span>':'')],['lancados','✅ Lançados'],['config','⚙️ Configurações']];
-  return '<div class="fin-tabs" role="tablist">'+t.map(function(x){return '<button type="button" role="tab" data-t="'+x[0]+'" class="'+(DSP.tela===x[0]?'on':'')+'">'+x[1]+'</button>';}).join('')+'</div>';
+  return '<div style="display:flex;justify-content:flex-end;margin:-4px 0 8px"><button type="button" class="fin-btn sm" id="dspVerMob">📱 Ver tela do celular</button></div><div class="fin-tabs" role="tablist">'+t.map(function(x){return '<button type="button" role="tab" data-t="'+x[0]+'" class="'+(DSP.tela===x[0]?'on':'')+'">'+x[1]+'</button>';}).join('')+'</div>';
 }
 function dspMsgHtml(){return DSP.msg?'<div class="fin-msg '+(DSP.msgTipo||'info')+'" role="status">'+dspEsc(DSP.msg)+'</div>':'';}
 function dspDraw(){
@@ -3407,6 +3408,7 @@ function dspDraw(){
   else h+=dspHtmlConfig();
   h+='<div id="dspZoom" hidden></div>';
   DSP.root.innerHTML=h;
+  var vm=dspEl('dspVerMob');if(vm)vm.onclick=function(){if(DSP.form&&DSP.form._editado)dspSalvarForm(true);DSP.forcarMob=true;DSP.modoPc=false;DSP.sel=null;DSP.form=null;DSP.msg='';render();window.scrollTo(0,0);};
   DSP.root.querySelectorAll('.fin-tabs [data-t]').forEach(function(b){b.onclick=function(){if(DSP.form&&DSP.form._editado)dspSalvarForm(true);DSP.tela=b.dataset.t;DSP.msg='';DSP.revisao=null;dspDraw();};});
   if(DSP.carregado){if(DSP.tela==='captura')dspBindCaptura();else if(DSP.tela==='conferencia')dspBindConferencia();else if(DSP.tela==='config')dspBindConfig();else dspBindLancados();}
 }
@@ -3584,12 +3586,13 @@ function dspAvisoGlobal(){
 
 
 // ---------- TELA DO CELULAR (layout próprio, sem cabeçalho e menu do app) ----------
-function dspUsarMobile(){return STATE.modulo==='mod14'&&STATE.roleLogado==='admin'&&dspMobile()&&!DSP.modoPc;}
+function dspUsarMobile(){return STATE.modulo==='mod14'&&STATE.roleLogado==='admin'&&(DSP.forcarMob||(dspMobile()&&!DSP.modoPc));}
 function dspMobCss(){
   if(dspEl('dspMobCss'))return;var st=document.createElement('style');st.id='dspMobCss';
   st.textContent=
   '.dm{min-height:100vh;background:#f2f2f7;color:#1c1c1e;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))}'+
   '.dm [hidden]{display:none!important}'+
+  '@media(min-width:761px){.dm{max-width:430px;margin:0 auto;box-shadow:0 0 0 1px #e5e5ea,0 10px 40px rgba(0,0,0,.12)}.dm-cta,.dm-tab{max-width:430px;margin:0 auto}}'+
   '.dm{overflow-x:hidden}.dm .fin-f{min-width:0}.dm select{width:100%;max-width:100%;min-width:0}.dm .fin-card{min-width:0;overflow:hidden}'+
   '.dm-top{position:sticky;top:0;z-index:20;background:#0a7d6b;color:#fff;display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 12px}'+
   '.dm-top h1{margin:0;font-size:19px;font-weight:800;flex:1;letter-spacing:-.2px}.dm-top small{display:block;font-size:12px;font-weight:500;opacity:.85}'+
@@ -3639,7 +3642,7 @@ function renderFinanceiroMobile(){
 function dspDrawMob(){
   var n=dspLista('pend').length,t=DSP.mtela,h='';
   var titulo={enviar:'Enviar comprovante',pend:'Pendentes',lanc:'Lançados',item:'Conferir despesa'}[t];
-  h+='<div class="dm-top">'+(t==='item'?'<button type="button" class="dm-back" id="dmVoltar">‹</button>':'')+'<h1>'+titulo+'<small>Financeiro · '+dspEsc(STATE.usuarioLogado||'')+'</small></h1>'+(t==='item'?'':'<button type="button" id="dmApp">App completo</button>')+'</div>';
+  h+='<div class="dm-top">'+(t==='item'?'<button type="button" class="dm-back" id="dmVoltar">‹</button>':'')+'<h1>'+titulo+'<small>Financeiro · '+dspEsc(STATE.usuarioLogado||'')+'</small></h1>'+(t==='item'?'':(DSP.forcarMob&&!dspMobile()?'<button type="button" id="dmPc">💻 Tela do PC</button>':'<button type="button" id="dmApp">App completo</button>'))+'</div>';
   h+='<div class="dm-body">'+dspMsgHtml();
   if(!DSP.carregado)h+='<div class="fin-card fin-mu">Carregando…</div>';
   else if(t==='enviar')h+=dspMobEnviar();
@@ -3653,7 +3656,8 @@ function dspDrawMob(){
   h+='<div id="dspZoom" hidden></div>';
   DSP.root.innerHTML=h;
   DSP.root.querySelectorAll('.dm-tab [data-m]').forEach(function(b){b.onclick=function(){DSP.mtela=b.dataset.m;DSP.msg='';dspDraw();window.scrollTo(0,0);};});
-  var ap=dspEl('dmApp');if(ap)ap.onclick=function(){DSP.modoPc=true;DSP.mob=false;DSP.root=null;STATE.modulo='frete';STATE.tab='cotacao';render();};
+  var pc=dspEl('dmPc');if(pc)pc.onclick=function(){DSP.forcarMob=false;DSP.mob=false;DSP.root=null;DSP.sel=null;DSP.form=null;DSP.msg='';if(location.hash==='#celular')history.replaceState(null,'',location.pathname);render();};
+  var ap=dspEl('dmApp');if(ap)ap.onclick=function(){DSP.forcarMob=false;DSP.modoPc=true;DSP.mob=false;DSP.root=null;STATE.modulo='frete';STATE.tab='cotacao';render();};
   var vt=dspEl('dmVoltar');if(vt)vt.onclick=function(){if(DSP.form&&DSP.form._editado)dspSalvarForm(true);DSP.mtela='pend';DSP.sel=null;DSP.form=null;DSP.msg='';dspDraw();window.scrollTo(0,0);};
   if(!DSP.carregado)return;
   if(t==='enviar'){
