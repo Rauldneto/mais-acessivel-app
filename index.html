@@ -5492,6 +5492,7 @@ function ccBind(root){
 function cqDrawConf(root){
   var modo=CQ.aba==='vend'?'vend':'conf';cqEstiloV();
   if(modo==='vend'&&CQ.vv==='guia'){cqGuiaDraw(root);return;}
+  if(modo==='vend'&&!CQ._prefOk&&typeof LC!=='undefined'){CQ._prefOk=1;fetch(FIREBASE_DB+'/clientesLicitacao/config.json').then(function(r){return r.ok?r.json():null;}).then(function(c){if(c&&c.prefixo!=null){LC.cfg=LC.cfg||{};LC.cfg.prefixo=c.prefixo;}}).catch(function(){});}
   if(modo==='vend'&&(CQ.vv==='cob'||CQ.vv==='perd'||CQ.vv==='conc')){if(CQ.vv==='perd')pdDraw(root);else if(CQ.vv==='conc')ccDraw(root);else cbDraw(root);return;}
   // Vendas abre com TODAS as situações (Erros continua no padrão Em aberto), a não ser que a pessoa tenha escolhido outra
   if(modo==='vend'&&!CQ._vendIni){CQ._vendIni=1;if(!CQ.sitTocado)CQ.sitPesq='sit-';}
@@ -5788,7 +5789,7 @@ function cqEstiloV(){
   '.vg-c p,.vg-c li{font-size:13px;color:#44403c;line-height:1.55}.vg-c ul{margin:6px 0 0;padding-left:18px}'+
   '.vg-cad{display:flex;gap:0;margin-top:6px}.vg-cad div{flex:1;border-top:3px solid #f59e0b;padding:8px 6px 0;font-size:12px;color:#44403c}.vg-cad b{display:block;font-size:13px;color:#1c1917}'+
   '@media(max-width:900px){.vc-det,.vg{grid-template-columns:1fr}.vtop-r{grid-template-columns:30px 1fr 1fr}.vtop-r>:nth-child(4),.vtop-r>:nth-child(5){display:none}.vc-bar{width:110px}.vc-top{flex-wrap:wrap}}';
-  s.textContent+=CQ_TL_CSS;
+  s.textContent+=CQ_TL_CSS+CQ_FONE_CSS;
   document.head.appendChild(s);
 }
 
@@ -5824,7 +5825,7 @@ function cqEvento(id,tipo,obs){
     .then(function(r){return r.json();}).then(function(j){if(j&&j.name){delete v.ev[tmp];v.ev[j.name]=e;}}).catch(function(){});
   if(it){v.n=it.numero;v.cli=it.cliente;v.vend=it.vendedor||'';fetch(FIREBASE_DB+'/vendaInfo/'+id+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({n:it.numero,cli:it.cliente,vend:it.vendedor||'',tot:cqVal(it)})}).catch(function(){});}
 }
-var CQ_EV_TXT={assumiu:'🙋 Assumiu o atendimento',liberou:'🔓 Terminou / liberou o atendimento',retorno:'⏰ Agendou retorno',retornoFeito:'✔ Retorno feito',situacao:'🔄 Mudou a situação no Bling',resultado:'🏁 Marcou o resultado'};
+var CQ_EV_TXT={assumiu:'🙋 Assumiu o atendimento',liberou:'🔓 Terminou / liberou o atendimento',retorno:'⏰ Agendou retorno',ligou:'📞 Ligou pelo MicroSIP',retornoFeito:'✔ Retorno feito',situacao:'🔄 Mudou a situação no Bling',resultado:'🏁 Marcou o resultado'};
 // tira a cotação da lista de cobranças atrasadas que a extensão mostra em todos os computadores (sem esperar o recálculo)
 function cqTirarAtraso(id){fetch(FIREBASE_DB+'/cobAtrasadas/itens/'+id+'.json',{method:'DELETE'}).catch(function(){});}
 
@@ -6107,6 +6108,7 @@ function cqCardVenda(i,card,sel,rank){
   if(CQ.sitMsg[i.id])x+='<div style="margin:0 18px 10px 22px;font-size:12px;font-weight:700;color:'+(/^❌|^⚠/.test(CQ.sitMsg[i.id])?'#b91c1c':/^✔/.test(CQ.sitMsg[i.id])?'#15803d':'#57534e')+'">'+cqEsc(CQ.sitMsg[i.id])+'</div>';
   // barra de ações
   var fc=cqFoneCopia(i),det=CQ.det&&CQ.det[i.id],fv=CQ.vi&&CQ.vi[i.id]&&CQ.vi[i.id].fech;
+  x+='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:0 18px 10px 22px"><span style="font-size:11.5px;font-weight:800;color:#57534e;text-transform:uppercase;letter-spacing:.04em">Ligar:</span>'+cqFonesHtml(i)+'</div>';
   x+='<div class="vc-ac">';
   if(outro)x+='<span style="font-size:12px;color:#78716c;display:inline-flex;gap:6px;align-items:center">'+cqIc('lock',13)+' '+cqEsc(asI.u)+' está atendendo — as ações ficam com quem assumiu até terminar ou passar '+CQ_ASSUM_HORAS+' h.</span>'+(gest?'<button class="vb sm cqLiberar" data-id="'+id+'">'+cqIc('unlock',13)+' Liberar (gestor)</button>':'');
   else{
@@ -6117,7 +6119,7 @@ function cqCardVenda(i,card,sel,rank){
       '<label class="vb" title="Envie a imagem ou PDF da cotação do concorrente que o cliente mandou">'+cqIc('clip')+' Concorrente<input type="file" class="cqConcArq" data-id="'+id+'" accept="image/*,application/pdf" style="display:none"></label>';
   }
   x+='<span class="vc-sep"></span><a class="vb" href="https://www.bling.com.br/orcamentos.php#edit/'+id+'" target="_blank">'+cqIc('ext')+' Bling</a>'+
-    (fc?'<button class="vb cqCopiaFone" data-n="'+cqEsc(fc)+'" title="Copia o número para colar na busca do WhatsApp">'+cqIc('copy')+' '+cqEsc(fc.length>=10?'('+fc.slice(0,2)+') '+fc.slice(2,-4)+'-'+fc.slice(-4):fc)+'</button>':'');
+    '';
   x+='<span style="flex:1"></span>';
   if(!outro){
     x+='<button class="vb'+(form==='fechado'?' on':'')+' cqBtFechado" data-id="'+id+'" style="'+(form==='fechado'?'':'color:#15803d;border-color:#86efac')+'">'+cqIc('check')+' Fechado</button>'+
@@ -6138,6 +6140,27 @@ function cqCardVenda(i,card,sel,rank){
 }
 
 
+// ── 📞 TELEFONES DA COTAÇÃO: clicar liga direto pelo MicroSIP (mesmo modelo da aba Lead); ⧉ copia ──
+function cqTelDig(t){var d=String(t||'').replace(/\D/g,'');if(d.length>=12&&d.indexOf('55')===0)d=d.slice(2);if(d.length>=11&&d[0]==='0')d=d.slice(1);return d;}
+function cqFones(i){
+  var L=[],vistos={},add=function(t,orig){var d=cqTelDig(t);if(d.length<8)return;if(d.length===8||d.length===9)d='62'+d;var k=d.slice(-8);if(vistos[k])return;vistos[k]=1;
+    L.push({d:d,tipo:d.length===11&&d.charAt(2)==='9'?'Celular':d.length===10?(/[6-9]/.test(d.charAt(2))?'Celular':'Fixo'):'',orig:orig});};
+  String(i.fone||'').split(/[\/,;|]| e /).forEach(function(t){add(t,'Bling');});
+  var w=i._ws&&i._ws.w;if(w&&w._p)add(w._p,'WhatsApp');
+  return L;
+}
+function cqFoneFmt(d){return d.length===11?'('+d.slice(0,2)+') '+d.slice(2,7)+'-'+d.slice(7):d.length===10?'('+d.slice(0,2)+') '+d.slice(2,6)+'-'+d.slice(6):d;}
+function cqFoneHref(d){var pre=(typeof LC!=='undefined'&&LC.cfg&&LC.cfg.prefixo!=null)?LC.cfg.prefixo:'0';return 'tel:'+((d.length===10||d.length===11)?pre+d:d);}
+function cqFonesHtml(i){
+  var F=cqFones(i),id=cqEsc(i.id);
+  if(!F.length)return '<span style="font-size:11.5px;color:#a8a29e">sem telefone no cadastro</span>';
+  return F.map(function(f){return '<span class="vfone"><a class="vfone-l cqLigar" href="'+cqEsc(cqFoneHref(f.d))+'" data-id="'+id+'" data-t="'+cqEsc(cqFoneFmt(f.d))+'" title="Ligar pelo MicroSIP">'+cqIc('phone',13)+' '+cqEsc(cqFoneFmt(f.d))+(f.tipo?' <small>'+f.tipo+'</small>':'')+'</a>'+
+    '<button class="vfone-c cqCopiaFone" data-n="'+cqEsc(f.d)+'" title="Copiar o número (para buscar no WhatsApp)">'+cqIc('copy',12)+'</button></span>';}).join('');
+}
+var CQ_FONE_CSS='.vfone{display:inline-flex;align-items:stretch;border:1px solid #86efac;border-radius:8px;overflow:hidden;background:#f0fdf4}'+
+  '.vfone-l{display:inline-flex;gap:5px;align-items:center;padding:6px 10px;font-size:12.5px;font-weight:800;color:#15803d;text-decoration:none;white-space:nowrap}.vfone-l:hover{background:#dcfce7}.vfone-l small{font-weight:600;color:#4ade80;font-size:10.5px;text-transform:uppercase}'+
+  '.vfone-c{border:none;border-left:1px solid #bbf7d0;background:#fff;color:#57534e;padding:0 8px;cursor:pointer}.vfone-c:hover{background:#f5f5f4}';
+
 // ── 🕘 ATUALIZAÇÕES DA COTAÇÃO (linha do tempo com tudo que aconteceu) ──
 function cqDtH(ms){return new Date(ms).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}
 function cqTimeline(i){
@@ -6146,7 +6169,7 @@ function cqTimeline(i){
   cqCobs(id).forEach(function(c){L.push({ts:c.ts,c:'#d97706',ic:'📞',t:'Cobrança registrada ('+(c.canal||'')+')',u:c.u,d:[cqHumorTxt(c.humor),c.obs?'"'+c.obs+'"':''].filter(Boolean).join(' · ')});});
   var temRetEv=false;
   cqEvs(id).forEach(function(e){
-    var m={assumiu:['🙋','Assumiu o atendimento','#059669'],liberou:['🔓','Terminou / liberou o atendimento','#57534e'],retorno:['⏰','Retorno agendado','#2563eb'],retornoFeito:['✔','Retorno feito','#16a34a'],situacao:['🔄','Situação no Bling mudada','#7c3aed'],resultado:['🏁','Resultado marcado','#1d4ed8']}[e.tipo]||['•',e.tipo,'#57534e'];
+    var m={assumiu:['🙋','Assumiu o atendimento','#059669'],liberou:['🔓','Terminou / liberou o atendimento','#57534e'],retorno:['⏰','Retorno agendado','#2563eb'],retornoFeito:['✔','Retorno feito','#16a34a'],situacao:['🔄','Situação no Bling mudada','#7c3aed'],ligou:['📞','Ligou pelo MicroSIP','#15803d'],resultado:['🏁','Resultado marcado','#1d4ed8']}[e.tipo]||['•',e.tipo,'#57534e'];
     if(e.tipo==='retorno')temRetEv=true;
     L.push({ts:e.ts,c:m[2],ic:m[0],t:m[1],u:e.u,d:e.obs||''});});
   var l=CQ.lemb&&CQ.lemb[id];
@@ -6291,6 +6314,7 @@ function cqBindComum(root,verOk){
   if($('cqMaisF'))$('cqMaisF').onclick=function(){CQ.maisF=!CQ.maisF;cqDraw();};
   if($('rtIrLead'))$('rtIrLead').onclick=rtIrLead;
   // v2: detalhes, perfil, dicas, faixa "cobrar agora"
+  root.querySelectorAll('.cqLigar').forEach(function(a){a.onclick=function(){var k=a.getAttribute('data-id');cqEvento(k,'ligou',a.getAttribute('data-t'));};});
   root.querySelectorAll('.cqTl').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id');CQ.tlAberto=CQ.tlAberto||{};CQ.tlAberto[k]=!CQ.tlAberto[k];cqDraw();};});
   root.querySelectorAll('.cqDet').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id');CQ.det=CQ.det||{};CQ.det[k]=!CQ.det[k];cqDraw();};});
   root.querySelectorAll('.cqPfAbrir').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id');CQ.pfForm=CQ.pfForm||{};CQ.pfForm[k]=!CQ.pfForm[k];cqDraw();};});
