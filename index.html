@@ -3236,6 +3236,7 @@ function dspAplicarLeitura(r){
     parcelas:dspEhCredito(formaId)&&r.parcelas>1?Math.min(24,parseInt(r.parcelas,10)):1,itens:Array.isArray(r.itens)?r.itens.slice(0,15):[],incertos:unc,leituraErro:null};
   if(!formaId)unc.push('forma');
   d.vencimento=dspVencSugerido(em,formaId).v;
+  var hc=dspCatSugerida(d);if(hc)d.categoria=hc;
   return d;
 }
 
@@ -3428,6 +3429,7 @@ async function dspLancarCore2(id,f,passo){
   await dspFb('despesas/'+id,{method:'PATCH',body:upd});
   if(!pend.length){try{await dspFb('fotos/'+id,{method:'DELETE'});}catch(e){}upd.nFotos=0;}
   DSP.desp[id]=Object.assign({},DSP.desp[id]||{},upd);
+  if(f.categoria){var cfc=dspCfg();cfc.catPorForn=cfc.catPorForn||{};var mud=false;dspChavesForn(f).forEach(function(k){if(cfc.catPorForn[k]!==f.categoria){cfc.catPorForn[k]=f.categoria;mud=true;}});if(mud){DSP.cfg=cfc;dspSalvarCfg().catch(function(){});}}
   if(f.formaId&&f.contaId){var cfg=dspCfg();cfg.contaPorForma=cfg.contaPorForma||{};if(cfg.contaPorForma[f.formaId]!==f.contaId){cfg.contaPorForma[f.formaId]=f.contaId;DSP.cfg=cfg;dspSalvarCfg().catch(function(){});}}
   return {blingId:upd.blingId,pend:pend};
 }
@@ -3652,10 +3654,27 @@ function dspBindLista(){DSP.root.querySelectorAll('.fin-it[data-id]').forEach(fu
 
 // Conferência (computador)
 function dspOpts(list,val,vazio,filtro){return '<option value="">'+dspEsc(vazio)+'</option>'+(filtro?list.filter(filtro):list).map(function(x){return '<option value="'+dspEsc(x.id)+'"'+(String(x.id)===String(val||'')?' selected':'')+'>'+dspEsc(x.nome)+'</option>';}).join('');}
-function dspOptsCat(val){var h='<option value="">Sem categoria</option>',aberto=false;
-  dspListas().categorias.forEach(function(c){if(c.pai){if(aberto)h+='</optgroup>';h+='<optgroup label="'+dspEsc(c.nome)+'">';aberto=true;return;}
-    if(!c.grupo&&aberto){h+='</optgroup>';aberto=false;}h+='<option value="'+c.id+'"'+(String(c.id)===String(val||'')?' selected':'')+'>'+dspEsc(c.nome)+'</option>';});
-  if(aberto)h+='</optgroup>';return h;}
+function dspOptsCat(val,filtro){var q=dspNorm(filtro||'').trim(),h=q?'':'<option value="">Sem categoria</option>',aberto=false,grupo='',n=0;
+  dspListas().categorias.forEach(function(c){if(c.pai){if(aberto)h+='</optgroup>';aberto=false;grupo=c.nome;
+      if(!q){h+='<optgroup label="'+dspEsc(c.nome)+'">';aberto=true;}return;}
+    if(!c.grupo){if(aberto){h+='</optgroup>';aberto=false;}grupo='';}
+    var sel=String(c.id)===String(val||'');
+    if(q&&dspNorm(c.nome+' '+grupo).indexOf(q)<0)return;
+    n++;h+='<option value="'+c.id+'"'+(sel?' selected':'')+'>'+dspEsc(q&&grupo?grupo+' › '+c.nome:c.nome)+'</option>';});
+  if(aberto)h+='</optgroup>';
+  if(q&&!n)h='<option value="'+dspEsc(val||'')+'">Nada com "'+dspEsc(filtro)+'"</option>';
+  return h;}
+// última categoria usada com o mesmo fornecedor (pelo cadastro do Bling, CNPJ ou nome)
+function dspChavesForn(d){var k=[];if(!d)return k;if(d.contato&&d.contato.id)k.push('c'+d.contato.id);
+  var doc=dspDig((d.contato&&d.contato.doc)||(d.fornecedor&&d.fornecedor.doc));if(doc.length>=11)k.push('d'+doc);
+  var nm=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'';if(nm&&nm!==DSP_SEM_FORN){var t=dspTokens(nm).join('_');if(t)k.push('n'+t);}return k;}
+function dspCatSugerida(d,eu){var ks=dspChavesForn(d);if(!ks.length)return '';
+  var ok=function(id){return id&&dspListas().categorias.some(function(c){return String(c.id)===String(id)&&!c.pai;});};
+  var melhor=null;Object.keys(DSP.desp||{}).forEach(function(k){var x=DSP.desp[k];if(!x||x===d||k===eu||!x.categoria||!ok(x.categoria))return;
+    var kx=dspChavesForn(x);if(!kx.some(function(c){return ks.indexOf(c)>=0;}))return;
+    var t=x.lancadoEm||x.atualizadoEm||x.criadoEm||0;if(!melhor||t>melhor.t)melhor={t:t,c:String(x.categoria)};});
+  if(melhor)return melhor.c;
+  var m=(dspCfg().catPorForn)||{};for(var i=0;i<ks.length;i++){if(ok(m[ks[i]]))return String(m[ks[i]]);}return '';}
 function dspHtmlConferencia(){
   var ext=dspExtOk();
   var h=dspConfHtml()+(ext?'':'<div class="fin-msg warn">Para lançar no Bling, use o app no computador com a extensão Mais Acessível — Vendas e Atendimento'+(dspExtVer()?' (este tem a v'+dspEsc(dspExtVer())+')':'')+'. Baixe pelo botão 🧩 Extensão no topo e atualize a pasta.</div>');
@@ -3670,6 +3689,7 @@ function dspHtmlConferencia(){
 function dspHtmlFormCard(f,mob,ext){
   var lendo=DSP.desp[DSP.sel].status==='lendo'||DSP.lendo[DSP.sel];
   var unc={};(f.incertos||[]).forEach(function(k){unc[k]=1;});
+  var catSug=dspCatSugerida(f,DSP.sel);if(!f.categoria&&catSug&&!f._catSugOk){f.categoria=catSug;f._editado=true;}f._catSugOk=1;
   function tag(k){return f.incertos?(unc[k]?'<span class="fin-tag unc">conferir</span>':'<span class="fin-tag">lido</span>'):'';}
   function rd(k){return f.incertos&&!f._toq?' fin-read':'';}
   var vs=dspVencSugerido(f.emissao,f.formaId);
@@ -3686,7 +3706,7 @@ function dspHtmlFormCard(f,mob,ext){
    '<div class="fin-sec"><p class="fin-st">Pagamento</p><div class="fin-g">'+
     '<div class="fin-f fin-c3"><label for="fForma">Forma de pagamento '+(f.incertos&&!f.formaId?'<span class="fin-tag unc">escolher</span>':'')+'</label><select id="fForma">'+dspOpts(dspListas().formas,f.formaId,'Selecione')+'</select></div>'+
     '<div class="fin-f fin-c3"><label for="fConta">Conta financeira</label><select id="fConta">'+dspOpts(dspListas().contas,f.contaId,'Selecione')+'</select></div>'+
-    '<div class="fin-f fin-c4"><label for="fCat">Categoria</label><select id="fCat">'+dspOptsCat(f.categoria)+'</select></div>'+
+    '<div class="fin-f fin-c4"><label for="fCat">Categoria'+(catSug&&String(catSug)===String(f.categoria)?' <span class="fin-tag" id="fCatTag">última usada com este fornecedor</span>':'')+'</label><input class="fin-in" id="fCatBusca" type="search" autocomplete="off" placeholder="🔎 Buscar categoria pelo nome" style="margin-bottom:6px"><select id="fCat">'+dspOptsCat(f.categoria)+'</select></div>'+
     '<div class="fin-f fin-c2" id="fParcW"'+(dspEhCredito(f.formaId)?'':' hidden')+'><label for="fParc">Parcelas</label><input class="fin-in" id="fParc" type="number" min="1" max="24" value="'+(f.parcelas||1)+'"></div></div></div>'+
    '<div class="fin-sec"><p class="fin-st">Valores e datas</p><div class="fin-g">'+
     '<div class="fin-f fin-c2"><label for="fValor">Valor (R$) '+tag('valor_total')+'</label><input class="fin-in fin-money'+rd()+'" id="fValor" inputmode="decimal" value="'+dspEsc(f.valor>0?dspMoney(f.valor):'')+'" placeholder="0,00"></div>'+
@@ -3725,6 +3745,11 @@ function dspBindConferencia(){
   dspEl('fComp').addEventListener('input',function(){dspEl('fComp').dataset.toq='1';});
   dspEl('fForma').addEventListener('change',function(){var id=dspEl('fForma').value;dspEl('fParcW').hidden=!dspEhCredito(id);var c=dspContaSugerida(id);if(c)dspEl('fConta').value=c;delete dspEl('fVenc').dataset.toq;reVenc();});
   var bb=dspEl('fBuscar');if(bb)bb.onclick=dspBuscarFornecedor;
+  var cb=dspEl('fCatBusca'),cs=dspEl('fCat');if(cb&&cs){cb.addEventListener('input',function(){var v=cs.value;cs.innerHTML=dspOptsCat(v,cb.value);
+      var reais=[].filter.call(cs.options,function(o){return o.value&&!/^Nada com/.test(o.text);});
+      if(cb.value.trim()&&reais.length){cs.value=reais[0].value;f.categoria=cs.value;cs.dispatchEvent(new Event('input'));}});
+    var tg=dspEl('fCatTag'),cat0=cs.value;var vtg=function(){if(tg)tg.hidden=cs.value!==cat0;};cs.addEventListener('input',vtg);cs.addEventListener('change',function(){f.categoria=cs.value;vtg();});
+    cb.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();cb.blur();}});}
   DSP.root.querySelectorAll('[data-cand]').forEach(function(b){b.onclick=async function(){var c=DSP.desp[DSP.sel].fornCand[+b.dataset.cand];f.contato={id:String(c.id),nome:c.nome,doc:c.doc||''};f._editado=true;await dspSalvarForm(true);
     await dspFb('despesas/'+DSP.sel,{method:'PATCH',body:{fornCand:null}});delete DSP.desp[DSP.sel].fornCand;dspDraw();};});
   var cn=dspEl('fCandNovo');if(cn)cn.onclick=function(){if(!confirm('Nenhum destes é o fornecedor? Vou cadastrar um novo no Bling.'))return;cn.disabled=true;dspCadastrarAgora();};
