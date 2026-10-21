@@ -4877,7 +4877,7 @@ function lvDraw(){
 // ===================== MÓDULO COTAÇÕES › CONFERÊNCIA EM LOTE (mod10) =====================
 // Lê as propostas do Bling pela extensão (app-bridge.js) e aplica as regras do Check.
 var CQ_SITS=[['sit-','Todas'],['sit-EmAberto','Em aberto'],['sit-Rascunho','Rascunho'],['sit-Pendente','Pendente'],['sit-Aguardando','Aguardando'],['sit-Aprovado','Aprovado'],['sit-Não aprovado','Não aprovado'],['sit-Concluído','Concluído']];
-var CQ={fSit:'',fErr:'',etq:'',aba:'conf',ext:null,rodando:false,status:'',total:0,feitos:0,itens:[],erro:'',periodo:'7',sitPesq:'sit-EmAberto',res:'todas',busca:'',limite:60,vend:'',reqId:null,quando:null};
+var CQ={fSit:'',fErr:'',etq:'',aba:'vend',ext:null,rodando:false,status:'',total:0,feitos:0,itens:[],erro:'',periodo:'7',sitPesq:'sit-EmAberto',res:'todas',busca:'',limite:60,vend:'',reqId:null,quando:null};
 window.addEventListener('message',function(e){
   if(e.source!==window||!e.data||e.data.source!=='ma-ext')return;
   var m=e.data;
@@ -5157,6 +5157,38 @@ function cqFaixaLembretes(card){
     b('cobatr',cAtr.length,'📞 cobranças atrasadas','#c2410c','#fff7ed')+b('atrasado',atr.length,'🔴 retornos atrasados','#b91c1c','#fef2f2')+b('hoje',hj.length,'🔵 retornos para hoje','#1d4ed8','#eff6ff')+
     '<span style="font-size:11.5px;color:#78716c">'+atr.concat(hj).slice(0,5).map(function(l){return 'Nº '+cqEsc(l.n)+' '+cqEsc(l.cli)+' ('+cqQuando(l.quando)+')';}).join(' · ')+'</span></div>';
 }
+// ── 🙋 ASSUMIR ATENDIMENTO (assumidos/{idProposta} = {u, ts}) — quem assumiu atende; os outros veem como "em atendimento" ──
+var CQ_ASSUM_HORAS=4; // depois disso a cotação volta sozinha para disponível (evita ficar presa se alguém esquecer)
+function cqCarregarSnapMeta(){if(CQ.snapMetaOk)return;CQ.snapMetaOk=1;fetch(FIREBASE_DB+'/cotSnapMeta.json').then(function(r){return r.ok?r.json():null;}).then(function(d){CQ.snapMeta=d;if(STATE.modulo==='mod10')cqDraw();}).catch(function(){});}
+function cqCarregarAssum(){
+  if(CQ.assumCarregando)return;CQ.assumCarregando=true;
+  fetch(FIREBASE_DB+'/assumidos.json').then(function(r){return r.ok?r.json():null;}).then(function(d){CQ.assum=d||{};CQ.assumCarregando=false;if(STATE.modulo==='mod10')cqDraw();}).catch(function(){CQ.assum=CQ.assum||{};CQ.assumCarregando=false;});
+  if(!CQ.assumPoll)CQ.assumPoll=setInterval(function(){if(STATE.modulo==='mod10'&&CQ.aba==='vend'&&!document.hidden){fetch(FIREBASE_DB+'/assumidos.json').then(function(r){return r.ok?r.json():null;}).then(function(d){var n=d||{};if(JSON.stringify(n)!==JSON.stringify(CQ.assum||{})){CQ.assum=n;var ae=document.activeElement;if(!(ae&&/INPUT|SELECT|TEXTAREA/.test(ae.tagName)))cqDraw();}}).catch(function(){});}},60000);
+}
+function cqAssum(i){var a=CQ.assum&&CQ.assum[i.id];if(!a||!a.u)return null;var ativo=Date.now()-(a.ts||0)<CQ_ASSUM_HORAS*3600000;if(!ativo)return null;return {u:a.u,ts:a.ts,meu:a.u===cqUsuario()};}
+function cqAberta(i){var f=cqFech(i);return !f&&['Rascunho','Pendente','Aguardando'].indexOf(i.situacao)!==-1;}
+function cqAssumir(i){
+  CQ.assumMsg=CQ.assumMsg||{};CQ.assumMsg[i.id]='⏳ Assumindo...';cqDraw();
+  fetch(FIREBASE_DB+'/assumidos/'+i.id+'.json').then(function(r){return r.json();}).then(function(a){
+    if(a&&a.u&&a.u!==cqUsuario()&&Date.now()-(a.ts||0)<CQ_ASSUM_HORAS*3600000){CQ.assum[i.id]=a;CQ.assumMsg[i.id]='⚠️ '+a.u+' assumiu esta cotação antes de você.';cqDraw();return;}
+    var n={u:cqUsuario(),ts:Date.now(),n:i.numero,cli:i.cliente};CQ.assum[i.id]=n;CQ.assumMsg[i.id]='';cqDraw();
+    return fetch(FIREBASE_DB+'/assumidos/'+i.id+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(n)});
+  }).catch(function(){CQ.assumMsg[i.id]='❌ Não consegui assumir agora. Tente de novo.';cqDraw();});
+}
+function cqLiberar(id){if(CQ.assum)delete CQ.assum[id];fetch(FIREBASE_DB+'/assumidos/'+id+'.json',{method:'DELETE'}).catch(function(){});}
+// fim do atendimento: "continuar comigo" para quem está negociando; os outros casos voltam para disponível
+var CQ_HUMOR_CONTINUA=['vai_fechar','negociando','duvidas'];
+function cqSaudeSync(card){
+  var wm=CQ.waMeta,ag=Date.now(),h='';
+  var idade=wm&&wm.ts?(ag-wm.ts)/60000:null,dia=new Date().getDay(),hora=new Date().getHours(),expediente=dia>=1&&dia<=5&&hora>=8&&hora<18;
+  var probs=[];
+  if(!wm)probs.push('o WhatsApp nunca foi sincronizado');
+  else if(idade>(expediente?30:24*60))probs.push('o WhatsApp não sincroniza desde <b>'+new Date(wm.ts).toLocaleString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</b> — conversas novas (e os clientes delas) não aparecem');
+  var sm=CQ.snapMeta;if(wm&&wm.ts&&idade<=60&&expediente&&(!sm||!sm.ts||ag-sm.ts>3*3600000))probs.push('o computador do WhatsApp não está rodando as tarefas automáticas (foto das cotações e cobrança atrasada'+(sm&&sm.ts?', última em '+new Date(sm.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'')+') — atualize nele a extensão <b>Mais Acessível — Vendas e Atendimento</b> e deixe o Bling logado');
+  if(!probs.length)return '';
+  return '<div style="'+card+';background:#fef2f2;border:1.5px solid #fca5a5;color:#991b1b;font-size:13px;padding:12px 16px"><b>⚠️ Atenção:</b> '+probs.join('; ')+'.<div style="font-size:12px;margin-top:4px;color:#7f1d1d">No computador do WhatsApp: ligado, Chrome aberto com o <b>WhatsApp Web</b> e o <b>Bling</b> logados, extensão atualizada (🔄 em chrome://extensions) e "💬 Este computador sincroniza o WhatsApp" marcado no popup.</div></div>';
+}
+function cqVerNum(v){return String(v||'0').split('.').map(Number).reduce(function(a,n,i){return a+(n||0)*Math.pow(1000,2-i);},0);}
 // ── humor do cliente na cobrança ──
 var CQ_HUMOR=[['vai_fechar','🟢 Vai fechar'],['negociando','💬 Negociando preço ou condição'],['sem_tempo','⏳ Sem tempo agora — pediu para retornar'],['duvidas','❓ Com dúvidas sobre o produto'],['aprovacao','🏢 Depende de aprovação (engenharia, compras, cliente final)'],['preco_melhor','💲 Tem preço melhor de outro fornecedor'],['prazo','📅 Prazo de entrega pode não atender'],['obra_parada','🚧 Obra ou projeto ainda não começou'],['sem_resposta','🔇 Não respondeu']];
 function cqHumorTxt(k){var h=CQ_HUMOR.filter(function(x){return x[0]===k;})[0];return h?h[1]:'';}
@@ -5296,7 +5328,7 @@ function cqDrawConf(root){
   if(modo==='vend'&&(CQ.vv==='cob'||CQ.vv==='perd'||CQ.vv==='conc')){if(CQ.vv==='perd')pdDraw(root);else if(CQ.vv==='conc')ccDraw(root);else cbDraw(root);return;}
   // Vendas abre com TODAS as situações (Erros continua no padrão Em aberto), a não ser que a pessoa tenha escolhido outra
   if(modo==='vend'&&!CQ._vendIni){CQ._vendIni=1;if(!CQ.sitTocado)CQ.sitPesq='sit-';}
-  if(modo==='vend'){if(!CQ.lemb&&!CQ.lembCarregando)cqCarregarLemb();if(!CQ.conc&&!CQ.concCarregando)cqCarregarConc();if(!CQ.rel&&!CQ.relCarregando)cqCarregarRel();if(!CQ.waOk&&!CQ.waCarregando)cqCarregarWA();if(!CQ.vi&&!CQ.viCarregando)cqCarregarVI();}
+  if(modo==='vend'){cqCarregarSnapMeta();if(!CQ.assum&&!CQ.assumCarregando)cqCarregarAssum();if(!CQ.lemb&&!CQ.lembCarregando)cqCarregarLemb();if(!CQ.conc&&!CQ.concCarregando)cqCarregarConc();if(!CQ.rel&&!CQ.relCarregando)cqCarregarRel();if(!CQ.waOk&&!CQ.waCarregando)cqCarregarWA();if(!CQ.vi&&!CQ.viCarregando)cqCarregarVI();}
   var verOk=CQ.ext&&CQ.ext.split('.').map(Number).reduce(function(a,n,i){return a+n*Math.pow(1000,2-i);},0)>=1011000;
   var card='background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:18px 20px;margin-bottom:14px;box-shadow:0 1px 2px rgba(0,0,0,.04)';
   var sel='padding:8px 10px;border:1.5px solid #e7e5e4;border-radius:8px;font-family:inherit;font-size:13px;background:#fff';
@@ -5332,6 +5364,7 @@ function cqDrawConf(root){
   }
   if(CQ.erro)h+='<div style="margin-top:14px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;font-size:13px;color:#b91c1c">❌ '+cqEsc(CQ.erro)+'</div>';
   h+='</div>';
+  if(modo==='vend'&&CQ.waOk)h+=cqSaudeSync(card);
   if(CQ.itens.length){
     CQ.itens.forEach(function(i){i._ws=modo==='vend'?cqWaStatus(i):null;});
     h+=modo==='vend'?cqCorpoVendas(card,sel):cqCorpoErros(card,sel);
@@ -5410,6 +5443,10 @@ function cqCorpoVendas(card,sel){
     if(!isNaN(vmax)&&cqVal(i)>vmax)return false;
     if(CQ.fFech){var fe=cqFech(i);if(CQ.fFech==='__aberta'?!!fe:!(fe&&fe.st===CQ.fFech))return false;}
     if(CQ.fCob){var cb=cqCobs(i.id),ult=cb[0]&&cb[0].ts;if(CQ.fCob==='nunca'&&cb.length)return false;if(CQ.fCob==='hoje'&&!(ult&&new Date(ult).toDateString()===new Date().toDateString()))return false;if(CQ.fCob==='3d'&&(ult&&agora-ult<3*86400000))return false;}
+    var at=CQ.fAt||'disp',as=cqAssum(i);
+    if(at==='disp'&&(!cqAberta(i)||(as&&!as.meu)))return false;
+    if(at==='atend'&&!as)return false;
+    if(at==='minhas'&&!(as&&as.meu))return false;
     if(CQ.fLemb==='cobatr'){var ca=cqCobAtraso(i);if(!(ca&&ca.atrasada))return false;}
     else if(CQ.fLemb){var lm=cqLembDe(i.id),ag=Date.now();if(!lm)return false;if(CQ.fLemb==='atrasado'&&!(lm.quando<=ag))return false;if(CQ.fLemb==='hoje'&&new Date(lm.quando).toDateString()!==new Date().toDateString())return false;}
     if(CQ.fUf&&(i.uf||'')!==CQ.fUf)return false;
@@ -5457,6 +5494,11 @@ function cqCorpoVendas(card,sel){
       op('cqFHum','Situação do cliente (última cobrança)',[['','Todas']].concat(CQ_HUMOR),CQ.fHum||'')+
       op('cqResSel','Mostrar',[['todas','Todas'],['sug','Com produto p/ oferecer'],['esperando','⏰ Cliente esperando resposta'],['semcontato','💤 Sem conversa há +3 dias'],['semwa','Cliente não achado no WhatsApp'],['divergente','⚠️ Etiqueta diferente do Bling']],CQ.res||'todas')+'</div>':'')+'</div>';
   h+=cqFaixaLembretes(card);
+  // 🟢 disponíveis · 🔒 em atendimento · 👤 minhas · todas
+  var cntAt=function(f){return CQ.itens.filter(f).length;},asOf=function(i){return cqAssum(i);};
+  var nDisp=cntAt(function(i){var a=asOf(i);return cqAberta(i)&&!(a&&!a.meu);}),nAt=cntAt(function(i){return !!asOf(i);}),nMin=cntAt(function(i){var a=asOf(i);return a&&a.meu;});
+  var bA=function(id,l,n){var on=(CQ.fAt||'disp')===id;return '<button class="cqFAt" data-f="'+id+'" style="border:1.5px solid '+(on?'#1c1917':'#e7e5e4')+';background:'+(on?'#1c1917':'#fff')+';color:'+(on?'#fff':'#44403c')+';border-radius:20px;padding:6px 14px;font-weight:800;font-size:12.5px;cursor:pointer;font-family:inherit">'+l+(n!==null?' ('+n+')':'')+'</button>';};
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px">'+bA('disp','🟢 Disponíveis',nDisp)+bA('atend','🔒 Em atendimento',nAt)+bA('minhas','👤 Minhas',nMin)+bA('todas','Todas',null)+'</div>';
   var ordem=CQ.ordV||'data';
   var lista=F.slice().sort(ordem==='valor'?function(a,b){return cqVal(b)-cqVal(a);}:function(a,b){return (b.data||'').localeCompare(a.data||'')||(parseInt(b.numero,10)-parseInt(a.numero,10));});
   h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 2px 10px"><div style="font-size:13px;font-weight:800;color:#1c1917">'+lista.length+' cotação(ões)</div>'+
@@ -5471,6 +5513,13 @@ function cqCardVenda(i,card,sel){
   var ws=i._ws,fe=cqFech(i),cobs=cqCobs(i.id),pb=cqProb(i);
   var corB=fe?(CQ_FECH.filter(function(f){return f[0]===fe.st;})[0]||[,,'#57534e'])[2]:(pb&&pb.n==='alta'?'#15803d':pb&&pb.n==='baixa'?'#b45309':'#d6d3d1');
   var x='<div style="'+card+';padding:14px 16px;border-left:5px solid '+corB+'">'+cqCabCard(i);
+  var asI=cqAssum(i),outro=asI&&!asI.meu,am=CQ.assumMsg&&CQ.assumMsg[i.id];
+  if(cqAberta(i)||asI)x+='<div style="margin:0 0 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-radius:8px;padding:6px 10px;font-size:12.5px;'+(asI?(asI.meu?'background:#ecfdf5;border:1.5px solid #34d399;color:#065f46':'background:#f5f5f4;border:1.5px solid #a8a29e;color:#44403c'):'background:#fff;border:1.5px dashed #d6d3d1;color:#57534e')+'">'+
+    (asI?'<b>🔒 '+(asI.meu?'Você está atendendo':'Em atendimento por '+cqEsc(asI.u))+'</b> desde '+new Date(asI.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+(asI.meu?' · ao registrar a cobrança ou o resultado, o atendimento termina':''):'<b>🟢 Disponível</b> — ninguém está atendendo')+
+    '<span style="flex:1"></span>'+
+    (!asI&&cqAberta(i)?'<button class="cqAssumir" data-id="'+cqEsc(i.id)+'" style="background:#059669;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-weight:900;cursor:pointer;font-family:inherit">🙋 Assumir atendimento</button>':'')+
+    (asI&&(asI.meu||typeof lcGestor!=='function'||lcGestor())?'<button class="cqLiberar" data-id="'+cqEsc(i.id)+'" style="background:#fff;border:1.5px solid #a8a29e;color:#44403c;border-radius:6px;padding:5px 12px;font-weight:800;cursor:pointer;font-family:inherit">🔓 Liberar'+(asI.meu?'':' (gestor)')+'</button>':'')+
+    (am?'<span style="width:100%;font-weight:700;color:'+(/^⚠|^❌/.test(am)?'#b91c1c':'#57534e')+'">'+cqEsc(am)+'</span>':'')+'</div>';
   var fc=cqFoneCopia(i),ca=cqCobAtraso(i);
   if(ca)x+='<div style="margin:0 0 6px;background:'+(ca.atrasada?'#fff7ed;border:1.5px solid #fb923c;color:#9a3412':'#eff6ff;border:1px solid #bfdbfe;color:#1e40af')+';border-radius:8px;padding:5px 10px;font-size:12px;font-weight:800">'+
     (ca.atrasada?'📞 COBRANÇA ATRASADA — ':'📞 Cobrar ')+(ca.tipo==='retorno'?'o cliente pediu retorno em ':'cotação nova: cobrar em ')+new Date(ca.prazo).toLocaleString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+(ca.atrasada?' · registre a cobrança abaixo':'')+'</div>';
@@ -5480,7 +5529,7 @@ function cqCardVenda(i,card,sel){
   // probabilidade + materiais
   var pbTxt=pb?{alta:'📈 Alta',media:'➖ Média',baixa:'📉 Baixa'}[pb.n]||pb.n:'';
   x+='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;margin:2px 0 6px">'+
-    (pb?'<span style="background:'+(pb.n==='alta'?'#dcfce7;color:#166534':pb.n==='baixa'?'#ffedd5;color:#9a3412':'#fef9c3;color:#854d0e')+';border-radius:10px;padding:2px 9px;font-weight:800" title="'+cqEsc(pb.m||'')+'">🎯 '+pbTxt+(pb.pct?' '+pb.pct+'%':'')+(pb.fonte==='etiqueta'?' (etiqueta)':'')+'</span>'+(pb.m?'<span style="color:#78716c">'+cqEsc(pb.m)+'</span>':''):'<span style="color:#a8a29e">🎯 probabilidade ainda não avaliada</span>')+
+    (pb?'<span style="background:'+(pb.n==='alta'?'#dcfce7;color:#166534':pb.n==='baixa'?'#ffedd5;color:#9a3412':'#fef9c3;color:#854d0e')+';border-radius:10px;padding:2px 9px;font-weight:800" title="'+cqEsc(pb.m||'')+'">🎯 '+pbTxt+(pb.pct?' '+pb.pct+'%':'')+(pb.fonte==='etiqueta'?' (pela etiqueta)':' (pela conversa)')+'</span>'+(pb.m?'<span style="color:#78716c">'+cqEsc(pb.m)+'</span>':''):'<span style="color:#a8a29e" title="A probabilidade vem da leitura da conversa do WhatsApp pela IA (ou da etiqueta ALTA/BAIXA PROB). Sem conversa encontrada, não há avaliação.">🎯 probabilidade ainda não avaliada'+(i._ws?'':' — conversa não encontrada no WhatsApp')+'</span>')+
     cqMateriais(i).map(function(m){return '<span style="background:#f5f5f4;color:#44403c;border-radius:10px;padding:2px 8px;font-size:11px">'+cqEsc(m)+'</span>';}).join('')+'</div>';
   var its=i.itens||[];
   if(its.length)x+='<div style="font-size:12px;color:#57534e">📦 <b>'+its.length+' produto(s):</b> '+its.slice(0,4).map(function(p){return cqEsc(p.descricao)+(p.qtd?' <span style="color:#a8a29e">('+cqEsc(String(p.qtd).replace(/,00$/,''))+')</span>':'');}).join(' · ')+(its.length>4?' <span style="color:#a8a29e">e mais '+(its.length-4)+'</span>':'')+'</div>';
@@ -5498,6 +5547,7 @@ function cqCardVenda(i,card,sel){
   if(sg.length){var mot=sg.map(function(s){return cqMotivo(i,s);}),todosJust=mot.every(function(m){return m&&m.just;});
     x+='<div style="margin-top:6px;background:'+(todosJust?'#f0fdf4;border:1px solid #bbf7d0;color:#14532d':'#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a')+';border-radius:8px;padding:7px 10px;font-size:12px"><b>💡 Costuma ir junto e não está na cotação'+(todosJust?' — ✔ justificado':'')+':</b> '+
     sg.map(function(s,k){var m=mot[k];return '<span'+(m&&m.just?' style="text-decoration:line-through;color:#94a3b8"':'')+'>'+cqEsc(s.d)+' <b>('+s.p+'%)</b></span>'+(m?' <b style="color:'+(m.just?'#15803d':'#b91c1c')+'">'+(m.just?'✔ ':'⚠ ')+cqEsc(m.txt)+'</b>':'');}).join(' · ')+'</div>';}
+  if(outro)return x+'<div style="margin-top:8px;font-size:12px;color:#78716c;background:#fafaf9;border-radius:8px;padding:8px 10px">🔒 '+cqEsc(asI.u)+' está atendendo este cliente. As ações (cobrança, retorno, resultado) ficam com quem assumiu até terminar'+(CQ_ASSUM_HORAS?' ou passar '+CQ_ASSUM_HORAS+' h':'')+'.</div></div>';
   // cobranças
   var cAb=CQ.cobAberto&&CQ.cobAberto[i.id],fAb=CQ.cobForm&&CQ.cobForm[i.id];
   var ult=cobs[0];
@@ -5509,6 +5559,7 @@ function cqCardVenda(i,card,sel){
     (fAb?'<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end"><label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px">Como cobrou<select class="cqCobCanal" data-id="'+cqEsc(i.id)+'" style="'+sel+';padding:6px 8px">'+CQ_CANAIS.map(function(c){return '<option>'+c+'</option>';}).join('')+'</select></label>'+
       '<label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px">Situação do cliente<select class="cqCobHum" data-id="'+cqEsc(i.id)+'" style="'+sel+';padding:6px 8px"><option value="">— escolha —</option>'+CQ_HUMOR.map(function(h){return '<option value="'+h[0]+'">'+h[1]+'</option>';}).join('')+'</select></label>'+
       '<label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px;flex:1;min-width:200px">O que o cliente disse<input class="cqCobObs" data-id="'+cqEsc(i.id)+'" placeholder="ex.: vai decidir na sexta, pediu desconto..." style="'+sel+';padding:6px 8px"></label>'+
+      (asI&&asI.meu?'<label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px">Depois deste atendimento<select class="cqCobDepois" data-id="'+cqEsc(i.id)+'" style="'+sel+';padding:6px 8px"><option value="auto">Automático pela situação</option><option value="libera">🔓 Liberar para outros</option><option value="continua">🔒 Continuar comigo</option></select></label>':'')+
       '<label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px">⏰ Retornar em (opcional)<input type="datetime-local" class="cqCobRet" data-id="'+cqEsc(i.id)+'" style="'+sel+';padding:5px 8px"></label>'+
       '<button class="cqCobSalvar" data-id="'+cqEsc(i.id)+'" style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-weight:800;cursor:pointer;font-family:inherit">Salvar</button></div>':'')+
     (cAb&&cobs.length?'<div style="margin-top:6px">'+cobs.map(function(c){return '<div style="padding:4px 0;border-top:1px dashed #e7e5e4"><b>'+new Date(c.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})+'</b> · '+cqEsc(c.u||'?')+' · '+cqEsc(c.canal||'')+(c.humor?' · <b style="color:#5b21b6">'+cqEsc(cqHumorTxt(c.humor))+'</b>':'')+(c.obs?' — '+cqEsc(c.obs):'')+'</div>';}).join('')+'</div>':'')+'</div>';
@@ -5561,17 +5612,19 @@ function cqBindComum(root,verOk){
     var canal=root.querySelector('.cqCobCanal[data-id="'+k+'"]').value,obs=root.querySelector('.cqCobObs[data-id="'+k+'"]').value.trim(),hum=root.querySelector('.cqCobHum[data-id="'+k+'"]').value;
     if(!hum){alert('Escolha a situação do cliente (ex.: vai fechar, sem tempo, com dúvidas...).');return;}
     var ret=root.querySelector('.cqCobRet[data-id="'+k+'"]');ret=ret&&ret.value;
+    var dep=root.querySelector('.cqCobDepois[data-id="'+k+'"]'),asK=cqAssum(it);
+    if(asK&&asK.meu){var d=dep?dep.value:'auto';if(d==='libera'||(d==='auto'&&CQ_HUMOR_CONTINUA.indexOf(hum)===-1))cqLiberar(k);else{CQ.assum[k].ts=Date.now();fetch(FIREBASE_DB+'/assumidos/'+k+'/ts.json',{method:'PUT',body:JSON.stringify(Date.now())}).catch(function(){});}}
     CQ.cobForm[k]=false;CQ.cobAberto=CQ.cobAberto||{};CQ.cobAberto[k]=true;cqSalvarCob(it,canal,obs,hum);if(ret)cqSalvarLembrete(it,new Date(ret).getTime(),(cqHumorTxt(hum)+(obs?' — '+obs:'')).trim());};});
   var abreForm=function(cls,tipo){root.querySelectorAll(cls).forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id');CQ.fechForm=CQ.fechForm||{};CQ.fechForm[k]=CQ.fechForm[k]===tipo?'':tipo;cqDraw();};});};
   abreForm('.cqBtFechado','fechado');abreForm('.cqBtCancel','cancel');
   root.querySelectorAll('.cqFfOk').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id'),it=item(k);if(!it)return;
     var st=root.querySelector('.cqFfTipo[data-id="'+k+'"]').value,obs=root.querySelector('.cqFfObs[data-id="'+k+'"]').value.trim();
-    CQ.fechForm[k]='';cqSalvarFech(it,st,obs);cqLembreteFeito(k,true);if(it.situacao!=='Aprovado'&&it.situacao!=='Concluído')cqMudarSitBling(it,'Aprovado');};});
+    CQ.fechForm[k]='';cqLiberar(k);cqSalvarFech(it,st,obs);cqLembreteFeito(k,true);if(it.situacao!=='Aprovado'&&it.situacao!=='Concluído')cqMudarSitBling(it,'Aprovado');};});
   root.querySelectorAll('.cqFcOk').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id'),it=item(k);if(!it)return;
     var st=root.querySelector('.cqFcMot[data-id="'+k+'"]').value,obs=root.querySelector('.cqFcObs[data-id="'+k+'"]').value.trim();
     if(!st){alert('Escolha o motivo.');return;}if(!obs){alert('Escreva uma observação — ela é o que mais ajuda no relatório.');return;}
     if(it.situacao==='Concluído'&&!confirm('Esta cotação já está Concluída no Bling (virou pedido). Marcar como não fechou mesmo assim? A situação no Bling não será mudada.'))return;
-    CQ.fechForm[k]='';cqSalvarFech(it,st,obs);cqLembreteFeito(k,true);if(it.situacao!=='Não aprovado'&&it.situacao!=='Concluído')cqMudarSitBling(it,'Não aprovado');};});
+    CQ.fechForm[k]='';cqLiberar(k);cqSalvarFech(it,st,obs);cqLembreteFeito(k,true);if(it.situacao!=='Não aprovado'&&it.situacao!=='Concluído')cqMudarSitBling(it,'Não aprovado');};});
   root.querySelectorAll('.cqBtReabrir').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id'),it=item(k);if(!it)return;
     if(!confirm('Voltar esta cotação para "Em negociação"?'+(it.situacao==='Não aprovado'||it.situacao==='Aprovado'?' A situação no Bling volta para Rascunho (em aberto).':'')))return;
     cqSalvarFech(it,'','');if(it.situacao==='Não aprovado'||it.situacao==='Aprovado')cqMudarSitBling(it,'Rascunho');};});
@@ -5582,6 +5635,9 @@ function cqBindComum(root,verOk){
     if(!q){alert('Escolha o dia e a hora do retorno.');return;}CQ.lmForm[k]=false;cqSalvarLembrete(it,new Date(q).getTime(),obs);};});
   root.querySelectorAll('.cqLmFeito').forEach(function(b){b.onclick=function(){cqLembreteFeito(b.getAttribute('data-id'));};});
   root.querySelectorAll('.cqLmFiltro').forEach(function(b){b.onclick=function(){CQ.fLemb=CQ.fLemb===b.getAttribute('data-f')?'':b.getAttribute('data-f');CQ.limite=60;cqDraw();};});
+  root.querySelectorAll('.cqAssumir').forEach(function(b){b.onclick=function(){var it=item(b.getAttribute('data-id'));if(it)cqAssumir(it);};});
+  root.querySelectorAll('.cqLiberar').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id');cqLiberar(k);cqDraw();};});
+  root.querySelectorAll('.cqFAt').forEach(function(b){b.onclick=function(){CQ.fAt=b.getAttribute('data-f');CQ.limite=60;cqDraw();};});
   root.querySelectorAll('.cqCopiaFone').forEach(function(b){b.onclick=function(){cqCopiar(b.getAttribute('data-n'),b);};});
   root.querySelectorAll('.cqConcArq').forEach(function(f){f.onchange=function(){var it=item(f.getAttribute('data-id'));if(it&&f.files&&f.files[0])cqLerConcorrente(it,f.files[0]);};});
   if($('cqMaisF'))$('cqMaisF').onclick=function(){CQ.maisF=!CQ.maisF;cqDraw();};
@@ -5712,8 +5768,8 @@ function pdBind(root){
   root.querySelectorAll('.pdRow').forEach(function(r){r.onclick=function(e){if(e.target.tagName==='A')return;var id=r.getAttribute('data-id');PD.aberto[id]=!PD.aberto[id];cqDraw();};});
 }
 function cqTabs(){
-  var b=function(id,l){var on=(CQ.aba||'conf')===id;return '<button class="cqTab" data-a="'+id+'" style="border:none;border-bottom:3px solid '+(on?'#d97706':'transparent')+';background:none;padding:10px 16px;font-weight:800;font-size:14px;color:'+(on?'#d97706':'#78716c')+';cursor:pointer;font-family:inherit">'+l+'</button>';};
-  return '<div style="display:flex;gap:4px;border-bottom:1px solid #e7e5e4;margin-bottom:16px">'+b('conf','⚠️ Erros')+b('vend','💰 Vendas')+(typeof lcGestor!=='function'||lcGestor()?b('rel','📊 Relatório')+b('ate','⏱️ Atendimento'):'')+'</div>';
+  var b=function(id,l){var on=(CQ.aba||'vend')===id;return '<button class="cqTab" data-a="'+id+'" style="border:none;border-bottom:3px solid '+(on?'#d97706':'transparent')+';background:none;padding:10px 16px;font-weight:800;font-size:14px;color:'+(on?'#d97706':'#78716c')+';cursor:pointer;font-family:inherit">'+l+'</button>';};
+  return '<div style="display:flex;gap:4px;border-bottom:1px solid #e7e5e4;margin-bottom:16px">'+b('vend','💰 Vendas')+(typeof lcGestor!=='function'||lcGestor()?b('ate','⏱️ Atendimento'):'')+b('conf','⚠️ Erros')+(typeof lcGestor!=='function'||lcGestor()?b('rel','👥 Relatório colaboradores'):'')+'</div>';
 }
 function cqBindTabs(root){root.querySelectorAll('.cqTab').forEach(function(t){t.onclick=function(){CQ.aba=t.getAttribute('data-a');cqDraw();};});}
 function cqDraw(){
