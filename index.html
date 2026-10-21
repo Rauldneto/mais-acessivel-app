@@ -3096,7 +3096,14 @@ function dspNumDoc(s){var d=String(s||'').replace(/\D/g,'').replace(/^0+/,'');re
 function dspPalavra(s){var w=dspNorm(s).replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(x){return x.length>2&&['ltda','comercio','com','posto','supermercado','auto','servicos','eireli','me','epp','the'].indexOf(x)<0;});return w[0]||'';}
 function dspDias(a,b){if(!a||!b)return 99;return Math.abs((new Date(a+'T12:00:00')-new Date(b+'T12:00:00'))/864e5);}
 // Duplicidade: verificada no Contas a Pagar do Bling (em aberto, mesmo dia, mesmo valor). O resultado fica em d.dupBling.
-function dspDuplicados(id){var d=DSP.desp[id];return (d&&d.dupBling&&d.dupBling.itens)||[];}
+document.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest&&ev.target.closest('[data-naodup]');if(!b)return;
+  var id=b.getAttribute('data-naodup'),d=DSP.desp[id];if(!d)return;
+  if(!confirm('Confirma que esta despesa NÃO é a mesma conta que já está no Bling?'))return;
+  var lib=(d.naoDup||[]).concat((d.dupBling&&d.dupBling.itens||[]).map(function(x){return x.blingId;}));
+  d.naoDup=lib;d.dupBling={ts:Date.now(),itens:[]};
+  dspFb('despesas/'+id,{method:'PATCH',body:{naoDup:lib,dupBling:d.dupBling}}).catch(function(){});
+  if(DSP.revisao)DSP.revisao=null;dspDraw();});
+function dspDuplicados(id){var d=DSP.desp[id];var lib=(d&&d.naoDup)||[];return ((d&&d.dupBling&&d.dupBling.itens)||[]).filter(function(x){return lib.indexOf(x.blingId)<0;});}
 async function dspChecarDupBling(id,f){
   var r=await dspBling('verificarDuplicado',{valor:f.valor,emissao:f.emissao,vencimento:f.vencimento});
   var info={ts:Date.now(),itens:(r.itens||[]).map(function(x){return {blingId:String(x.id),valor:x.valor,vencimento:x.vencimento,emissao:x.dataEmissao||'',contato:x.contatoNome||'',contatoId:x.contatoId||''};})};
@@ -3108,7 +3115,8 @@ function dspDupHtml(id,curto){
   if(curto)return '<span class="fin-chip err">⚠️ igual a uma conta em aberto no Bling</span>';
   return '<div class="fin-msg err" style="display:block"><b>⚠️ Possível duplicidade no Bling</b>'+L.map(function(x){
     return '<div style="margin-top:4px">Conta em aberto no Bling com o mesmo valor e a mesma data: R$ '+dspMoney(x.valor)+' · vence '+dspBr(x.vencimento)+(x.contato?' · '+dspEsc(x.contato):'')+' (ID '+dspEsc(x.blingId)+')</div>';}).join('')+
-    '<div style="margin-top:6px;font-weight:400">Se for a mesma despesa, exclua esta. Se for outra compra, pode lançar.</div></div>';
+    '<div style="margin-top:6px;font-weight:400">Se for a mesma despesa, exclua esta. Se for outra compra, confirme abaixo para liberar o lançamento.</div>'+
+    '<button type="button" class="fin-btn sm" style="margin-top:6px" data-naodup="'+dspEsc(id)+'">Não é duplicado — é outra compra</button></div>';
 }
 // Só o valor impede o lançamento. O resto é pendência: lança assim mesmo e fica lembrando o que falta.
 function dspFaltas(d){return (d&&d.valor>0)?[]:['Valor'];}
@@ -3267,6 +3275,7 @@ async function dspLerDespesa(id,fotos,obs){
   try{await dspFb('despesas/'+id,{method:'PATCH',body:upd});}catch(e){}
   DSP.desp[id]=Object.assign({},DSP.desp[id]||{},upd);delete DSP.lendo[id];
   if(DSP.sel===id&&DSP.form&&!DSP.form._editado){DSP.form=null;}
+  if(!dspMobile()&&dspExtOk()&&upd.valor>0){try{await dspConferirUma(id);}catch(e){}}
   if(STATE.modulo==='mod14'){if(dspEditando())dspDrawLista();else dspDraw();}
 }
 
@@ -3361,8 +3370,21 @@ async function dspResolverFornecedor(id,f,podeCriar,passo){
   return f.contato;
 }
 // Lança uma despesa no Bling a partir dos dados (sem depender da tela). Usado pelo botão e pelo lançamento automático.
+var DSP_TRAVA={};
 async function dspLancarCore(id,f,passo){
+  if(DSP_TRAVA[id])throw new Error('Esta despesa já está sendo lançada.');
+  DSP_TRAVA[id]=1;try{return await dspLancarCore2(id,f,passo);}finally{delete DSP_TRAVA[id];}
+}
+async function dspLancarCore2(id,f,passo){
   passo=passo||function(){};
+  // nunca lançar a mesma despesa duas vezes: confere no Firebase se já tem ID do Bling
+  try{var atual=await dspFb('despesas/'+id);if(atual&&(atual.blingId||atual.status==='lancado')){if(DSP.desp[id])Object.assign(DSP.desp[id],atual);throw new Error('Esta despesa já foi lançada no Bling (ID '+(atual.blingId||'?')+').');}}catch(e){if(/já foi lançada/.test(e.message))throw e;}
+  // duplicidade: confere no Bling na hora (mesmo valor e mesma data, em aberto)
+  passo('Conferindo duplicidade no Bling…');
+  var dups=await dspChecarDupBling(id,Object.assign({},f,{vencimento:f.vencimento||f.emissao}));
+  var lib=(DSP.desp[id]&&DSP.desp[id].naoDup)||[];
+  var novos=dups.filter(function(x){return lib.indexOf(x.blingId)<0;});
+  if(novos.length)throw new Error('Já existe conta em aberto no Bling com o mesmo valor e a mesma data (ID '+novos.map(function(x){return x.blingId;}).join(', ')+'). Se for outra compra, clique em "Não é duplicado" e lance de novo.');
   var pend=dspPendencias(f);
   if(!f.vencimento)f.vencimento=f.emissao||dspHoje();
   if(!f.competencia)f.competencia=f.emissao||f.vencimento;
@@ -3389,43 +3411,30 @@ async function dspLancar(){
     var prox=dspLista('pend').filter(function(x){return x.id!==id&&x.status!=='lancado';})[0];DSP.sel=prox?prox.id:null;DSP.form=null;DSP.revisao=null;dspDraw();
   }catch(e){DSP.msg='Não lancei: '+e.message+' A despesa continua em Pendentes.';DSP.msgTipo='err';DSP.revisao=null;dspDraw();}
 }
-// ---------- lançamento automático: o computador com a extensão lança sozinho o que chega do celular ----------
-var DSP_AUTO={rodando:false,timer:null,feitos:0};
-var DSP_NF=['nfe','nfce','nfse','cupom'];
-function dspEhNota(d){return DSP_NF.indexOf(String(d&&d.tipoDoc||''))>=0;}
-// Lança sozinho só nota fiscal / cupom com tudo preenchido e sem duplicidade já conferida. Comprovante avulso fica para conferir no PC.
-function dspAutoElegivel(d){return dspEhNota(d)&&!dspPendencias(d).length&&!(d.dupBling&&d.dupBling.itens&&d.dupBling.itens.length);}
-function dspAutoLigado(){var c=dspCfg();return c.autoLancar!==false;}
-async function dspAutoLancar(){
-  if(DSP_AUTO.rodando||!STATE.auth||STATE.roleLogado!=='admin'||dspMobile()||!dspExtOk()||!dspAutoLigado()||document.hidden)return;
-  DSP_AUTO.rodando=true;var lanc=[],erros=[];
-  try{
-    var all=await dspFb('despesas')||{};DSP.desp=all;
-    var semForn=Object.keys(all).filter(function(k){var d=all[k];return d&&d.status==='pendente'&&!d.contato&&d.fornecedor&&d.fornecedor.nome&&d.fornecedor.nome!==DSP_SEM_FORN&&!(d.fornChecado&&Date.now()-d.fornChecado<3600000);});
-    for(var j=0;j<semForn.length;j++){var kk=semForn[j];try{var ff=JSON.parse(JSON.stringify(all[kk]));await dspResolverFornecedor(kk,ff,false);}catch(e){}
-      try{await dspFb('despesas/'+kk,{method:'PATCH',body:{fornChecado:Date.now()}});all[kk].fornChecado=Date.now();}catch(e){}}
-    var agora=Date.now();
-    var cand=Object.keys(all).filter(function(k){var d=all[k];return d&&d.status==='pendente'&&!d.blingId&&d.valor>0&&!DSP.lendo[k]&&!(DSP.mob===false&&DSP.sel===k&&DSP.form&&DSP.form._editado)
-      &&!(d.lancando&&agora-d.lancando<180000)&&!(d.autoErro&&agora-(d.autoErro.ts||0)<1800000)&&dspAutoElegivel(d);});
-    for(var i=0;i<cand.length;i++){var k=cand[i];
-      try{await dspFb('despesas/'+k,{method:'PATCH',body:{lancando:Date.now()}});
-        var fresco=await dspFb('despesas/'+k);if(!fresco||fresco.status!=='pendente'||fresco.blingId)continue;
-        DSP.desp[k]=fresco;var dup=await dspChecarDupBling(k,Object.assign({},fresco,{vencimento:fresco.vencimento||fresco.emissao}));
-        if(dup.length){await dspFb('despesas/'+k,{method:'PATCH',body:{lancando:null}});continue;}
-        var r=await dspLancarCore(k,JSON.parse(JSON.stringify(fresco)));lanc.push({nome:(fresco.contato&&fresco.contato.nome)||(fresco.fornecedor&&fresco.fornecedor.nome)||'',valor:fresco.valor,pend:r.pend});}
-      catch(e){if(!e.ambiguo)erros.push(e.message);try{await dspFb('despesas/'+k,{method:'PATCH',body:{lancando:null,autoErro:{ts:Date.now(),msg:String(e.message||e).slice(0,300)}}});}catch(x){}
-        if(DSP.desp[k])DSP.desp[k].autoErro={ts:Date.now(),msg:String(e.message||e)};}
-    }
-  }catch(e){}
-  DSP_AUTO.rodando=false;
-  if(lanc.length||erros.length){
-    var txt=lanc.length?('✓ '+lanc.length+(lanc.length>1?' despesas lançadas':' despesa lançada')+' no Bling automaticamente'+(lanc.some(function(x){return x.pend.length;})?' (com pendência para completar)':'')):'';
-    if(erros.length)txt+=(txt?' · ':'')+'⚠️ '+erros.length+' não lançou: '+erros[0];
-    if(STATE.modulo==='mod14'&&DSP.root&&document.body.contains(DSP.root)){DSP.msg=txt;DSP.msgTipo=erros.length?'warn':'ok';if(!dspEditando())dspDraw();else dspDrawLista();}
-    else{dspCss();var o=dspEl('dspAviso');if(o)o.remove();var bt=document.createElement('button');bt.id='dspAviso';bt.type='button';bt.textContent=txt;bt.onclick=function(){bt.remove();STATE.modulo='mod14';DSP.tela='conferencia';render();};document.body.appendChild(bt);setTimeout(function(){if(bt.parentNode)bt.remove();},90000);}
-  }
+// ---------- conferência no Bling: roda ao abrir o Financeiro no PC (uma vez) e ao clicar em Conferir ----------
+// Liga cada despesa ao cadastro do fornecedor e verifica duplicidade no Contas a Pagar em aberto. Nada é lançado sozinho.
+var DSP_CONF={rodando:false,feita:false,feitos:0,total:0,ts:0};
+async function dspConferirUma(k){
+  var d=DSP.desp[k];if(!d||d.status!=='pendente'||DSP.lendo[k])return;
+  var f=JSON.parse(JSON.stringify(d));
+  if(!f.contato&&f.fornecedor&&f.fornecedor.nome&&f.fornecedor.nome!==DSP_SEM_FORN){try{await dspResolverFornecedor(k,f,false);}catch(e){}}
+  if(f.valor>0){try{await dspChecarDupBling(k,Object.assign({},f,{vencimento:f.vencimento||f.emissao}));}catch(e){}}
+  try{await dspFb('despesas/'+k,{method:'PATCH',body:{conferidoEm:Date.now(),fornChecado:Date.now()}});DSP.desp[k].conferidoEm=Date.now();DSP.desp[k].fornChecado=Date.now();}catch(e){}
 }
-function dspAutoIniciar(){if(DSP_AUTO.timer||STATE.roleLogado!=='admin'||dspMobile())return;DSP_AUTO.timer=setInterval(dspAutoLancar,60000);setTimeout(dspAutoLancar,4000);}
+async function dspConferirTudo(){
+  if(DSP_CONF.rodando||dspMobile()||!dspExtOk())return;
+  DSP_CONF.rodando=true;
+  var ks=Object.keys(DSP.desp).filter(function(k){var d=DSP.desp[k];return d&&d.status==='pendente'&&!DSP.lendo[k];});
+  DSP_CONF.total=ks.length;DSP_CONF.feitos=0;if(!dspEditando())dspDraw();
+  for(var i=0;i<ks.length;i++){await dspConferirUma(ks[i]);DSP_CONF.feitos++;if(!dspEditando())dspDraw();else dspDrawLista();}
+  DSP_CONF.rodando=false;DSP_CONF.feita=true;DSP_CONF.ts=Date.now();if(!dspEditando())dspDraw();else dspDrawLista();
+}
+function dspConfHtml(){
+  if(dspMobile()||!dspExtOk())return '';
+  if(DSP_CONF.rodando)return '<div class="fin-msg info"><span>🔄 Conferindo no Bling: fornecedores e duplicidade ('+DSP_CONF.feitos+' de '+DSP_CONF.total+')…</span></div>';
+  if(DSP_CONF.feita)return '<div class="fin-msg ok" style="justify-content:space-between;align-items:center"><span>✓ Conferido no Bling às '+new Date(DSP_CONF.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'.</span><button type="button" class="fin-btn sm" id="dspConfNovo">🔄 Conferir de novo</button></div>';
+  return '';
+}
 async function dspAtualizarBling(){
   var f=dspLerCampos();if(!f||!f.blingId)return;var b=dspEl('fAtualizar');if(b){b.disabled=true;b.textContent='Atualizando no Bling…';}
   try{
@@ -3530,7 +3539,7 @@ function renderFinanceiro(){
   var wrap=document.createElement('div');wrap.className='fin-wrap';DSP.root=wrap;DSP.mob=false;
   if(!DSP.tela)DSP.tela=dspMobile()?'captura':'conferencia';
   window.postMessage({source:'ma-app',type:'ping'},'*');
-  if(!DSP.carregado)dspCarregar();else setTimeout(dspDraw,0);
+  if(!DSP.carregado)dspCarregar().then(function(){if(!DSP_CONF.feita)setTimeout(dspConferirTudo,600);});else{setTimeout(dspDraw,0);if(!DSP_CONF.feita)setTimeout(dspConferirTudo,600);}
   dspFilaEnviar();
   if(!DSP.poll)DSP.poll=setInterval(function(){if(STATE.modulo==='mod14'&&!document.hidden&&DSP.root&&document.body.contains(DSP.root))dspCarregar(true);},30000);
   return wrap;
@@ -3593,8 +3602,7 @@ function dspChips(d){
   if(d.autoErro)h+='<span class="fin-chip err" title="'+dspEsc(d.autoErro.msg||'')+'">não lançou: '+dspEsc(String(d.autoErro.msg||'').slice(0,60))+'</span>';
   if(!(d.valor>0))h+='<span class="fin-chip err">sem valor</span>';
   var p=dspPendencias(d).filter(function(x){return x!=='Conferir a leitura';});
-  if(d.tipoDoc&&!dspEhNota(d))h+='<span class="fin-chip">comprovante · lançar no PC</span>';
-  h+=p.length?'<span class="fin-chip warn">lança com pendência: '+dspEsc(p.join(', '))+'</span>':'<span class="fin-chip ok">Completo'+(dspEhNota(d)&&dspAutoLigado()?' · lança sozinho':'')+'</span>';
+  h+=p.length?'<span class="fin-chip warn">lança com pendência: '+dspEsc(p.join(', '))+'</span>':'<span class="fin-chip ok">Completo · pronto para lançar</span>';
   if(d.contato)h+='<span class="fin-chip ok">no Bling: '+dspEsc(d.contato.nome)+'</span>';else if(d.fornChecado&&!(d.fornCand&&d.fornCand.length))h+='<span class="fin-chip">fornecedor novo (será cadastrado)</span>';
   return h+dspDupHtml(d.id,true);
 }
@@ -3620,7 +3628,7 @@ function dspOptsCat(val){var h='<option value="">Sem categoria</option>',aberto=
   if(aberto)h+='</optgroup>';return h;}
 function dspHtmlConferencia(){
   var ext=dspExtOk();
-  var h=ext?'':'<div class="fin-msg warn">Para lançar no Bling, use o app no computador com a extensão Mais Acessível — Vendas e Atendimento'+(dspExtVer()?' (este tem a v'+dspEsc(dspExtVer())+')':'')+'. Baixe pelo botão 🧩 Extensão no topo e atualize a pasta.</div>';
+  var h=dspConfHtml()+(ext?'':'<div class="fin-msg warn">Para lançar no Bling, use o app no computador com a extensão Mais Acessível — Vendas e Atendimento'+(dspExtVer()?' (este tem a v'+dspEsc(dspExtVer())+')':'')+'. Baixe pelo botão 🧩 Extensão no topo e atualize a pasta.</div>');
   h+='<div class="fin-cols"><div><div class="fin-h" style="margin-top:0">Para conferir</div><div class="fin-list" id="dspPendList">'+dspHtmlListaItens()+'</div>'+
     '<p class="fin-mu" style="margin-top:10px">Também dá para enviar daqui: <button type="button" class="fin-sw" id="dspIrCap">anexar comprovante</button></p></div><div id="dspForm">';
   var f=DSP.sel&&DSP.desp[DSP.sel]?dspFormAtual():null;
@@ -3675,7 +3683,7 @@ function dspHtmlFormCard(f,mob,ext){
 }
 function dspBindConferencia(){
   DSP.root.querySelectorAll('[data-dup]').forEach(function(b){b.onclick=function(e){e.preventDefault();if(DSP.form&&DSP.form._editado)dspSalvarForm(true);if(DSP.mob)dspMobAbrir(b.dataset.dup);else dspAbrir(b.dataset.dup);};});
-  dspBindLista();var ic=dspEl('dspIrCap');if(ic)ic.onclick=function(){DSP.tela='captura';dspDraw();};
+  dspBindLista();var cf=dspEl('dspConfNovo');if(cf)cf.onclick=dspConferirTudo;var ic=dspEl('dspIrCap');if(ic)ic.onclick=function(){DSP.tela='captura';dspDraw();};
   if(!DSP.sel||!dspEl('fNome'))return;var f=DSP.form;
   if(f.nFotos)dspVerFotos(DSP.sel,dspEl('dspFotos'));
   DSP.root.querySelectorAll('#dspForm input,#dspForm select,#dspForm textarea').forEach(function(el){el.addEventListener('input',function(){f._editado=true;el.classList.remove('fin-read');if(DSP.revisao){DSP.revisao=null;var r=dspEl('dspRev');if(r)r.remove();}});});
@@ -3722,8 +3730,7 @@ function dspHtmlConfig(){
    '<div class="fin-f fin-c3"><label for="cPix">Comprovante de Pix usa</label><select id="cPix">'+dspOpts(L.formas,cfg.padrao&&cfg.padrao.pix,'Escolher na hora')+'</select></div>'+
    '<div class="fin-f fin-c3"><label for="cDin">Pagamento em dinheiro usa</label><select id="cDin">'+dspOpts(L.formas,cfg.padrao&&cfg.padrao.dinheiro,'Escolher na hora')+'</select></div></div>'+
    '<p class="fin-mu" style="margin:10px 0 0">Pix feito em sábado, domingo ou feriado vence no próximo dia útil.</p></div>'+
-   '<div class="fin-h">Lançamento automático</div><div class="fin-card"><label style="display:flex;gap:10px;align-items:flex-start;font-size:14px;color:#1c1c1e;font-weight:500;cursor:pointer"><input type="checkbox" id="cAuto" style="width:20px;height:20px;margin-top:1px"'+(cfg.autoLancar===false?'':' checked')+'>'+
-   '<span><b>Lançar sozinho no Bling o que chegar do celular</b><br><span class="fin-mu">Roda a cada minuto em qualquer tela do app aberta num computador com a extensão. Só fica esperando você o que estiver sem valor ou parecer duplicado. O que faltar vira pendência para completar.</span></span></label></div>'+
+   '<div class="fin-h">Conferência no Bling</div><div class="fin-card"><p style="margin:0;font-size:13.5px">Nada é lançado sozinho. Ao abrir o Financeiro neste computador, o app confere no Bling o fornecedor e se já existe conta igual em aberto (mesmo valor e mesma data). O lançamento é sempre feito por você, em <b>Revisar e lançar</b>.</p></div>'+
    '<div class="fin-act"><button type="button" class="fin-btn pri" id="cSalvar">Salvar configurações</button></div>'+
    '<div class="fin-h">Listas do Bling</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">'+L.formas.length+' formas de pagamento, '+L.contas.length+' contas financeiras e '+L.categorias.filter(function(c){return !c.pai;}).length+' categorias'+(L.atualizadoEm?', atualizadas em '+new Date(L.atualizadoEm).toLocaleDateString('pt-BR'):'')+'.</p>'+
    '<button type="button" class="fin-btn sm" id="cListas">🔄 Atualizar do Bling</button> <span id="dspCfgSt"></span><p class="fin-mu" style="margin:8px 0 0">Use quando criar uma forma de pagamento ou conta nova no Bling. Precisa da extensão neste computador.</p></div>';
@@ -3731,7 +3738,7 @@ function dspHtmlConfig(){
 }
 function dspLerCfgTela(){var cfg=JSON.parse(JSON.stringify(dspCfg()));
   cfg.cartoes=(cfg.cartoes||[]).map(function(c,i){return {formaId:dspEl('cc'+i).value,fechamento:dspEl('cf'+i).value,vencimento:dspEl('cv'+i).value};});
-  cfg.padrao={pix:dspEl('cPix').value,dinheiro:dspEl('cDin').value};var ca=dspEl('cAuto');if(ca)cfg.autoLancar=ca.checked;return cfg;}
+  cfg.padrao={pix:dspEl('cPix').value,dinheiro:dspEl('cDin').value};return cfg;}
 function dspBindConfig(){
   dspEl('ccAdd').onclick=function(){DSP.cfg=dspLerCfgTela();DSP.cfg.cartoes.push({formaId:'',fechamento:'',vencimento:''});dspDraw();};
   DSP.root.querySelectorAll('[data-rmc]').forEach(function(b){b.onclick=function(){DSP.cfg=dspLerCfgTela();DSP.cfg.cartoes.splice(+b.dataset.rmc,1);dspDraw();};});
@@ -3744,7 +3751,6 @@ function dspBindConfig(){
 
 // Aviso flutuante em outras telas: há despesas para conferir (só no computador, admin)
 function dspAvisoGlobal(){
-  dspAutoIniciar();
   if(DSP.avisoVisto||STATE.roleLogado!=='admin'||dspMobile())return;DSP.avisoVisto=true;
   dspFb('despesas').then(function(d){d=d||{};var n=Object.keys(d).filter(function(k){return d[k]&&(d[k].status!=='lancado'||(d[k].pendencias&&d[k].pendencias.length));}).length;
     if(!n||STATE.modulo==='mod14'||dspEl('dspAviso'))return;
