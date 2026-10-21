@@ -5252,6 +5252,36 @@ function cqCobAtraso(i){
 function cqWaUn(i){var w=i._ws&&i._ws.w;if(!w&&CQ.waIdx)w=cqWa(i);return ((w&&w.un)||0)*1000;}
 // contato pelo WhatsApp depois da cotação que ainda não foi registrado no app
 function cqWaContato(i){var un=cqWaUn(i);if(!un||!cqAberta(i))return 0;var c=cqCobs(i.id)[0];if(c&&c.ts>=un-3600000)return 0;return un>=cqProxUtil9h(i.data)-12*3600000?un:0;}
+// ── campo de data/hora do retorno: texto dd/mm/aaaa + hh:mm, atalhos e prévia do que vai ser salvo ──
+function cqRetParse(d,h){
+  var m=String(d||'').trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);if(!m)return NaN;
+  var ano=m[3]?(+m[3]<100?2000+(+m[3]):+m[3]):new Date().getFullYear(),hm=String(h||'09:00').trim().match(/^(\d{1,2})(?::?(\d{2}))?$/);if(!hm)return NaN;
+  var dt=new Date(ano,+m[2]-1,+m[1],+hm[1],+(hm[2]||0),0,0);
+  if(dt.getDate()!==+m[1]||dt.getMonth()!==+m[2]-1||+hm[1]>23||+(hm[2]||0)>59)return NaN;return dt.getTime();
+}
+function cqRetPrev(ms){if(isNaN(ms))return '';var d=new Date(ms);return d.toLocaleDateString('pt-BR',{weekday:'long'})+', '+d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
+function cqRetCampos(id,cls,valMs,opcional){
+  var pad=function(n){return String(n).padStart(2,'0');},d='',h='09:00';
+  if(valMs){var x=new Date(valMs);d=pad(x.getDate())+'/'+pad(x.getMonth()+1)+'/'+x.getFullYear();h=pad(x.getHours())+':'+pad(x.getMinutes());}
+  var inp='padding:6px 8px;border:1.5px solid #e7e5e4;border-radius:8px;font-family:inherit;font-size:13px;background:#fff';
+  var chip=function(v,l){return '<button type="button" class="vb sm cqRetAt" data-id="'+id+'" data-c="'+cls+'" data-v="'+v+'">'+l+'</button>';};
+  return '<div class="cqRetBox" data-id="'+id+'" data-c="'+cls+'" style="display:flex;flex-direction:column;gap:5px"><span style="font-size:11.5px;color:#57534e">⏰ '+(opcional?'Retornar em (opcional)':'Dia e hora do retorno')+'</span>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><input class="'+cls+'D cqRetIn" data-id="'+id+'" data-c="'+cls+'" value="'+d+'" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" style="'+inp+';width:110px">'+
+    '<input class="'+cls+'H cqRetIn" data-id="'+id+'" data-c="'+cls+'" value="'+h+'" placeholder="hh:mm" maxlength="5" inputmode="numeric" style="'+inp+';width:68px">'+
+    chip('1','Amanhã')+chip('2','Em 2 dias')+chip('seg','Próx. segunda')+chip('7','Em 1 semana')+(opcional?chip('','limpar'):'')+'</div>'+
+    '<span class="cqRetPrev" data-id="'+id+'" data-c="'+cls+'" style="font-size:12px;font-weight:800;color:#1d4ed8">'+(valMs?'→ '+cqRetPrev(valMs):'')+'</span></div>';
+}
+function cqRetLer(root,id,cls){var d=root.querySelector('.'+cls+'D[data-id="'+id+'"]'),h=root.querySelector('.'+cls+'H[data-id="'+id+'"]');if(!d||!d.value.trim())return null;return cqRetParse(d.value,h&&h.value);}
+function cqRetBind(root){
+  var prev=function(id,cls){var p=root.querySelector('.cqRetPrev[data-id="'+id+'"][data-c="'+cls+'"]');if(!p)return;var ms=cqRetLer(root,id,cls);
+    p.textContent=ms===null?'':isNaN(ms)?'⚠️ data ou hora inválida — use dd/mm/aaaa e hh:mm':(ms<Date.now()?'⚠️ essa data já passou: ':'→ ')+cqRetPrev(ms);p.style.color=ms!==null&&(isNaN(ms)||ms<Date.now())?'#b91c1c':'#1d4ed8';};
+  root.querySelectorAll('.cqRetIn').forEach(function(e){e.onfocus=function(){try{e.select();}catch(x){}e._sel=1;};e.onmouseup=function(ev){if(e._sel){ev.preventDefault();e._sel=0;}};e.oninput=function(){var hora=/H$/.test(e.className.split(' ')[0]),v=e.value.replace(/\D/g,'');
+    if(hora){e.value=v.length>2?v.slice(0,2)+':'+v.slice(2,4):v;}else{e.value=v.length>4?v.slice(0,2)+'/'+v.slice(2,4)+'/'+v.slice(4,8):v.length>2?v.slice(0,2)+'/'+v.slice(2):v;}
+    prev(e.getAttribute('data-id'),e.getAttribute('data-c'));};});
+  root.querySelectorAll('.cqRetAt').forEach(function(b){b.onclick=function(){var id=b.getAttribute('data-id'),cls=b.getAttribute('data-c'),v=b.getAttribute('data-v'),d=root.querySelector('.'+cls+'D[data-id="'+id+'"]'),pad=function(n){return String(n).padStart(2,'0');};
+    if(!v){d.value='';prev(id,cls);return;}var x=new Date();if(v==='seg'){do{x.setDate(x.getDate()+1);}while(x.getDay()!==1);}else{x.setDate(x.getDate()+(+v));if(x.getDay()===0)x.setDate(x.getDate()+1);if(x.getDay()===6)x.setDate(x.getDate()+2);}
+    d.value=pad(x.getDate())+'/'+pad(x.getMonth()+1)+'/'+x.getFullYear();prev(id,cls);};});
+}
 function cqLembDe(id){var l=CQ.lemb&&CQ.lemb[id];return l&&!l.feito?l:null;}
 function cqSalvarLembrete(i,quando,obs){
   var l={quando:quando,obs:obs||'',u:cqUsuario(),ts:Date.now(),n:i.numero,cli:i.cliente,vend:i.vendedor||'',fone:cqFoneCopia(i)||''};
@@ -6058,10 +6088,10 @@ function cqCardVenda(i,card,sel,rank){
       '<label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px">Situação do cliente<select class="cqCobHum" data-id="'+id+'" style="'+sel+';padding:6px 8px"><option value="">— escolha —</option>'+CQ_HUMOR.map(function(h){return '<option value="'+h[0]+'">'+h[1]+'</option>';}).join('')+'</select></label>'+
       '<label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px;flex:1;min-width:200px">O que o cliente disse<input class="cqCobObs" data-id="'+id+'" placeholder="ex.: vai decidir na sexta, pediu desconto..." style="'+sel+';padding:6px 8px"></label>'+
       (asI&&asI.meu?'<label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px">Depois deste atendimento<select class="cqCobDepois" data-id="'+id+'" style="'+sel+';padding:6px 8px"><option value="auto">Automático pela situação</option><option value="libera">🔓 Liberar para outros</option><option value="continua">🔒 Continuar comigo</option></select></label>':'')+
-      '<label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px">⏰ Retornar em (opcional)<input type="datetime-local" class="cqCobRet" data-id="'+id+'" style="'+sel+';padding:5px 8px"></label>'+
+      cqRetCampos(id,'cqCobRet',0,true)+
       '<button class="vb amb cqCobSalvar" data-id="'+id+'">'+cqIc('check')+' Salvar</button></div></div>';
-    if(lf){var pad=function(n){return String(n).padStart(2,'0');};var amn=new Date();amn.setDate(amn.getDate()+1);var sug=amn.getFullYear()+'-'+pad(amn.getMonth()+1)+'-'+pad(amn.getDate())+'T09:00';
-      x+='<div class="vc-pn blu"><h4>'+cqIc('bell')+' '+(lm?'Remarcar retorno':'Agendar retorno')+'</h4><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end"><label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px">Dia e hora<input type="datetime-local" class="cqLmQuando" data-id="'+id+'" value="'+sug+'" style="'+sel+';padding:5px 8px"></label>'+
+    if(lf){
+      x+='<div class="vc-pn blu"><h4>'+cqIc('bell')+' '+(lm?'Remarcar retorno':'Agendar retorno')+'</h4><div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">'+cqRetCampos(id,'cqLm',0,false)+(lm?'<span style="font-size:11.5px;color:#64748b;align-self:center">hoje está marcado: <b>'+cqRetPrev(lm.quando)+'</b></span>':'')+
       '<label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px;flex:1;min-width:200px">O que combinar no retorno<input class="cqLmObs" data-id="'+id+'" placeholder="ex.: cliente pediu para ligar depois da reunião" style="'+sel+';padding:6px 8px"></label>'+
       '<button class="vb pri cqLmSalvar" data-id="'+id+'">'+cqIc('check')+' Salvar lembrete</button></div><div style="font-size:11px;color:#64748b;margin-top:6px">Na hora marcada, todos os computadores com a extensão recebem o aviso.</div></div>';}
     if(form==='fechado')x+='<div class="vc-pn grn"><h4>'+cqIc('check')+' Marcar como fechado</h4><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">'+
@@ -6224,10 +6254,11 @@ function cqBindComum(root,verOk){
   root.querySelectorAll('.cqCobSalvar').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id'),it=item(k);if(!it)return;
     var canal=root.querySelector('.cqCobCanal[data-id="'+k+'"]').value,obs=root.querySelector('.cqCobObs[data-id="'+k+'"]').value.trim(),hum=root.querySelector('.cqCobHum[data-id="'+k+'"]').value;
     if(!hum){alert('Escolha a situação do cliente (ex.: vai fechar, sem tempo, com dúvidas...).');return;}
-    var ret=root.querySelector('.cqCobRet[data-id="'+k+'"]');ret=ret&&ret.value;
+    var ret=cqRetLer(root,k,'cqCobRet');if(ret!==null&&isNaN(ret)){alert('A data do retorno está inválida. Use dd/mm/aaaa e hh:mm (ex.: 28/10/2026 14:00) ou clique em limpar.');return;}
+    if(ret&&ret<Date.now()&&!confirm('A data do retorno ('+cqRetPrev(ret)+') já passou. Salvar mesmo assim?'))return;
     var dep=root.querySelector('.cqCobDepois[data-id="'+k+'"]'),asK=cqAssum(it);
     if(asK&&asK.meu){var d=dep?dep.value:'auto';if(d==='libera'||(d==='auto'&&CQ_HUMOR_CONTINUA.indexOf(hum)===-1))cqLiberar(k,'depois da cobrança');else{CQ.assum[k].ts=Date.now();fetch(FIREBASE_DB+'/assumidos/'+k+'/ts.json',{method:'PUT',body:JSON.stringify(Date.now())}).catch(function(){});}}
-    CQ.cobForm[k]=false;CQ.cobAberto=CQ.cobAberto||{};CQ.cobAberto[k]=true;cqSalvarCob(it,canal,obs,hum);if(ret)cqSalvarLembrete(it,new Date(ret).getTime(),(cqHumorTxt(hum)+(obs?' — '+obs:'')).trim());};});
+    CQ.cobForm[k]=false;CQ.cobAberto=CQ.cobAberto||{};CQ.cobAberto[k]=true;cqSalvarCob(it,canal,obs,hum);if(ret)cqSalvarLembrete(it,ret,(cqHumorTxt(hum)+(obs?' — '+obs:'')).trim());};});
   var abreForm=function(cls,tipo){root.querySelectorAll(cls).forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id');CQ.fechForm=CQ.fechForm||{};CQ.fechForm[k]=CQ.fechForm[k]===tipo?'':tipo;cqDraw();};});};
   abreForm('.cqBtFechado','fechado');abreForm('.cqBtCancel','cancel');
   root.querySelectorAll('.cqFfOk').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id'),it=item(k);if(!it)return;
@@ -6244,8 +6275,12 @@ function cqBindComum(root,verOk){
   // lembretes de retorno
   root.querySelectorAll('.cqLmNovo').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id');CQ.lmForm=CQ.lmForm||{};CQ.lmForm[k]=!CQ.lmForm[k];cqDraw();};});
   root.querySelectorAll('.cqLmSalvar').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id'),it=item(k);if(!it)return;
-    var q=root.querySelector('.cqLmQuando[data-id="'+k+'"]').value,obs=root.querySelector('.cqLmObs[data-id="'+k+'"]').value.trim();
-    if(!q){alert('Escolha o dia e a hora do retorno.');return;}CQ.lmForm[k]=false;cqSalvarLembrete(it,new Date(q).getTime(),obs);};});
+    var q=cqRetLer(root,k,'cqLm'),obs=root.querySelector('.cqLmObs[data-id="'+k+'"]').value.trim();
+    if(q===null){alert('Escolha o dia do retorno (digite dd/mm/aaaa ou clique em um atalho).');return;}
+    if(isNaN(q)){alert('Data ou hora inválida. Use dd/mm/aaaa e hh:mm (ex.: 28/10/2026 e 14:00).');return;}
+    if(q<Date.now()&&!confirm('Essa data ('+cqRetPrev(q)+') já passou. Salvar mesmo assim?'))return;
+    CQ.lmForm[k]=false;cqSalvarLembrete(it,q,obs);};});
+  cqRetBind(root);
   root.querySelectorAll('.cqLmFeito').forEach(function(b){b.onclick=function(){cqLembreteFeito(b.getAttribute('data-id'));};});
   root.querySelectorAll('.cqLmFiltro').forEach(function(b){b.onclick=function(){CQ.fLemb=CQ.fLemb===b.getAttribute('data-f')?'':b.getAttribute('data-f');CQ.limite=60;cqDraw();};});
   root.querySelectorAll('.cqAssumir').forEach(function(b){b.onclick=function(){var it=item(b.getAttribute('data-id'));if(it)cqAssumir(it);};});
@@ -6487,6 +6522,13 @@ function cqTabs(){
 function cqBindTabs(root){root.querySelectorAll('.cqTab').forEach(function(t){t.onclick=function(){CQ.aba=t.getAttribute('data-a');cqDraw();};});}
 function cqDraw(){
   var root=document.getElementById('cqRoot');if(!root)return;
+  // Redesenho automático (sincronização, resumos, assumidos, respostas da extensão) NÃO acontece enquanto a pessoa
+  // está preenchendo um campo (ex.: escolhendo a data do retorno no calendário) — espera ela sair do campo.
+  var ev=window.event,acaoUsuario=ev&&/^(click|change|input|keydown|keyup|submit|mousedown|mouseup|pointerup|pointerdown)$/.test(ev.type),ae=document.activeElement;
+  if(!acaoUsuario&&ae&&root.contains(ae)&&/^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)&&ae.type!=='file'){
+    if(!CQ._adiado){CQ._adiado=1;var volta=function(){ae.removeEventListener('blur',volta);var ok=false,go=function(){if(ok)return;ok=true;document.removeEventListener('click',go,true);setTimeout(function(){CQ._adiado=0;cqDraw();},80);};document.addEventListener('click',go,true);setTimeout(go,1500);};ae.addEventListener('blur',volta);}
+    return;
+  }
   if(CQ.aba==='perd'){CQ.aba='vend';CQ.vv='perd';}
   if((CQ.aba||'conf')==='rel')crDraw(root);else if(CQ.aba==='ate')atDraw(root);else cqDrawConf(root);
   cqBindTabs(root);
