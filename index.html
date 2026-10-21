@@ -3320,7 +3320,7 @@ async function dspBuscarFornecedor(){
 function dspHtmlCandidatos(id){
   var d=DSP.desp[id];if(!d||d.contato||!d.fornCand||!d.fornCand.length)return '';
   return '<div class="fin-msg warn" style="display:block"><b>Encontrei fornecedor parecido no Bling. É algum destes?</b><div class="fin-match">'+d.fornCand.map(function(c,i){return '<button type="button" data-cand="'+i+'">'+dspEsc(c.nome)+(c.doc?' · '+dspEsc(dspDoc(c.doc)):'')+'</button>';}).join('')+
-    '</div><button type="button" class="fin-btn sm" id="fCandNovo">Nenhum destes: cadastrar novo ao lançar</button></div>';
+    '</div><button type="button" class="fin-btn sm" id="fCandNovo">Nenhum destes: cadastrar novo no Bling</button></div>';
 }
 function dspCadastrarFornecedor(){
   var f=dspLerCampos();var txt=(f.fornecedor.nome||'')+(f.fornecedor.doc?' — '+dspDoc(f.fornecedor.doc):'');
@@ -3328,10 +3328,40 @@ function dspCadastrarFornecedor(){
   window.open('https://www.bling.com.br/contatos.php#add','_blank');
   dspEl('fForStatus').innerHTML='<span class="fin-chip warn">Abri o cadastro de contatos do Bling. Copiei o '+(f.fornecedor.doc?'CNPJ/CPF':'nome')+': '+dspEsc(txt)+'. Depois de salvar lá, toque em Buscar no Bling.</span>';
 }
+async function dspCadastrarAgora(){
+  var f=dspLerCampos(),sel=DSP.sel;var b=dspEl('fCadAgora');if(b){b.disabled=true;b.textContent='Cadastrando no Bling…';}
+  f.fornNovoOk=true;
+  try{await dspFb('despesas/'+sel,{method:'PATCH',body:{fornCand:null,fornNovoOk:true}});if(DSP.desp[sel]){delete DSP.desp[sel].fornCand;DSP.desp[sel].fornNovoOk=true;}
+    await dspResolverFornecedor(sel,f,true,function(t){if(b)b.textContent=t;});
+    f._editado=true;await dspSalvarForm(true);DSP.fornSt=DSP.fornSt||{};DSP.fornSt[sel]='criado';
+  }catch(e){DSP.fornSt=DSP.fornSt||{};DSP.fornSt[sel]='erro:'+e.message;}
+  dspDraw();
+}
+function dspRevFornHtml(f){
+  var st=(DSP.fornSt||{})[DSP.sel]||'';
+  if(f.contato)return '<div class="fin-msg ok" style="display:block;margin:0"><b>✓ '+(st==='criado'?'Cadastrado agora no Bling':'Já cadastrado no Bling')+':</b> '+dspEsc(f.contato.nome)+(f.contato.doc?' · '+dspEsc(dspDoc(f.contato.doc)):'')+'</div>';
+  if(DSP.desp[DSP.sel]&&DSP.desp[DSP.sel].fornCand&&DSP.desp[DSP.sel].fornCand.length)return dspHtmlCandidatos(DSP.sel);
+  if(!f.fornecedor||!f.fornecedor.nome||f.fornecedor.nome===DSP_SEM_FORN)return '<div class="fin-msg warn" style="display:block;margin:0"><b>Sem fornecedor.</b> Lanço como "'+DSP_SEM_FORN+'" e fica pendente.</div>';
+  if(st.indexOf('erro:')===0)return '<div class="fin-msg err" style="display:block;margin:0"><b>Não consegui conferir o fornecedor no Bling:</b> '+dspEsc(st.slice(5))+'</div>';
+  return '<div class="fin-msg warn" style="display:block;margin:0"><b>⚠️ Não está cadastrado no Bling:</b> '+dspEsc(f.fornecedor.nome)+(f.fornecedor.doc?' · '+dspEsc(dspDoc(f.fornecedor.doc)):' (sem CPF/CNPJ)')+
+    (f.fornecedor.dados?'<div class="fin-mu">Dados da Receita: '+dspEsc(f.fornecedor.dados.cidade||'')+'/'+dspEsc(f.fornecedor.dados.uf||'')+'</div>':'')+
+    '<div style="margin-top:6px"><button type="button" class="fin-btn sm pri" id="fCadAgora">Cadastrar agora no Bling</button></div></div>';
+}
 async function dspRevisar(){
   var f=dspLerCampos();var falta=dspFaltas(f);if(falta.length){DSP.msg='Para lançar ainda falta: '+falta.join(', ')+'.';DSP.msgTipo='warn';dspDraw();return;}
   var b=dspEl('fRevisar');if(b){b.disabled=true;b.textContent='Conferindo no Bling…';}
-  if(dspExtOk()){try{await dspSalvarForm(true);await dspChecarDupBling(DSP.sel,Object.assign({},f,{vencimento:f.vencimento||f.emissao}));}catch(e){}}
+  DSP.fornSt=DSP.fornSt||{};delete DSP.fornSt[DSP.sel];
+  if(dspExtOk()){var sel=DSP.sel;try{await dspSalvarForm(true);}catch(e){}
+    // fornecedor: confere no Bling na hora para mostrar se já está cadastrado
+    var nm=f.fornecedor&&f.fornecedor.nome;
+    if(!f.contato&&nm&&nm!==DSP_SEM_FORN){if(b)b.textContent='Procurando o fornecedor no Bling…';
+      try{var a=await dspAcharFornecedor(f);
+        if(a.match){f.contato=a.match;f._editado=true;await dspSalvarForm(true);await dspFb('despesas/'+sel,{method:'PATCH',body:{fornCand:null,fornChecado:Date.now()}});delete DSP.desp[sel].fornCand;}
+        else if(a.cand.length&&!(DSP.desp[sel]&&DSP.desp[sel].fornNovoOk)){await dspFb('despesas/'+sel,{method:'PATCH',body:{fornCand:a.cand.slice(0,6)}});DSP.desp[sel].fornCand=a.cand.slice(0,6);}
+        else DSP.fornSt[sel]='novo';
+      }catch(e){DSP.fornSt[sel]='erro:'+e.message;}}
+    if(b)b.textContent='Conferindo duplicidade no Bling…';
+    try{await dspChecarDupBling(sel,Object.assign({},f,{vencimento:f.vencimento||f.emissao}));}catch(e){}}
   DSP.revisao=true;DSP.msg='';dspDraw();var el=dspEl('dspRev');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});
 }
 // ---------- fornecedor: achar no Bling sem nunca cadastrar em dobro ----------
@@ -3650,7 +3680,7 @@ function dspHtmlFormCard(f,mob,ext){
    (f.obs?'<div class="fin-msg info">Observação de quem enviou: '+dspEsc(f.obs)+'</div>':'')+
    '<div class="fin-sec"><p class="fin-st">Comprovante <span class="fin-mu">'+(f.nFotos?f.nFotos+' imagem(ns) · toque para ampliar':'')+'</span></p><div class="fin-fotos" id="dspFotos"></div></div>'+
    '<div class="fin-sec"><p class="fin-st">Fornecedor '+(f.contato?'<span class="fin-chip ok">No Bling: '+dspEsc(f.contato.nome)+'</span>':'<span class="fin-chip">Se não existir no Bling, é cadastrado ao lançar</span>')+'</p>'+
-    dspHtmlCandidatos(DSP.sel)+'<div class="fin-g"><div class="fin-f fin-c4"><label for="fNome">Nome / razão social '+tag('fornecedor_nome')+'</label><input class="fin-in'+rd()+'" id="fNome" value="'+dspEsc(f.fornecedor.nome)+'"></div>'+
+    (DSP.revisao?'':dspHtmlCandidatos(DSP.sel))+'<div class="fin-g"><div class="fin-f fin-c4"><label for="fNome">Nome / razão social '+tag('fornecedor_nome')+'</label><input class="fin-in'+rd()+'" id="fNome" value="'+dspEsc(f.fornecedor.nome)+'"></div>'+
     '<div class="fin-f fin-c2"><label for="fDoc">CPF/CNPJ '+tag('fornecedor_documento')+'</label><input class="fin-in'+rd()+'" id="fDoc" inputmode="numeric" value="'+dspEsc(dspDoc(f.fornecedor.doc))+'"></div></div>'+
     (ext?'<div><button type="button" class="fin-btn sm" id="fBuscar">'+(f.contato?'Trocar fornecedor':'Buscar no Bling')+'</button> <span id="fForStatus"></span></div>':(f.contato?'':'<p class="fin-mu" style="margin:0">O vínculo com o cadastro do Bling é feito no computador.</p>'))+'</div>'+
    '<div class="fin-sec"><p class="fin-st">Pagamento</p><div class="fin-g">'+
@@ -3671,13 +3701,13 @@ function dspHtmlFormCard(f,mob,ext){
    '<button type="button" class="fin-btn" id="fSalvar">Salvar e terminar depois</button><button type="button" class="fin-btn pri" id="fRevisar">Revisar e lançar</button></div>'));
   if(DSP.revisao&&!mob){
     var catN=dspCatNome(f.categoria);
-    var rows=[['Valor','R$ '+dspMoney(f.valor)+(f.parcelas>1?' em '+f.parcelas+'x':'')],['Fornecedor',f.contato?f.contato.nome:(f.fornecedor.nome+' — NOVO: será cadastrado no Bling'+(f.fornecedor.dados?' com os dados da Receita ('+dspDoc(f.fornecedor.doc)+', '+f.fornecedor.dados.cidade+'/'+f.fornecedor.dados.uf+')':(f.fornecedor.doc?' (CNPJ '+dspDoc(f.fornecedor.doc)+')':' só com o nome')))],['Forma de pagamento',dspFormaNome(f.formaId)],['Conta financeira',dspContaNome(f.contaId)||'—'],['Categoria',catN||'Sem categoria'],
+    var rows=[['Valor','R$ '+dspMoney(f.valor)+(f.parcelas>1?' em '+f.parcelas+'x':'')],['Forma de pagamento',dspFormaNome(f.formaId)],['Conta financeira',dspContaNome(f.contaId)||'—'],['Categoria',catN||'Sem categoria'],
       ['Data da compra',dspBr(f.emissao)],['Vencimento',dspBr(f.vencimento)],['Competência',dspBr(f.competencia)],['Nº documento',f.numeroDocumento||'—'],['Histórico',f.historico]];
-    h+='<div class="fin-rev" id="dspRev"><b style="font-size:16px">Confirme antes de lançar</b><dl>'+rows.map(function(r){return '<dt>'+r[0]+'</dt><dd>'+dspEsc(r[1])+'</dd>';}).join('')+'</dl>'+
+    h+='<div class="fin-rev" id="dspRev"><b style="font-size:16px">Confirme antes de lançar</b><div style="margin:8px 0"><div class="fin-mu" style="margin-bottom:4px">Fornecedor</div>'+dspRevFornHtml(f)+'</div><dl>'+rows.map(function(r){return '<dt>'+r[0]+'</dt><dd>'+dspEsc(r[1])+'</dd>';}).join('')+'</dl>'+
       (f.parcelas>1?'<p class="fin-mu" style="margin:0">Parcelado: o Bling divide o valor total nas parcelas a partir deste vencimento.</p>':'')+
       (dspPendencias(f).length?'<div class="fin-msg warn" style="margin:0">Vai lançar com pendência: <b>'+dspEsc(dspPendencias(f).join(', '))+'</b>. Depois fica na lista para você completar.'+(!f.vencimento?' Sem vencimento: uso a data da compra.':'')+((!f.contato&&!(f.fornecedor&&f.fornecedor.nome))?' Sem fornecedor: lanço como "'+DSP_SEM_FORN+'".':'')+'</div>':'')+
       (dspDuplicados(DSP.sel).length?'<div class="fin-msg err" style="margin:0">⚠️ Esta despesa parece duplicada. Confira o aviso no topo antes de lançar.</div>':'')+
-      '<div class="fin-act" style="margin-top:0"><button type="button" class="fin-btn" id="fVoltar">Voltar e editar</button><button type="button" class="fin-btn pri" id="fLancar"'+(ext?'':' disabled')+'>'+(dspDuplicados(DSP.sel).length?'Lançar mesmo assim':'Confirmar e lançar no Contas a Pagar')+'</button></div></div>';
+      '<div class="fin-act" style="margin-top:0"><button type="button" class="fin-btn" id="fVoltar">Voltar e editar</button><button type="button" class="fin-btn pri" id="fLancar"'+(ext&&!dspDuplicados(DSP.sel).length&&!(DSP.desp[DSP.sel].fornCand&&DSP.desp[DSP.sel].fornCand.length&&!f.contato)?'':' disabled')+'>'+(dspDuplicados(DSP.sel).length?'Bloqueado: possível duplicidade':(DSP.desp[DSP.sel].fornCand&&DSP.desp[DSP.sel].fornCand.length&&!f.contato)?'Escolha o fornecedor acima':f.contato?'Confirmar e lançar no Contas a Pagar':'Cadastrar fornecedor e lançar')+'</button></div></div>';
   }
   return h;
 }
@@ -3697,7 +3727,8 @@ function dspBindConferencia(){
   var bb=dspEl('fBuscar');if(bb)bb.onclick=dspBuscarFornecedor;
   DSP.root.querySelectorAll('[data-cand]').forEach(function(b){b.onclick=async function(){var c=DSP.desp[DSP.sel].fornCand[+b.dataset.cand];f.contato={id:String(c.id),nome:c.nome,doc:c.doc||''};f._editado=true;await dspSalvarForm(true);
     await dspFb('despesas/'+DSP.sel,{method:'PATCH',body:{fornCand:null}});delete DSP.desp[DSP.sel].fornCand;dspDraw();};});
-  var cn=dspEl('fCandNovo');if(cn)cn.onclick=async function(){await dspFb('despesas/'+DSP.sel,{method:'PATCH',body:{fornCand:null,fornNovoOk:true}});delete DSP.desp[DSP.sel].fornCand;DSP.desp[DSP.sel].fornNovoOk=true;dspDraw();};
+  var cn=dspEl('fCandNovo');if(cn)cn.onclick=function(){if(!confirm('Nenhum destes é o fornecedor? Vou cadastrar um novo no Bling.'))return;cn.disabled=true;dspCadastrarAgora();};
+  var ca=dspEl('fCadAgora');if(ca)ca.onclick=dspCadastrarAgora;
   var sv=dspEl('fSalvar');if(sv)sv.onclick=async function(){sv.disabled=true;await dspSalvarForm(false);dspDraw();};
   var rv=dspEl('fRevisar');if(rv)rv.onclick=dspRevisar;
   var ex=dspEl('fExcluir');if(ex)ex.onclick=dspExcluir;
