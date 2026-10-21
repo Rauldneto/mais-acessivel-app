@@ -3114,8 +3114,9 @@ function dspDupHtml(id,curto){
 function dspFaltas(d){return (d&&d.valor>0)?[]:['Valor'];}
 var DSP_SEM_FORN='FORNECEDOR A IDENTIFICAR';
 function dspPendencias(d){var p=[];if(!d)return p;var fn=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'';
-  if(!fn||fn===DSP_SEM_FORN)p.push('Fornecedor');
-  else if(!(d.fornecedor&&[11,14].indexOf(dspDig(d.fornecedor.doc).length)>=0))p.push('CNPJ do fornecedor');
+  if(d.fornCand&&d.fornCand.length&&!d.contato)p.push('Escolher fornecedor no Bling');
+  else if(!fn||fn===DSP_SEM_FORN)p.push('Fornecedor');
+  else if([11,14].indexOf(dspDig((d.contato&&d.contato.doc)||(d.fornecedor&&d.fornecedor.doc)).length)<0)p.push('CPF/CNPJ do fornecedor');
   if(!d.historico)p.push('Histórico');if(!d.categoria)p.push('Categoria');if(!d.formaId)p.push('Forma de pagamento');if(!d.contaId)p.push('Conta financeira');
   if(!d.numeroDocumento)p.push('Nº do documento');if(!d.vencimento)p.push('Vencimento');if(d.leituraErro)p.push('Conferir a leitura');return p;}
 function dspLancadoPend(d){return d&&d.status==='lancado'&&d.pendencias&&d.pendencias.length;}
@@ -3174,8 +3175,8 @@ async function dspAddArquivos(list){
 function dspPrompt(){
   var cats=dspListas().categorias.filter(function(c){return !c.pai;}).map(function(c){return c.id+' = '+(c.grupo?c.grupo+' > ':'')+c.nome;}).join('\n');
   return 'Você vai ler imagens de um ou mais documentos de uma despesa de empresa brasileira (revenda de materiais de construção): nota fiscal (NF-e/DANFE), NFC-e/cupom fiscal, nota de serviço, comprovante de Pix ou comprovante de cartão. Podem vir juntos a nota e o comprovante da mesma compra. Algumas imagens terão pouca informação.\n'+
-  'Responda SOMENTE com um JSON neste formato:\n{\n "tipo_documento": "nfe"|"nfce"|"nfse"|"cupom"|"comprovante_pix"|"comprovante_cartao"|"recibo"|"outro",\n "fornecedor_nome": string,\n "fornecedor_documento": string,\n "valor_total": number,\n "data_emissao": "AAAA-MM-DD",\n "numero_documento": string,\n "forma_pagamento": "pix"|"cartao_credito"|"cartao_debito"|"dinheiro"|"boleto"|"desconhecida",\n "banco_ou_cartao": string,\n "parcelas": number,\n "historico": string,\n "categoria_id": string,\n "itens": [{"descricao": string, "quantidade": number, "valor": number}],\n "campos_incertos": [string]\n}\n'+
-  'Regras: tipo_documento: use nfe/nfce/nfse/cupom quando houver nota fiscal ou cupom fiscal na imagem (mesmo que venha junto com o comprovante); use comprovante_pix/comprovante_cartao quando for só o comprovante de pagamento. fornecedor_nome é o emitente da nota (num Pix, o recebedor). fornecedor_documento é o CNPJ/CPF só com dígitos ("" se não aparecer). valor_total é o valor pago em reais (0 se ilegível). numero_documento é o nº da nota (ex.: "NF 1234") ou o ID da transação Pix. banco_ou_cartao é o banco/cartão se aparecer (ex.: "Inter", "Sicoob"). parcelas = 1 se à vista ou não informado. historico é um resumo curto do que foi comprado, até 80 caracteres. categoria_id é o id da lista abaixo que melhor descreve a despesa ("" se não tiver certeza). Máximo de 15 itens. Não invente nada: o que não estiver visível fica vazio e vai para campos_incertos. Se houver nota e comprovante, use a nota para fornecedor e itens e o comprovante para a forma de pagamento.\n\nCategorias de despesa (id = nome):\n'+cats;
+  'Responda SOMENTE com um JSON neste formato:\n{\n "tipo_documento": "nfe"|"nfce"|"nfse"|"cupom"|"comprovante_pix"|"comprovante_cartao"|"recibo"|"outro",\n "fornecedor_nome": string,\n "fornecedor_documento": string,\n "fornecedor_documento_parcial": string,\n "valor_total": number,\n "data_emissao": "AAAA-MM-DD",\n "numero_documento": string,\n "forma_pagamento": "pix"|"cartao_credito"|"cartao_debito"|"dinheiro"|"boleto"|"desconhecida",\n "banco_ou_cartao": string,\n "parcelas": number,\n "historico": string,\n "categoria_id": string,\n "itens": [{"descricao": string, "quantidade": number, "valor": number}],\n "campos_incertos": [string]\n}\n'+
+  'Regras: tipo_documento: use nfe/nfce/nfse/cupom quando houver nota fiscal ou cupom fiscal na imagem (mesmo que venha junto com o comprovante); use comprovante_pix/comprovante_cartao quando for só o comprovante de pagamento. fornecedor_nome é o emitente da nota (num Pix, o recebedor). fornecedor_documento é o CNPJ/CPF só com dígitos ("" se não aparecer completo). fornecedor_documento_parcial: se o CPF/CNPJ vier mascarado (ex.: ***.505.731-**), coloque só os dígitos visíveis na ordem (ex.: "505731"); senão "". valor_total é o valor pago em reais (0 se ilegível). numero_documento é o nº da nota (ex.: "NF 1234") ou o ID da transação Pix. banco_ou_cartao é o banco/cartão se aparecer (ex.: "Inter", "Sicoob"). parcelas = 1 se à vista ou não informado. historico é um resumo curto do que foi comprado, até 80 caracteres. categoria_id é o id da lista abaixo que melhor descreve a despesa ("" se não tiver certeza). Máximo de 15 itens. Não invente nada: o que não estiver visível fica vazio e vai para campos_incertos. Se houver nota e comprovante, use a nota para fornecedor e itens e o comprovante para a forma de pagamento.\n\nCategorias de despesa (id = nome):\n'+cats;
 }
 async function dspLerIA(fotos,obs){
   var content=[{type:'text',text:dspPrompt()+(obs?'\n\nObservação de quem enviou: '+obs:'')}];
@@ -3222,7 +3223,7 @@ async function dspEnriquecer(d){
 function dspAplicarLeitura(r){
   var unc=r.campos_incertos||[];var formaId=dspFormaDaLeitura(r);var em=/^\d{4}-\d{2}-\d{2}$/.test(r.data_emissao||'')?r.data_emissao:'';
   var cat=r.categoria_id&&dspListas().categorias.some(function(c){return String(c.id)===String(r.categoria_id)&&!c.pai;})?String(r.categoria_id):'';
-  var d={tipoDoc:String(r.tipo_documento||'outro'),fornecedor:{nome:r.fornecedor_nome||'',doc:dspDig(r.fornecedor_documento)},valor:r.valor_total>0?Number(r.valor_total):null,emissao:em,competencia:em,
+  var d={tipoDoc:String(r.tipo_documento||'outro'),fornecedor:{nome:r.fornecedor_nome||'',doc:dspDig(r.fornecedor_documento),docParcial:dspDig(r.fornecedor_documento_parcial)},valor:r.valor_total>0?Number(r.valor_total):null,emissao:em,competencia:em,
     numeroDocumento:r.numero_documento||'',historico:(r.historico||'').slice(0,200),formaId:formaId,contaId:formaId?dspContaSugerida(formaId):'',categoria:cat,
     parcelas:dspEhCredito(formaId)&&r.parcelas>1?Math.min(24,parseInt(r.parcelas,10)):1,itens:Array.isArray(r.itens)?r.itens.slice(0,15):[],incertos:unc,leituraErro:null};
   if(!formaId)unc.push('forma');
@@ -3281,7 +3282,7 @@ function dspFormAtual(){
 function dspLerCampos(){
   var f=DSP.form;if(!f||!dspEl('fNome'))return f;
   var _ant=f.fornecedor||{};var _doc=dspDig(dspEl('fDoc').value);
-  f.fornecedor={nome:dspEl('fNome').value.trim(),doc:_doc};if(_ant.dados&&_ant.doc===_doc)f.fornecedor.dados=_ant.dados;
+  f.fornecedor={nome:dspEl('fNome').value.trim(),doc:_doc};if(_ant.dados&&_ant.doc===_doc)f.fornecedor.dados=_ant.dados;if(_ant.docParcial)f.fornecedor.docParcial=_ant.docParcial;
   f.valor=dspParseMoney(dspEl('fValor').value);f.emissao=dspEl('fEm').value;f.vencimento=dspEl('fVenc').value;f.competencia=dspEl('fComp').value;
   f.numeroDocumento=dspEl('fNum').value.trim();f.historico=dspEl('fHist').value.trim();
   f.formaId=dspEl('fForma').value;f.contaId=dspEl('fConta').value;f.categoria=dspEl('fCat').value;
@@ -3297,16 +3298,20 @@ async function dspSalvarForm(quieto){
   catch(e){DSP.msg='Não consegui salvar: '+e.message;DSP.msgTipo='err';return false;}
 }
 async function dspBuscarFornecedor(){
-  var f=dspLerCampos();var box=dspEl('fForStatus');
+  var f=dspLerCampos();var box=dspEl('fForStatus');if(!box)return;
   if(!f.fornecedor.doc&&!f.fornecedor.nome){box.innerHTML='<span class="fin-chip warn">Informe nome ou CNPJ</span>';return;}
   box.innerHTML='<span class="fin-chip">Buscando no Bling…</span>';
-  try{var r=await dspBling('buscarContato',{doc:f.fornecedor.doc,nome:f.fornecedor.nome});var L=r.itens||[];
-    if(L.length===1&&r.porDoc){f.contato={id:String(L[0].id),nome:L[0].nome};f._editado=true;await dspSalvarForm(true);dspDraw();return;}
-    if(!L.length){box.innerHTML='<span class="fin-chip warn">Não encontrado no Bling</span> <button type="button" class="fin-btn sm" id="fCad">Cadastrar no Bling</button>';dspEl('fCad').onclick=dspCadastrarFornecedor;return;}
-    box.innerHTML='<div class="fin-match">'+L.map(function(c,i){return '<button type="button" data-i="'+i+'">'+dspEsc(c.nome)+(c.doc?' · '+dspEsc(dspDoc(c.doc)):'')+'</button>';}).join('')+'</div><button type="button" class="fin-btn sm" id="fCad">Não é nenhum: cadastrar</button>';
-    box.querySelectorAll('[data-i]').forEach(function(b){b.onclick=async function(){var c=L[+b.dataset.i];f.contato={id:String(c.id),nome:c.nome};f._editado=true;await dspSalvarForm(true);dspDraw();};});
-    dspEl('fCad').onclick=dspCadastrarFornecedor;
+  try{var a=await dspAcharFornecedor(f);
+    try{await dspFb('despesas/'+DSP.sel,{method:'PATCH',body:{fornChecado:Date.now()}});DSP.desp[DSP.sel].fornChecado=Date.now();}catch(e){}
+    if(a.match){f.contato=a.match;f._editado=true;await dspSalvarForm(true);await dspFb('despesas/'+DSP.sel,{method:'PATCH',body:{fornCand:null}});delete DSP.desp[DSP.sel].fornCand;dspDraw();return;}
+    if(a.cand.length){await dspFb('despesas/'+DSP.sel,{method:'PATCH',body:{fornCand:a.cand.slice(0,6)}});DSP.desp[DSP.sel].fornCand=a.cand.slice(0,6);dspDraw();return;}
+    box.innerHTML='<span class="fin-chip">Não existe no Bling: será cadastrado ao lançar</span>';
   }catch(e){box.innerHTML='<span class="fin-chip err">'+dspEsc(e.message)+'</span>';}
+}
+function dspHtmlCandidatos(id){
+  var d=DSP.desp[id];if(!d||d.contato||!d.fornCand||!d.fornCand.length)return '';
+  return '<div class="fin-msg warn" style="display:block"><b>Encontrei fornecedor parecido no Bling. É algum destes?</b><div class="fin-match">'+d.fornCand.map(function(c,i){return '<button type="button" data-cand="'+i+'">'+dspEsc(c.nome)+(c.doc?' · '+dspEsc(dspDoc(c.doc)):'')+'</button>';}).join('')+
+    '</div><button type="button" class="fin-btn sm" id="fCandNovo">Nenhum destes: cadastrar novo ao lançar</button></div>';
 }
 function dspCadastrarFornecedor(){
   var f=dspLerCampos();var txt=(f.fornecedor.nome||'')+(f.fornecedor.doc?' — '+dspDoc(f.fornecedor.doc):'');
@@ -3320,6 +3325,41 @@ async function dspRevisar(){
   if(dspExtOk()){try{await dspSalvarForm(true);await dspChecarDupBling(DSP.sel,Object.assign({},f,{vencimento:f.vencimento||f.emissao}));}catch(e){}}
   DSP.revisao=true;DSP.msg='';dspDraw();var el=dspEl('dspRev');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});
 }
+// ---------- fornecedor: achar no Bling sem nunca cadastrar em dobro ----------
+var DSP_GENERICAS=['ltda','me','epp','eireli','sa','s','a','cia','e','de','da','do','das','dos','comercio','comercial','servicos','servico','industria','distribuidora','eirelli','mei','limitada'];
+function dspTokens(n){return dspNorm(n).replace(/&/g,' e ').replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(w){return w&&DSP_GENERICAS.indexOf(w)<0;});}
+function dspSimNome(a,b){var x=dspTokens(a),y=dspTokens(b);if(!x.length||!y.length)return 0;var c=x.filter(function(w){return y.indexOf(w)>=0;}).length;return c/Math.min(x.length,y.length);}
+function dspDocParcial(f){var p=dspDig(f.fornecedor&&f.fornecedor.docParcial);if(p.length>=4)return p;
+  var t=(f.incertos||[]).join(' ');var m=t.match(/[\*x•]{0,3}[.\s]?\d{2,3}[.\s]?\d{3}[\/.\-\s]?\d{0,4}[\-\s]?[\*x•]{0,2}/i);return m?dspDig(m[0]):'';}
+async function dspAcharFornecedor(f){
+  var nome=(f.fornecedor&&f.fornecedor.nome)||'',doc=dspDig(f.fornecedor&&f.fornecedor.doc),parc=dspDocParcial(f);
+  if(nome===DSP_SEM_FORN)nome='';
+  var qs=[];if(doc.length===14||doc.length===11)qs.push({doc:doc});if(nome){qs.push({nome:nome});var tk=dspTokens(nome);if(tk.length>=2)qs.push({nome:tk.slice(0,2).join(' ')});}
+  var cand={};
+  for(var i=0;i<qs.length;i++){var r=await dspBling('buscarContato',qs[i]);(r.itens||[]).forEach(function(c){cand[c.id]={id:String(c.id),nome:c.nome,doc:dspDig(c.doc)};});}
+  var L=Object.keys(cand).map(function(k){return cand[k];});
+  var porDoc=L.filter(function(c){return doc&&c.doc===doc;});if(porDoc.length)return {match:porDoc[0],cand:L};
+  var porParc=L.filter(function(c){return parc.length>=4&&c.doc&&c.doc.indexOf(parc)>=0&&dspSimNome(c.nome,nome)>=0.5;});if(porParc.length===1)return {match:porParc[0],cand:L};
+  var iguais=L.filter(function(c){return dspTokens(c.nome).join(' ')===dspTokens(nome).join(' ');});if(iguais.length===1)return {match:iguais[0],cand:L};
+  var parecidos=L.filter(function(c){return dspSimNome(c.nome,nome)>=0.5;});
+  return {match:null,cand:parecidos};
+}
+// Liga o fornecedor ao cadastro do Bling. Só cadastra se não houver nenhum parecido.
+async function dspResolverFornecedor(id,f,podeCriar,passo){
+  if(f.contato)return f.contato;passo=passo||function(){};
+  passo('Procurando o fornecedor no Bling…');
+  var a=await dspAcharFornecedor(f);
+  if(a.match){f.contato=a.match;await dspFb('despesas/'+id,{method:'PATCH',body:{contato:a.match,fornCand:null}});if(DSP.desp[id]){DSP.desp[id].contato=a.match;delete DSP.desp[id].fornCand;}return a.match;}
+  var novoOk=f.fornNovoOk||(DSP.desp[id]&&DSP.desp[id].fornNovoOk);
+  if(a.cand.length&&!novoOk){await dspFb('despesas/'+id,{method:'PATCH',body:{fornCand:a.cand.slice(0,6)}});if(DSP.desp[id])DSP.desp[id].fornCand=a.cand.slice(0,6);
+    var e=new Error('Há fornecedor parecido no Bling ('+a.cand.slice(0,3).map(function(c){return c.nome;}).join('; ')+'). Escolha qual é na despesa antes de lançar, para não cadastrar em dobro.');e.ambiguo=true;throw e;}
+  if(!podeCriar)return null;
+  passo('Cadastrando o fornecedor no Bling…');
+  var nc=await dspBling('criarContato',Object.assign({nome:f.fornecedor.nome,doc:f.fornecedor.doc},f.fornecedor.dados||{}));
+  f.contato={id:String(nc.id),nome:f.fornecedor.nome,doc:dspDig(f.fornecedor.doc)};
+  await dspFb('despesas/'+id,{method:'PATCH',body:{contato:f.contato,fornCand:null}});if(DSP.desp[id])DSP.desp[id].contato=f.contato;
+  return f.contato;
+}
 // Lança uma despesa no Bling a partir dos dados (sem depender da tela). Usado pelo botão e pelo lançamento automático.
 async function dspLancarCore(id,f,passo){
   passo=passo||function(){};
@@ -3327,14 +3367,7 @@ async function dspLancarCore(id,f,passo){
   if(!f.vencimento)f.vencimento=f.emissao||dspHoje();
   if(!f.competencia)f.competencia=f.emissao||f.vencimento;
   if(!f.contato&&!(f.fornecedor&&f.fornecedor.nome))f.fornecedor={nome:DSP_SEM_FORN,doc:''};
-  if(!f.contato){
-    passo('Procurando o fornecedor no Bling…');
-    var bc=await dspBling('buscarContato',{doc:f.fornecedor.doc,nome:f.fornecedor.nome});var L=bc.itens||[];
-    var igual=L.filter(function(c){return (f.fornecedor.doc&&dspDig(c.doc)===f.fornecedor.doc)||dspNorm(c.nome)===dspNorm(f.fornecedor.nome);})[0]||(bc.porDoc&&L[0]);
-    if(igual)f.contato={id:String(igual.id),nome:igual.nome};
-    else{passo('Cadastrando o fornecedor no Bling…');var nc=await dspBling('criarContato',Object.assign({nome:f.fornecedor.nome,doc:f.fornecedor.doc},f.fornecedor.dados||{}));f.contato={id:String(nc.id),nome:f.fornecedor.nome};}
-    await dspFb('despesas/'+id,{method:'PATCH',body:{contato:f.contato,fornecedor:f.fornecedor}});
-  }
+  if(!f.contato)await dspResolverFornecedor(id,f,true,passo);
   passo('Lançando no Bling…');
   var r=await dspBling('lancar',{idContato:f.contato.id,contato:f.contato.nome,valor:f.valor,vencimento:f.vencimento,emissao:f.emissao,competencia:f.competencia,
     historico:f.historico,numeroDocumento:f.numeroDocumento,categoria:f.categoria,portador:f.contaId,forma:f.formaId,parcelas:f.parcelas});
@@ -3368,6 +3401,9 @@ async function dspAutoLancar(){
   DSP_AUTO.rodando=true;var lanc=[],erros=[];
   try{
     var all=await dspFb('despesas')||{};DSP.desp=all;
+    var semForn=Object.keys(all).filter(function(k){var d=all[k];return d&&d.status==='pendente'&&!d.contato&&d.fornecedor&&d.fornecedor.nome&&d.fornecedor.nome!==DSP_SEM_FORN&&!(d.fornChecado&&Date.now()-d.fornChecado<3600000);});
+    for(var j=0;j<semForn.length;j++){var kk=semForn[j];try{var ff=JSON.parse(JSON.stringify(all[kk]));await dspResolverFornecedor(kk,ff,false);}catch(e){}
+      try{await dspFb('despesas/'+kk,{method:'PATCH',body:{fornChecado:Date.now()}});all[kk].fornChecado=Date.now();}catch(e){}}
     var agora=Date.now();
     var cand=Object.keys(all).filter(function(k){var d=all[k];return d&&d.status==='pendente'&&!d.blingId&&d.valor>0&&!DSP.lendo[k]&&!(DSP.mob===false&&DSP.sel===k&&DSP.form&&DSP.form._editado)
       &&!(d.lancando&&agora-d.lancando<180000)&&!(d.autoErro&&agora-(d.autoErro.ts||0)<1800000)&&dspAutoElegivel(d);});
@@ -3377,7 +3413,7 @@ async function dspAutoLancar(){
         DSP.desp[k]=fresco;var dup=await dspChecarDupBling(k,Object.assign({},fresco,{vencimento:fresco.vencimento||fresco.emissao}));
         if(dup.length){await dspFb('despesas/'+k,{method:'PATCH',body:{lancando:null}});continue;}
         var r=await dspLancarCore(k,JSON.parse(JSON.stringify(fresco)));lanc.push({nome:(fresco.contato&&fresco.contato.nome)||(fresco.fornecedor&&fresco.fornecedor.nome)||'',valor:fresco.valor,pend:r.pend});}
-      catch(e){erros.push(e.message);try{await dspFb('despesas/'+k,{method:'PATCH',body:{lancando:null,autoErro:{ts:Date.now(),msg:String(e.message||e).slice(0,300)}}});}catch(x){}
+      catch(e){if(!e.ambiguo)erros.push(e.message);try{await dspFb('despesas/'+k,{method:'PATCH',body:{lancando:null,autoErro:{ts:Date.now(),msg:String(e.message||e).slice(0,300)}}});}catch(x){}
         if(DSP.desp[k])DSP.desp[k].autoErro={ts:Date.now(),msg:String(e.message||e)};}
     }
   }catch(e){}
@@ -3393,12 +3429,7 @@ function dspAutoIniciar(){if(DSP_AUTO.timer||STATE.roleLogado!=='admin'||dspMobi
 async function dspAtualizarBling(){
   var f=dspLerCampos();if(!f||!f.blingId)return;var b=dspEl('fAtualizar');if(b){b.disabled=true;b.textContent='Atualizando no Bling…';}
   try{
-    if(!f.contato&&f.fornecedor&&f.fornecedor.nome&&f.fornecedor.nome!==DSP_SEM_FORN){
-      var bc=await dspBling('buscarContato',{doc:f.fornecedor.doc,nome:f.fornecedor.nome});var L=bc.itens||[];
-      var igual=L.filter(function(c){return (f.fornecedor.doc&&dspDig(c.doc)===f.fornecedor.doc)||dspNorm(c.nome)===dspNorm(f.fornecedor.nome);})[0]||(bc.porDoc&&L[0]);
-      if(igual)f.contato={id:String(igual.id),nome:igual.nome};
-      else{var nc=await dspBling('criarContato',Object.assign({nome:f.fornecedor.nome,doc:f.fornecedor.doc},f.fornecedor.dados||{}));f.contato={id:String(nc.id),nome:f.fornecedor.nome};}
-    }
+    if(!f.contato&&f.fornecedor&&f.fornecedor.nome&&f.fornecedor.nome!==DSP_SEM_FORN)await dspResolverFornecedor(DSP.sel,f,true);
     await dspBling('atualizar',{blingId:f.blingId,idContato:f.contato&&f.contato.id,contato:f.contato&&f.contato.nome,valor:f.valor,vencimento:f.vencimento,emissao:f.emissao,competencia:f.competencia,
       historico:f.historico,numeroDocumento:f.numeroDocumento,categoria:f.categoria,portador:f.contaId,forma:f.formaId});
     var pend=dspPendencias(f);f._editado=true;await dspSalvarForm(true);
@@ -3564,7 +3595,7 @@ function dspChips(d){
   var p=dspPendencias(d).filter(function(x){return x!=='Conferir a leitura';});
   if(d.tipoDoc&&!dspEhNota(d))h+='<span class="fin-chip">comprovante · lançar no PC</span>';
   h+=p.length?'<span class="fin-chip warn">lança com pendência: '+dspEsc(p.join(', '))+'</span>':'<span class="fin-chip ok">Completo'+(dspEhNota(d)&&dspAutoLigado()?' · lança sozinho':'')+'</span>';
-  if(!d.contato&&d.fornecedor&&d.fornecedor.nome)h+='<span class="fin-chip">fornecedor novo</span>';
+  if(d.contato)h+='<span class="fin-chip ok">no Bling: '+dspEsc(d.contato.nome)+'</span>';else if(d.fornChecado&&!(d.fornCand&&d.fornCand.length))h+='<span class="fin-chip">fornecedor novo (será cadastrado)</span>';
   return h+dspDupHtml(d.id,true);
 }
 function dspHtmlListaItens(lista){
@@ -3611,7 +3642,7 @@ function dspHtmlFormCard(f,mob,ext){
    (f.obs?'<div class="fin-msg info">Observação de quem enviou: '+dspEsc(f.obs)+'</div>':'')+
    '<div class="fin-sec"><p class="fin-st">Comprovante <span class="fin-mu">'+(f.nFotos?f.nFotos+' imagem(ns) · toque para ampliar':'')+'</span></p><div class="fin-fotos" id="dspFotos"></div></div>'+
    '<div class="fin-sec"><p class="fin-st">Fornecedor '+(f.contato?'<span class="fin-chip ok">No Bling: '+dspEsc(f.contato.nome)+'</span>':'<span class="fin-chip">Se não existir no Bling, é cadastrado ao lançar</span>')+'</p>'+
-    '<div class="fin-g"><div class="fin-f fin-c4"><label for="fNome">Nome / razão social '+tag('fornecedor_nome')+'</label><input class="fin-in'+rd()+'" id="fNome" value="'+dspEsc(f.fornecedor.nome)+'"></div>'+
+    dspHtmlCandidatos(DSP.sel)+'<div class="fin-g"><div class="fin-f fin-c4"><label for="fNome">Nome / razão social '+tag('fornecedor_nome')+'</label><input class="fin-in'+rd()+'" id="fNome" value="'+dspEsc(f.fornecedor.nome)+'"></div>'+
     '<div class="fin-f fin-c2"><label for="fDoc">CPF/CNPJ '+tag('fornecedor_documento')+'</label><input class="fin-in'+rd()+'" id="fDoc" inputmode="numeric" value="'+dspEsc(dspDoc(f.fornecedor.doc))+'"></div></div>'+
     (ext?'<div><button type="button" class="fin-btn sm" id="fBuscar">'+(f.contato?'Trocar fornecedor':'Buscar no Bling')+'</button> <span id="fForStatus"></span></div>':(f.contato?'':'<p class="fin-mu" style="margin:0">O vínculo com o cadastro do Bling é feito no computador.</p>'))+'</div>'+
    '<div class="fin-sec"><p class="fin-st">Pagamento</p><div class="fin-g">'+
@@ -3656,6 +3687,9 @@ function dspBindConferencia(){
   dspEl('fComp').addEventListener('input',function(){dspEl('fComp').dataset.toq='1';});
   dspEl('fForma').addEventListener('change',function(){var id=dspEl('fForma').value;dspEl('fParcW').hidden=!dspEhCredito(id);var c=dspContaSugerida(id);if(c)dspEl('fConta').value=c;delete dspEl('fVenc').dataset.toq;reVenc();});
   var bb=dspEl('fBuscar');if(bb)bb.onclick=dspBuscarFornecedor;
+  DSP.root.querySelectorAll('[data-cand]').forEach(function(b){b.onclick=async function(){var c=DSP.desp[DSP.sel].fornCand[+b.dataset.cand];f.contato={id:String(c.id),nome:c.nome,doc:c.doc||''};f._editado=true;await dspSalvarForm(true);
+    await dspFb('despesas/'+DSP.sel,{method:'PATCH',body:{fornCand:null}});delete DSP.desp[DSP.sel].fornCand;dspDraw();};});
+  var cn=dspEl('fCandNovo');if(cn)cn.onclick=async function(){await dspFb('despesas/'+DSP.sel,{method:'PATCH',body:{fornCand:null,fornNovoOk:true}});delete DSP.desp[DSP.sel].fornCand;DSP.desp[DSP.sel].fornNovoOk=true;dspDraw();};
   var sv=dspEl('fSalvar');if(sv)sv.onclick=async function(){sv.disabled=true;await dspSalvarForm(false);dspDraw();};
   var rv=dspEl('fRevisar');if(rv)rv.onclick=dspRevisar;
   var ex=dspEl('fExcluir');if(ex)ex.onclick=dspExcluir;
