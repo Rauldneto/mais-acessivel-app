@@ -5615,6 +5615,7 @@ function cqCorpoVendas(card,sel){
       op('cqFCob','Cobrança',[['','Todas'],['nunca','Nunca cobrada'],['3d','Sem cobrança há 3+ dias'],['hoje','Cobrada hoje']],CQ.fCob||'')+
       op('cqFHum','Situação do cliente (última cobrança)',[['','Todas']].concat(CQ_HUMOR),CQ.fHum||'')+
       op('cqResSel','Mostrar',[['todas','Todas'],['sug','Com produto p/ oferecer'],['esperando','⏰ Cliente esperando resposta'],['semcontato','💤 Sem conversa há +3 dias'],['semwa','Cliente não achado no WhatsApp'],['divergente','⚠️ Etiqueta diferente do Bling']],CQ.res||'todas')+'</div>':'')+'</div>';
+  h+=rtFaixa(card);
   h+=cqFaixaLembretes(card);
   // 🟢 disponíveis · 🔒 em atendimento · 👤 minhas · todas
   var cntAt=function(f){return CQ.itens.filter(f).length;},asOf=function(i){return cqAssum(i);};
@@ -6194,6 +6195,7 @@ function cqBindComum(root,verOk){
   root.querySelectorAll('.cqCopiaFone').forEach(function(b){b.onclick=function(){cqCopiar(b.getAttribute('data-n'),b);};});
   root.querySelectorAll('.cqConcArq').forEach(function(f){f.onchange=function(){var it=item(f.getAttribute('data-id'));if(it&&f.files&&f.files[0])cqLerConcorrente(it,f.files[0]);};});
   if($('cqMaisF'))$('cqMaisF').onclick=function(){CQ.maisF=!CQ.maisF;cqDraw();};
+  if($('rtIrLead'))$('rtIrLead').onclick=rtIrLead;
   // v2: detalhes, perfil, dicas, faixa "cobrar agora"
   root.querySelectorAll('.cqDet').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id');CQ.det=CQ.det||{};CQ.det[k]=!CQ.det[k];cqDraw();};});
   root.querySelectorAll('.cqPfAbrir').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id');CQ.pfForm=CQ.pfForm||{};CQ.pfForm[k]=!CQ.pfForm[k];cqDraw();};});
@@ -6213,6 +6215,76 @@ function cqBindComum(root,verOk){
   root.querySelectorAll('.cqDicaNova').forEach(function(b){b.onclick=function(){var it=item(b.getAttribute('data-id'));if(it)cqGerarDica(it);};});
   root.querySelectorAll('.cqCopiaTxt').forEach(function(b){b.onclick=function(){cqCopiar(b.getAttribute('data-t'),b);};});
   root.querySelectorAll('.cqIrPara').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id');CQ.foco=k;if(!document.getElementById('vc-'+k))CQ.limite=999;cqDraw();setTimeout(function(){var e=document.getElementById('vc-'+k);if(e)e.scrollIntoView({behavior:'smooth',block:'center'});},60);setTimeout(function(){if(CQ.foco===k){CQ.foco='';var e=document.getElementById('vc-'+k);if(e)e.classList.remove('vc-foco');}},4000);};});
+}
+
+
+// ===================== 🔁 RITMO: a cada 3 cobranças, chamar 1 lead (só aviso) =====================
+// Cobrança = registrada no app OU mensagem nossa no WhatsApp para cliente de cotação em aberto do colaborador (1 por cotação por dia).
+// Lead = mudar o status de um lead da aba Lead (para qualquer status diferente de Novo), 1 por lead por dia.
+// Firebase: ritmo/{AAAA-MM-DD}/{usuario} = {cob:n, app:n, wa:n, leads:{chave:{ts,st,emp}}, ts}
+var RT_A_CADA=3;
+function rtDia(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function rtUsu(){return String(STATE.usuarioLogado||'').replace(/[.#$\/\[\]]/g,'_');}
+function rtEhMeu(i){
+  var u=cqNorm(STATE.usuarioLogado||'').replace(/ /g,'');if(!u)return false;
+  var bate=function(n){var w=cqNorm(n).split(' ')[0];return w&&w.length>=3&&(u.indexOf(w)===0||w.indexOf(u)===0);};
+  if(i.vendedor&&bate(i.vendedor))return true;
+  return !!(i._ws&&(i._ws.w.e||[]).some(bate));
+}
+function rtCarregar(){
+  if(RT.carregando||(RT.dia===rtDia()&&RT.ok))return;RT.carregando=true;var dia=rtDia();
+  fetch(FIREBASE_DB+'/ritmo/'+dia+'/'+rtUsu()+'.json').then(function(r){return r.ok?r.json():null;}).then(function(d){RT.dados=d||{};RT.dia=dia;RT.ok=true;RT.carregando=false;if(STATE.modulo==='mod10')cqDraw();else if(STATE.modulo==='mod9'&&typeof lcDrawList==='function')lcDrawList();}).catch(function(){RT.carregando=false;});
+}
+var RT={dados:null,dia:'',ok:false};
+function rtCalc(){
+  var ini=new Date();ini.setHours(0,0,0,0);ini=ini.getTime();var me=cqUsuario(),ids={},app=0,wa=0;
+  Object.keys(CQ.vi||{}).forEach(function(id){var v=CQ.vi[id];if(Object.keys((v&&v.cob)||{}).some(function(k){var c=v.cob[k];return c.u===me&&c.ts>=ini;})){ids[id]=1;app++;}});
+  (CQ.itens||[]).forEach(function(i){if(ids[i.id]||!cqAberta(i)||!rtEhMeu(i))return;var un=cqWaUn(i);if(un>=ini&&un>=cqProxUtil9h(i.data)-12*3600000){ids[i.id]=1;wa++;}});
+  var leads=Object.keys((RT.dados&&RT.dados.leads)||{}).length,cob=app+wa,devidos=Math.floor(cob/RT_A_CADA);
+  return {cob:cob,app:app,wa:wa,leads:leads,pend:Math.max(0,devidos-leads),prox:RT_A_CADA-(cob%RT_A_CADA)};
+}
+function rtSalvarCont(r){
+  var k=r.cob+'|'+r.app+'|'+r.wa;if(RT.salvo===k||!rtUsu())return;RT.salvo=k;
+  fetch(FIREBASE_DB+'/ritmo/'+rtDia()+'/'+rtUsu()+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({cob:r.cob,app:r.app,wa:r.wa,ts:Date.now()})}).catch(function(){});
+}
+function rtIrLead(){
+  var user=STATE.usuarios&&STATE.usuarios[STATE.loginUser],abas=user&&user.abas;
+  if(abas&&abas.length&&abas.indexOf('mod9')===-1&&STATE.roleLogado!=='admin'){alert('Você ainda não tem acesso à aba Lead. Peça ao administrador para liberar.');return;}
+  STATE.modulo='mod9';STATE.tabClientes='licitacao';if(typeof LC!=='undefined'){LC.sub='lista';LC.F.st='Novo';LC.q='';}window.scrollTo(0,0);render();
+}
+function rtIrVendas(){STATE.modulo='mod10';STATE.tab='mod10';if(typeof CQ!=='undefined'){CQ.aba='vend';CQ.vv='cot';}window.scrollTo(0,0);render();}
+function rtFaixa(card){
+  if(!rtUsu())return '';if(!RT.ok||RT.dia!==rtDia()){rtCarregar();return '';}
+  var r=rtCalc();RT.ult=r;rtSalvarCont(r);
+  var dots='';for(var k=0;k<RT_A_CADA;k++)dots+='<span style="width:11px;height:11px;border-radius:50%;display:inline-block;background:'+(k<(r.cob%RT_A_CADA)||r.pend?'#d97706':'#e7e5e4')+'"></span>';
+  if(r.pend)return '<div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1.5px solid #60a5fa;border-radius:14px;padding:14px 18px;margin-bottom:14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">'+
+    '<div style="font-size:30px">🎯</div><div style="flex:1;min-width:240px"><div style="font-size:16px;font-weight:900;color:#1e3a8a">Hora de chamar '+(r.pend>1?r.pend+' leads':'um lead')+'!</div>'+
+    '<div style="font-size:12.5px;color:#1e40af;margin-top:2px">Você fez <b>'+r.cob+' cobrança(s)</b> hoje ('+r.app+' no app, '+r.wa+' pelo WhatsApp). O ritmo é <b>'+RT_A_CADA+' cobranças → 1 lead</b>. Chame '+(r.pend>1?r.pend+' clientes':'1 cliente')+' da aba Lead e depois volte para as cobranças.</div></div>'+
+    '<button class="vb" id="rtIrLead" style="background:#1d4ed8;border-color:#1d4ed8;color:#fff;padding:10px 16px;font-size:13.5px">'+cqIc('target',16)+' Ir para a aba Lead</button></div>';
+  return '<div style="'+card+';padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:#44403c">'+
+    '<b style="display:inline-flex;gap:6px;align-items:center">🔁 Ritmo de hoje</b><span style="display:inline-flex;gap:4px">'+dots+'</span>'+
+    '<span>Cobranças: <b>'+r.cob+'</b> <span style="color:#a8a29e">('+r.app+' app · '+r.wa+' WhatsApp)</span></span><span>Leads chamados: <b>'+r.leads+'</b></span>'+
+    '<span style="color:#78716c">faltam <b>'+r.prox+'</b> cobrança(s) para o próximo lead</span></div>';
+}
+// chamado quando o colaborador muda o status de um lead (aba Lead)
+function rtRegLead(k,st){
+  if(!rtUsu())return;var e=(typeof LC!=='undefined'&&LC.emp&&LC.emp[k])||{},o={ts:Date.now(),st:st,emp:e.emp||''},dia=rtDia();
+  if(RT.dia===dia&&RT.dados){RT.dados.leads=RT.dados.leads||{};var novo=!RT.dados.leads[k];RT.dados.leads[k]=o;}
+  fetch(FIREBASE_DB+'/ritmo/'+dia+'/'+rtUsu()+'/leads/'+String(k).replace(/[.#$\/\[\]]/g,'_')+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)}).catch(function(){});
+  if(RT.ult&&RT.ult.pend>0){RT.ult.pend--;RT.ult.leads++;RT.okLead=true;}
+}
+// faixa na aba Lead
+function rtFaixaLead(){
+  if(!rtUsu())return '';if(!RT.ok||RT.dia!==rtDia()){rtCarregar();return '';}
+  var r=RT.ult||{pend:Math.max(0,Math.floor(((RT.dados&&RT.dados.cob)||0)/RT_A_CADA)-Object.keys((RT.dados&&RT.dados.leads)||{}).length)};
+  if(RT.okLead&&!(r&&r.pend))return '<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;padding:10px 14px;margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;color:#166534"><b>✅ Lead registrado! Ritmo em dia.</b><span style="flex:1"></span><button type="button" class="lc-btn" data-rt="vendas" style="background:#16a34a;color:#fff;border-color:#16a34a">💰 Voltar para as cobranças</button></div>';
+  if(!r||!r.pend)return '';
+  // sugestão: lead Novo, sem vendedor, maior potencial, mais recente
+  var E=(typeof LC!=='undefined'&&LC.emp)||{},best=null,bs=-1;
+  Object.keys(E).forEach(function(k){var e=E[k];if(lcEf(e)!=='Novo'||e.resp)return;var s=(LC_PT[lcPtEmp(e)]||0)*1e13+(Date.parse(e.atualizado||e.criado||0)||0);if(s>bs){bs=s;best=k;}});
+  return '<div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1.5px solid #60a5fa;border-radius:12px;padding:12px 14px;margin-bottom:10px;font-size:13px;color:#1e3a8a">'+
+    '<b style="font-size:14px">🎯 Ritmo: chame '+(r.pend>1?r.pend+' leads':'1 lead')+' e volte para as cobranças</b><div style="margin-top:3px">Assuma um cliente <b>Novo</b>, fale com ele e mude o status (Atendido, Sucesso, Não encontrado...). O ritmo zera sozinho.</div>'+
+    (best?'<div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">💡 Sugestão: <b>'+lcEsc(E[best].emp||'')+'</b> <span style="color:#3b82f6">· potencial '+lcEsc(lcPtEmp(E[best]))+'</span><button type="button" class="lc-btn" data-rt="ver" data-rtk="'+lcEsc(E[best].emp||'')+'">Mostrar este cliente</button></div>':'')+'</div>';
 }
 
 // ── 📞 COBRANÇAS (relatório) ──
@@ -6242,12 +6314,18 @@ function cbDraw(root){
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">'+Object.keys(pu).sort(function(a,b){return pu[b].n-pu[a].n;}).map(function(u){return '<div style="flex:1;min-width:150px;'+card+';margin:0;border-top:4px solid #d97706"><div style="font-size:24px;font-weight:900;color:#b45309">'+pu[u].n+'</div><div style="font-size:12px;color:#78716c">cobranças de <b>'+cqEsc(u)+'</b></div><div style="font-size:11px;color:#a8a29e">'+Object.keys(pu[u].cots).length+' cotação(ões)'+(pu[u].as?' · assumiu '+pu[u].as+' atendimento(s)':'')+'</div></div>';}).join('')+'</div>';
   h+='<div style="'+card+';overflow-x:auto">'+(F.length?'<table style="width:100%;border-collapse:collapse"><tr>'+['Quando','Cotação','Cliente','Vendedor','Quem cobrou','Como','Situação do cliente','O que o cliente disse'].map(function(x){return '<th style="'+th+'">'+x+'</th>';}).join('')+'</tr>'+
     F.map(function(x){return '<tr><td style="'+td+';white-space:nowrap">'+new Date(x.c.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</td><td style="'+td+'"><a href="https://www.bling.com.br/orcamentos.php#edit/'+cqEsc(x.id)+'" target="_blank" style="color:#d97706;font-weight:800;text-decoration:none">Nº '+cqEsc(x.n||'')+'</a>'+(x.tot?'<br><span style="color:#a8a29e;font-size:11.5px">'+cqBRL(x.tot)+'</span>':'')+'</td><td style="'+td+'">'+cqEsc(x.cli||'')+'</td><td style="'+td+'">'+cqEsc(x.vend||'')+'</td><td style="'+td+'">'+cqEsc(x.c.u||'?')+'</td><td style="'+td+(x.c.ev?';font-weight:800;color:'+(x.c.ev==='assumiu'?'#059669':'#57534e'):'')+'">'+cqEsc(x.c.canal||'')+'</td><td style="'+td+';color:#5b21b6;font-weight:700">'+cqEsc(cqHumorTxt(x.c.humor)||'—')+'</td><td style="'+td+'">'+cqEsc(x.c.obs||'')+'</td></tr>';}).join('')+'</table>':'<div style="text-align:center;color:#78716c">Nenhuma cobrança registrada neste período.</div>')+'</div>';
+  if(!CB.rt&&!CB.rtCarr){CB.rtCarr=1;fetch(FIREBASE_DB+'/ritmo.json').then(function(r){return r.ok?r.json():null;}).then(function(d){CB.rt=d||{};CB.rtCarr=0;if(STATE.modulo==='mod10'&&CQ.vv==='cob')cqDraw();}).catch(function(){CB.rt={};CB.rtCarr=0;});}
+  if(CB.rt){var dl=rtDia(new Date(desde)),RL=[];Object.keys(CB.rt).filter(function(d){return d>=dl;}).sort().reverse().forEach(function(d){Object.keys(CB.rt[d]||{}).forEach(function(u){var x=CB.rt[d][u]||{},nl=Object.keys(x.leads||{}).length,dev=Math.floor((x.cob||0)/RT_A_CADA);if(CB.usu&&u!==CB.usu)return;RL.push({d:d,u:u,cob:x.cob||0,app:x.app||0,wa:x.wa||0,nl:nl,dev:dev,leads:x.leads||{}});});});
+    h+='<div style="'+card+';overflow-x:auto"><h3 style="margin:0 0 4px;font-size:15px">🔁 Ritmo: '+RT_A_CADA+' cobranças → 1 lead</h3><p style="margin:0 0 10px;font-size:12px;color:#78716c">Cobranças do dia (registradas no app + mensagens pelo WhatsApp) e leads chamados na aba Lead. Atualiza quando o colaborador abre 💰 Vendas.</p>'+
+      (RL.length?'<table style="width:100%;border-collapse:collapse"><tr>'+['Dia','Colaborador','Cobranças','Leads devidos','Leads chamados','Situação','Leads'].map(function(x){return '<th style="'+th+'">'+x+'</th>';}).join('')+'</tr>'+
+      RL.map(function(x){var ok=x.nl>=x.dev;return '<tr><td style="'+td+';white-space:nowrap">'+x.d.split('-').reverse().join('/')+'</td><td style="'+td+'">'+cqEsc(x.u)+'</td><td style="'+td+'"><b>'+x.cob+'</b> <span style="color:#a8a29e;font-size:11.5px">('+x.app+' app · '+x.wa+' WhatsApp)</span></td><td style="'+td+'">'+x.dev+'</td><td style="'+td+'"><b>'+x.nl+'</b></td>'+
+        '<td style="'+td+';font-weight:800;color:'+(ok?'#15803d':'#b91c1c')+'">'+(ok?'✅ em dia':'⚠️ faltou '+(x.dev-x.nl))+'</td><td style="'+td+';font-size:12px;color:#57534e">'+Object.keys(x.leads).map(function(k){var l=x.leads[k];return cqEsc(l.emp||k)+' <span style="color:#a8a29e">('+cqEsc(l.st||'')+')</span>';}).join(' · ')+'</td></tr>';}).join('')+'</table>':'<div style="text-align:center;color:#78716c">Sem registros de ritmo neste período.</div>')+'</div>';}
   root.innerHTML=h;cbBind(root);
 }
 function cbBind(root){
   var g=function(id){return root.querySelector('#'+id);};
   [['cbPer','periodo'],['cbUsu','usu'],['cbVend','vend'],['cbHum','hum'],['cbTipo','tipo']].forEach(function(q){var e=g(q[0]);if(e)e.onchange=function(){CB[q[1]]=e.value;cqDraw();};});
-  if(g('cbReload'))g('cbReload').onclick=function(){CQ.vi=null;cqDraw();};
+  if(g('cbReload'))g('cbReload').onclick=function(){CQ.vi=null;CB.rt=null;cqDraw();};
   root.querySelectorAll('.cqVV').forEach(function(b){b.onclick=function(){CQ.vv=b.getAttribute('data-v');cqDraw();};});
 }
 
@@ -9313,7 +9391,7 @@ function lcDraw(){
   if(LC.sub==='lista'){
     h+='<div class="lc-grid"><aside class="lc-side" id="lcSide"></aside><div>'+
       '<div class="lc-q"><span aria-hidden="true">🔎</span><input id="lcQ" type="search" placeholder="Buscar empresa, cidade, CNPJ ou contato" aria-label="Buscar cliente" value="'+lcEsc(LC.q)+'"></div>'+
-      '<div id="lcToast"></div><div id="lcChips"></div><div class="lc-cnt" id="lcCnt"></div><div id="lcList"></div></div></div>';
+      '<div id="lcRitmo"></div><div id="lcToast"></div><div id="lcChips"></div><div class="lc-cnt" id="lcCnt"></div><div id="lcList"></div></div></div>';
     root.innerHTML=h;lcDrawList();
   }else if(LC.sub==='relatorio'){
     h+=lcRelHtml();root.innerHTML=h;
@@ -9354,6 +9432,9 @@ function lcDrawList(){
     sh+='<div class="lc-fg"><h4>'+g[1]+'</h4>'+(ks.map(function(v){return '<button type="button" class="lc-fl'+(LC.F[g[0]]===v?' sel':'')+'" data-a="flt" data-k="'+g[0]+'" data-v="'+lcEsc(v)+'"><span>'+lcEsc(v)+'</span><span>'+(c[v]||0)+'</span></button>';}).join('')||'<span class="lc-cnt">Nenhum</span>')+'</div>';
   });
   side.innerHTML=sh;
+  var rtB=document.getElementById('lcRitmo');
+  if(rtB&&typeof rtFaixaLead==='function'){rtB.innerHTML=rtFaixaLead();rtB.querySelectorAll('[data-rt]').forEach(function(b){b.onclick=function(){var a=b.getAttribute('data-rt');
+    if(a==='vendas'){RT.okLead=false;rtIrVendas();}else if(a==='ver'){LC.q=b.getAttribute('data-rtk');var qi=document.getElementById('lcQ');if(qi)qi.value=LC.q;lcDrawList();}};});}
   var tt=document.getElementById('lcToast');
   if(tt){tt.innerHTML=LC.toast?'<div class="lc-toast">'+lcEsc(LC.toast)+'</div>':'';if(LC.toast){var m=LC.toast;setTimeout(function(){if(LC.toast===m){LC.toast='';var t2=document.getElementById('lcToast');if(t2)t2.innerHTML='';}},6000);}}
   var chips=document.getElementById('lcChips'),act=LC_G.filter(function(g){return LC.F[g[0]];});
@@ -9444,6 +9525,7 @@ function lcPatch(k,upd){
 function lcLog(k,ev){
   var id=Date.now()+'_'+Math.random().toString(36).slice(2,6),o={};
   ev.por=lcMe();ev.em=new Date().toISOString();o['hist/'+id]=ev;
+  if(ev.t==='status'&&ev.v&&ev.v!=='Novo'&&typeof rtRegLead==='function'){rtRegLead(k,ev.v);setTimeout(function(){if(STATE.modulo==='mod9')lcDrawList();},400);}
   if(LC.emp[k]){if(!LC.emp[k].hist)LC.emp[k].hist={};LC.emp[k].hist[id]=ev;}
   return lcFb('empresas/'+k,'PATCH',o).catch(function(){});
 }
