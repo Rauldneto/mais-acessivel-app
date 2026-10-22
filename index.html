@@ -3144,8 +3144,8 @@ function renderModuloNav(){
 // Controle de custos dos serviços que o app usa.
 // 1) Registrador: toda chamada do app à IA (worker rauldias.workers.dev) tem o consumo (tokens) anotado em
 //    Firebase controle/ia/{AAAA-MM-DD}/{id} = {t:ts, a:área, m:modelo, i:tokens entrada, o:tokens saída, w:buscas web, u:US$, e:erro}
-// 2) Saldo da Anthropic: a API não informa o saldo, então o admin digita o saldo que aparece no console
-//    (controle/config) e o app desconta o que foi gasto desde então -> saldo estimado e previsão de recarga.
+// 2) Saldo da Anthropic: não há API de saldo. Saldo = saldo base informado + recargas lançadas − gasto.
+//    Gasto real vem do Worker saldo-anthropic (Admin API cost_report); sem ele, usa a estimativa do item 1.
 var CTL_WORKER='rauldias.workers.dev';
 // Preço por 1 milhão de tokens (US$). Busca na web: US$ 10 por 1.000 buscas.
 var CTL_PRECOS=[
@@ -3193,92 +3193,122 @@ function ctlDia(ts){var d=new Date(ts);return d.getFullYear()+'-'+String(d.getMo
   };
 })();
 
+// ---- Dados ----
+// controle/config: {saldoUrl, orcamento, anthropic:{base:{saldo,data,gastoAntes,real}}, bling:{valor,venc}}
+// controle/creditos/{id}: {v:US$, d:ts}   (recargas já feitas)
+// Saldo = saldo base + recargas depois da base − gasto desde a base (real pelo Worker saldo-anthropic, ou estimado pelo registrador)
+function ctlUtcDia(ts){return new Date(ts).toISOString().slice(0,10);}
+function ctlUtcIni(ts){return Date.parse(ctlUtcDia(ts)+'T00:00:00Z');}
+
 async function ctlCarregar(){
   CTL.carregando=true;CTL.erro='';ctlDraw();
   try{
     var r=await Promise.all([
       fetch(FIREBASE_DB+'/controle/config.json').then(function(r){return r.json();}),
-      fetch(FIREBASE_DB+'/controle/ia.json').then(function(r){return r.json();})
+      fetch(FIREBASE_DB+'/controle/ia.json').then(function(r){return r.json();}),
+      fetch(FIREBASE_DB+'/controle/creditos.json').then(function(r){return r.json();})
     ]);
-    CTL.cfg=r[0]||{};CTL.ia=r[1]||{};
-    // limpeza: mantém só os últimos 120 dias
+    CTL.cfg=r[0]||{};CTL.ia=r[1]||{};CTL.cred=r[2]||{};
+    var an=CTL.cfg.anthropic;
+    if(an&&an.saldo!=null&&!an.base){CTL.cfg.anthropic={base:{saldo:an.saldo,data:an.data}};} // formato antigo
     var limite=ctlDia(Date.now()-120*864e5),apagar={};
     Object.keys(CTL.ia).forEach(function(d){if(d<limite){apagar[d]=null;delete CTL.ia[d];}});
     if(Object.keys(apagar).length)fetch(FIREBASE_DB+'/controle/ia.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(apagar)}).catch(function(){});
   }catch(e){CTL.erro='Não consegui ler os dados do Firebase: '+e.message;}
-  if(!CTL.dolar){
-    try{var d=await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL').then(function(r){return r.json();});CTL.dolar=parseFloat(d.USDBRL.bid)||null;}catch(e){}
-  }
+  if(!CTL.dolar){try{var d=await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL').then(function(r){return r.json();});CTL.dolar=parseFloat(d.USDBRL.bid)||null;}catch(e){}}
   CTL.carregando=false;ctlDraw();
+  await ctlBuscarReal();
+}
+async function ctlBuscarReal(){
+  var url=CTL.cfg&&CTL.cfg.saldoUrl;if(!url){CTL.real=null;return null;}
+  var b=CTL.cfg.anthropic&&CTL.cfg.anthropic.base;
+  var de=Date.now()-35*864e5;if(b&&b.data&&b.data<de)de=Math.max(b.data,Date.now()-120*864e5);
+  try{
+    var j=await fetch(url.replace(/\/$/,'')+'/?de='+ctlUtcDia(de)).then(function(r){return r.json();});
+    if(!j||!j.ok)throw new Error(j&&j.erro||'sem resposta');
+    CTL.real=j;CTL.realErro='';
+  }catch(e){CTL.real=null;CTL.realErro=e.message;}
+  ctlDraw();return CTL.real;
 }
 function ctlSalvarCfg(){
   return fetch(FIREBASE_DB+'/controle/config.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(CTL.cfg)});
 }
 
 function ctlLista(){var l=[];Object.keys(CTL.ia||{}).forEach(function(d){var o=CTL.ia[d]||{};Object.keys(o).forEach(function(k){l.push(o[k]);});});return l.sort(function(a,b){return a.t-b.t;});}
+function ctlCreditos(){var o=CTL.cred||{};return Object.keys(o).map(function(k){return {id:k,v:o[k].v||0,d:o[k].d||0};}).sort(function(a,b){return b.d-a.d;});}
 
 function ctlCalc(){
-  var l=ctlLista(),agora=Date.now(),cfg=CTL.cfg||{},an=cfg.anthropic||{};
-  var c={lista:l,total:l.length};
+  var l=ctlLista(),agora=Date.now(),cfg=CTL.cfg||{},b=(cfg.anthropic||{}).base,real=CTL.real;
+  var c={real:!!real,areas:[],dias:[]};
   c.primeiro=l.length?l[0].t:null;
-  function soma(de,ate){var s=0,n=0;l.forEach(function(x){if(x.t>=de&&(!ate||x.t<ate)){s+=x.u||0;n++;}});return {s:s,n:n};}
-  c.hoje=soma(new Date(new Date().toDateString()).getTime());
-  var g7=soma(agora-7*864e5),g30=soma(agora-30*864e5);
-  c.g7=g7;c.g30=g30;
-  var dias7=c.primeiro?Math.max(1,Math.min(7,(agora-c.primeiro)/864e5)):1;
-  var dias30=c.primeiro?Math.max(1,Math.min(30,(agora-c.primeiro)/864e5)):1;
-  c.media7=g7.s/dias7;c.media30=g30.s/dias30;
+  function somaLocal(de,ate){var s=0,n=0;l.forEach(function(x){if(x.t>=de&&(ate==null||x.t<ate)){s+=x.u||0;n++;}});return {s:s,n:n};}
+  function somaReal(de){var s=0,dd=ctlUtcDia(de);Object.keys(real.dias||{}).forEach(function(k){if(k>=dd)s+=real.dias[k];});return s;}
+  var hojeIni=new Date(new Date().toDateString()).getTime();
+  c.hojeN=somaLocal(hojeIni).n;
+  c.hoje=real?(real.dias[ctlUtcDia(agora)]||0):somaLocal(hojeIni).s;
+  // média dos últimos 7 dias
+  if(real){var s7=0;for(var i=0;i<7;i++)s7+=real.dias[ctlUtcDia(agora-i*864e5)]||0;c.media=s7/7;}
+  else{var dias7=c.primeiro?Math.max(1,Math.min(7,(agora-c.primeiro)/864e5)):1;c.media=somaLocal(agora-7*864e5).s/dias7;}
   var ini=new Date();ini.setDate(1);ini.setHours(0,0,0,0);
-  c.mes=soma(ini.getTime());
+  c.mes=real?somaReal(ini.getTime()):somaLocal(ini.getTime()).s;
   var diasMes=new Date(ini.getFullYear(),ini.getMonth()+1,0).getDate();
-  var diaHoje=Math.max(1,(agora-Math.max(ini.getTime(),c.primeiro||ini.getTime()))/864e5);
-  c.projMes=c.mes.s+(c.media7||c.mes.s/diaHoje)*(diasMes-new Date().getDate());
+  c.projMes=c.mes+c.media*(diasMes-new Date().getDate());
   c.orcamento=parseFloat(cfg.orcamento)||20;
-  if(an.saldo!=null&&an.data){
-    c.temSaldo=true;c.desde=soma(an.data).s;c.saldo=an.saldo-c.desde;
-    var media=c.media7||c.media30;
-    c.diasRest=media>0?c.saldo/media:Infinity;
+  var cr=ctlCreditos();c.creditos=cr;c.totalCred=cr.reduce(function(s,x){return s+x.v;},0);
+  if(b&&b.saldo!=null&&b.data){
+    c.temSaldo=true;
+    var recargas=cr.filter(function(x){return x.d>b.data;}).reduce(function(s,x){return s+x.v;},0);
+    var gasto;
+    if(real){var antes=b.real?(b.gastoAntes||0):somaLocal(ctlUtcIni(b.data),b.data).s;gasto=Math.max(0,somaReal(b.data)-antes);}
+    else gasto=somaLocal(b.data).s;
+    c.saldo=b.saldo+recargas-gasto;
+    c.diasRest=c.media>0?c.saldo/c.media:Infinity;
   }
-  // último erro de crédito
-  c.semCredito=null;for(var k=l.length-1;k>=0;k--){if(l[k].u>0)break;if(l[k].e&&/credit balance/i.test(l[k].e)&&!(an.data&&l[k].t<an.data)){c.semCredito=l[k];break;}}
-  // por área (30 dias)
-  var ar={};l.forEach(function(x){if(x.t<agora-30*864e5)return;var a=ar[x.a]=ar[x.a]||{a:x.a,n:0,u:0,i:0,o:0,w:0};a.n++;a.u+=x.u||0;a.i+=x.i||0;a.o+=x.o||0;a.w+=x.w||0;});
+  c.semCredito=null;for(var k=l.length-1;k>=0;k--){if(l[k].u>0)break;if(l[k].e&&/credit balance/i.test(l[k].e)&&!(b&&b.data&&l[k].t<b.data)){c.semCredito=l[k];break;}}
+  if(c.semCredito&&c.temSaldo&&c.saldo>1)c.semCredito=null;
+  var ar={};l.forEach(function(x){if(x.t<agora-30*864e5)return;var a=ar[x.a]=ar[x.a]||{a:x.a,n:0,u:0,w:0};a.n++;a.u+=x.u||0;a.w+=x.w||0;});
   c.areas=Object.keys(ar).map(function(k){return ar[k];}).sort(function(a,b){return b.u-a.u;});
-  // por dia (30 dias)
-  c.dias=[];for(var d=29;d>=0;d--){var dd=ctlDia(agora-d*864e5),s=0,n=0;Object.keys((CTL.ia||{})[dd]||{}).forEach(function(k){s+=CTL.ia[dd][k].u||0;n++;});c.dias.push({d:dd,s:s,n:n});}
+  for(var d=29;d>=0;d--){var t=agora-d*864e5,v;if(real)v=real.dias[ctlUtcDia(t)]||0;else{v=0;var dd=ctlDia(t);Object.keys((CTL.ia||{})[dd]||{}).forEach(function(k){v+=CTL.ia[dd][k].u||0;});}c.dias.push({t:t,s:v});}
   return c;
 }
 
-function ctlUS(v){return 'US$ '+(v||0).toFixed(v<1&&v>0?3:2).replace('.',',');}
+function ctlUS(v){v=v||0;return 'US$ '+v.toFixed(Math.abs(v)<1&&v!==0?3:2).replace('.',',');}
 function ctlRS(v){return CTL.dolar?'R$ '+(v*CTL.dolar).toFixed(2).replace('.',','):'';}
-function ctlData(ts){var d=new Date(ts);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();}
+function ctlData(ts,ano){var d=new Date(ts);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+(ano?'/'+d.getFullYear():'');}
+function ctlHora(ts){var d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 function ctlEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 
 function ctlCss(){
-  if(document.getElementById('ctlCss'))return;
-  var st=document.createElement('style');st.id='ctlCss';
+  if(document.getElementById('ctlCss2'))return;
+  var st=document.createElement('style');st.id='ctlCss2';
   st.textContent=
-  '.ctl{max-width:1100px;margin:0 auto;padding:16px 16px 40px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1c1c1e}'+
-  '.ctl h2{font-size:20px;font-weight:800;margin:4px 0 2px}.ctl .sub{color:#8e8e93;font-size:13px;margin-bottom:14px}'+
-  '.ctl-sec{font-size:12px;font-weight:800;color:#636366;text-transform:uppercase;letter-spacing:.7px;margin:22px 2px 8px}'+
-  '.ctl-card{background:#fff;border:1px solid #e5e5ea;border-radius:14px;padding:16px;margin-bottom:12px;border-left:5px solid var(--c,#5856d6)}'+
-  '.ctl-hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.ctl-hd b{font-size:16px}'+
-  '.ctl-tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}'+
+  '.ctl{max-width:760px;margin:0 auto;padding:14px 14px 40px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1c1c1e}'+
+  '.ctl-top{display:flex;align-items:center;justify-content:space-between;margin:2px 2px 10px;font-size:12px;color:#8e8e93}'+
+  '.ctl-top button{border:none;background:none;color:#5856d6;font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit}'+
+  '.ctl-card{background:#fff;border:1px solid #e5e5ea;border-radius:16px;padding:16px;margin-bottom:12px}'+
+  '.ctl-hd{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;font-weight:700;color:#636366}'+
+  '.ctl-tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap}'+
   '.ctl-ok{background:#e8f8ee;color:#1f8a43}.ctl-at{background:#fff4e0;color:#b36b00}.ctl-al{background:#fde8e8;color:#c62828}.ctl-ne{background:#f0f0f3;color:#636366}'+
-  '.ctl-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0 4px}'+
-  '.ctl-k{background:#f7f7fa;border-radius:12px;padding:10px 12px}.ctl-k small{display:block;font-size:11px;color:#8e8e93;font-weight:600}.ctl-k span{display:block;font-size:20px;font-weight:800;margin-top:2px}.ctl-k em{font-style:normal;font-size:11.5px;color:#8e8e93}'+
-  '.ctl-btn{border:none;background:#5856d6;color:#fff;font-weight:700;font-size:13px;padding:8px 14px;border-radius:9px;cursor:pointer;font-family:inherit}.ctl-btn.sec{background:#f0f0f3;color:#1c1c1e}'+
+  '.ctl-big{font-size:34px;font-weight:800;letter-spacing:-.5px;margin:8px 0 0;line-height:1.1}.ctl-big small{font-size:15px;font-weight:600;color:#8e8e93;margin-left:6px;letter-spacing:0}'+
+  '.ctl-line{font-size:13.5px;color:#3a3a3c;margin-top:4px}'+
+  '.ctl-k4{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#ececf0;border-radius:12px;overflow:hidden;margin:14px 0 12px}'+
+  '.ctl-k4>div{background:#f7f7fa;padding:9px 10px}.ctl-k4 small{display:block;font-size:10.5px;color:#8e8e93;font-weight:600}.ctl-k4 b{display:block;font-size:15px;margin-top:1px}.ctl-k4 em{font-style:normal;font-size:10.5px;color:#8e8e93}'+
+  '@media(max-width:560px){.ctl-k4{grid-template-columns:repeat(2,1fr)}.ctl-big{font-size:28px}}'+
+  '.ctl-bts{display:flex;gap:6px;flex-wrap:wrap}'+
+  '.ctl-btn{border:none;background:#5856d6;color:#fff;font-weight:700;font-size:12.5px;padding:7px 12px;border-radius:9px;cursor:pointer;font-family:inherit}.ctl-btn.sec{background:#f0f0f3;color:#1c1c1e}'+
   '.ctl a{color:#5856d6;font-weight:600;text-decoration:none}'+
-  '.ctl-tb{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}.ctl-tb th{text-align:left;font-size:11px;color:#8e8e93;font-weight:700;padding:6px 6px;border-bottom:1px solid #e5e5ea}.ctl-tb td{padding:7px 6px;border-bottom:1px solid #f2f2f5}.ctl-tb td.n{text-align:right;font-variant-numeric:tabular-nums}'+
-  '.ctl-bar{height:6px;background:#efeff4;border-radius:4px;overflow:hidden}.ctl-bar i{display:block;height:100%;background:#5856d6;border-radius:4px}'+
-  '.ctl-ch{display:flex;align-items:flex-end;gap:3px;height:90px;margin-top:10px;padding-top:6px;border-bottom:1px solid #e5e5ea}.ctl-ch div{flex:1;background:#c9c8f5;border-radius:3px 3px 0 0;min-height:1px;position:relative}.ctl-ch div.hj{background:#5856d6}'+
-  '.ctl-chl{display:flex;justify-content:space-between;font-size:10.5px;color:#8e8e93;margin-top:4px}'+
-  '.ctl-dicas{margin:10px 0 0;padding:0;list-style:none}.ctl-dicas li{font-size:13px;line-height:1.45;padding:7px 0 7px 26px;position:relative;border-top:1px solid #f2f2f5}.ctl-dicas li:before{content:"💡";position:absolute;left:0;top:7px}'+
-  '.ctl-dicas li.f:before{content:"⚠️"}'+
-  '.ctl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}.ctl-grid .ctl-card{margin:0}'+
-  '.ctl-ln{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:5px 0;border-bottom:1px solid #f2f2f5}.ctl-ln span:first-child{color:#636366}.ctl-ln span:last-child{font-weight:700;text-align:right}'+
-  '.ctl-ban{background:#fde8e8;border:1px solid #f5b5b5;color:#9b1c1c;border-radius:12px;padding:12px 14px;font-size:13.5px;margin-bottom:12px}'+
-  '.ctl-form{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:12px;background:#f7f7fa;padding:12px;border-radius:12px}.ctl-form label{font-size:11px;font-weight:700;color:#636366;display:block;margin-bottom:3px}.ctl-form input{border:1px solid #d1d1d6;border-radius:8px;padding:7px 9px;font-size:14px;width:130px;font-family:inherit}';
+  '.ctl-form{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;background:#f7f7fa;padding:10px;border-radius:12px}.ctl-form label{font-size:11px;font-weight:700;color:#636366;display:block;margin-bottom:3px}.ctl-form input{border:1px solid #d1d1d6;border-radius:8px;padding:6px 8px;font-size:14px;width:120px;font-family:inherit}.ctl-form p{font-size:12px;color:#636366;flex-basis:100%;margin:0;line-height:1.45}'+
+  '.ctl-det{margin-top:12px;border-top:1px solid #f0f0f3;padding-top:10px}'+
+  '.ctl-st{font-size:11px;font-weight:800;color:#8e8e93;text-transform:uppercase;letter-spacing:.6px;margin:12px 0 6px}'+
+  '.ctl-ch{display:flex;align-items:flex-end;gap:2px;height:56px}.ctl-ch div{flex:1;background:#c9c8f5;border-radius:2px 2px 0 0;min-height:1px}.ctl-ch div.hj{background:#5856d6}'+
+  '.ctl-row{display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 0;border-bottom:1px solid #f2f2f5}.ctl-row:last-child{border-bottom:none}.ctl-row .r{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}'+
+  '.ctl-row .x{border:none;background:none;color:#c7c7cc;cursor:pointer;font-size:14px;padding:0 2px}.ctl-row .x:hover{color:#c62828}'+
+  '.ctl-dica{font-size:12.5px;line-height:1.45;padding:5px 0 5px 22px;position:relative;color:#3a3a3c}.ctl-dica:before{content:"💡";position:absolute;left:0}'+
+  '.ctl-sv{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f2f2f5;font-size:13px}.ctl-sv:last-child{border-bottom:none}'+
+  '.ctl-sv .n{font-weight:700;min-width:150px}.ctl-sv .i{color:#636366;flex:1;min-width:0}.ctl-sv .ed{border:none;background:none;cursor:pointer;font-size:13px;padding:0}'+
+  '@media(max-width:560px){.ctl-sv{flex-wrap:wrap}.ctl-sv .n{min-width:0}.ctl-sv .i{flex-basis:100%;order:3}}'+
+  '.ctl-ban{background:#fde8e8;color:#9b1c1c;border-radius:12px;padding:10px 12px;font-size:13px;margin-bottom:10px}'+
+  '.ctl-ativ{display:block;margin-top:12px;font-size:12.5px;background:#f4f3ff;border-radius:10px;padding:8px 10px;color:#3a3a3c}';
   document.head.appendChild(st);
 }
 
@@ -3286,142 +3316,138 @@ function renderControle(){
   ctlCss();
   var wrap=document.createElement('div');wrap.className='ctl';CTL.root=wrap;
   if(!CTL.cfg&&!CTL.carregando)setTimeout(ctlCarregar,0);
+  if(!CTL.poll)CTL.poll=setInterval(function(){if(STATE.modulo==='mod15'&&!document.hidden&&CTL.root&&document.body.contains(CTL.root))ctlBuscarReal();},120000);
   ctlDraw();
   return wrap;
 }
 
 function ctlDraw(){
   var w=CTL.root;if(!w||!document.body.contains(w)&&w.childNodes.length)return;
-  if(!CTL.cfg){w.innerHTML='<h2>Controle de custos</h2><div class="sub">'+(CTL.erro?ctlEsc(CTL.erro):'⏳ Carregando consumo...')+'</div>';return;}
-  var c=ctlCalc(),cfg=CTL.cfg,an=cfg.anthropic||{};
-  var h='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap"><div><h2>Controle de custos</h2><div class="sub">Saldo, consumo e dicas dos serviços que o app usa'+(CTL.dolar?' · dólar hoje R$ '+CTL.dolar.toFixed(2).replace('.',','):'')+'</div></div><button class="ctl-btn sec" data-a="atualizar">↻ Atualizar</button></div>';
-  if(c.semCredito)h+='<div class="ctl-ban"><b>⛔ O crédito da Anthropic zerou</b> em '+ctlData(c.semCredito.t)+' — a IA do app parou. Recarregue em <a href="https://console.anthropic.com/settings/billing" target="_blank">console.anthropic.com → Billing</a> e depois clique em "Informar saldo" aqui embaixo.</div>';
+  if(!CTL.cfg){w.innerHTML='<div class="ctl-top">'+(CTL.erro?ctlEsc(CTL.erro):'⏳ Carregando...')+'</div>';return;}
+  var c=ctlCalc(),cfg=CTL.cfg,b=(cfg.anthropic||{}).base;
+  var h='<div class="ctl-top"><span>'+(c.real?'🟢 Saldo real · atualizado às '+ctlHora(CTL.real.ts):'Saldo estimado pelo app')+(CTL.dolar?' · US$ 1 = R$ '+CTL.dolar.toFixed(2).replace('.',','):'')+'</span><button data-a="atualizar">↻ Atualizar</button></div>';
+  if(c.semCredito)h+='<div class="ctl-ban">⛔ <b>O crédito da Anthropic zerou</b> ('+ctlData(c.semCredito.t)+') e a IA do app parou. Recarregue no <a href="https://console.anthropic.com/settings/billing" target="_blank">console</a> e lance a recarga aqui.</div>';
 
   // ===== Anthropic =====
-  h+='<div class="ctl-sec">Pago por uso</div>';
-  var tag,tagTxt;
-  if(c.semCredito){tag='ctl-al';tagTxt='Saldo zerado';}
-  else if(!c.temSaldo){tag='ctl-ne';tagTxt='Informe o saldo';}
-  else if(c.saldo<=0||c.diasRest<5){tag='ctl-al';tagTxt=c.saldo<=0?'Saldo zerado':'Recarregar já';}
-  else if(c.diasRest<15){tag='ctl-at';tagTxt='Recarregar em breve';}
-  else{tag='ctl-ok';tagTxt='Saldo tranquilo';}
-  var nivel=c.projMes<=c.orcamento*0.7?['ctl-ok','Consumo normal']:c.projMes<=c.orcamento?['ctl-at','Consumo no limite']:['ctl-al','Consumo alto'];
-  h+='<div class="ctl-card" style="--c:#d97757"><div class="ctl-hd"><b>🤖 API da Anthropic (IA do app)</b><span class="ctl-tag '+tag+'">'+tagTxt+'</span><span class="ctl-tag '+nivel[0]+'">'+nivel[1]+'</span><span style="margin-left:auto;font-size:12px"><a href="https://console.anthropic.com/settings/billing" target="_blank">Abrir console ↗</a></span></div>';
-  h+='<div class="ctl-kpis">';
+  var tag;
+  if(c.semCredito||(c.temSaldo&&c.saldo<=0))tag=['ctl-al','Sem saldo'];
+  else if(!c.temSaldo)tag=['ctl-ne','Informe o saldo'];
+  else if(c.diasRest<5)tag=['ctl-al','Recarregar já'];
+  else if(c.diasRest<15)tag=['ctl-at','Recarregar em breve'];
+  else tag=['ctl-ok','Saldo ok'];
+  var nivel=c.projMes<=c.orcamento*0.7?['ctl-ok','consumo normal']:c.projMes<=c.orcamento?['ctl-at','consumo no limite']:['ctl-al','consumo alto'];
+  h+='<div class="ctl-card"><div class="ctl-hd">🤖 API da Anthropic <span class="ctl-tag '+tag[0]+'">'+tag[1]+'</span><span style="margin-left:auto"><a href="https://console.anthropic.com/settings/billing" target="_blank">console ↗</a></span></div>';
   if(c.temSaldo){
-    h+='<div class="ctl-k"><small>Saldo estimado</small><span style="color:'+(c.saldo<=0?'#c62828':'#1c1c1e')+'">'+ctlUS(Math.max(0,c.saldo))+'</span><em>'+ctlRS(Math.max(0,c.saldo))+' · informado '+ctlUS(an.saldo)+' em '+ctlData(an.data)+'</em></div>';
-    var prev=c.diasRest===Infinity?'sem consumo ainda':(c.diasRest<=0?'já zerou':'~'+Math.round(c.diasRest)+' dias ('+ctlData(Date.now()+c.diasRest*864e5)+')');
-    h+='<div class="ctl-k"><small>Vai acabar em</small><span>'+(c.diasRest===Infinity?'—':(c.diasRest<=0?'0 dias':Math.round(c.diasRest)+' dias'))+'</span><em>'+prev+'</em></div>';
+    h+='<div class="ctl-big">'+ctlUS(Math.max(0,c.saldo))+'<small>'+ctlRS(Math.max(0,c.saldo))+'</small></div>';
+    var acaba=c.diasRest===Infinity?'sem consumo ainda':c.diasRest<=0?'já acabou':'acaba em <b>~'+Math.round(c.diasRest)+' dias</b> ('+ctlData(Date.now()+c.diasRest*864e5)+')';
+    h+='<div class="ctl-line">No ritmo atual '+acaba+' · <span class="ctl-tag '+nivel[0]+'">'+nivel[1]+'</span></div>';
   }else{
-    h+='<div class="ctl-k"><small>Saldo</small><span>—</span><em>Clique em "Informar saldo"</em></div>';
+    h+='<div class="ctl-big" style="color:#c7c7cc">US$ —</div><div class="ctl-line">Clique em <b>Acertar saldo</b> e digite o saldo que aparece no console.</div>';
   }
-  h+='<div class="ctl-k"><small>Gasto hoje</small><span>'+ctlUS(c.hoje.s)+'</span><em>'+c.hoje.n+' chamadas '+ctlRS(c.hoje.s)+'</em></div>';
-  h+='<div class="ctl-k"><small>Média por dia (7 dias)</small><span>'+ctlUS(c.media7)+'</span><em>'+ctlRS(c.media7)+'</em></div>';
-  h+='<div class="ctl-k"><small>Este mês</small><span>'+ctlUS(c.mes.s)+'</span><em>previsão fim do mês '+ctlUS(c.projMes)+' '+ctlRS(c.projMes)+'</em></div>';
-  h+='<div class="ctl-k"><small>Orçamento mensal</small><span>'+ctlUS(c.orcamento)+'</span><em>'+Math.round(c.projMes/c.orcamento*100)+'% previsto</em></div>';
-  h+='</div>';
-  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="ctl-btn" data-a="saldo">💰 Informar saldo / recarga</button><button class="ctl-btn sec" data-a="orc">🎯 Mudar orçamento mensal</button></div>';
-  if(CTL.form==='saldo')h+='<div class="ctl-form"><div><label>Saldo que aparece no console (US$)</label><input id="ctlSaldo" type="number" step="0.01" min="0" value="'+(c.temSaldo?Math.max(0,c.saldo).toFixed(2):'')+'"></div><button class="ctl-btn" data-a="salvarSaldo">Salvar</button><button class="ctl-btn sec" data-a="cancelar">Cancelar</button><div style="font-size:12px;color:#636366;flex-basis:100%">Abra console.anthropic.com → Settings → Billing, copie o "Credit balance" e cole aqui. Faça isso a cada recarga — o app desconta o consumo a partir desse momento.</div></div>';
-  if(CTL.form==='orc')h+='<div class="ctl-form"><div><label>Quanto aceita gastar por mês (US$)</label><input id="ctlOrc" type="number" step="1" min="1" value="'+c.orcamento+'"></div><button class="ctl-btn" data-a="salvarOrc">Salvar</button><button class="ctl-btn sec" data-a="cancelar">Cancelar</button><div style="font-size:12px;color:#636366;flex-basis:100%">É a régua para dizer se o consumo está normal, no limite ou alto.</div></div>';
+  h+='<div class="ctl-k4">'+
+    '<div><small>Hoje</small><b>'+ctlUS(c.hoje)+'</b><em>'+c.hojeN+' usos</em></div>'+
+    '<div><small>Média/dia</small><b>'+ctlUS(c.media)+'</b><em>últimos 7 dias</em></div>'+
+    '<div><small>Este mês</small><b>'+ctlUS(c.mes)+'</b><em>prev. '+ctlUS(c.projMes)+' de '+ctlUS(c.orcamento)+'</em></div>'+
+    '<div><small>Já creditado</small><b>'+ctlUS(c.totalCred)+'</b><em>'+c.creditos.length+' recarga'+(c.creditos.length===1?'':'s')+'</em></div>'+
+  '</div>';
+  h+='<div class="ctl-bts"><button class="ctl-btn" data-a="recarga">＋ Lançar recarga</button><button class="ctl-btn sec" data-a="saldo">Acertar saldo</button><button class="ctl-btn sec" data-a="det">'+(CTL.det?'Fechar detalhes ▴':'Detalhes ▾')+'</button></div>';
+  var hoje=new Date(),hj=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
+  if(CTL.form==='recarga')h+='<div class="ctl-form"><div><label>Valor creditado (US$)</label><input id="ctlRecV" type="number" step="0.01" min="0" placeholder="ex.: 20"></div><div><label>Data</label><input id="ctlRecD" type="date" value="'+hj+'" style="width:145px"></div><button class="ctl-btn" data-a="salvarRecarga">Salvar</button><button class="ctl-btn sec" data-a="cancelar">Cancelar</button><p>O valor entra no saldo na hora. Lance também as recargas antigas para ver o total já creditado.</p></div>';
+  if(CTL.form==='saldo')h+='<div class="ctl-form"><div><label>Saldo no console agora (US$)</label><input id="ctlSaldo" type="number" step="0.01" min="0" value="'+(c.temSaldo?Math.max(0,c.saldo).toFixed(2):'')+'"></div><button class="ctl-btn" data-a="salvarSaldo">Salvar</button><button class="ctl-btn sec" data-a="cancelar">Cancelar</button><p>Copie o "Credit balance" do console (Settings → Billing). Use só na primeira vez ou se o valor daqui ficar diferente do console.</p></div>';
+  if(CTL.form==='orc')h+='<div class="ctl-form"><div><label>Orçamento mensal (US$)</label><input id="ctlOrc" type="number" step="1" min="1" value="'+c.orcamento+'"></div><button class="ctl-btn" data-a="salvarOrc">Salvar</button><button class="ctl-btn sec" data-a="cancelar">Cancelar</button><p>É a régua para "consumo normal / no limite / alto".</p></div>';
+  if(!cfg.saldoUrl||CTL.form==='ativar'){
+    if(CTL.form==='ativar')h+='<div class="ctl-form"><div style="flex:1;min-width:220px"><label>Endereço do Worker "saldo-anthropic"</label><input id="ctlUrl" type="url" style="width:100%" placeholder="https://saldo-anthropic.rauldias.workers.dev" value="'+ctlEsc(cfg.saldoUrl||'')+'"></div><button class="ctl-btn" data-a="salvarUrl">Ativar</button><button class="ctl-btn sec" data-a="cancelar">Cancelar</button><p>Depois de criar o Worker com a chave de administrador da Anthropic, cole o endereço dele aqui. Com isso o gasto vem direto da Anthropic (não é mais estimativa).</p></div>';
+    else h+='<a class="ctl-ativ" href="#" data-a="ativar">⚡ <b>Ativar saldo real</b> — buscar o gasto direto da Anthropic em vez de estimar</a>';
+  }else if(CTL.realErro)h+='<div class="ctl-ativ" style="background:#fff4e0">⚠️ Não consegui buscar o gasto real ('+ctlEsc(CTL.realErro)+'). Mostrando a estimativa. <a href="#" data-a="ativar">Corrigir endereço</a></div>';
 
-  // gráfico 30 dias
-  var max=Math.max.apply(null,c.dias.map(function(d){return d.s;}).concat([0.0001]));
-  h+='<div style="margin-top:16px;font-size:12px;font-weight:700;color:#636366">Gasto por dia — últimos 30 dias</div><div class="ctl-ch">'+c.dias.map(function(d,i){return '<div class="'+(i===29?'hj':'')+'" style="height:'+(d.s/max*100)+'%" title="'+d.d.split('-').reverse().join('/')+': '+ctlUS(d.s)+' · '+d.n+' chamadas"></div>';}).join('')+'</div><div class="ctl-chl"><span>'+c.dias[0].d.split('-').reverse().slice(0,2).join('/')+'</span><span>hoje</span></div>';
-
-  // por área
-  var tot30=c.areas.reduce(function(s,a){return s+a.u;},0)||1;
-  h+='<div style="margin-top:16px;font-size:12px;font-weight:700;color:#636366">Onde a IA está gastando — últimos 30 dias</div>';
-  if(!c.areas.length)h+='<div style="font-size:13px;color:#8e8e93;padding:10px 0">Ainda sem registros. A partir de agora cada uso da IA no app é anotado aqui.</div>';
-  else{
-    h+='<table class="ctl-tb"><tr><th>Tela</th><th style="text-align:right">Usos</th><th style="text-align:right">Gasto</th><th style="text-align:right">Por uso</th><th style="width:28%">Parte do total</th></tr>';
-    c.areas.forEach(function(a){var pct=a.u/tot30*100;h+='<tr><td>'+ctlEsc(CTL_AREAS[a.a]||a.a)+(a.w?' <span style="font-size:11px;color:#8e8e93">· '+a.w+' buscas web</span>':'')+'</td><td class="n">'+a.n+'</td><td class="n">'+ctlUS(a.u)+'</td><td class="n">'+ctlUS(a.n?a.u/a.n:0)+'</td><td><div class="ctl-bar"><i style="width:'+pct.toFixed(1)+'%"></i></div><div style="font-size:11px;color:#8e8e93;margin-top:2px">'+pct.toFixed(0)+'%</div></td></tr>';});
-    h+='</table>';
+  if(CTL.det){
+    h+='<div class="ctl-det">';
+    var max=Math.max.apply(null,c.dias.map(function(d){return d.s;}).concat([0.0001]));
+    h+='<div class="ctl-st" style="margin-top:2px">Gasto por dia · 30 dias</div><div class="ctl-ch">'+c.dias.map(function(d,i){return '<div class="'+(i===29?'hj':'')+'" style="height:'+(d.s/max*100)+'%" title="'+ctlData(d.t)+': '+ctlUS(d.s)+'"></div>';}).join('')+'</div>';
+    var tot=c.areas.reduce(function(s,a){return s+a.u;},0)||1;
+    h+='<div class="ctl-st">Onde gasta mais · 30 dias</div>';
+    if(!c.areas.length)h+='<div class="ctl-row" style="color:#8e8e93">Sem registros ainda.</div>';
+    c.areas.slice(0,5).forEach(function(a){h+='<div class="ctl-row">'+ctlEsc(CTL_AREAS[a.a]||a.a)+' <span style="color:#8e8e93;font-size:12px">'+a.n+' usos · '+ctlUS(a.u/a.n)+'/uso</span><span class="r">'+ctlUS(a.u)+' · '+Math.round(a.u/tot*100)+'%</span></div>';});
+    h+='<div class="ctl-st">Recargas lançadas</div>';
+    if(!c.creditos.length)h+='<div class="ctl-row" style="color:#8e8e93">Nenhuma ainda.</div>';
+    c.creditos.forEach(function(x){h+='<div class="ctl-row">'+ctlData(x.d,1)+'<span class="r">'+ctlUS(x.v)+'</span><button class="x" title="Excluir" data-a="delRec" data-id="'+ctlEsc(x.id)+'">✕</button></div>';});
+    h+='<div class="ctl-st">Dicas para gastar menos</div>'+ctlDicasIA(c).slice(0,3).map(function(d){return '<div class="ctl-dica">'+d+'</div>';}).join('');
+    h+='<div style="margin-top:8px;font-size:12px"><a href="#" data-a="orc">Mudar orçamento mensal ('+ctlUS(c.orcamento)+')</a>'+(cfg.saldoUrl?' · <a href="#" data-a="ativar">Endereço do saldo real</a>':'')+'</div>';
+    h+='</div>';
   }
-  h+='<ul class="ctl-dicas">'+ctlDicasIA(c).map(function(d){return '<li'+(d.f?' class="f"':'')+'>'+d.t+'</li>';}).join('')+'</ul></div>';
-
-  // ===== Outros serviços =====
-  var navEntry=performance.getEntriesByType&&performance.getEntriesByType('navigation')[0];
-  var tamApp=navEntry&&(navEntry.decodedBodySize||navEntry.transferSize)||0;
-  var chamHoje=c.hoje.n;
-  h+='<div class="ctl-sec">Grátis (dentro do limite)</div><div class="ctl-grid">';
-  h+=ctlCardServ('#f6821f','☁️ Cloudflare Workers','ctl-ok','Grátis',[
-    ['Para que serve','Leva os pedidos do app até a IA'],
-    ['Chamadas de IA hoje',chamHoje+' de 100.000/dia ('+(chamHoje/1000).toFixed(2).replace('.',',')+'%)'],
-    ['Plano','Free — 100 mil chamadas/dia']
-  ],['Está muito longe do limite; não precisa fazer nada.','Se um dia passar de 100 mil/dia, o Worker para até meia-noite (UTC) — não cobra nada sozinho.'],'https://dash.cloudflare.com/');
-  h+=ctlCardServ('#ffca28','🔥 Firebase (Google)','ctl-ok','Grátis',[
-    ['Para que serve','Banco de dados: cotações, despesas, fotos, configurações'],
-    ['Limite do plano Spark','1 GB guardado · 10 GB baixados/mês'],
-    ['Fotos de comprovante pendentes',CTL.fotos==null?'<a href="#" data-a="fotos">contar</a>':CTL.fotos]
-  ],['As fotos dos comprovantes são o que mais pesa — o app já apaga depois de lançar no Bling. Não deixe despesas paradas sem lançar.','Confira no console se o projeto continua no plano <b>Spark</b> (grátis). No Blaze (pago) ele cobra se passar do limite.','Se o "Downloads" do mês ficar perto de 10 GB, evite deixar o app aberto em muitas abas: ele atualiza sozinho a cada 30 s.'],'https://console.firebase.google.com/project/maisacessivel-1d0ad/usage');
-  h+=ctlCardServ('#24292f','🐙 GitHub Pages','ctl-ok','Grátis',[
-    ['Para que serve','Hospeda o app (rauldneto.github.io)'],
-    ['Tamanho do app',tamApp?(tamApp/1048576).toFixed(1).replace('.',',')+' MB de 1 GB':'—'],
-    ['Limite de tráfego','100 GB/mês (limite brando)']
-  ],['Cada abertura do app baixa ~'+(tamApp?(tamApp/1048576).toFixed(1).replace('.',','):'1,5')+' MB (inclui as extensões embutidas). Mesmo com 50 aberturas/dia dá menos de 3 GB/mês.'],'https://github.com/rauldneto/mais-acessivel-app');
-  h+=ctlCardServ('#34a853','🔎 BrasilAPI / CNPJ.ws','ctl-ok','Grátis',[
-    ['Para que serve','Puxa dados do fornecedor pelo CNPJ'],
-    ['Limite','CNPJ.ws público: 3 consultas por minuto']
-  ],['Se aparecer erro ao buscar CNPJ, espere 1 minuto e tente de novo — é o limite gratuito, não é cobrança.'],null);
   h+='</div>';
 
-  h+='<div class="ctl-sec">Pagamento fixo</div><div class="ctl-grid">';
-  var bl=cfg.bling||{};
-  var blTag=['ctl-ne','Sem vencimento'];
-  if(bl.venc){var dv=Math.ceil((new Date(bl.venc+'T12:00:00').getTime()-Date.now())/864e5);blTag=dv<0?['ctl-al','Venceu']:dv<=7?['ctl-at','Vence em '+dv+' dia'+(dv===1?'':'s')]:['ctl-ok','Em dia'];}
-  h+=ctlCardServ('#2b7de9','📊 Bling (ERP)',blTag[0],blTag[1],[
-    ['Para que serve','ERP — o app lança as contas nele'],
-    ['Mensalidade',bl.valor?'R$ '+Number(bl.valor).toFixed(2).replace('.',','):'—'],
-    ['Próximo vencimento',bl.venc?bl.venc.split('-').reverse().join('/'):'—'],
-    ['Limite da API','3 por segundo · 120 mil por dia']
-  ],['Já é sua assinatura normal — o app não aumenta o valor.'],'https://www.bling.com.br/',
-  '<button class="ctl-btn sec" data-a="bling" style="margin-top:10px">✏️ Mensalidade e vencimento</button>'+(CTL.form==='bling'?'<div class="ctl-form"><div><label>Mensalidade (R$)</label><input id="ctlBlVal" type="number" step="0.01" value="'+(bl.valor||'')+'"></div><div><label>Próximo vencimento</label><input id="ctlBlVenc" type="date" value="'+(bl.venc||'')+'" style="width:150px"></div><button class="ctl-btn" data-a="salvarBling">Salvar</button><button class="ctl-btn sec" data-a="cancelar">Cancelar</button></div>':''));
-  h+=ctlCardServ('#4285f4','🧩 Chrome Web Store','ctl-ok','Pago 1x',[
-    ['Para que serve','Publicar a extensão'],
-    ['Custo','US$ 5 uma única vez — não é mensal']
-  ],['Nada a acompanhar.'],null);
+  // ===== Outros serviços (1 linha cada) =====
+  var nav=performance.getEntriesByType&&performance.getEntriesByType('navigation')[0];
+  var tam=nav&&(nav.decodedBodySize||nav.transferSize)||0;
+  var bl=cfg.bling||{},blTag=['ctl-ne','—'],blInfo='Sua assinatura normal';
+  if(bl.venc){var dv=Math.ceil((new Date(bl.venc+'T12:00:00').getTime()-Date.now())/864e5);blTag=dv<0?['ctl-al','Venceu']:dv<=7?['ctl-at','Vence em '+dv+'d']:['ctl-ok','Em dia'];}
+  if(bl.valor||bl.venc)blInfo=(bl.valor?'R$ '+Number(bl.valor).toFixed(2).replace('.',',')+'/mês':'')+(bl.venc?' · vence '+bl.venc.split('-').reverse().slice(0,2).join('/'):'');
+  function sv(nome,t,info,link,extra){return '<div class="ctl-sv"><span class="n">'+nome+'</span><span class="ctl-tag '+t[0]+'">'+t[1]+'</span><span class="i">'+info+'</span>'+(extra||'')+(link?'<a href="'+link+'" target="_blank">↗</a>':'')+'</div>';}
+  h+='<div class="ctl-card" style="padding:6px 16px"><div class="ctl-st">Outros serviços</div>'+
+    sv('🔥 Firebase',['ctl-ok','Grátis'],'Plano Spark · 1 GB guardado, 10 GB/mês','https://console.firebase.google.com/project/maisacessivel-1d0ad/usage')+
+    sv('☁️ Cloudflare Workers',['ctl-ok','Grátis'],c.hojeN+' de 100 mil chamadas hoje','https://dash.cloudflare.com/')+
+    sv('🐙 GitHub Pages',['ctl-ok','Grátis'],'App com '+(tam?(tam/1048576).toFixed(1).replace('.',','):'~1,5')+' MB · 100 GB/mês','https://github.com/rauldneto/mais-acessivel-app')+
+    sv('🔎 BrasilAPI / CNPJ.ws',['ctl-ok','Grátis'],'Limite de 3 consultas por minuto',null)+
+    sv('📊 Bling',blTag,blInfo,'https://www.bling.com.br/','<button class="ed" data-a="bling" title="Editar">✏️</button>')+
+    sv('🧩 Chrome Web Store',['ctl-ok','Pago 1x'],'US$ 5 uma única vez',null);
+  if(CTL.form==='bling')h+='<div class="ctl-form" style="margin-bottom:10px"><div><label>Mensalidade (R$)</label><input id="ctlBlVal" type="number" step="0.01" value="'+(bl.valor||'')+'"></div><div><label>Próximo vencimento</label><input id="ctlBlVenc" type="date" value="'+(bl.venc||'')+'" style="width:145px"></div><button class="ctl-btn" data-a="salvarBling">Salvar</button><button class="ctl-btn sec" data-a="cancelar">Cancelar</button></div>';
   h+='</div>';
-  h+='<div style="font-size:11.5px;color:#8e8e93;margin-top:16px;line-height:1.5">Como funciona: a Anthropic não mostra o saldo pela API, então o app anota o consumo (tokens) de cada uso da IA e desconta do último saldo que você informou. Preços usados: Sonnet US$ 3 / US$ 15 por milhão de tokens (entrada/saída), Haiku US$ 1 / US$ 5, busca na web US$ 0,01 cada. É uma estimativa — o valor exato é sempre o do console.</div>';
   w.innerHTML=h;
-  w.querySelectorAll('[data-a]').forEach(function(b){b.onclick=function(e){e.preventDefault();ctlAcao(b.getAttribute('data-a'));};});
-}
-
-function ctlCardServ(cor,nome,tag,tagTxt,linhas,dicas,link,extra){
-  return '<div class="ctl-card" style="--c:'+cor+'"><div class="ctl-hd"><b>'+nome+'</b><span class="ctl-tag '+tag+'">'+tagTxt+'</span>'+(link?'<span style="margin-left:auto;font-size:12px"><a href="'+link+'" target="_blank">Abrir ↗</a></span>':'')+'</div><div style="margin-top:10px">'+
-    linhas.map(function(l){return '<div class="ctl-ln"><span>'+l[0]+'</span><span>'+l[1]+'</span></div>';}).join('')+'</div>'+
-    '<ul class="ctl-dicas">'+dicas.map(function(d){return '<li>'+d+'</li>';}).join('')+'</ul>'+(extra||'')+'</div>';
+  w.querySelectorAll('[data-a]').forEach(function(el){el.onclick=function(e){e.preventDefault();ctlAcao(el.getAttribute('data-a'),el.getAttribute('data-id'));};});
 }
 
 function ctlDicasIA(c){
   var d=[],tot=c.areas.reduce(function(s,a){return s+a.u;},0);
   function area(id){return c.areas.filter(function(a){return a.a===id;})[0];}
-  if(c.temSaldo&&c.diasRest<15&&c.diasRest>0)d.push({f:1,t:'No ritmo atual o crédito acaba em <b>~'+Math.round(c.diasRest)+' dias</b>. Recarregue antes para a leitura de comprovantes e as dicas não pararem.'});
-  if(c.media30>0&&c.media7>c.media30*1.5)d.push({f:1,t:'O gasto dos últimos 7 dias está <b>'+Math.round((c.media7/c.media30-1)*100)+'% acima</b> da média do mês. Veja na tabela qual tela subiu.'});
-  var lc=area('mod9');
-  if(lc&&tot&&lc.u/tot>0.25)d.push({t:'<b>Licitação</b> é '+Math.round(lc.u/tot*100)+'% do gasto'+(lc.w?' — a busca de contatos na web faz até 4 pesquisas por empresa e lê as páginas inteiras':'')+'. Use a busca só nos leads com potencial Alto.'});
-  var ds=area('mod14');
-  if(ds&&ds.n&&ds.u/ds.n>0.02)d.push({t:'Cada comprovante está custando <b>'+ctlUS(ds.u/ds.n)+'</b>. Foto grande pesa: enquadre só o papel, sem fundo, e mande 1 foto por despesa sempre que der.'});
-  var ct=area('mod10');
-  if(ct&&tot&&ct.u/tot>0.25)d.push({t:'As <b>dicas das cotações</b> já ficam salvas (gera só 1 vez por cotação). Se ainda está alto, evite clicar em "gerar de novo" sem necessidade.'});
-  var cr=area('mod2');
-  if(cr&&tot&&cr.u/tot>0.25)d.push({t:'<b>Análise de crédito</b> manda imagens dos relatórios para a IA. Recorte só a parte útil do relatório antes de enviar.'});
-  d.push({t:'O app usa o <b>Sonnet</b> em tudo. Tarefas simples (ler comprovante, parecer curto) funcionam bem com o <b>Haiku</b>, que custa 1/3. Se quiser, troco nas telas mais simples.'});
-  d.push({t:'No console da Anthropic, em <b>Settings → Limits</b>, coloque um limite mensal de gasto — assim nunca passa do que você quer, mesmo se algo sair do controle.'});
-  d.push({t:'Se não quiser ser pego de surpresa, ative a <b>recarga automática</b> (auto-reload) no Billing: ela recarrega sozinha quando o saldo cai de um valor que você escolhe.'});
+  var lc=area('mod9');if(lc&&tot&&lc.u/tot>0.25)d.push('<b>Licitação</b> é '+Math.round(lc.u/tot*100)+'% do gasto'+(lc.w?' (a busca de contatos na web faz até 4 pesquisas por empresa)':'')+'. Use a busca só nos leads com potencial Alto.');
+  var ds=area('mod14');if(ds&&ds.n&&ds.u/ds.n>0.02)d.push('Cada comprovante custa <b>'+ctlUS(ds.u/ds.n)+'</b>. Enquadre só o papel, sem fundo, e mande 1 foto por despesa.');
+  var cr=area('mod2');if(cr&&tot&&cr.u/tot>0.25)d.push('<b>Análise de crédito</b> envia imagens dos relatórios. Recorte só a parte útil antes de mandar.');
+  var ct=area('mod10');if(ct&&tot&&ct.u/tot>0.25)d.push('As dicas das cotações já ficam salvas; evite clicar em "gerar de novo" sem necessidade.');
+  d.push('Trocar o modelo Sonnet pelo <b>Haiku</b> nas tarefas simples (comprovante, parecer curto) corta o custo delas para ~1/3.');
+  d.push('No console, em <b>Settings → Limits</b>, coloque um limite mensal de gasto para nunca passar do orçamento.');
+  d.push('Ative a <b>recarga automática</b> no Billing para a IA não parar quando o saldo acabar.');
   return d;
 }
 
-async function ctlAcao(a){
+async function ctlAcao(a,id){
   var cfg=CTL.cfg=CTL.cfg||{};
-  if(a==='atualizar'){CTL.fotos=null;ctlCarregar();return;}
-  if(a==='saldo'||a==='orc'||a==='bling'){CTL.form=CTL.form===a?null:a;ctlDraw();var i=CTL.root.querySelector('.ctl-form input');if(i)i.focus();return;}
+  if(a==='atualizar'){ctlCarregar();return;}
+  if(a==='det'){CTL.det=!CTL.det;ctlDraw();return;}
+  if(['recarga','saldo','orc','bling','ativar'].indexOf(a)>=0){CTL.form=CTL.form===a?null:a;if(a==='orc')CTL.det=true;ctlDraw();var i=CTL.root.querySelector('.ctl-form input');if(i)i.focus();return;}
   if(a==='cancelar'){CTL.form=null;ctlDraw();return;}
-  if(a==='salvarSaldo'){var v=parseFloat((document.getElementById('ctlSaldo').value||'').replace(',','.'));if(isNaN(v)||v<0){alert('Digite o saldo em dólar, ex.: 25.40');return;}cfg.anthropic={saldo:v,data:Date.now()};}
-  else if(a==='salvarOrc'){var o=parseFloat(document.getElementById('ctlOrc').value);if(!(o>0)){alert('Digite um valor maior que zero');return;}cfg.orcamento=o;}
-  else if(a==='salvarBling'){cfg.bling={valor:parseFloat(document.getElementById('ctlBlVal').value)||null,venc:document.getElementById('ctlBlVenc').value||null};}
-  else if(a==='fotos'){CTL.fotos='…';ctlDraw();try{var f=await fetch(FIREBASE_DB+'/financeiro/fotos.json?shallow=true').then(function(r){return r.json();});CTL.fotos=f?Object.keys(f).length:0;}catch(e){CTL.fotos='erro';}ctlDraw();return;}
-  else return;
-  try{var r=await ctlSalvarCfg();if(!r.ok)throw new Error(r.status);CTL.form=null;}catch(e){alert('Não consegui salvar: '+e.message);}
+  function num(idEl){return parseFloat(String(document.getElementById(idEl).value||'').replace(',','.'));}
+  try{
+    if(a==='salvarRecarga'){
+      var v=num('ctlRecV');if(!(v>0)){alert('Digite o valor em dólar, ex.: 20');return;}
+      var dt=document.getElementById('ctlRecD').value,ts=Date.now();
+      if(dt&&dt!==ctlDia(ts))ts=new Date(dt+'T12:00:00').getTime();
+      var r=await fetch(FIREBASE_DB+'/controle/creditos.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({v:v,d:ts})});
+      if(!r.ok)throw new Error(r.status);var j=await r.json();CTL.cred=CTL.cred||{};CTL.cred[j.name]={v:v,d:ts};CTL.form=null;ctlDraw();return;
+    }
+    if(a==='delRec'){
+      if(!confirm('Excluir esta recarga?'))return;
+      var r2=await fetch(FIREBASE_DB+'/controle/creditos/'+encodeURIComponent(id)+'.json',{method:'DELETE'});if(!r2.ok)throw new Error(r2.status);
+      delete CTL.cred[id];ctlDraw();return;
+    }
+    if(a==='salvarSaldo'){
+      var s=num('ctlSaldo');if(isNaN(s)||s<0){alert('Digite o saldo em dólar, ex.: 25.40');return;}
+      var base={saldo:s,data:Date.now()};
+      var real=await ctlBuscarReal();
+      if(real){base.real=true;base.gastoAntes=real.dias[ctlUtcDia(base.data)]||0;}
+      cfg.anthropic={base:base};
+    }
+    else if(a==='salvarOrc'){var o=num('ctlOrc');if(!(o>0)){alert('Digite um valor maior que zero');return;}cfg.orcamento=o;}
+    else if(a==='salvarBling'){cfg.bling={valor:num('ctlBlVal')||null,venc:document.getElementById('ctlBlVenc').value||null};}
+    else if(a==='salvarUrl'){
+      var u=(document.getElementById('ctlUrl').value||'').trim();
+      if(u&&!/^https:\/\//.test(u)){alert('O endereço precisa começar com https://');return;}
+      cfg.saldoUrl=u||null;
+    }
+    else return;
+    var rs=await ctlSalvarCfg();if(!rs.ok)throw new Error(rs.status);CTL.form=null;
+    if(a==='salvarUrl'){await ctlBuscarReal();if(CTL.realErro)alert('Salvei, mas o Worker respondeu com erro: '+CTL.realErro);}
+  }catch(e){alert('Não consegui salvar: '+e.message);}
   ctlDraw();
 }
 
