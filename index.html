@@ -3307,7 +3307,9 @@ async function dspLerIA(fotos,obs){
   fotos.forEach(function(b){content.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:b}});});
   var r=await fetch(DSP_IA_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1500,messages:[{role:'user',content:content}]})});
   if(!r.ok)throw new Error('IA respondeu '+r.status);
-  var j=await r.json();var t=(j.content&&j.content[0]&&j.content[0].text)||'';
+  var j=await r.json();
+  if(j&&j.error){var em=(j.error.message||j.error.type||'erro');if(/credit balance/i.test(em))throw new Error('Acabou o crédito da API da Anthropic (console.anthropic.com → Plans & Billing)');throw new Error('IA: '+em);}
+  var t=(j.content||[]).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
   t=t.replace(/```json|```/g,'').trim();var a=t.indexOf('{'),b=t.lastIndexOf('}');if(a<0||b<a)throw new Error('Resposta da IA sem dados');
   return JSON.parse(t.slice(a,b+1));
 }
