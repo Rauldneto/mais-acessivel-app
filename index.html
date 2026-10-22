@@ -7160,7 +7160,7 @@ var FIREBASE_ENERGIA_CFG_PATH='energiaSolarConfig';
 var FIREBASE_ENERGIA_CLI_PATH='energiaSolarClientes';
 var FIREBASE_ENERGIA_SCEE_PATH='energiaSolarScee';
 var FIREBASE_ENERGIA_ALIAS_PATH='energiaSolarAlias'; // {ucAntiga: {para: ucAtual (dígitos), uc: ucAtual formatada}} // dados SCEE de TODA fatura carregada (geração, excedente, saldo, rateio, histórico do gráfico) // cadastro do cliente de cada casa, chave = nº da UC (só dígitos)
-var ES={aba:'nova',dados:null,pdfB64:null,erro:'',lendo:false,desc:17,vencCli:'',hist:null,histCarregando:false,cfg:null,cfgOk:false,salvo:false,chave:'',arquivo:'',fCli:'',fSit:'',relDe:'',relAte:'',relCli:'',cli:null,editCli:'',cliCtx:{},scee:null,pdfSalvo:'',alias:null,cobrarGeradora:false,gerBase:'eq',gCli:'',gDe:'',gAte:''};
+var ES={aba:'nova',pagarManual:null,dados:null,pdfB64:null,erro:'',lendo:false,desc:17,vencCli:'',hist:null,histCarregando:false,cfg:null,cfgOk:false,salvo:false,chave:'',arquivo:'',fCli:'',fSit:'',relDe:'',relAte:'',relCli:'',cli:null,editCli:'',cliCtx:{},scee:null,pdfSalvo:'',alias:null,cobrarGeradora:false,gerBase:'eq',gCli:'',gDe:'',gAte:''};
 function esUcK(uc){return String(uc||'').replace(/\D/g,'').replace(/^0+(?=\d)/,'');}
 // UC antiga -> UC atual (a Equatorial trocou a numeração entre AGO e SET/2026)
 function esAl(k){k=esUcK(k);var n=0;while(ES.alias&&ES.alias[k]&&ES.alias[k].para&&ES.alias[k].para!==k&&n<5){k=ES.alias[k].para;n++;}return k;}
@@ -7292,13 +7292,18 @@ function esGrafico(ct,ref){
 }
 
 // Cálculo da cobrança
-function esCalc(d,descPct){
+function esCalc(d,descPct,pagarFixo){
   var unit=+d.unit||0,kwh=+d.kwh||0,desc=+descPct||0;
   var unitDesc=esR(unit*(1-desc/100),6);
   var valorEnergia=esR(kwh*unitDesc,2);
   var totalFatura=esR(+d.totalPagar||0,2);
   var valorCheio=esR(kwh*unit,2);
   var pagar=esR(valorEnergia+totalFatura,2);
+  if(pagarFixo!=null&&pagarFixo!==''&&isFinite(+pagarFixo)){
+    // valor combinado com o cliente: a energia é o que sobra depois da conta da Equatorial, e o desconto sai daí
+    pagar=esR(+pagarFixo,2);valorEnergia=esR(pagar-totalFatura,2);
+    unitDesc=kwh?esR(valorEnergia/kwh,6):0;desc=unit?esR((1-unitDesc/unit)*100,2):0;
+  }
   var real=esR(valorCheio+totalFatura,2);
   return {unit:unit,kwh:kwh,desc:desc,unitDesc:unitDesc,valorEnergia:valorEnergia,totalFatura:totalFatura,valorCheio:valorCheio,pagar:pagar,real:real,economia:esR(real-pagar,2)};
 }
@@ -7353,7 +7358,7 @@ async function esLerPdf(file){
     var dup=esJaCarregada(d);
     if(dup){ES.dup=dup;ES.dados=null;ES.pdfB64=null;ES.lendo=false;esDraw();return;}
     ES.pdfB64=x.b64;
-    ES.dados=d;ES.vencCli=d.venc||'';ES.desc=esDescPara(d.uc);
+    ES.dados=d;ES.vencCli=d.venc||'';ES.desc=esDescPara(d.uc);ES.pagarManual=null;
     ES.cobrarGeradora=false;ES.pdfSalvo='';
     await esSalvarScee(d);
     if(d.scee&&d.scee.ehGeradora){try{await esUnificarUsina();}catch(e){}}
@@ -7464,11 +7469,13 @@ async function esCarregar(){
   ES.histCarregando=false;if(STATE.modulo==='mod11')esDraw();
   try{await esUnificarUsina();}catch(e){}
 }
-function esMontarReg(d,descX,vencX){
-  var c=esCalc(d,descX==null?ES.desc:descX);
+function esMontarReg(d,descX,vencX,pagarX){
+  var pf=pagarX!==undefined?pagarX:(descX==null?ES.pagarManual:null);
+  var c=esCalc(d,descX==null?ES.desc:descX,pf);
   return {uc:d.uc,cliente:d.cliente||'',doc:d.doc||'',endereco:d.endereco||'',ref:d.ref||'',venc:d.venc||'',vencCli:(vencX!=null?vencX:ES.vencCli)||d.venc||'',
     leitAnt:d.leitAnt||'',leitAtu:d.leitAtu||'',dias:d.dias||0,
     kwh:c.kwh,unit:c.unit,desc:c.desc,unitDesc:c.unitDesc,valorEnergia:c.valorEnergia,totalFatura:c.totalFatura,valorCheio:c.valorCheio,pagar:c.pagar,real:c.real,economia:c.economia,
+    pagarManual:(pf!=null&&pf!==''&&isFinite(+pf))?esR(+pf,2):null,
     itens:d.itens||[],avisos:(d.avisos||[]).filter(function(a){return a.indexOf('ℹ️')!==0;}),
     saldoKwh:isFinite(d.saldoKwh)?d.saldoKwh:null,geracaoCiclo:isFinite(d.geracaoCiclo)?d.geracaoCiclo:null};
 }
@@ -7478,6 +7485,7 @@ async function esSalvar(){
   if(!esCad(d.uc)){alert('Cadastre primeiro o cliente desta casa (quadro amarelo acima).');return;}
   var k=esChave(d),ant=(ES.hist||{})[k]||{},reg=esMontarReg(d),agora=Date.now();
   reg.pagoEquatorial=ant.pagoEquatorial||null;reg.pagoCliente=ant.pagoCliente||null;
+  if(reg.pagarManual!=null)reg.descAuto=(ant.descAuto!=null?ant.descAuto:(ant.pagarManual==null&&ant.desc!=null?ant.desc:ES.desc));
   reg.criadoEm=ant.criadoEm||agora;reg.atualizadoEm=agora;reg.salvoPor=STATE.loginUser||'';
   reg.temPdf=!!ant.temPdf;reg.uploads=ant.uploads||[];
   try{
@@ -7560,7 +7568,7 @@ function esAbrirHist(k){
   ES.dados={uc:h.uc,cliente:h.cliente,doc:h.doc,endereco:h.endereco,ref:h.ref,venc:h.venc,leitAnt:h.leitAnt,leitAtu:h.leitAtu,dias:h.dias,kwh:h.kwh,unit:h.unit,totalPagar:h.totalFatura,
     itens:h.itens||[],avisos:h.avisos||[],saldoKwh:h.saldoKwh==null?NaN:h.saldoKwh,geracaoCiclo:h.geracaoCiclo==null?NaN:h.geracaoCiclo};
   var sc0=ES.scee&&ES.scee[k];if(sc0)ES.dados.scee=sc0;
-  ES.desc=h.desc;ES.vencCli=h.vencCli||h.venc||'';ES.salvo=true;ES.chave=k;ES.erro='';ES.arquivo='';ES.pdfB64=null;ES.aba='nova';
+  ES.desc=h.desc;ES.pagarManual=h.pagarManual!=null?h.pagarManual:null;ES.vencCli=h.vencCli||h.venc||'';ES.salvo=true;ES.chave=k;ES.erro='';ES.arquivo='';ES.pdfB64=null;ES.aba='nova';
   esDraw();window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -7638,7 +7646,7 @@ function esFaturaCliente(r){
     '<h3>1. Energia solar fornecida</h3><table>'+
       tr('Energia injetada na sua unidade (créditos SCEE)',esFmt(r.kwh,2)+' kWh')+
       tr('Preço do kWh cobrado pela Equatorial','R$ '+esFmt(r.unit,6))+
-      tr('Seu desconto',esFmt(r.desc,2).replace(',00','')+'%')+
+      tr('Seu desconto'+(r.pagarManual!=null?' <small>(ajustado ao valor combinado de '+esBRL(r.pagar)+')</small>':''),esFmt(r.desc,2).replace(',00','')+'%')+
       tr('Preço do kWh com desconto','R$ '+esFmt(r.unitDesc,6))+
       tr('Valor da energia solar ('+esFmt(r.kwh,2)+' kWh × R$ '+esFmt(r.unitDesc,6)+')',esBRL(r.valorEnergia),'b')+'</table>'+
     '<h3>2. Conta da Equatorial do mês</h3><table>'+itensEq+tr('Total da conta Equatorial',esBRL(r.totalFatura),'b')+'</table>'+
@@ -7737,8 +7745,11 @@ function esHtmlNova(){
   h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:14px">'+
      '<label style="font-size:12px;color:#57534e;font-weight:600">Energia injetada (kWh)<input id="esKwh" type="number" step="0.01" value="'+r.kwh+'" style="'+ES_INP+';margin-top:4px"></label>'+
      '<label style="font-size:12px;color:#57534e;font-weight:600">Valor unit. do kWh (R$)<input id="esUnit" type="number" step="0.000001" value="'+(r.unit||'')+'" style="'+ES_INP+';margin-top:4px"></label>'+
-     '<label style="font-size:12px;color:#57534e;font-weight:600">Desconto (%)<input id="esDesc" type="number" step="0.01" value="'+r.desc+'" style="'+ES_INP+';margin-top:4px"></label>'+
-     '<label style="font-size:12px;color:#57534e;font-weight:600">Vencimento p/ cliente<input id="esVencCli" type="date" value="'+esBrParaIso(r.vencCli)+'" style="'+ES_INP+';margin-top:4px"></label></div>';
+     '<label style="font-size:12px;color:#57534e;font-weight:600">Desconto (%)<input id="esDesc" type="number" step="0.01" value="'+r.desc+'" style="'+ES_INP+';margin-top:4px'+(r.pagarManual!=null?';background:#fffbeb':'')+'"></label>'+
+     '<label style="font-size:12px;color:#57534e;font-weight:600">Valor a pagar do cliente (R$)<input id="esPagarCli" type="number" step="0.01" value="'+r.pagar+'" style="'+ES_INP+';margin-top:4px;font-weight:800;'+(r.pagarManual!=null?'border-color:#d97706;background:#fffbeb':'')+'"></label>'+
+     '<label style="font-size:12px;color:#57534e;font-weight:600">Vencimento p/ cliente<input id="esVencCli" type="date" value="'+esBrParaIso(r.vencCli)+'" style="'+ES_INP+';margin-top:4px"></label></div>'+
+     (r.pagarManual!=null?'<div style="margin-top:6px;font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:6px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">✏️ Valor combinado: <b>'+esBRL(r.pagar)+'</b>. Desconto recalculado para <b>'+esFmt(r.desc,2)+'%</b> (R$ '+esFmt(r.unitDesc,6)+'/kWh). <button id="esPagarAuto" style="'+ES_BTN_SM+';padding:3px 8px;font-size:11px">↺ Voltar ao cálculo pelo %</button></div>':'')+
+     (r.pagar<r.totalFatura?'<div style="margin-top:6px;font-size:12px;color:#b91c1c">⚠️ O valor a pagar está abaixo da conta da Equatorial ('+esBRL(r.totalFatura)+'): a energia sai com valor negativo.</div>':'');
   h+='<table style="width:100%;border-collapse:collapse;margin-top:16px;font-size:14px">';
   esLinhasDemo(r).forEach(function(l){
     if(l[0]==='sec'){h+='<tr><td colspan="2" style="background:#fef3c7;color:#92400e;font-weight:800;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;padding:7px 10px">'+esEsc(l[1])+'</td></tr>';return;}
@@ -7795,7 +7806,7 @@ function esHtmlHist(){
        '<div><div style="font-size:15px;font-weight:800">👤 '+esEsc(esNome(porUc[u][0]))+(esCad(u)?'':' <span style="font-size:11px;color:#b45309;background:#fef3c7;padding:2px 8px;border-radius:10px">sem cadastro</span>')+'</div>'+(esCasa(porUc[u][0])?'<div style="font-size:12.5px;color:#57534e">🏠 '+esEsc(esCasa(porUc[u][0]))+'</div>':'')+'<div style="font-size:12px;color:#78716c">'+(porUc[u][0].endereco?esEsc(porUc[u][0].endereco)+'<br>':'')+'UC '+esEsc(u)+' · '+porUc[u].length+' cobrança(s)</div></div>'+
        '<div style="font-size:12px;color:#57534e;text-align:right">'+esFmt(tot.kwh,2)+' kWh vendidos · Ganho total <b style="color:#92400e">'+esBRL(tot.lucro)+'</b><br>A receber: <b style="color:'+(tot.rec?'#b91c1c':'#15803d')+'">'+esBRL(tot.rec)+'</b></div></div>'+
        '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:1000px"><tr style="text-align:left;color:#78716c;font-size:11px;text-transform:uppercase;letter-spacing:.3px">'+
-       '<th style="padding:6px 8px">Ref.</th><th style="padding:6px 8px;text-align:right">kWh</th><th style="padding:6px 8px;text-align:right">Ganho</th><th style="padding:6px 8px;text-align:right">Fat. Equatorial</th><th style="padding:6px 8px;text-align:right">Cliente paga</th><th style="padding:6px 8px">Fatura Equatorial paga em</th><th style="padding:6px 8px">Cliente pagou em</th><th></th></tr>';
+       '<th style="padding:6px 8px">Ref.</th><th style="padding:6px 8px;text-align:right">kWh</th><th style="padding:6px 8px;text-align:right">Ganho</th><th style="padding:6px 8px;text-align:right">Fat. Equatorial</th><th style="padding:6px 8px;text-align:right">Cliente paga</th><th style="padding:6px 8px">Venc. cliente</th><th style="padding:6px 8px">Fatura Equatorial paga em</th><th style="padding:6px 8px">Cliente pagou em</th><th></th></tr>';
     regs.forEach(function(x){
       var up=(x.uploads||[]),ult=up[up.length-1];
       var tip=ult?'PDF enviado por '+(ult.por||'?')+' em '+new Date(ult.em).toLocaleString('pt-BR')+(up.length>1?' ('+up.length+' envios)':''):'';
@@ -7803,7 +7814,8 @@ function esHtmlHist(){
          '<td style="padding:8px;text-align:right">'+esFmt(x.kwh,2)+'</td>'+
          '<td style="padding:8px;text-align:right;color:#92400e;font-weight:700;white-space:nowrap;'+(x.pagoCliente&&x.pagoCliente.dispensado?'text-decoration:line-through;color:#a8a29e':'')+'">'+esBRL(x.valorEnergia)+'</td>'+
          '<td style="padding:8px;text-align:right;white-space:nowrap">'+esBRL(x.totalFatura)+'</td>'+
-         '<td style="padding:8px;text-align:right;white-space:nowrap;font-weight:800;'+(x.pagoCliente&&x.pagoCliente.dispensado?'text-decoration:line-through;color:#a8a29e':'')+'">'+esBRL(x.pagar)+'</td>'+
+         '<td style="padding:8px;text-align:right;white-space:nowrap">'+esCampoValor(x)+'</td>'+
+         '<td style="padding:8px">'+esCampoVenc(x)+'</td>'+
          '<td style="padding:8px">'+esCampoPg(x,'pagoEquatorial')+'</td><td style="padding:8px">'+esCampoPg(x,'pagoCliente')+'</td>'+
          '<td style="padding:8px;text-align:right;white-space:nowrap">'+
            '<button data-es-abrir="'+esEsc(x._k)+'" style="'+ES_BTN_SM+'" title="Abrir cálculo">Abrir</button> '+
@@ -7920,9 +7932,11 @@ function esLigar(root){
   }
   function liga(id,campo){var el=document.getElementById(id);if(!el)return;el.onchange=function(){
     if(campo==='vencCli')ES.vencCli=esIsoParaBr(el.value);
-    else{var v=parseFloat(el.value);if(!isFinite(v))v=0;if(campo==='desc')ES.desc=v;else ES.dados[campo]=v;}
+    else if(campo==='pagar'){var vp=parseFloat(el.value);ES.pagarManual=isFinite(vp)?esR(vp,2):null;}
+    else{var v=parseFloat(el.value);if(!isFinite(v))v=0;if(campo==='desc'){ES.desc=v;ES.pagarManual=null;}else ES.dados[campo]=v;}
     ES.salvo=false;esDraw();};}
-  liga('esKwh','kwh');liga('esUnit','unit');liga('esDesc','desc');liga('esVencCli','vencCli');
+  liga('esKwh','kwh');liga('esUnit','unit');liga('esDesc','desc');liga('esVencCli','vencCli');liga('esPagarCli','pagar');
+  if(b=document.getElementById('esPagarAuto'))b.onclick=function(){if(ES.dados&&ES.chave&&ES.hist&&ES.hist[ES.chave]&&ES.hist[ES.chave].descAuto!=null)ES.desc=ES.hist[ES.chave].descAuto;ES.pagarManual=null;ES.salvo=false;esDraw();};
   var b;
   if(b=document.getElementById('esSalvar'))b.onclick=esSalvar;
   if(b=document.getElementById('esFatura'))b.onclick=function(){
@@ -7935,11 +7949,14 @@ function esLigar(root){
   if(b=document.getElementById('esCfgSalvar'))b.onclick=esSalvarCfg;
   if(b=document.getElementById('esCobrarGer'))b.onclick=function(){ES.cobrarGeradora=true;esDraw();};
   if(b=document.getElementById('esRevisar'))b.onclick=esRevisar;
+  root.querySelectorAll('[data-es-valor]').forEach(function(x){x.onchange=function(){esMudarValor(x.getAttribute('data-es-valor'),x.value);};x.onkeydown=function(e){if(e.key==='Enter')x.blur();};});
+  root.querySelectorAll('[data-es-valauto]').forEach(function(x){x.onclick=function(){esMudarValor(x.getAttribute('data-es-valauto'),'');};});
+  root.querySelectorAll('[data-es-vencli]').forEach(function(x){x.onchange=function(){esMudarVenc(x.getAttribute('data-es-vencli'),x.value);};});
   if(b=document.getElementById('esLoteFechar'))b.onclick=function(){ES.lote=null;esDraw();};
   if(b=document.getElementById('esLoteVoltar'))b.onclick=function(){ES.dados=null;ES.chave='';esDraw();};
   root.querySelectorAll('[data-es-lote-abrir]').forEach(function(x){x.onclick=function(){
     var it=ES.lote.itens[+x.getAttribute('data-es-lote-abrir')],d=it.d,k=esChave(d),hrec=ES.hist&&ES.hist[k];
-    ES.dados=d;ES.chave=hrec?k:'';ES.salvo=!!hrec;ES.desc=hrec?hrec.desc:esDescPara(d.uc);ES.vencCli=hrec?(hrec.vencCli||d.venc):(d.venc||'');ES.arquivo=it.arquivo;ES.pdfB64=null;ES.pdfSalvo=hrec?'':(it.temPdf?k:'');ES.cobrarGeradora=false;
+    ES.dados=d;ES.chave=hrec?k:'';ES.salvo=!!hrec;ES.desc=hrec?hrec.desc:esDescPara(d.uc);ES.pagarManual=hrec&&hrec.pagarManual!=null?hrec.pagarManual:null;ES.vencCli=hrec?(hrec.vencCli||d.venc):(d.venc||'');ES.arquivo=it.arquivo;ES.pdfB64=null;ES.pdfSalvo=hrec?'':(it.temPdf?k:'');ES.cobrarGeradora=false;
     esDraw();window.scrollTo({top:0,behavior:'smooth'});};});
   root.querySelectorAll('[data-es-pgdata]').forEach(function(x){x.onchange=function(){esPagarData(x.getAttribute('data-k'),x.getAttribute('data-es-pgdata'),x.value);};});
   root.querySelectorAll('[data-es-pgnao]').forEach(function(x){x.onclick=function(){esNaoCobrar(x.getAttribute('data-k'),x.getAttribute('data-es-pgnao'));};});
@@ -8540,6 +8557,47 @@ async function esRevisar(){
   esDraw();
 }
 
+// ---- valor a pagar e vencimento do cliente editáveis (histórico) ----
+function esCampoValor(x){
+  var disp=x.pagoCliente&&x.pagoCliente.dispensado,man=x.pagarManual!=null;
+  return '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><input type="number" step="0.01" data-es-valor="'+esEsc(x._k)+'" value="'+(+x.pagar||0).toFixed(2)+'" title="Edite para mudar o valor; o desconto é recalculado" style="width:108px;text-align:right;padding:4px 6px;border:1.5px solid '+(man?'#d97706':'#e7e5e4')+';background:'+(man?'#fffbeb':'#fff')+';border-radius:6px;font-family:inherit;font-size:13px;font-weight:800;'+(disp?'text-decoration:line-through;color:#a8a29e':'')+'">'+
+    '<span style="font-size:10.5px;color:'+(man?'#92400e':'#a8a29e')+'">desc. '+esFmt(+x.desc||0,2).replace(',00','')+'%'+(man?' ✏️ <a href="#" data-es-valauto="'+esEsc(x._k)+'" onclick="return false" style="color:#92400e">↺</a>':'')+'</span></div>';
+}
+function esCampoVenc(x){
+  var v=x.vencCli||x.venc||'';
+  return '<input type="date" data-es-vencli="'+esEsc(x._k)+'" value="'+esBrParaIso(v)+'" title="Vencimento da fatura do cliente'+(x.venc?' (Equatorial: '+esEsc(x.venc)+')':'')+'" style="padding:4px 6px;border:1.5px solid #e7e5e4;border-radius:6px;font-family:inherit;font-size:12px'+(x.vencCli&&x.venc&&x.vencCli!==x.venc?';border-color:#d97706;background:#fffbeb':'')+'">';
+}
+async function esMudarValor(k,valor){
+  var rec=ES.hist&&ES.hist[k];if(!rec)return;
+  var v=String(valor).trim()===''?null:esR(parseFloat(valor),2),upd;
+  if(v!=null&&(!isFinite(v)||v<0)){alert('Valor inválido.');esDraw();return;}
+  var d={unit:rec.unit,kwh:rec.kwh,totalPagar:rec.totalFatura};
+  if(v==null){ // volta ao cálculo pelo desconto original
+    var dA=rec.descAuto!=null?rec.descAuto:(isFinite(+rec.desc)?+rec.desc:esDescPara(rec.uc));
+    var c0=esCalc(d,dA);upd={desc:c0.desc,unitDesc:c0.unitDesc,valorEnergia:c0.valorEnergia,pagar:c0.pagar,economia:c0.economia,pagarManual:null,descAuto:null};
+  }else{
+    if(v<(+rec.totalFatura||0)&&!confirm('O valor ('+esBRL(v)+') é menor que a conta da Equatorial ('+esBRL(rec.totalFatura)+'): a energia fica com valor negativo. Continuar?')){esDraw();return;}
+    var c=esCalc(d,rec.desc,v);
+    upd={desc:c.desc,unitDesc:c.unitDesc,valorEnergia:c.valorEnergia,pagar:c.pagar,economia:c.economia,pagarManual:c.pagar,descAuto:rec.descAuto!=null?rec.descAuto:(rec.pagarManual==null?rec.desc:null)};
+  }
+  upd.atualizadoEm=Date.now();
+  try{
+    var r=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_PATH+'/'+k+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(upd)});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    Object.keys(upd).forEach(function(f){if(upd[f]===null)delete rec[f];else rec[f]=upd[f];});
+  }catch(e){alert('Não consegui salvar: '+e.message);}
+  esDraw();
+}
+async function esMudarVenc(k,iso){
+  var rec=ES.hist&&ES.hist[k];if(!rec)return;
+  var br=iso?esIsoParaBr(iso):(rec.venc||'');
+  try{
+    var r=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_PATH+'/'+k+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({vencCli:br,atualizadoEm:Date.now()})});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    rec.vencCli=br;
+  }catch(e){alert('Não consegui salvar: '+e.message);}
+  esDraw();
+}
 function renderModuloVazio(num){
   var wrap=document.createElement('div');
   wrap.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;color:#888;text-align:center;gap:14px';
