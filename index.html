@@ -5809,7 +5809,7 @@ function cqDrawConf(root){
   if(modo==='vend'&&!CQ._prefOk&&typeof LC!=='undefined'){CQ._prefOk=1;fetch(FIREBASE_DB+'/clientesLicitacao/config.json').then(function(r){return r.ok?r.json():null;}).then(function(c){if(c&&c.prefixo!=null){LC.cfg=LC.cfg||{};LC.cfg.prefixo=c.prefixo;}}).catch(function(){});}
   if(modo==='vend'&&(CQ.vv==='cob'||CQ.vv==='perd'||CQ.vv==='conc')){if(CQ.vv==='perd')pdDraw(root);else if(CQ.vv==='conc')ccDraw(root);else cbDraw(root);return;}
   // Vendas abre com TODAS as situações (Erros continua no padrão Em aberto), a não ser que a pessoa tenha escolhido outra
-  if(modo==='vend'&&!CQ._vendIni){CQ._vendIni=1;if(!CQ.sitTocado)CQ.sitPesq='sit-';}
+  if(modo==='vend'&&!CQ._vendIni){CQ._vendIni=1;if(!CQ.sitTocado){CQ.sitPesq='sit-EmAberto';if(CQ.periodo==='7')CQ.periodo='90';}}
   if(modo==='vend'){cqCarregarSnapMeta();if(!CQ.assum&&!CQ.assumCarregando)cqCarregarAssum();if(!CQ.lemb&&!CQ.lembCarregando)cqCarregarLemb();if(!CQ.conc&&!CQ.concCarregando)cqCarregarConc();if(!CQ.rel&&!CQ.relCarregando)cqCarregarRel();if(!CQ.waOk&&!CQ.waCarregando)cqCarregarWA();if(!CQ.vi&&!CQ.viCarregando)cqCarregarVI();if(!CQ.pf&&!CQ.pfCarregando)cqCarregarPf();}
   var verOk=CQ.ext&&CQ.ext.split('.').map(Number).reduce(function(a,n,i){return a+n*Math.pow(1000,2-i);},0)>=1011000;
   var card='background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:18px 20px;margin-bottom:14px;box-shadow:0 1px 2px rgba(0,0,0,.04)';
@@ -5918,6 +5918,43 @@ function cqVendasNav(){
   var b=function(id,l){var on=(CQ.vv||'cot')===id;return '<button class="cqVV" data-v="'+id+'" style="border:1.5px solid '+(on?'#d97706':'#e7e5e4')+';background:'+(on?'#fff7ed':'#fff')+';color:'+(on?'#b45309':'#57534e')+';border-radius:20px;padding:6px 14px;font-weight:800;font-size:12.5px;cursor:pointer;font-family:inherit">'+l+'</button>';};
   return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px">'+b('cot','📋 Cotações')+b('guia','📘 Como cobrar e negociar')+b('conc','🥊 Concorrentes')+(g?b('cob','📞 Cobranças')+b('perd','📉 Produtos não vendidos'):'')+'</div>';
 }
+
+// ── 🏷️ COTAÇÕES = só clientes com etiqueta PROPOSTA ALTA / BAIXA PROB. no WhatsApp ──
+function cqEtqProp(e){return /alta\s*prob/i.test(e)?'alta':/baixa\s*prob/i.test(e)?'baixa':'';}
+function cqTemEtqProp(i){var ws=i._ws;return !!(ws&&(ws.w.e||[]).some(cqEtqProp));}
+function cqAbertaBling(i){return ['Rascunho','Pendente','Aguardando'].indexOf(i.situacao)!==-1;}
+// Conferência: conversas com etiqueta de proposta × cotações em aberto no Bling (devem bater)
+function cqConferencia(card){
+  if(!CQ.waIdx||!CQ.waMeta)return '';
+  var chats={};Object.keys(CQ.waIdx).forEach(function(k){var w=CQ.waIdx[k],t=(w.e||[]).map(cqEtqProp).filter(Boolean)[0];if(t)chats[k]={k:k,w:w,t:t,cots:[]};});
+  var abertas=CQ.itens.filter(cqAbertaBling),semEtq=[];
+  abertas.forEach(function(i){var w=cqWa(i),k=w&&w._k;if(k&&chats[k])chats[k].cots.push(i);else semEtq.push({i:i,w:w});});
+  var C=Object.keys(chats).map(function(k){return chats[k];}),semCot=C.filter(function(c){return !c.cots.length;}),ok=C.length-semCot.length;
+  var nA=C.filter(function(c){return c.t==='alta';}).length,nB=C.length-nA;
+  var periodoTxt=(CQ_SITS.filter(function(s){return s[0]===CQ.sitPesq;})[0]||['',''])[1]+' · '+(CQ.periodo==='0'?'hoje':'últimos '+CQ.periodo+' dias');
+  var confiavel=(CQ.sitPesq==='sit-EmAberto'||CQ.sitPesq==='sit-')&&parseInt(CQ.periodo,10)>=90&&!(CQ.busca||'').trim();
+  var bate=!semCot.length&&!semEtq.length;
+  var ab=CQ.confAberta;
+  var x='<div style="'+card+';padding:12px 16px;border-left:5px solid '+(bate?'#16a34a':'#f59e0b')+'">'+
+    '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><b style="font-size:14px">🔎 Conferência: etiquetas do WhatsApp × Bling</b>'+
+    '<span style="font-size:12.5px">🏷️ <b>'+C.length+'</b> conversas com etiqueta <span style="color:#15803d">(ALTA '+nA+')</span> <span style="color:#b45309">(BAIXA '+nB+')</span></span>'+
+    '<span style="font-size:12.5px">📋 <b>'+abertas.length+'</b> cotações em aberto no Bling</span>'+
+    '<span style="font-size:12.5px;font-weight:800;color:'+(bate?'#15803d':'#b45309')+'">'+(bate?'✅ Batem':'⚠️ '+(semCot.length+semEtq.length)+' diferença(s)')+'</span>'+
+    '<span style="flex:1"></span>'+(!confiavel&&CQ.ext?'<button class="vb sm" id="cqConfBuscar" title="Busca todas as cotações em aberto dos últimos 6 meses">🔄 Buscar todas em aberto (6 meses)</button>':'')+
+    ((semCot.length||semEtq.length)?'<button class="vb sm" id="cqConfVer">'+(ab?'esconder':'ver diferenças')+'</button>':'')+'</div>'+
+    '<div style="font-size:11.5px;color:#78716c;margin-top:4px">Cada conversa com PROPOSTA ALTA/BAIXA PROB. deve ter cotação em aberto no Bling, e cada cotação em aberto deve ter a etiqueta. '+ok+' conversa(s) batem. Busca atual: '+cqEsc(periodoTxt)+(confiavel?'':' — <b style="color:#b45309">para conferir certo, busque "Em aberto" de pelo menos 90 dias</b>')+'.</div>';
+  if(ab){
+    var fone=function(k){return k.length>=10?'('+k.slice(0,2)+') '+k.slice(2,-4)+'-'+k.slice(-4):k;};
+    x+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px">'+
+      '<div><div style="font-size:12px;font-weight:900;color:#b45309;margin-bottom:4px">🏷️ Etiqueta no WhatsApp, mas SEM cotação em aberto no Bling ('+semCot.length+')</div><div style="font-size:11px;color:#78716c;margin-bottom:6px">Cotação já aprovada, cancelada ou mais antiga que a busca — ou o telefone do WhatsApp não está no cadastro do Bling. Tire a etiqueta ou acerte o cadastro.</div>'+
+      (semCot.length?semCot.sort(function(a,b){return (b.w.t||0)-(a.w.t||0);}).map(function(c){return '<div style="font-size:12px;padding:4px 0;border-top:1px dashed #eeeceb;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span class="vp '+(c.t==='alta'?'vp-grn':'vp-org')+'" style="padding:1px 7px">'+(c.t==='alta'?'ALTA':'BAIXA')+'</span><b>'+cqEsc(c.w.n||'(sem nome)')+'</b><button class="vb sm cqCopiaFone" data-n="'+cqEsc(c.k)+'">'+cqIc('copy',11)+' '+fone(c.k)+'</button>'+(c.w.t?'<span style="color:#a8a29e">conversa '+new Date(c.w.t*1000).toLocaleDateString('pt-BR')+'</span>':'')+'</div>';}).join(''):'<div style="font-size:12px;color:#15803d">✔ Nenhuma</div>')+'</div>'+
+      '<div><div style="font-size:12px;font-weight:900;color:#b91c1c;margin-bottom:4px">📋 Cotação em aberto no Bling, mas SEM etiqueta de proposta ('+semEtq.length+')</div><div style="font-size:11px;color:#78716c;margin-bottom:6px">Coloque PROPOSTA ALTA ou BAIXA PROB. na conversa do cliente — ou, se não vai fechar, marque Não fechou para mudar no Bling.</div>'+
+      (semEtq.length?semEtq.map(function(o){var i=o.i;return '<div style="font-size:12px;padding:4px 0;border-top:1px dashed #eeeceb;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><a href="https://www.bling.com.br/orcamentos.php#edit/'+cqEsc(i.id)+'" target="_blank" style="color:#b45309;font-weight:800;text-decoration:none">Nº '+cqEsc(i.numero)+'</a><b>'+cqEsc(i.cliente)+'</b><span style="color:#78716c">'+cqBRL(cqVal(i))+' · '+cqEsc(i.vendedor||'')+'</span>'+
+        (o.w?'<span style="color:#a8a29e">etiqueta: '+cqEsc((o.w.e||[]).join(', ')||'nenhuma')+'</span>':'<span style="color:#a8a29e">não achado no WhatsApp</span>')+'<button class="vb sm cqConfIr" data-id="'+cqEsc(i.id)+'">ver</button></div>';}).join(''):'<div style="font-size:12px;color:#15803d">✔ Nenhuma</div>')+'</div></div>';
+  }
+  return x+'</div>';
+}
+
 function cqCorpoVendas(card,sel){
   var h='',agora=Date.now();
   var vmin=parseFloat(String(CQ.vMin||'').replace(/\./g,'').replace(',','.')),vmax=parseFloat(String(CQ.vMax||'').replace(/\./g,'').replace(',','.'));
@@ -5931,6 +5968,7 @@ function cqCorpoVendas(card,sel){
     if(!isNaN(vmax)&&cqVal(i)>vmax)return false;
     if(CQ.fFech){var fe=cqFech(i);if(CQ.fFech==='__aberta'?!!fe:!(fe&&fe.st===CQ.fFech))return false;}
     if(CQ.fCob){var cb=cqCobs(i.id),ult=cb[0]&&cb[0].ts;if(CQ.fCob==='nunca'&&cb.length)return false;if(CQ.fCob==='hoje'&&!(ult&&new Date(ult).toDateString()===new Date().toDateString()))return false;if(CQ.fCob==='3d'&&(ult&&agora-ult<3*86400000))return false;}
+    if((CQ.fEtqP||'prop')==='prop'&&!cqTemEtqProp(i))return false;
     var at=CQ.fAt||'disp',as=cqAssum(i);
     if(at==='disp'&&(!cqAberta(i)||(as&&!as.meu)))return false;
     if(at==='atend'&&!as)return false;
@@ -5984,11 +6022,14 @@ function cqCorpoVendas(card,sel){
       op('cqFHum','Situação do cliente (última cobrança)',[['','Todas']].concat(CQ_HUMOR),CQ.fHum||'')+
       op('cqResSel','Mostrar',[['todas','Todas'],['sug','Com produto p/ oferecer'],['esperando','⏰ Cliente esperando resposta'],['semcontato','💤 Sem conversa há +3 dias'],['semwa','Cliente não achado no WhatsApp'],['divergente','⚠️ Etiqueta diferente do Bling']],CQ.res||'todas')+'</div>':'')+'</div>';
   h+=rtFaixa(card);
+  h+=cqConferencia(card);
   h+=cqFaixaLembretes(card);
   // 🟢 disponíveis · 🔒 em atendimento · 👤 minhas · todas
-  var cntAt=function(f){return CQ.itens.filter(f).length;},asOf=function(i){return cqAssum(i);};
+  var etqOk=function(i){return (CQ.fEtqP||'prop')!=='prop'||cqTemEtqProp(i);},cntAt=function(f){return CQ.itens.filter(function(i){return etqOk(i)&&f(i);}).length;},asOf=function(i){return cqAssum(i);};
   var nDisp=cntAt(function(i){var a=asOf(i);return cqAberta(i)&&!(a&&!a.meu);}),nAt=cntAt(function(i){return !!asOf(i);}),nMin=cntAt(function(i){var a=asOf(i);return a&&a.meu;});
   var bA=function(id,l,n){var on=(CQ.fAt||'disp')===id;return '<button class="cqFAt" data-f="'+id+'" style="border:1.5px solid '+(on?'#1c1917':'#e7e5e4')+';background:'+(on?'#1c1917':'#fff')+';color:'+(on?'#fff':'#44403c')+';border-radius:20px;padding:6px 14px;font-weight:800;font-size:12.5px;cursor:pointer;font-family:inherit">'+l+(n!==null?' ('+n+')':'')+'</button>';};
+  var nProp=CQ.itens.filter(cqTemEtqProp).length,bE=function(id,l,n){var on=(CQ.fEtqP||'prop')===id;return '<button class="cqFEtq" data-f="'+id+'" style="border:1.5px solid '+(on?'#7c3aed':'#e7e5e4')+';background:'+(on?'#7c3aed':'#fff')+';color:'+(on?'#fff':'#44403c')+';border-radius:20px;padding:6px 14px;font-weight:800;font-size:12.5px;cursor:pointer;font-family:inherit">'+l+' ('+n+')</button>';};
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 8px;align-items:center"><span style="font-size:12px;font-weight:800;color:#57534e">Mostrar:</span>'+bE('prop','🏷️ Só PROPOSTA ALTA / BAIXA PROB.',nProp)+bE('todas','Todas as cotações',CQ.itens.length)+'</div>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px">'+bA('disp','🟢 Disponíveis',nDisp)+bA('atend','🔒 Em atendimento',nAt)+bA('minhas','👤 Minhas',nMin)+bA('todas','Todas',null)+'</div>';
   var ordem=CQ.ordV||'chance';
   var porData=function(a,b){return (b.data||'').localeCompare(a.data||'')||(parseInt(b.numero,10)-parseInt(a.numero,10));};
@@ -6629,6 +6670,10 @@ function cqBindComum(root,verOk){
   if($('rtIrLead'))$('rtIrLead').onclick=rtIrLead;
   // v2: detalhes, perfil, dicas, faixa "cobrar agora"
   root.querySelectorAll('.cqLigar').forEach(function(a){a.onclick=function(){var k=a.getAttribute('data-id');cqEvento(k,'ligou',a.getAttribute('data-t'));};});
+  root.querySelectorAll('.cqFEtq').forEach(function(b){b.onclick=function(){CQ.fEtqP=b.getAttribute('data-f');CQ.limite=60;cqDraw();};});
+  if($('cqConfVer'))$('cqConfVer').onclick=function(){CQ.confAberta=!CQ.confAberta;cqDraw();};
+  if($('cqConfBuscar'))$('cqConfBuscar').onclick=function(){CQ.periodo='180';CQ.sitPesq='sit-EmAberto';CQ.sitTocado=1;CQ.busca='';cqIniciar();};
+  root.querySelectorAll('.cqConfIr').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id');CQ.fEtqP='todas';CQ.fAt='todas';CQ.foco=k;CQ.limite=999;cqDraw();setTimeout(function(){var e=document.getElementById('vc-'+k);if(e)e.scrollIntoView({behavior:'smooth',block:'center'});},80);};});
   root.querySelectorAll('.cqTl').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id');CQ.tlAberto=CQ.tlAberto||{};CQ.tlAberto[k]=!CQ.tlAberto[k];cqDraw();};});
   root.querySelectorAll('.cqDet').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id');CQ.det=CQ.det||{};CQ.det[k]=!CQ.det[k];cqDraw();};});
   root.querySelectorAll('.cqPfAbrir').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id');CQ.pfForm=CQ.pfForm||{};CQ.pfForm[k]=!CQ.pfForm[k];cqDraw();};});
