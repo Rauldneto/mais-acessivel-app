@@ -3006,7 +3006,7 @@ function renderModuloNav(){
     {id:'mod12', icon:'🏠', label:'Leilão de imóveis'},
     {id:'mod13', icon:'💲', label:'Formação de preço'},
     {id:'mod14', icon:'💸', label:'Lançamento de despesas'},
-    {id:'mod16', icon:'🚚', label:'Fretes'},
+    {id:'mod16', icon:'🚚', label:'Lançamento de frete'},
     {id:'mod5',  icon:'🧪', label:'Modelo em Teste'},
     {id:'mod15', icon:'📊', label:'Controle'}
   ];
@@ -3154,7 +3154,7 @@ var CTL_PRECOS=[
   {p:'claude-sonnet',in:3,out:15},
   {p:'claude-opus-4-5',in:5,out:25},{p:'claude-opus-4-6',in:5,out:25},{p:'claude-opus',in:15,out:75}
 ];
-var CTL_AREAS={frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod14:'Despesas (comprovantes)',mod16:'Fretes (CT-e)',mod15:'Controle'};
+var CTL_AREAS={frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod14:'Despesas (comprovantes)',mod16:'Lançamento de frete (CT-e)',mod15:'Controle'};
 var CTL={cfg:null,ia:null,carregando:false,erro:'',dolar:null,root:null};
 
 function ctlPreco(model){model=model||'';for(var k=0;k<CTL_PRECOS.length;k++){if(model.indexOf(CTL_PRECOS[k].p)===0)return CTL_PRECOS[k];}return {in:3,out:15};}
@@ -4361,7 +4361,7 @@ function dspModoApp(on){
 function dspDrawMob(){
   var n=dspLista('pend').length,t=DSP.mtela,h='';
   var titulo={enviar:'Enviar comprovante',pend:'Pendentes',lanc:'Lançados',item:'Conferir despesa'}[t];
-  h+='<div class="dm-top">'+(t==='item'?'<button type="button" class="dm-back" id="dmVoltar">‹</button>':'')+'<h1>'+titulo+'<small>Financeiro · '+dspEsc(STATE.usuarioLogado||'')+'</small></h1>'+(t==='item'?'':'<button type="button" id="dmTroca">🚚 Fretes</button>'+(DSP.forcarMob&&!dspMobile()?'<button type="button" id="dmPc">💻 Tela do PC</button>':'<button type="button" id="dmApp">App completo</button>'))+'</div>';
+  h+='<div class="dm-top">'+(t==='item'?'<button type="button" class="dm-back" id="dmVoltar">‹</button>':'')+'<h1>'+titulo+'<small>Financeiro · '+dspEsc(STATE.usuarioLogado||'')+'</small></h1>'+(t==='item'?'':'<button type="button" id="dmTroca">🚚 Frete</button>'+(DSP.forcarMob&&!dspMobile()?'<button type="button" id="dmPc">💻 Tela do PC</button>':'<button type="button" id="dmApp">App completo</button>'))+'</div>';
   h+='<div class="dm-body">'+dspMsgHtml();
   if(!DSP.carregado)h+='<div class="fin-card fin-mu">Carregando…</div>';
   else if(t==='enviar')h+=dspMobEnviar();
@@ -4430,7 +4430,7 @@ function dspMobItem(){
   return '<div id="dspForm">'+dspHtmlFormCard(f,true,false)+'</div>';
 }
 
-// ===================== MÓDULO FRETES (mod16) — cópia do Lançamento de despesas =====================
+// ===================== MÓDULO LANÇAMENTO DE FRETE (mod16) — cópia do Lançamento de despesas =====================
 // Foto do CT-e/DACTE ou comprovante de frete -> recorte do documento no próprio aparelho -> leitura pela IA ->
 // conferência -> Contas a Pagar do Bling -> e-mail com o PDF para a contabilidade (Google Apps Script).
 // Firebase: financeiro/fretes/{id}, financeiro/fretesFotos/{id} (apagadas depois de enviar à contabilidade),
@@ -4524,7 +4524,7 @@ function frtDupHtml(id,curto){
     '<button type="button" class="fin-btn sm" style="margin-top:6px" data-naodup="'+frtEsc(id)+'">Não é duplicado — é outro frete</button></div>';
 }
 // Só o valor impede o lançamento. O resto é pendência: lança assim mesmo e fica lembrando o que falta.
-function frtFaltas(d){return (d&&d.valor>0)?[]:['Valor'];}
+function frtFaltas(d){var f=[];if(!(d&&d.valor>0))f.push('Valor');if(!(d&&(d.nFotos>0||d.status==='lancado')))f.push('Imagem do documento');return f;}
 var FRT_SEM_FORN='TRANSPORTADORA A IDENTIFICAR';
 function frtPendencias(d){var p=[];if(!d)return p;var fn=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'';
   if(d.fornCand&&d.fornCand.length&&!d.contato)p.push('Escolher fornecedor no Bling');
@@ -4534,6 +4534,23 @@ function frtPendencias(d){var p=[];if(!d)return p;var fn=(d.contato&&d.contato.n
   if(!d.numeroDocumento)p.push('Nº do documento');if(!d.vencimento)p.push('Vencimento');if(d.leituraErro)p.push('Conferir a leitura');return p;}
 function frtLancadoPend(d){return d&&d.status==='lancado'&&d.pendencias&&d.pendencias.length;}
 
+// ---------- o mesmo CT-e em dois lançamentos (CT-e avulso e depois na fatura/boleto) ----------
+function frtChavesDoc(d){var k=[];if(!d)return k;var td=frtDig((d.cte&&d.cte.transportadora&&d.cte.transportadora.doc)||(d.contato&&d.contato.doc)||(d.fornecedor&&d.fornecedor.doc)).slice(0,8);
+  function add(num,ch){if(ch&&ch.length===44)k.push('c'+ch);if(num&&td)k.push('n'+td+'-'+num);}
+  if(d.cte&&!d.fatura)add(d.cte.numero,d.cte.chave);
+  if(d.fatura)(d.fatura.ctes||[]).forEach(function(c){add(c.numero,c.chave);});
+  return k;}
+function frtCruzados(id){var d=FRT.desp[id];if(!d)return [];var ks=frtChavesDoc(d);if(!ks.length)return [];var lib=d.naoCruz||[],out=[];
+  Object.keys(FRT.desp).forEach(function(k){if(k===id||lib.indexOf(k)>=0)return;var x=FRT.desp[k];if(!x||(x.naoCruz||[]).indexOf(id)>=0)return;
+    if(frtChavesDoc(x).some(function(c){return ks.indexOf(c)>=0;}))out.push({id:k,desc:(x.numeroDocumento||'frete')+' de R$ '+frtMoney(x.valor)+(x.status==='lancado'?' (já lançado no Bling'+(x.blingId?' ID '+x.blingId:'')+')':' (pendente)')});});
+  return out;}
+function frtCruzHtml(id){var L=frtCruzados(id);if(!L.length)return '';
+  return '<div class="fin-msg err" style="display:block"><b>⚠️ Este documento cobre CT-e que já está em outro lançamento</b>'+L.map(function(x){return '<div style="margin-top:4px">'+frtEsc(x.desc)+'</div>';}).join('')+
+    '<div style="margin-top:6px;font-weight:400">Normalmente a transportadora manda o CT-e e depois uma fatura com o boleto daquele mesmo CT-e. Lance só um dos dois no Contas a Pagar (de preferência a fatura, que tem o boleto e o vencimento) e exclua ou ajuste o outro.</div>'+
+    '<button type="button" class="fin-btn sm" style="margin-top:6px" data-naocruz="'+frtEsc(id)+'">Não é o mesmo — liberar o lançamento</button></div>';}
+document.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest&&ev.target.closest('[data-naocruz]');if(!b)return;var id=b.getAttribute('data-naocruz'),d=FRT.desp[id];if(!d)return;
+  if(!confirm('Confirma que são cobranças diferentes e as duas devem entrar no Contas a Pagar?'))return;
+  d.naoCruz=(d.naoCruz||[]).concat(frtCruzados(id).map(function(x){return x.id;}));frtFb('fretes/'+id,{method:'PATCH',body:{naoCruz:d.naoCruz}}).catch(function(){});FRT.revisao=null;frtDraw();});
 // ---------- ponte com a extensão ----------
 var FRT_PEND={};
 window.addEventListener('message',function(e){
@@ -4559,7 +4576,7 @@ function frtBling(op,dados){
 
 // ---------- dados ----------
 function frtCarregar(silencioso){
-  frtFb('fretesEmail').then(function(e){FRT.email=e||{};}).catch(function(){});
+  frtFb('fretesEmail').then(function(e){FRT.email=e||{};}).catch(function(){});frtFb('fretesConfig').then(function(e){FRT.fcfg=e||{};}).catch(function(){});
   return Promise.all([frtFb('fretes'),frtFb('config'),frtFb('listas')]).then(function(r){
     FRT.desp=r[0]||{};FRT.cfg=r[1]?Object.assign({},FRT_CFG_PADRAO,r[1]):null;
     if(FRT.cfg&&!FRT.cfg.contaPorForma)FRT.cfg.contaPorForma={};
@@ -4582,8 +4599,11 @@ async function frtPdf(file){var pdf=await pdfjsLib.getDocument({data:await file.
     var c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;var x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);await pg.render({canvasContext:x,viewport:vp}).promise;out.push(c.toDataURL('image/jpeg',0.82).split(',')[1]);}
   return out;}
 async function frtAddArquivos(list){
+  FRT.pdfsNovos=FRT.pdfsNovos||[];
   for(var i=0;i<list.length;i++){var f=list[i];
-    try{if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){(await frtPdf(f)).forEach(function(b){FRT.fotosNovas.push(b);});}
+    try{if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){var imgs=await frtPdf(f);imgs.forEach(function(b){FRT.fotosNovas.push(b);});
+        if(f.size<=4*1024*1024){var b64=await new Promise(function(res,rej){var fr=new FileReader();fr.onload=function(){res(String(fr.result).split(',')[1]);};fr.onerror=rej;fr.readAsDataURL(f);});
+          FRT.pdfsNovos.push({nome:f.name||'documento.pdf',b64:b64,imgs:imgs});}}
       else{var r=await frtRecortar(f);if(r)FRT.fotosNovas.push(r);}}
     catch(e){FRT.msg='Não consegui abrir "'+(f.name||'arquivo')+'". Tente uma foto (JPG ou PNG).';FRT.msgTipo='err';}}
   if(FRT.fotosNovas.length>4){FRT.fotosNovas=FRT.fotosNovas.slice(0,4);FRT.msg='Fiquei com as 4 primeiras imagens, o máximo por frete.';FRT.msgTipo='warn';}
@@ -4689,25 +4709,60 @@ function frtRecortar(file){
 // ---------- leitura com a IA ----------
 var FRT_CAT_VENDA='14700094019',FRT_CAT_COMPRA='14634451798'; // Fretes e seguros - Venda / Compra (Bling)
 function frtPrompt(){
-  return 'Você vai ler imagens de um documento de FRETE pago por uma empresa brasileira de Goiânia/GO (revenda de materiais de construção: JDFER Comércio e Serviços / Mais Acessível, CNPJ 35.017.646/0001-66). '+
-  'Normalmente é um DACTE (CT-e, conhecimento de transporte eletrônico), mas pode ser fatura/boleto de transportadora, recibo de frete autônomo (RPA) ou comprovante de Pix/cartão de pagamento de frete. Podem vir juntos o CT-e e o comprovante do mesmo frete.\n'+
-  'Responda SOMENTE com um JSON neste formato:\n{\n "tipo_documento": "cte"|"fatura"|"boleto"|"recibo"|"comprovante_pix"|"comprovante_cartao"|"outro",\n "transportadora_nome": string,\n "transportadora_documento": string,\n "transportadora_documento_parcial": string,\n "valor_frete": number,\n "data_emissao": "AAAA-MM-DD",\n "vencimento": "AAAA-MM-DD",\n "numero_cte": string,\n "serie": string,\n "chave_acesso": string,\n "notas_fiscais": [string],\n "remetente_nome": string,\n "remetente_documento": string,\n "destinatario_nome": string,\n "destinatario_documento": string,\n "tomador": "remetente"|"destinatario"|"outro"|"",\n "origem": string,\n "destino": string,\n "sentido": "venda"|"compra"|"",\n "forma_pagamento": "pix"|"cartao_credito"|"cartao_debito"|"dinheiro"|"boleto"|"desconhecida",\n "banco_ou_cartao": string,\n "peso_kg": number,\n "volumes": number,\n "campos_incertos": [string]\n}\n'+
-  'Regras: transportadora_nome é o EMITENTE do CT-e (a transportadora), nunca o remetente nem o destinatário; num Pix, é o recebedor. transportadora_documento é o CNPJ/CPF só com dígitos ("" se não aparecer completo); transportadora_documento_parcial: se vier mascarado, só os dígitos visíveis em ordem, senão "". '+
-  'valor_frete é o valor total da prestação do serviço / valor a receber, em reais (0 se ilegível). numero_cte é só o número do CT-e (sem zeros à esquerda); chave_acesso são os 44 dígitos se aparecerem. notas_fiscais são os números das NF-e transportadas (só os números, sem zeros à esquerda). '+
-  'origem e destino no formato "Cidade/UF". sentido: "venda" se o remetente for a nossa empresa (CNPJ 35.017.646/0001-66, JDFER, Mais Acessível) ou se a origem for Goiânia/GO levando mercadoria a cliente; "compra" se a nossa empresa for o destinatário (mercadoria chegando de fornecedor); "" se não der para saber. '+
-  'vencimento só se aparecer fatura/boleto/duplicata com vencimento; senão "". Não invente nada: o que não estiver visível fica vazio e vai para campos_incertos.';
+  return 'Você vai ler um documento de FRETE pago pela JDFER Comércio e Serviços Ltda / Mais Acessível (CNPJ 35.017.646/0001-66, Goiânia/GO). '+
+  'Pode ser: DACTE (CT-e modelo 57, layout SSW das transportadoras TG, BBT, Accert e outras, ou layout próprio como o da Rodonaves); FATURA de transportadora com boleto cobrando um ou vários CT-e (ex.: Braspress); recibo de frete; ou comprovante de pagamento. '+
+  'Muitos DACTE vêm com 2 vias iguais na mesma página ("Corte aqui"): leia uma só.\n'+
+  'Responda SOMENTE com um JSON neste formato (use "" ou 0 para o que não existir):\n'+
+  '{"tipo_documento":"cte"|"fatura"|"recibo"|"comprovante_pix"|"outro",\n'+
+  ' "transportadora":{"nome":"","cnpj":"","ie":"","rntrc":"","cidade_uf":""},\n'+
+  ' "cte":{"modelo":"57","serie":"","numero":"","data_emissao":"AAAA-MM-DD","hora_emissao":"HH:MM","chave":"","protocolo":"","cfop":"","natureza":"","tipo_cte":"","tipo_servico":"","modal":"","emitido_por":""},\n'+
+  ' "origem":"Cidade/UF","destino":"Cidade/UF",\n'+
+  ' "remetente":{"nome":"","cnpj":""},"destinatario":{"nome":"","cnpj":""},"expedidor":{"nome":"","cnpj":""},"recebedor":{"nome":"","cnpj":""},\n'+
+  ' "tomador":{"papel":"remetente"|"destinatario"|"expedidor"|"recebedor"|"outro"|"","nome":"","cnpj":""},\n'+
+  ' "subcontratado":{"nome":"","cnpj":""},\n'+
+  ' "componentes":[{"nome":"","valor":0}],\n'+
+  ' "valor_total_servico":0,"valor_a_receber":0,\n'+
+  ' "impostos":{"cst":"","icms_base":0,"icms_aliquota":0,"icms_valor":0,"ibs":0,"cbs":0,"pis":0,"cofins":0,"total_tributos":0},\n'+
+  ' "carga":{"produto_predominante":"","especie":"","valor_mercadoria":0,"peso_kg":0,"peso_calculo_kg":0,"cubagem_m3":0,"volumes":0},\n'+
+  ' "notas_fiscais":[{"numero":"","serie":"","chave":""}],\n'+
+  ' "condicao_pagamento":"a_prazo"|"a_vista"|"pago"|"",\n'+
+  ' "condicao_texto":"","previsao_entrega":"AAAA-MM-DD",\n'+
+  ' "fatura":{"numero":"","emissao":"AAAA-MM-DD","vencimento":"AAAA-MM-DD","valor":0,"linha_digitavel":"","banco":"","ctes":[{"numero":"","chave":"","data":"AAAA-MM-DD","nf":"","destinatario":"","valor":0}]},\n'+
+  ' "forma_pagamento":"boleto"|"pix"|"cartao_credito"|"debito_conta"|"dinheiro"|"desconhecida",\n'+
+  ' "sentido":"venda"|"compra"|"",\n'+
+  ' "observacoes":"",\n'+
+  ' "campos_incertos":[""]}\n'+
+  'Regras: transportadora é o EMITENTE do CT-e (no topo, com CNPJ/IE/RNTRC), nunca remetente/destinatário; numa fatura, é o beneficiário do boleto. '+
+  'chave: os 44 dígitos da chave de acesso, só números. numero e serie do CT-e sem zeros à esquerda. CNPJs só com dígitos. '+
+  'notas_fiscais: todas as NF-e da seção "Documentos originários" ou "Chaves NF-e/CT-e", com número (sem zeros à esquerda) e chave de 44 dígitos. '+
+  'componentes: cada componente do valor da prestação (FRETE PESO, FRETE VALOR, GRIS, PEDÁGIO, DESPACHO, TAS, COLETA, SECCAT, ADIC FRETE, IMP REPASSADO, OUTROS…). '+
+  'valor_a_receber: o campo "VALOR A RECEBER"; valor_total_servico: "VALOR TOTAL DO SERVIÇO"/"FRETE TOTAL". '+
+  'condicao_pagamento: "a_prazo" se aparecer COBRAR A PRAZO/faturado; "a_vista" se COBRAR A VISTA/CIF A VISTA; "pago" se FRETE PAGO/débito em conta já feito; condicao_texto é o texto exato (ex.: "TOMADOR REMET COBRAR A PRAZO", "FORMA DE RECEBIMENTO: DEBITO EM C/C"). '+
+  'fatura: preencha só se for fatura/boleto (número da fatura, emissão, vencimento, valor cobrado, linha digitável com 47 dígitos, banco, e a lista de CT-e cobrados com número, chave, data, nota fiscal, destinatário e valor do frete); num CT-e simples deixe vazio. '+
+  'sentido: "venda" se a JDFER for remetente/expedidor (mercadoria saindo para cliente); "compra" se a JDFER for destinatária (mercadoria chegando de fornecedor). '+
+  'observacoes: até 200 caracteres com o que importa (redespacho/subcontratação, nº de pedido, apólice). Não invente nada: o que não estiver legível fica vazio e o nome do campo vai para campos_incertos.';
 }
-async function frtLerIA(fotos,obs){
-  var content=[{type:'text',text:frtPrompt()+(obs?'\n\nObservação de quem enviou: '+obs:'')}];
-  fotos.forEach(function(b){content.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:b}});});
-  var r=await fetch(DSP_IA_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1500,messages:[{role:'user',content:content}]})});
-  if(!r.ok)throw new Error('IA respondeu '+r.status);
-  var j=await r.json();
-  if(j&&j.error){var em=(j.error.message||j.error.type||'erro');if(/credit balance/i.test(em))throw new Error('Acabou o crédito da API da Anthropic (console.anthropic.com → Plans & Billing)');throw new Error('IA: '+em);}
-  var t=(j.content||[]).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
-  t=t.replace(/```json|```/g,'').trim();var a=t.indexOf('{'),b=t.lastIndexOf('}');if(a<0||b<a)throw new Error('Resposta da IA sem dados');
-  return JSON.parse(t.slice(a,b+1));
+// chave de acesso (44 dígitos): confere o dígito verificador e extrai CNPJ do emitente, modelo, série e número
+function frtChave(ch){ch=frtDig(ch);if(ch.length!==44)return null;var s=0,p=2;for(var i=42;i>=0;i--){s+=(+ch[i])*p;p=p===9?2:p+1;}var r=s%11,dv=r<2?0:11-r;
+  return {ok:dv===+ch[43],chave:ch,uf:ch.slice(0,2),aamm:ch.slice(2,6),cnpj:ch.slice(6,20),modelo:ch.slice(20,22),serie:String(+ch.slice(22,25)),numero:String(+ch.slice(25,34))};}
+function frtChaveFmt(ch){return frtDig(ch).replace(/(\d{4})(?=\d)/g,'$1 ');}
+async function frtLerIA(fotos,obs,pdfs){
+  async function chamar(comPdf){
+    var content=[{type:'text',text:frtPrompt()+(obs?'\n\nObservação de quem enviou: '+obs:'')}];
+    if(comPdf)pdfs.forEach(function(p){content.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:p.b64}});});
+    (comPdf?(fotos||[]).filter(function(_b,i){return FRT_FOTOS_PDF_IDX.indexOf(i)<0;}):fotos||[]).forEach(function(b){content.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:b}});});
+    var r=await fetch(DSP_IA_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,messages:[{role:'user',content:content}]})});
+    if(!r.ok)throw new Error('IA respondeu '+r.status);
+    var j=await r.json();
+    if(j&&j.error){var em=(j.error.message||j.error.type||'erro');if(/credit balance/i.test(em))throw new Error('Acabou o crédito da API da Anthropic (console.anthropic.com → Plans & Billing)');throw new Error('IA: '+em);}
+    var t=(j.content||[]).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
+    t=t.replace(/```json|```/g,'').trim();var a=t.indexOf('{'),b=t.lastIndexOf('}');if(a<0||b<a)throw new Error('Resposta da IA sem dados');
+    return JSON.parse(t.slice(a,b+1));
+  }
+  if(pdfs&&pdfs.length){try{return await chamar(true);}catch(e){if(/crédito/.test(e.message))throw e;}}
+  return chamar(false);
 }
+var FRT_FOTOS_PDF_IDX=[];
 function frtFormaDaLeitura(r){
   var cfg=frtCfg();
   if(r.forma_pagamento==='pix')return (cfg.padrao&&cfg.padrao.pix)||'';
@@ -4742,29 +4797,58 @@ async function frtEnriquecer(d){
   d.fornecedor.dados=x;d.fornecedor.nome=x.nome;return d;
 }
 function frtNum(s){var d=String(s||'').replace(/\D/g,'').replace(/^0+/,'');return d;}
-function frtHistoricoFrete(r){
-  var p=['Frete'];var n=frtNum(r.numero_cte);if(n)p.push('CT-e '+n);
-  var nfs=(Array.isArray(r.notas_fiscais)?r.notas_fiscais:[]).map(frtNum).filter(Boolean);if(nfs.length)p.push('NF '+nfs.slice(0,4).join(', '));
-  if(r.origem||r.destino)p.push((r.origem||'?')+' → '+(r.destino||'?'));
-  var outro=r.sentido==='compra'?r.remetente_nome:r.destinatario_nome;if(outro)p.push(String(outro).slice(0,40));
+function frtHistoricoFrete(d){
+  var c=d.cte||{},f=d.fatura,p=[];
+  if(f){p.push('Fatura frete'+(f.numero?' '+f.numero:''));var ns=(f.ctes||[]).map(function(x){return x.numero;}).filter(Boolean);if(ns.length)p.push('CT-e '+ns.slice(0,6).join(', ')+(ns.length>6?'…':''));
+    var nf=(f.ctes||[]).map(function(x){return x.nf;}).filter(Boolean);if(nf.length)p.push('NF '+nf.slice(0,6).join(', '));}
+  else{p.push('Frete'+(c.numero?' CT-e '+c.numero:''));var n=(c.nfs||[]).map(function(x){return x.numero;}).filter(Boolean);if(n.length)p.push('NF '+n.slice(0,4).join(', '));
+    if(c.origem||c.destino)p.push((c.origem||'?')+' → '+(c.destino||'?'));
+    var outro=c.sentido==='compra'?c.remetente&&c.remetente.nome:c.destinatario&&c.destinatario.nome;if(outro)p.push(String(outro).slice(0,40));}
   return p.join(' · ').slice(0,200);
 }
+var FRT_NOSSO='35017646000166';
+function frtPessoa(x){x=x||{};return {nome:String(x.nome||'').trim(),doc:frtDig(x.cnpj)};}
+function frtData(v){return /^\d{4}-\d{2}-\d{2}$/.test(v||'')?v:'';}
 function frtAplicarLeitura(r){
-  var unc=r.campos_incertos||[];var formaId=frtFormaDaLeitura(r);var em=/^\d{4}-\d{2}-\d{2}$/.test(r.data_emissao||'')?r.data_emissao:'';
-  var cat=r.sentido==='venda'?FRT_CAT_VENDA:r.sentido==='compra'?FRT_CAT_COMPRA:'';
-  var nCte=frtNum(r.numero_cte);
-  var d={tipoDoc:String(r.tipo_documento||'outro'),fornecedor:{nome:r.transportadora_nome||'',doc:frtDig(r.transportadora_documento),docParcial:frtDig(r.transportadora_documento_parcial)},
-    valor:r.valor_frete>0?Number(r.valor_frete):null,emissao:em,competencia:em,
-    numeroDocumento:nCte?'CT-e '+nCte:'',historico:frtHistoricoFrete(r),formaId:formaId,contaId:'',categoria:cat,parcelas:1,itens:[],incertos:unc,leituraErro:null,
-    cte:{numero:nCte,serie:r.serie||'',chave:frtDig(r.chave_acesso).length===44?frtDig(r.chave_acesso):'',nfs:(Array.isArray(r.notas_fiscais)?r.notas_fiscais:[]).map(frtNum).filter(Boolean).slice(0,20),
-      remetente:r.remetente_nome||'',remetenteDoc:frtDig(r.remetente_documento),destinatario:r.destinatario_nome||'',destinatarioDoc:frtDig(r.destinatario_documento),
-      tomador:r.tomador||'',origem:r.origem||'',destino:r.destino||'',sentido:r.sentido||'',peso:r.peso_kg>0?Number(r.peso_kg):null,volumes:r.volumes>0?Number(r.volumes):null}};
-  // forma de pagamento: a da leitura; se não tiver, a última usada com esta transportadora
-  if(!d.formaId){var fu=frtUltimo(d,'formaId');if(fu)d.formaId=fu;}
+  var unc=(r.campos_incertos||[]).filter(Boolean);var tr=r.transportadora||{},ct=r.cte||{},fa=r.fatura||{},imp=r.impostos||{},cg=r.carga||{};
+  var ehFat=r.tipo_documento==='fatura'||!!(fa.numero&&fa.valor>0);
+  // chave de acesso: a fonte mais confiável para número, série e CNPJ da transportadora
+  var ck=frtChave(ct.chave);var nCte=frtNum(ct.numero),serie=frtNum(ct.serie)||String(ct.serie||''),trDoc=frtDig(tr.cnpj);
+  if(ck&&ck.ok){if(ck.modelo==='57'){nCte=ck.numero;serie=ck.serie;}if(trDoc.length!==14)trDoc=ck.cnpj;}
+  else if(ct.chave){unc.push('chave_acesso');}
+  var rem=frtPessoa(r.remetente),des=frtPessoa(r.destinatario);
+  var sent=rem.doc===FRT_NOSSO?'venda':des.doc===FRT_NOSSO?'compra':(r.sentido||'');
+  var nfs=(Array.isArray(r.notas_fiscais)?r.notas_fiscais:[]).map(function(n){var k=frtChave(n.chave);return {numero:frtNum(n.numero)||(k&&k.ok?k.numero:''),serie:String(n.serie||''),chave:k&&k.ok?k.chave:frtDig(n.chave)};}).filter(function(n){return n.numero||n.chave;}).slice(0,30);
+  var fctes=(Array.isArray(fa.ctes)?fa.ctes:[]).map(function(c){var k=frtChave(c.chave);return {numero:frtNum(c.numero)||(k&&k.ok?k.numero:''),chave:k&&k.ok?k.chave:frtDig(c.chave),data:frtData(c.data),nf:frtNum(c.nf),destinatario:c.destinatario||'',valor:c.valor>0?Number(c.valor):null};}).filter(function(c){return c.numero||c.chave;}).slice(0,60);
+  var em=ehFat?(frtData(fa.emissao)||frtData(ct.data_emissao)):frtData(ct.data_emissao);
+  var valor=ehFat?(fa.valor>0?Number(fa.valor):null):(r.valor_a_receber>0?Number(r.valor_a_receber):(r.valor_total_servico>0?Number(r.valor_total_servico):null));
+  var cte={modelo:String(ct.modelo||'57'),serie:serie,numero:nCte,hora:String(ct.hora_emissao||''),chave:ck?ck.chave:'',chaveOk:!!(ck&&ck.ok),protocolo:frtDig(ct.protocolo),cfop:String(ct.cfop||''),natureza:String(ct.natureza||''),
+    tipoCte:String(ct.tipo_cte||''),tipoServico:String(ct.tipo_servico||''),modal:String(ct.modal||''),emitidoPor:String(ct.emitido_por||''),
+    transportadora:{nome:String(tr.nome||''),doc:trDoc,ie:String(tr.ie||''),rntrc:String(tr.rntrc||''),cidade:String(tr.cidade_uf||'')},
+    origem:String(r.origem||''),destino:String(r.destino||''),remetente:rem,destinatario:des,expedidor:frtPessoa(r.expedidor),recebedor:frtPessoa(r.recebedor),
+    tomador:Object.assign(frtPessoa(r.tomador),{papel:(r.tomador&&r.tomador.papel)||''}),subcontratado:frtPessoa(r.subcontratado),
+    componentes:(Array.isArray(r.componentes)?r.componentes:[]).filter(function(c){return c&&c.nome&&c.valor>0;}).map(function(c){return {nome:String(c.nome),valor:Number(c.valor)};}).slice(0,20),
+    valorTotal:r.valor_total_servico>0?Number(r.valor_total_servico):null,valorReceber:r.valor_a_receber>0?Number(r.valor_a_receber):null,
+    impostos:{cst:String(imp.cst||''),icmsBase:+imp.icms_base||0,icmsAliq:+imp.icms_aliquota||0,icmsValor:+imp.icms_valor||0,ibs:+imp.ibs||0,cbs:+imp.cbs||0,pis:+imp.pis||0,cofins:+imp.cofins||0,total:+imp.total_tributos||0},
+    carga:{produto:String(cg.produto_predominante||''),especie:String(cg.especie||''),valorMercadoria:+cg.valor_mercadoria||0,peso:+cg.peso_kg||0,pesoCalculo:+cg.peso_calculo_kg||0,cubagem:+cg.cubagem_m3||0,volumes:+cg.volumes||0},
+    nfs:nfs,condicao:String(r.condicao_pagamento||''),condicaoTexto:String(r.condicao_texto||''),previsao:frtData(r.previsao_entrega),sentido:sent,obs:String(r.observacoes||'').slice(0,300)};
+  var fatura=ehFat?{numero:String(fa.numero||''),emissao:frtData(fa.emissao),vencimento:frtData(fa.vencimento),valor:fa.valor>0?Number(fa.valor):null,linha:frtDig(fa.linha_digitavel),banco:String(fa.banco||''),ctes:fctes}:null;
+  var d={tipoDoc:ehFat?'fatura':String(r.tipo_documento||'outro'),fornecedor:{nome:cte.transportadora.nome,doc:trDoc,docParcial:''},valor:valor,emissao:em,competencia:em,
+    numeroDocumento:ehFat?(fatura.numero?'Fatura '+fatura.numero:''):(nCte?'CT-e '+nCte:''),historico:'',formaId:'',contaId:'',
+    categoria:sent==='venda'?FRT_CAT_VENDA:sent==='compra'?FRT_CAT_COMPRA:'',parcelas:1,itens:[],incertos:unc,leituraErro:null,cte:cte,fatura:fatura};
+  d.historico=frtHistoricoFrete(d);
+  // forma de pagamento: lida no documento > padrão da aba (boleto/à vista) > última usada com a transportadora
+  var fp=r.forma_pagamento,fc=FRT.fcfg||{};
+  if(fp==='pix'||fp==='dinheiro'||fp==='cartao_credito')d.formaId=frtFormaDaLeitura(r);
+  if(!d.formaId&&(ehFat||fp==='boleto'||cte.condicao==='a_prazo'))d.formaId=fc.formaBoleto||'';
+  if(!d.formaId&&(cte.condicao==='a_vista'||cte.condicao==='pago'||fp==='debito_conta'))d.formaId=fc.formaVista||'';
+  if(!d.formaId)d.formaId=frtUltimo(d,'formaId');
   if(!d.formaId)unc.push('forma');
   d.contaId=d.formaId?frtContaSugerida(d.formaId):'';
-  var vl=/^\d{4}-\d{2}-\d{2}$/.test(r.vencimento||'')?r.vencimento:'';
-  d.vencimento=vl||frtVencSugerido(em,d.formaId).v;
+  // vencimento: o do boleto/fatura; à vista = emissão; a prazo sem boleto fica pendente até o boleto chegar
+  if(fatura&&fatura.vencimento)d.vencimento=fatura.vencimento;
+  else if(cte.condicao==='a_prazo')d.vencimento='';
+  else d.vencimento=frtVencSugerido(em,d.formaId).v;
   if(!d.categoria){var hc=frtCatSugerida(d);if(hc)d.categoria=hc;}
   return d;
 }
@@ -4780,19 +4864,22 @@ function frtFilaGravar(f){try{localStorage.setItem('frt_fila',JSON.stringify(f))
 async function frtEnviar(){
   if(!FRT.fotosNovas.length||FRT.enviando)return;
   var obs=(frtEl('frtObs')||{}).value||'';
-  var item={fotos:FRT.fotosNovas.slice(),obs:obs.trim(),ts:Date.now()};
+  var fts=FRT.fotosNovas.slice();var pdfs=(FRT.pdfsNovos||[]).filter(function(p){return p.imgs.some(function(x){return fts.indexOf(x)>=0;});});
+  var item={fotos:fts,obs:obs.trim(),ts:Date.now(),pdfs:pdfs.map(function(p){return {nome:p.nome,b64:p.b64};}),
+    fotosDoPdf:fts.map(function(x,i){return pdfs.some(function(p){return p.imgs.indexOf(x)>=0;})?i:-1;}).filter(function(i){return i>=0;})};
   FRT.enviando=true;FRT.msg='Enviando…';FRT.msgTipo='info';frtDraw();
-  try{var id=await frtSubir(item);FRT.fotosNovas=[];FRT.obsCompart='';FRT.ultimoEnvio=id;FRT.msg='';frtDraw();frtLerDespesa(id,item.fotos,item.obs);}
-  catch(e){var f=frtFilaLer();f.push(item);if(frtFilaGravar(f)){FRT.fotosNovas=[];FRT.msg='Sem conexão agora. A foto ficou guardada neste celular e sobe sozinha quando a internet voltar.';FRT.msgTipo='warn';}
+  try{var id=await frtSubir(item);FRT.fotosNovas=[];FRT.pdfsNovos=[];FRT.obsCompart='';FRT.ultimoEnvio=id;FRT.msg='';frtDraw();frtLerDespesa(id,item.fotos,item.obs);}
+  catch(e){var f=frtFilaLer();f.push(item);if(frtFilaGravar(f)){FRT.fotosNovas=[];FRT.pdfsNovos=[];FRT.msg='Sem conexão agora. A foto ficou guardada neste celular e sobe sozinha quando a internet voltar.';FRT.msgTipo='warn';}
     else{FRT.msg='Sem conexão e sem espaço para guardar no celular. Tente de novo quando a internet voltar.';FRT.msgTipo='err';}}
   FRT.enviando=false;frtDraw();
 }
 async function frtSubir(item){
   var agora=Date.now();
   var doc={status:'lendo',criadoEm:item.ts||agora,atualizadoEm:agora,criadoPor:STATE.usuarioLogado||'',origem:frtMobile()?'celular':'computador',obs:item.obs||'',nFotos:item.fotos.length,emissao:frtIso(new Date(item.ts||agora))};
-  doc.fotoHash=item.fotos[0]?await frtHash(item.fotos[0]):'';
+  doc.fotoHash=item.fotos[0]?await frtHash(item.fotos[0]):'';doc.nPdf=(item.pdfs||[]).length;doc.fotosDoPdf=item.fotosDoPdf||[];
   var r=await frtFb('fretes',{method:'POST',body:doc});var id=r.name;
   await frtFb('fretesFotos/'+id,{method:'PUT',body:item.fotos});
+  if(item.pdfs&&item.pdfs.length)await frtFb('fretesPdf/'+id,{method:'PUT',body:item.pdfs});
   FRT.desp[id]=doc;return id;
 }
 async function frtFilaEnviar(){
@@ -4804,7 +4891,8 @@ window.addEventListener('online',function(){frtFilaEnviar();});
 async function frtLerDespesa(id,fotos,obs){
   FRT.lendo[id]=true;if(STATE.modulo==='mod16')frtDraw();
   var upd;
-  try{if(!fotos)fotos=await frtFb('fretesFotos/'+id);var r=await frtLerIA(fotos||[],obs);upd=await frtEnriquecer(frtAplicarLeitura(r));}
+  try{if(!fotos)fotos=await frtFb('fretesFotos/'+id);var pdfs=await frtFb('fretesPdf/'+id).catch(function(){return null;});
+    FRT_FOTOS_PDF_IDX=(FRT.desp[id]&&FRT.desp[id].fotosDoPdf)||[];var r=await frtLerIA(fotos||[],obs,pdfs||[]);upd=await frtEnriquecer(frtAplicarLeitura(r));}
   catch(e){upd={leituraErro:'A leitura automática falhou ('+e.message+'). Preencha à mão ou toque em Ler de novo.'};}
   upd.status='pendente';upd.atualizadoEm=Date.now();
   try{await frtFb('fretes/'+id,{method:'PATCH',body:upd});}catch(e){}
@@ -4814,15 +4902,58 @@ async function frtLerDespesa(id,fotos,obs){
   if(STATE.modulo==='mod16'){if(frtEditando())frtDrawLista();else frtDraw();}
 }
 
+function frtR$(v){return v>0?'R$ '+frtMoney(v):'';}
+function frtPes(p){return p&&(p.nome||p.doc)?[p.nome,p.doc?frtDoc(p.doc):''].filter(Boolean).join(' · '):'';}
+// todas as informações do CT-e/fatura, em linhas [rótulo, valor] — usadas na tela e no e-mail da contabilidade
+function frtCteLinhas(d){
+  var c=d.cte||{},f=d.fatura,t=c.transportadora||{},i=c.impostos||{},g=c.carga||{},L=[];
+  function a(k,v){if(v)L.push([k,String(v)]);}
+  a('Tipo de documento',{cte:'CT-e (DACTE)',fatura:'Fatura de frete com boleto',recibo:'Recibo de frete',comprovante_pix:'Comprovante de Pix'}[d.tipoDoc]||d.tipoDoc||'');
+  if(f){a('Fatura',[f.numero?'Nº '+f.numero:'',f.emissao?'emitida '+frtBr(f.emissao):'',f.vencimento?'vence '+frtBr(f.vencimento):'',frtR$(f.valor)].filter(Boolean).join(' · '));
+    a('Banco',f.banco);a('Linha digitável',f.linha);
+    (f.ctes||[]).forEach(function(x,k){a('CT-e '+(k+1)+' da fatura',['Nº '+(x.numero||'?'),x.data?frtBr(x.data):'',x.nf?'NF '+x.nf:'',x.destinatario,frtR$(x.valor)].filter(Boolean).join(' · ')+(x.chave?' · chave '+frtChaveFmt(x.chave):''));});}
+  if(c.numero||c.chave){a('CT-e',['Nº '+(c.numero||'?'),c.serie?'série '+c.serie:'','modelo '+(c.modelo||'57'),c.modal].filter(Boolean).join(' · '));
+    a('Emissão do CT-e',d.emissao?frtBr(d.emissao)+(c.hora?' às '+c.hora:''):'');
+    a('Chave de acesso',c.chave?frtChaveFmt(c.chave)+(c.chaveOk?'':' (conferir: dígito não bate)'):'');
+    a('Protocolo de autorização',c.protocolo);a('CFOP / natureza',[c.cfop,c.natureza].filter(Boolean).join(' - '));
+    a('Tipo do CT-e / serviço',[c.tipoCte,c.tipoServico].filter(Boolean).join(' / '));a('Emitido por',c.emitidoPor);}
+  a('Transportadora',[t.nome,t.doc?'CNPJ '+frtDoc(t.doc):'',t.ie?'IE '+t.ie:'',t.rntrc?'RNTRC '+t.rntrc:'',t.cidade].filter(Boolean).join(' · '));
+  a('Subcontratada / redespacho',frtPes(c.subcontratado));
+  a('Remetente',frtPes(c.remetente));a('Destinatário',frtPes(c.destinatario));
+  if(frtPes(c.expedidor)&&frtPes(c.expedidor)!==frtPes(c.remetente))a('Expedidor',frtPes(c.expedidor));
+  if(frtPes(c.recebedor)&&frtPes(c.recebedor)!==frtPes(c.destinatario))a('Recebedor',frtPes(c.recebedor));
+  a('Tomador (quem paga)',[c.tomador&&c.tomador.papel,frtPes(c.tomador)].filter(Boolean).join(' · '));
+  a('Trajeto',(c.origem&&c.destino)?c.origem+' → '+c.destino:'');
+  a('Sentido',c.sentido==='venda'?'Frete de venda (saída para cliente)':c.sentido==='compra'?'Frete de compra (entrada de fornecedor)':'');
+  a('Condição de pagamento',[{a_prazo:'A prazo (boleto)',a_vista:'À vista',pago:'Já pago'}[c.condicao]||'',c.condicaoTexto].filter(Boolean).join(' · '));
+  a('Previsão de entrega',c.previsao?frtBr(c.previsao):'');
+  a('Componentes do frete',(c.componentes||[]).map(function(x){return x.nome+' '+frtMoney(x.valor);}).join(' · '));
+  a('Valor total do serviço',frtR$(c.valorTotal));a('Valor a receber',frtR$(c.valorReceber));
+  a('ICMS',i.icmsValor?[i.cst?'CST '+i.cst:'','base '+frtMoney(i.icmsBase),i.icmsAliq?i.icmsAliq+'%':'','R$ '+frtMoney(i.icmsValor)].filter(Boolean).join(' · '):'');
+  a('IBS / CBS',(i.ibs||i.cbs)?'IBS R$ '+frtMoney(i.ibs)+' · CBS R$ '+frtMoney(i.cbs):'');
+  a('PIS / COFINS',(i.pis||i.cofins)?'PIS R$ '+frtMoney(i.pis)+' · COFINS R$ '+frtMoney(i.cofins):'');
+  a('Carga',[g.produto,g.especie,g.volumes?g.volumes+' vol.':'',g.peso?frtMoney(g.peso)+' kg':'',g.pesoCalculo&&g.pesoCalculo!==g.peso?'calc. '+frtMoney(g.pesoCalculo)+' kg':'',g.cubagem?g.cubagem+' m³':''].filter(Boolean).join(' · '));
+  a('Valor da mercadoria',frtR$(g.valorMercadoria));
+  (c.nfs||[]).forEach(function(n,k){a('NF-e transportada'+((c.nfs.length>1)?' '+(k+1):''),['Nº '+(n.numero||'?'),n.serie?'série '+n.serie:'',n.chave?'chave '+frtChaveFmt(n.chave):''].filter(Boolean).join(' · '));});
+  a('Observações',c.obs);
+  return L;
+}
+function frtCteHtml(f){var L=frtCteLinhas(f);if(!L.length)return '';
+  return '<div class="fin-sec"><p class="fin-st">'+(f.fatura?'Dados da fatura e dos CT-e':'Dados do CT-e')+' <span class="fin-tag">lido</span></p><div style="overflow-x:auto"><table class="fin-tbl" style="font-family:inherit">'+
+    L.map(function(r){return '<tr><td style="color:#636366;white-space:nowrap;vertical-align:top;font-family:inherit">'+frtEsc(r[0])+'</td><td style="overflow-wrap:anywhere;font-family:inherit">'+frtEsc(r[1])+(r[0]==='Linha digitável'?' <button type="button" class="fin-sw" data-copia="'+frtEsc(r[1])+'">copiar</button>':'')+'</td></tr>';}).join('')+'</table></div></div>';}
+document.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest&&ev.target.closest('[data-copia]');if(!b)return;try{navigator.clipboard.writeText(b.getAttribute('data-copia'));b.textContent='copiado ✓';}catch(e){}});
 // ---------- envio à contabilidade (Google Apps Script: e-mail com PDF + cópia no Google Drive) ----------
 function frtEmailCfg(){return FRT.email||{};}
 function frtEmailAuto(){var c=frtEmailCfg();return !!(c.url&&c.auto!==false);}
 function frtEmailAssunto(d){return ['Frete'+(d.numeroDocumento?' '+d.numeroDocumento:''),(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'Transportadora','R$ '+frtMoney(d.valor),frtBr(d.emissao)].filter(Boolean).join(' — ');}
-function frtEmailLinhas(d){var c=d.cte||{};return [['Transportadora',(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||''],['CNPJ/CPF',frtDoc((d.contato&&d.contato.doc)||(d.fornecedor&&d.fornecedor.doc)||'')],
-  ['Documento',d.numeroDocumento||''],['Chave do CT-e',c.chave||''],['NF-e transportadas',(c.nfs||[]).join(', ')],['Remetente',c.remetente||''],['Destinatário',c.destinatario||''],
-  ['Trajeto',(c.origem||c.destino)?(c.origem||'?')+' → '+(c.destino||'?'):''],['Emissão',frtBr(d.emissao)],['Vencimento',frtBr(d.vencimento)],['Valor','R$ '+frtMoney(d.valor)],
-  ['Categoria',frtCatNome(d.categoria)],['Forma de pagamento',frtFormaNome(d.formaId)],['Pago em',d.baixaData?frtBr(d.baixaData):''],['Lançado no Bling',d.blingId?'ID '+d.blingId:''],['Histórico',d.historico||'']].filter(function(r){return r[1];});}
-function frtEmailHtml(d){return '<p>Segue o documento do frete para lançamento como despesa.</p><table style="border-collapse:collapse;font:14px Arial,sans-serif">'+
+function frtEmailLinhas(d){
+  var base=[['Transportadora',(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||''],['CNPJ/CPF',frtDoc((d.contato&&d.contato.doc)||(d.fornecedor&&d.fornecedor.doc)||'')],
+    ['Documento',d.numeroDocumento||''],['Emissão',frtBr(d.emissao)],['Vencimento',frtBr(d.vencimento)],['Valor',frtR$(d.valor)],
+    ['Categoria',frtCatNome(d.categoria)],['Forma de pagamento',frtFormaNome(d.formaId)],['Pago em',d.baixaData?frtBr(d.baixaData):''],['Lançado no Bling',d.blingId?'ID '+d.blingId:''],['Histórico',d.historico||'']].filter(function(r){return r[1];});
+  var ja={};base.forEach(function(r){ja[r[0]]=1;});
+  return base.concat(frtCteLinhas(d).filter(function(r){return !ja[r[0]]&&r[0]!=='Transportadora';}));
+}
+function frtEmailHtml(d){return '<p>Segue o documento do frete (CT-e / fatura) para lançamento como despesa. Anexo: documento original.</p><table style="border-collapse:collapse;font:14px Arial,sans-serif">'+
   frtEmailLinhas(d).map(function(r){return '<tr><td style="padding:4px 12px 4px 0;color:#555">'+frtEsc(r[0])+'</td><td style="padding:4px 0;font-weight:bold">'+frtEsc(r[1])+'</td></tr>';}).join('')+
   '</table><p style="color:#888;font-size:12px">Enviado pelo app Mais Acessível (JDFER Comércio e Serviços Ltda).</p>';}
 function frtEmailNome(d){return ('Frete_'+(d.numeroDocumento||'sem-numero')+'_'+((d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'transportadora')+'_'+(d.emissao||frtHoje())).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_\-]+/g,'-').slice(0,90);}
@@ -4838,16 +4969,18 @@ async function frtEnviarEmail(id){
   try{
     var d=FRT.desp[id];if(!d)throw new Error('Frete não encontrado.');
     var fotos=await frtFb('fretesFotos/'+id);if(!fotos||!fotos.length)throw new Error('As imagens deste frete não estão mais guardadas no app.');
-    var j=await frtEmailPost({assunto:frtEmailAssunto(d),html:frtEmailHtml(d),texto:frtEmailLinhas(d).map(function(r){return r[0]+': '+r[1];}).join('\n'),nome:frtEmailNome(d),mes:(d.emissao||frtHoje()).slice(0,7),fotos:fotos});
+    var pdfs=(await frtFb('fretesPdf/'+id).catch(function(){return null;}))||[];var dp=d.fotosDoPdf||[];
+    if(pdfs.length)fotos=fotos.filter(function(_b,i){return dp.indexOf(i)<0;}); // o PDF original vai no lugar das páginas convertidas
+    var j=await frtEmailPost({assunto:frtEmailAssunto(d),html:frtEmailHtml(d),texto:frtEmailLinhas(d).map(function(r){return r[0]+': '+r[1];}).join('\n'),nome:frtEmailNome(d),mes:(d.emissao||frtHoje()).slice(0,7),fotos:fotos,pdfs:pdfs});
     var up={emailEm:Date.now(),emailPor:STATE.usuarioLogado||'',emailPara:j.para||'',emailLink:j.link||'',emailErro:null};
-    if(d.status==='lancado'&&!(d.pendencias&&d.pendencias.length)){try{await frtFb('fretesFotos/'+id,{method:'DELETE'});up.nFotos=0;}catch(e){}}
+    if(d.status==='lancado'&&!(d.pendencias&&d.pendencias.length)){try{await frtFb('fretesFotos/'+id,{method:'DELETE'});await frtFb('fretesPdf/'+id,{method:'DELETE'});up.nFotos=0;up.nPdf=0;}catch(e){}}
     await frtFb('fretes/'+id,{method:'PATCH',body:up});Object.assign(d,up);return j;
   }catch(e){try{await frtFb('fretes/'+id,{method:'PATCH',body:{emailErro:e.message}});if(FRT.desp[id])FRT.desp[id].emailErro=e.message;}catch(_e){}throw e;}
   finally{delete FRT_ENVIANDO[id];}
 }
 // As imagens só saem do Firebase depois de lançadas sem pendência E enviadas à contabilidade.
 async function frtApagarFotosSePuder(id){var d=FRT.desp[id];if(!d||!d.emailEm||d.status!=='lancado'||(d.pendencias&&d.pendencias.length))return;
-  try{await frtFb('fretesFotos/'+id,{method:'DELETE'});await frtFb('fretes/'+id,{method:'PATCH',body:{nFotos:0}});d.nFotos=0;}catch(e){}}
+  try{await frtFb('fretesFotos/'+id,{method:'DELETE'});await frtFb('fretesPdf/'+id,{method:'DELETE'});await frtFb('fretes/'+id,{method:'PATCH',body:{nFotos:0,nPdf:0}});d.nFotos=0;d.nPdf=0;}catch(e){}}
 function frtEmailChip(d){
   if(d.emailEm)return '<span class="fin-chip ok" title="'+frtEsc(d.emailPara||'')+'">📧 enviado '+new Date(d.emailEm).toLocaleDateString('pt-BR')+'</span>'+(d.emailLink?' <a href="'+frtEsc(d.emailLink)+'" target="_blank" rel="noopener" class="fin-sw">Drive</a>':'');
   return (d.emailErro?'<span class="fin-chip err" title="'+frtEsc(d.emailErro)+'">não enviou</span> ':'')+'<button type="button" class="fin-btn sm" data-em="'+frtEsc(d.id)+'"'+(frtEmailCfg().url?'':' disabled title="Configure o envio em Configurações"')+'>📧 Enviar</button>';
@@ -4989,10 +5122,13 @@ async function frtLancarCore2(id,f,passo){
   var lib=(FRT.desp[id]&&FRT.desp[id].naoDup)||[];
   var novos=dups.filter(function(x){return lib.indexOf(x.blingId)<0;});
   if(novos.length)throw new Error('Já existe conta no Bling (em aberto ou paga) com o mesmo valor e data próxima (ID '+novos.map(function(x){return x.blingId;}).join(', ')+'). Se for outra compra, clique em "Não é duplicado" e lance de novo.');
+  passo('Conferindo a imagem do documento…');
+  var fts=await frtFb('fretesFotos/'+id);if(!fts||!fts.length)throw new Error('Sem a imagem do documento não dá para lançar: ela vai para a contabilidade. Anexe o CT-e/fatura de novo.');
+  var cz=frtCruzados(id);if(cz.length)throw new Error('Este documento cobre CT-e que já está em outro lançamento ('+cz.map(function(x){return x.desc;}).join('; ')+'). Confira para não pagar duas vezes. Se estiver certo, clique em "Não é o mesmo".');
   var semVenc=!f.vencimento;
   if(!f.vencimento)f.vencimento=f.emissao||frtHoje();
   if(!f.competencia)f.competencia=f.emissao||f.vencimento;
-  var pend=frtPendencias(f);if(semVenc)pend.push('Conferir vencimento');
+  var pend=frtPendencias(f).filter(function(x){return x!=='Vencimento';});if(semVenc)pend.push(f.cte&&f.cte.condicao==='a_prazo'?'Vencimento do boleto':'Conferir vencimento');
   if(!f.contato&&!(f.fornecedor&&f.fornecedor.nome))f.fornecedor={nome:FRT_SEM_FORN,doc:''};
   if(!f.contato)await frtResolverFornecedor(id,f,true,passo);
   passo('Lançando no Bling…');
@@ -5087,7 +5223,7 @@ async function frtResolvido(){
 }
 async function frtExcluir(){
   if(!FRT.sel)return;if(!confirm('Excluir este frete do app? (Nada é apagado no Bling.)'))return;
-  var id=FRT.sel;try{await frtFb('fretes/'+id,{method:'DELETE'});await frtFb('fretesFotos/'+id,{method:'DELETE'});}catch(e){}
+  var id=FRT.sel;try{await frtFb('fretes/'+id,{method:'DELETE'});await frtFb('fretesFotos/'+id,{method:'DELETE'});await frtFb('fretesPdf/'+id,{method:'DELETE'});}catch(e){}
   delete FRT.desp[id];FRT.sel=null;FRT.form=null;if(FRT.mob)FRT.mtela='pend';FRT.msg='Frete excluído do app.';FRT.msgTipo='ok';frtDraw();
 }
 async function frtVerFotos(id,alvo){
@@ -5210,7 +5346,7 @@ function frtHtmlCaptura(){
       '<p class="fin-mu" style="margin:8px 0 0">CT-e e comprovante de pagamento do mesmo frete podem ir juntos.</p>'+
       '<div class="fin-f" style="margin-top:12px"><label for="frtObs">Observação (opcional)</label><input class="fin-in" id="frtObs" placeholder="Ex.: frete pedido 1234 · cliente Construtora X"></div>'+
       '<div class="fin-big" style="margin-top:12px"><button type="button" class="fin-btn pri" id="frtEnviar"'+(FRT.enviando?' disabled':'')+'>'+(FRT.enviando?'Enviando…':'Enviar para conferência')+'</button></div>';
-  } else h+='<p class="fin-mu" style="margin:12px 0 0;text-align:center">Fotografe o CT-e (DACTE), a fatura ou o recibo do frete. O app recorta só o documento e a leitura é automática.</p>';
+  } else h+='<p class="fin-mu" style="margin:12px 0 0;text-align:center">Fotografe ou anexe o PDF do CT-e (DACTE) ou da fatura/boleto. A imagem é obrigatória: ela vai para a contabilidade. Foto é recortada sozinha; PDF vai como está.</p>';
   h+='</div>';
   if(fila)h+='<div class="fin-msg warn" style="margin-top:12px">'+fila+' documento(s) aguardando internet neste celular. <button type="button" class="fin-sw" id="frtFila">Enviar agora</button></div>';
   var ult=frtLista('pend').slice(0,6);
@@ -5231,7 +5367,8 @@ function frtChips(d){
   var h='';if(d.status==='lancado'){h+='<span class="fin-chip ok">✓ Lançado no Bling</span>';(d.pendencias||[]).forEach(function(x){h+='<span class="fin-chip warn">falta: '+frtEsc(x)+'</span>';});return h;}
   if(d.leituraErro)h+='<span class="fin-chip err">leitura falhou</span>';
   if(d.autoErro)h+='<span class="fin-chip err" title="'+frtEsc(d.autoErro.msg||'')+'">não lançou: '+frtEsc(String(d.autoErro.msg||'').slice(0,60))+'</span>';
-  if(!(d.valor>0))h+='<span class="fin-chip err">sem valor</span>';
+  if(!(d.valor>0))h+='<span class="fin-chip err">sem valor</span>';if(!(d.nFotos>0))h+='<span class="fin-chip err">sem imagem</span>';
+  if(d.tipoDoc==='fatura')h+='<span class="fin-chip">fatura · '+((d.fatura&&d.fatura.ctes||[]).length)+' CT-e</span>';if(frtCruzados(d.id).length)h+='<span class="fin-chip err">CT-e em outro lançamento</span>';
   var p=frtPendencias(d).filter(function(x){return x!=='Conferir a leitura';});
   h+=p.length?'<span class="fin-chip warn">lança com pendência: '+frtEsc(p.join(', '))+'</span>':'<span class="fin-chip ok">Completo · pronto para lançar</span>';
   if(d.contato)h+='<span class="fin-chip ok">no Bling: '+frtEsc(d.contato.nome)+'</span>';else if(d.fornChecado&&!(d.fornCand&&d.fornCand.length))h+='<span class="fin-chip">fornecedor novo (será cadastrado)</span>';
@@ -5293,7 +5430,7 @@ function frtHtmlFormCard(f,mob,ext){
   function rd(k){return f.incertos&&!f._toq?' fin-read':'';}
   var vs=frtVencSugerido(f.emissao,f.formaId);
   var lan=FRT.desp[FRT.sel].status==='lancado';var pnd=lan?(FRT.desp[FRT.sel].pendencias||[]):[];
-  var h='<div class="fin-card">'+(lan?'<div class="fin-msg '+(pnd.length?'warn':'ok')+'" style="display:block"><b>✓ Já lançado no Bling'+(f.blingId?' (ID '+frtEsc(f.blingId)+')':'')+'.</b>'+(pnd.length?' Ainda falta: <b>'+frtEsc(pnd.join(', '))+'</b>. Complete aqui e clique em <b>Atualizar no Bling</b>, ou corrija direto no Bling e clique em <b>Já resolvi</b>.':'')+'</div>':'')+(lendo||lan?'':frtDupHtml(FRT.sel,false))+
+  var h='<div class="fin-card">'+(lan?'<div class="fin-msg '+(pnd.length?'warn':'ok')+'" style="display:block"><b>✓ Já lançado no Bling'+(f.blingId?' (ID '+frtEsc(f.blingId)+')':'')+'.</b>'+(pnd.length?' Ainda falta: <b>'+frtEsc(pnd.join(', '))+'</b>. Complete aqui e clique em <b>Atualizar no Bling</b>, ou corrija direto no Bling e clique em <b>Já resolvi</b>.':'')+'</div>':'')+(lendo||lan?'':frtDupHtml(FRT.sel,false)+frtCruzHtml(FRT.sel))+
    (lendo?'<div class="fin-msg info">⏳ A IA está lendo este documento. Os campos se preenchem sozinhos em alguns segundos.</div>':'')+
    (f.leituraErro?'<div class="fin-msg warn">'+frtEsc(f.leituraErro)+'</div>':'')+
    (f.obs?'<div class="fin-msg info">Observação de quem enviou: '+frtEsc(f.obs)+'</div>':'')+
@@ -5314,7 +5451,7 @@ function frtHtmlFormCard(f,mob,ext){
     '<div class="fin-f fin-c2 h"><label for="fComp">Competência</label><input class="fin-in" id="fComp" type="date" value="'+frtEsc(f.competencia||'')+'"></div>'+
     '<div class="fin-f fin-c4"><label for="fNum">Nº do documento '+tag('numero_documento')+'</label><input class="fin-in'+rd()+'" id="fNum" value="'+frtEsc(f.numeroDocumento||'')+'"></div>'+
     '<div class="fin-f fin-c6"><label for="fHist">Histórico '+tag('historico')+'</label><textarea id="fHist" class="'+rd().trim()+'" rows="2" placeholder="Ex.: Frete CT-e 1234 · NF 5678 · Goiânia/GO → Anápolis/GO">'+frtEsc(f.historico||'')+'</textarea></div></div></div>'+
-   (f.cte&&(f.cte.chave||f.cte.remetente||f.cte.destinatario||(f.cte.nfs&&f.cte.nfs.length))?'<div class="fin-sec"><p class="fin-st">Dados do CT-e <span class="fin-tag">lido</span></p><table class="fin-tbl" style="font-family:inherit">'+[['Remetente',f.cte.remetente],['Destinatário',f.cte.destinatario],['Trajeto',(f.cte.origem||f.cte.destino)?(f.cte.origem||'?')+' → '+(f.cte.destino||'?'):''],['NF-e',(f.cte.nfs||[]).join(', ')],['Chave',f.cte.chave],['Peso / volumes',[f.cte.peso?f.cte.peso+' kg':'',f.cte.volumes?f.cte.volumes+' vol.':''].filter(Boolean).join(' · ')],['Sentido',f.cte.sentido==='venda'?'Frete de venda (saída)':f.cte.sentido==='compra'?'Frete de compra (entrada)':'']].filter(function(r){return r[1];}).map(function(r){return '<tr><td style="color:#636366">'+r[0]+'</td><td style="overflow-wrap:anywhere">'+frtEsc(r[1])+'</td></tr>';}).join('')+'</table></div>':'')+
+   frtCteHtml(f)+
    ((f.itens&&f.itens.length)?'<div class="fin-sec"><p class="fin-st">Itens lidos <span class="fin-tag">para conferência</span></p><div style="overflow-x:auto"><table class="fin-tbl"><tr><th>Descrição</th><th style="text-align:right">Qtd</th><th style="text-align:right">Valor</th></tr>'+f.itens.map(function(i){return '<tr><td>'+frtEsc(i.descricao)+'</td><td class="n">'+frtEsc(i.quantidade||'')+'</td><td class="n">'+frtMoney(i.valor)+'</td></tr>';}).join('')+'</table></div></div>':'')+
    (mob?'</div>':(lan?'<div class="fin-act"><button type="button" class="fin-btn" id="fResolvido">Já resolvi no Bling</button><button type="button" class="fin-btn" id="fSalvar">Salvar</button><button type="button" class="fin-btn pri" id="fAtualizar"'+(ext?'':' disabled')+'>Atualizar no Bling</button></div>':
    '<div class="fin-act"><button type="button" class="fin-btn dan" id="fExcluir">Excluir</button>'+(f.nFotos?'<button type="button" class="fin-btn" id="fReler">Ler de novo</button>':'')+
@@ -5326,9 +5463,9 @@ function frtHtmlFormCard(f,mob,ext){
     h+='<div class="fin-rev" id="frtRev"><b style="font-size:16px">Confirme antes de lançar</b><div style="margin:8px 0"><div class="fin-mu" style="margin-bottom:4px">Transportadora</div>'+frtRevFornHtml(f)+'</div><dl>'+rows.map(function(r){return '<dt>'+r[0]+'</dt><dd>'+frtEsc(r[1])+'</dd>';}).join('')+'</dl>'+
       (f.parcelas>1?'<p class="fin-mu" style="margin:0">Parcelado: o Bling divide o valor total nas parcelas a partir deste vencimento.</p>':'')+
       (frtPendencias(f).length?'<div class="fin-msg warn" style="margin:0">Vai lançar com pendência: <b>'+frtEsc(frtPendencias(f).join(', '))+'</b>. Depois fica na lista para você completar.'+(!f.vencimento?' Sem vencimento: uso a data da compra.':'')+((!f.contato&&!(f.fornecedor&&f.fornecedor.nome))?' Sem fornecedor: lanço como "'+FRT_SEM_FORN+'".':'')+'</div>':'')+
-      (frtDuplicados(FRT.sel).length?'<div class="fin-msg err" style="margin:0">⚠️ Este frete parece duplicado. Confira o aviso no topo antes de lançar.</div>':'')+
+      (frtCruzados(FRT.sel).length?'<div class="fin-msg err" style="margin:0">⚠️ O mesmo CT-e está em outro lançamento. Confira o aviso no topo.</div>':'')+(frtDuplicados(FRT.sel).length?'<div class="fin-msg err" style="margin:0">⚠️ Este frete parece duplicado. Confira o aviso no topo antes de lançar.</div>':'')+
       frtBaixaHtml(f)+
-      '<div class="fin-act" style="margin-top:0"><button type="button" class="fin-btn" id="fVoltar">Voltar e editar</button><button type="button" class="fin-btn pri" id="fLancar"'+(ext&&!frtDuplicados(FRT.sel).length&&!(FRT.desp[FRT.sel].fornCand&&FRT.desp[FRT.sel].fornCand.length&&!f.contato)?'':' disabled')+'>'+(frtDuplicados(FRT.sel).length?'Bloqueado: possível duplicidade':(FRT.desp[FRT.sel].fornCand&&FRT.desp[FRT.sel].fornCand.length&&!f.contato)?'Escolha o fornecedor acima':f.contato?'Confirmar e lançar no Contas a Pagar':'Cadastrar fornecedor e lançar')+'</button></div></div>';
+      '<div class="fin-act" style="margin-top:0"><button type="button" class="fin-btn" id="fVoltar">Voltar e editar</button><button type="button" class="fin-btn pri" id="fLancar"'+(ext&&!frtDuplicados(FRT.sel).length&&!frtCruzados(FRT.sel).length&&!(FRT.desp[FRT.sel].fornCand&&FRT.desp[FRT.sel].fornCand.length&&!f.contato)?'':' disabled')+'>'+(frtDuplicados(FRT.sel).length?'Bloqueado: possível duplicidade':(FRT.desp[FRT.sel].fornCand&&FRT.desp[FRT.sel].fornCand.length&&!f.contato)?'Escolha o fornecedor acima':f.contato?'Confirmar e lançar no Contas a Pagar':'Cadastrar fornecedor e lançar')+'</button></div></div>';
   }
   return h;
 }
@@ -5403,6 +5540,11 @@ function frtHtmlConfig(){
    '<p class="fin-mu" style="margin:10px 0 0">Pix feito em sábado, domingo ou feriado vence no próximo dia útil.</p></div>'+
    '<div class="fin-h">Conferência no Bling</div><div class="fin-card"><p style="margin:0;font-size:13.5px">Nada é lançado sozinho. Ao abrir Fretes neste computador, o app confere no Bling o fornecedor e se já existe conta igual em aberto (mesmo valor e mesma data). O lançamento é sempre feito por você, em <b>Revisar e lançar</b>.</p></div>'+
    '<div class="fin-act"><button type="button" class="fin-btn pri" id="cSalvar">Salvar configurações</button></div>'+
+   '<div class="fin-h">Pagamento dos fretes</div><div class="fin-card"><div class="fin-g">'+
+   '<div class="fin-f fin-c3"><label for="fcBol">CT-e a prazo e faturas (boleto) usam</label><select id="fcBol">'+frtOpts(L.formas,(FRT.fcfg||{}).formaBoleto,'Escolher na hora')+'</select></div>'+
+   '<div class="fin-f fin-c3"><label for="fcVis">CT-e à vista / já pago usa</label><select id="fcVis">'+frtOpts(L.formas,(FRT.fcfg||{}).formaVista,'Escolher na hora')+'</select></div></div>'+
+   '<p class="fin-mu" style="margin:10px 0 0">CT-e a prazo entra no Contas a Pagar com a pendência "Vencimento do boleto" até a fatura/boleto chegar. Fatura já vem com vencimento.</p>'+
+   '<div style="margin-top:10px"><button type="button" class="fin-btn sm pri" id="fcSalvar">Salvar pagamento dos fretes</button></div></div>'+
    '<div class="fin-h">Envio à contabilidade</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">Depois de lançar no Bling, o app manda um e-mail para a contabilidade com o PDF do documento recortado e os dados do frete, e guarda uma cópia no seu Google Drive (pasta <b>Fretes - Contabilidade</b>, separada por mês). Quem envia é um script grátis do Google na sua conta: o e-mail da contabilidade fica dentro do script.</p>'+
    '<div class="fin-g"><div class="fin-f fin-c4"><label for="emUrl">Endereço do script (App da Web do Google)</label><input class="fin-in" id="emUrl" placeholder="https://script.google.com/macros/s/…/exec" value="'+frtEsc(frtEmailCfg().url||'')+'"></div>'+
    '<div class="fin-f fin-c2"><label for="emTok">Chave (a mesma do script)</label><input class="fin-in" id="emTok" value="'+frtEsc(frtEmailCfg().token||'')+'"></div></div>'+
@@ -5424,6 +5566,7 @@ function frtBindConfig(){
     cfg.cartoes=cfg.cartoes.filter(function(c){return c.formaId;});FRT.cfg=cfg;
     try{await frtSalvarCfg();FRT.msg='Configurações salvas. Valem no celular e no computador.';FRT.msgTipo='ok';}catch(e){FRT.msg='Não consegui salvar: '+e.message;FRT.msgTipo='err';}frtDraw();};
   frtEl('cListas').onclick=frtAtualizarListas;
+  frtEl('fcSalvar').onclick=async function(){var e={formaBoleto:frtEl('fcBol').value,formaVista:frtEl('fcVis').value};try{await frtFb('fretesConfig',{method:'PUT',body:e});FRT.fcfg=e;FRT.msg='Pagamento dos fretes salvo.';FRT.msgTipo='ok';}catch(er){FRT.msg='Não consegui salvar: '+er.message;FRT.msgTipo='err';}frtDraw();};
   function lerEm(){return {url:frtEl('emUrl').value.trim(),token:frtEl('emTok').value.trim(),auto:frtEl('emAuto').checked};}
   frtEl('emSalvar').onclick=async function(){var e=lerEm();if(e.url&&!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec/.test(e.url)){frtEl('emSt').innerHTML='<span class="fin-chip err">O endereço deve terminar em /exec</span>';return;}
     try{await frtFb('fretesEmail',{method:'PUT',body:e});FRT.email=e;FRT.msg='Envio à contabilidade salvo.';FRT.msgTipo='ok';}catch(er){FRT.msg='Não consegui salvar: '+er.message;FRT.msgTipo='err';}frtDraw();};
@@ -5504,7 +5647,7 @@ function renderFretesMobile(){
 function frtModoApp(on){
   var hd=document.head;function meta(n,c){var m=hd.querySelector('meta[name="'+n+'"]');if(!m){m=document.createElement('meta');m.name=n;hd.appendChild(m);}m.content=c;return m;}
   if(on){
-    meta('theme-color','#0a7d6b');meta('apple-mobile-web-app-capable','yes');meta('mobile-web-app-capable','yes');meta('apple-mobile-web-app-title','Fretes');
+    meta('theme-color','#0a7d6b');meta('apple-mobile-web-app-capable','yes');meta('mobile-web-app-capable','yes');meta('apple-mobile-web-app-title','Frete');
     var v=hd.querySelector('meta[name="viewport"]');if(v){if(!v.dataset.orig)v.dataset.orig=v.content;v.content='width=device-width,initial-scale=1,viewport-fit=cover';}
     if(!hd.querySelector('link[rel="manifest"]')){var l=document.createElement('link');l.rel='manifest';l.href='despesas.webmanifest';hd.appendChild(l);}
     if(!hd.querySelector('link[rel="apple-touch-icon"]')){var a=document.createElement('link');a.rel='apple-touch-icon';a.href='despesas-192.png';hd.appendChild(a);}
@@ -5516,7 +5659,7 @@ function frtModoApp(on){
 function frtDrawMob(){
   var n=frtLista('pend').length,t=FRT.mtela,h='';
   var titulo={enviar:'Enviar frete',pend:'Pendentes',lanc:'Lançados',item:'Conferir frete'}[t];
-  h+='<div class="dm-top">'+(t==='item'?'<button type="button" class="dm-back" id="dmVoltar">‹</button>':'')+'<h1>'+titulo+'<small>Fretes · '+frtEsc(STATE.usuarioLogado||'')+'</small></h1>'+(t==='item'?'':'<button type="button" id="dmTroca">💸 Despesas</button>'+(FRT.forcarMob&&!frtMobile()?'<button type="button" id="dmPc">💻 Tela do PC</button>':'<button type="button" id="dmApp">App completo</button>'))+'</div>';
+  h+='<div class="dm-top">'+(t==='item'?'<button type="button" class="dm-back" id="dmVoltar">‹</button>':'')+'<h1>'+titulo+'<small>Lançamento de frete · '+frtEsc(STATE.usuarioLogado||'')+'</small></h1>'+(t==='item'?'':'<button type="button" id="dmTroca">💸 Despesas</button>'+(FRT.forcarMob&&!frtMobile()?'<button type="button" id="dmPc">💻 Tela do PC</button>':'<button type="button" id="dmApp">App completo</button>'))+'</div>';
   h+='<div class="dm-body">'+frtMsgHtml();
   if(!FRT.carregado)h+='<div class="fin-card fin-mu">Carregando…</div>';
   else if(t==='enviar')h+=frtMobEnviar();
@@ -5552,7 +5695,7 @@ function frtMobEnviar(){
   if(!FRT.fotosNovas.length){
     h+='<div class="dm-cam"><label class="big" for="frtCam"><span>📷</span>Tirar foto</label><input id="frtCam" type="file" accept="image/*" capture="environment" hidden>'+
       '<label class="sec" for="frtArq">🖼️ Galeria ou PDF</label><input id="frtArq" type="file" accept="image/*,application/pdf" multiple hidden>'+
-      '<p>CT-e, fatura ou recibo do frete. O app recorta o documento, lê sozinho e deixa pendente para você conferir.</p></div>';
+      '<p>CT-e (DACTE) ou fatura/boleto da transportadora. Foto ou PDF. O app lê tudo do CT-e e deixa pendente para você conferir.</p></div>';
   } else {
     h+='<div class="dm-lbl">'+FRT.fotosNovas.length+' imagem(ns) deste frete</div><div class="dm-thumbs">'+FRT.fotosNovas.map(function(b,i){return '<div><img src="data:image/jpeg;base64,'+b+'" alt=""><button type="button" data-rm="'+i+'" aria-label="Remover">×</button></div>';}).join('')+
       (FRT.fotosNovas.length<4?'<label for="dmMais"><span>＋</span>Mais uma</label><input id="dmMais" type="file" accept="image/*" capture="environment" hidden>':'')+'</div>'+

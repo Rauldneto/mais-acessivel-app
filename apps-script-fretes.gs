@@ -1,8 +1,8 @@
 /**
  * Mais Acessível — envio dos fretes para a contabilidade
  * -------------------------------------------------------
- * Recebe do app (aba Fretes) as imagens recortadas do CT-e e os dados do lançamento,
- * monta um PDF, envia por e-mail para a contabilidade e guarda uma cópia no Google Drive
+ * Recebe do app (aba Lançamento de frete) as imagens recortadas do CT-e e os dados do lançamento,
+ * anexa o PDF original (ou monta um PDF com as fotos), envia por e-mail para a contabilidade e guarda uma cópia no Google Drive
  * (pasta "Fretes - Contabilidade", com uma subpasta por mês).
  *
  * COMO INSTALAR (uma vez só, uns 5 minutos):
@@ -14,7 +14,7 @@
  *  5. Implantar → Nova implantação → engrenagem → "App da Web".
  *     Executar como: "Eu".  Quem pode acessar: "Qualquer pessoa".  → Implantar.
  *  6. Copie o "URL do app da Web" (termina em /exec).
- *  7. No app: Fretes → Configurações → Envio à contabilidade → cole o URL e a mesma CHAVE → Salvar envio → Enviar e-mail de teste.
+ *  7. No app: Financeiro → Lançamento de frete → Configurações → Envio à contabilidade → cole o URL e a mesma CHAVE → Salvar envio → Enviar e-mail de teste.
  *
  * Se mudar este código depois: Implantar → Gerenciar implantações → lápis → Versão: "Nova versão" → Implantar
  * (assim o URL continua o mesmo).
@@ -41,12 +41,17 @@ function doPost(e) {
     }
 
     const fotos = (p.fotos || []).slice(0, 6);
-    if (!fotos.length) return saida({ ok: false, erro: 'Nenhuma imagem recebida.' });
+    const pdfs = (p.pdfs || []).slice(0, 4);
+    if (!fotos.length && !pdfs.length) return saida({ ok: false, erro: 'Nenhuma imagem ou PDF recebido.' });
     const nome = String(p.nome || 'Frete').replace(/[^\w\-]+/g, '-').slice(0, 90);
 
-    let anexos;
-    try { anexos = [montarPdf(fotos, nome)]; }
-    catch (err) { anexos = fotos.map((b, i) => Utilities.newBlob(Utilities.base64Decode(b), 'image/jpeg', nome + (fotos.length > 1 ? '_' + (i + 1) : '') + '.jpg')); }
+    // PDF original da transportadora vai como veio; fotos viram um PDF só
+    let anexos = pdfs.map((x, i) => Utilities.newBlob(Utilities.base64Decode(x.b64), 'application/pdf', nome + (pdfs.length > 1 ? '_' + (i + 1) : '') + '.pdf'));
+    if (fotos.length) {
+      const nf = pdfs.length ? nome + '_fotos' : nome;
+      try { anexos.push(montarPdf(fotos, nf)); }
+      catch (err) { fotos.forEach((b, i) => anexos.push(Utilities.newBlob(Utilities.base64Decode(b), 'image/jpeg', nf + (fotos.length > 1 ? '_' + (i + 1) : '') + '.jpg'))); }
+    }
 
     let link = '';
     try {
