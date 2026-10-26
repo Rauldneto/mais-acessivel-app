@@ -4432,7 +4432,7 @@ function dspMobItem(){
 
 // ===================== MÓDULO LANÇAMENTO DE FRETE (mod16) — cópia do Lançamento de despesas =====================
 // Foto do CT-e/DACTE ou comprovante de frete -> recorte do documento no próprio aparelho -> leitura pela IA ->
-// conferência -> Contas a Pagar do Bling -> e-mail com o PDF para a contabilidade (Google Apps Script).
+// conferência -> Contas a Pagar do Bling -> e-mail pelo Outlook (Microsoft Graph) com o PDF para a contabilidade.
 // Firebase: financeiro/fretes/{id}, financeiro/fretesFotos/{id} (apagadas depois de enviar à contabilidade),
 //           financeiro/fretesEmail (envio), financeiro/config e financeiro/listas são os mesmos das despesas.
 // Lançamento de despesas: foto do comprovante (celular) -> leitura pela IA da empresa (Claude, via worker)
@@ -4940,7 +4940,8 @@ function frtCteHtml(f){var L=frtCteLinhas(f);if(!L.length)return '';
 document.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest&&ev.target.closest('[data-copia]');if(!b)return;try{navigator.clipboard.writeText(b.getAttribute('data-copia'));b.textContent='copiado ✓';}catch(e){}});
 // ---------- envio à contabilidade (Google Apps Script: e-mail com PDF + cópia no Google Drive) ----------
 function frtEmailCfg(){return FRT.email||{};}
-function frtEmailAuto(){var c=frtEmailCfg();return !!(c.url&&c.auto!==false);}
+function frtEmailPronto(){var c=frtEmailCfg();return !!(c.clientId&&c.para);}
+function frtEmailAuto(){return frtEmailPronto()&&frtEmailCfg().auto!==false;}
 function frtEmailAssunto(d){
   // Mais Acessível - Frete CT-e 4223496 - NF 3712 - RODONAVES TRANSPORTES E ENCOMENDAS LTDA
   var c=d.cte||{},f=d.fatura,doc,nfs;
@@ -4961,22 +4962,60 @@ function frtEmailHtml(d){return '<p>Segue o documento do frete (CT-e / fatura) p
   frtEmailLinhas(d).map(function(r){return '<tr><td style="padding:4px 12px 4px 0;color:#555">'+frtEsc(r[0])+'</td><td style="padding:4px 0;font-weight:bold">'+frtEsc(r[1])+'</td></tr>';}).join('')+
   '</table><p style="color:#888;font-size:12px">Enviado pelo app Mais Acessível (JDFER Comércio e Serviços Ltda).</p>';}
 function frtEmailNome(d){return ('Frete_'+(d.numeroDocumento||'sem-numero')+'_'+((d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'transportadora')+'_'+(d.emissao||frtHoje())).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_\-]+/g,'-').slice(0,90);}
-async function frtEmailPost(corpo){
-  var c=frtEmailCfg();if(!c.url)throw new Error('Configure o envio à contabilidade em Configurações.');
-  var r=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({token:c.token||''},corpo))});
-  var j;try{j=await r.json();}catch(e){throw new Error('O script do Google não respondeu direito (confira se a implantação é "Qualquer pessoa").');}
-  if(!j.ok)throw new Error(j.erro||'O script do Google recusou o envio.');return j;
+// ---------- envio pelo Outlook (Microsoft 365) da conta rauldias@tendfer.com.br, via Microsoft Graph ----------
+// Login uma vez no computador (janela da Microsoft); o app guarda a autorização e envia direto da sua caixa (fica em Itens enviados).
+var FRT_MSAL=null,FRT_ESCOPOS=['Mail.Send','User.Read'];
+function frtScript(src,glob){return window[glob]?Promise.resolve():new Promise(function(res,rej){var el=document.createElement('script');el.src=src;el.onload=function(){res();};el.onerror=function(){rej(new Error('Não consegui carregar '+src.split('/npm/')[1]+'. Confira a internet.'));};document.head.appendChild(el);});}
+async function frtMsal(){
+  var c=frtEmailCfg();if(!c.clientId)throw new Error('Configure o Outlook em Lançamento de frete → Configurações.');
+  await frtScript('https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.30.0/lib/msal-browser.min.js','msal');
+  var chave=c.clientId+'|'+(c.tenant||'organizations');
+  if(!FRT_MSAL||FRT_MSAL._chave!==chave){
+    var app=new msal.PublicClientApplication({auth:{clientId:c.clientId,authority:'https://login.microsoftonline.com/'+(c.tenant||'organizations'),redirectUri:new URL('msal-retorno.html',location.href).href},cache:{cacheLocation:'localStorage'}});
+    await app.initialize();app._chave=chave;FRT_MSAL=app;}
+  return FRT_MSAL;
+}
+function frtOutlookConta(app){var L=app.getAllAccounts();return L.filter(function(a){return /tendfer/i.test(a.username);})[0]||L[0]||null;}
+// interativo=true só quando vem de um clique (o navegador só deixa abrir a janela de login nesse caso)
+async function frtOutlookToken(interativo){
+  var app=await frtMsal(),conta=frtOutlookConta(app);
+  if(conta){try{return await app.acquireTokenSilent({scopes:FRT_ESCOPOS,account:conta});}catch(e){if(!interativo)throw new Error('A conexão com o Outlook expirou. Clique em "📧 Enviar" na aba Lançados para entrar de novo.');}}
+  else if(!interativo)throw new Error('O Outlook ainda não foi conectado neste computador (Configurações → Conectar ao Outlook).');
+  try{return await app.acquireTokenPopup({scopes:FRT_ESCOPOS,account:conta||undefined,loginHint:conta?undefined:'rauldias@tendfer.com.br'});}
+  catch(e){if(/popup_window_error|empty_window/.test(e.errorCode||e.message))throw new Error('O navegador bloqueou a janela de login da Microsoft. Libere pop-ups para este site e tente de novo.');
+    if(/user_cancelled/.test(e.errorCode||''))throw new Error('Login do Outlook cancelado.');throw new Error('Login do Outlook: '+(e.errorMessage||e.message));}
+}
+async function frtPdfDeFotos(fotos){
+  await frtScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js','jspdf');
+  var pdf=new jspdf.jsPDF({unit:'mm',format:'a4'}),W=210,H=297,m=8;
+  for(var i=0;i<fotos.length;i++){var src='data:image/jpeg;base64,'+fotos[i];
+    var dim=await new Promise(function(res){var im=new Image();im.onload=function(){res([im.naturalWidth,im.naturalHeight]);};im.onerror=function(){res([1000,1414]);};im.src=src;});
+    var esc=Math.min((W-2*m)/dim[0],(H-2*m)/dim[1]),w=dim[0]*esc,h=dim[1]*esc;if(i)pdf.addPage();pdf.addImage(src,'JPEG',(W-w)/2,m,w,h);}
+  return pdf.output('datauristring').split(',')[1];
+}
+function frtEmails(s){return String(s||'').split(/[,;\s]+/).filter(function(x){return /@/.test(x);}).map(function(x){return {emailAddress:{address:x}};});}
+async function frtOutlookEnviar(o){
+  var c=frtEmailCfg();if(!frtEmails(c.para).length)throw new Error('Informe o e-mail da contabilidade em Configurações.');
+  var tam=(o.anexos||[]).reduce(function(t,a){return t+a.b64.length*0.75;},0);if(tam>3.4e6)throw new Error('Os anexos passam de 3 MB, limite do envio pelo Outlook. Reenvie com menos imagens.');
+  var tk=await frtOutlookToken(o.interativo);
+  var r=await fetch('https://graph.microsoft.com/v1.0/me/sendMail',{method:'POST',headers:{'Authorization':'Bearer '+tk.accessToken,'Content-Type':'application/json'},
+    body:JSON.stringify({message:{subject:o.assunto,body:{contentType:'HTML',content:o.html},toRecipients:frtEmails(c.para),ccRecipients:frtEmails(c.cc),
+      attachments:(o.anexos||[]).map(function(a){return {'@odata.type':'#microsoft.graph.fileAttachment',name:a.nome,contentType:a.tipo,contentBytes:a.b64};})},saveToSentItems:true})});
+  if(r.status!==202){var t='';try{var j=await r.json();t=j.error&&j.error.message;}catch(e){}throw new Error('O Outlook recusou o envio ('+r.status+(t?': '+t:'')+').');}
+  return {para:c.para,de:(tk.account&&tk.account.username)||''};
 }
 var FRT_ENVIANDO={};
-async function frtEnviarEmail(id){
+async function frtEnviarEmail(id,interativo){
   if(FRT_ENVIANDO[id])throw new Error('Já está enviando este frete.');FRT_ENVIANDO[id]=1;
   try{
     var d=FRT.desp[id];if(!d)throw new Error('Frete não encontrado.');
     var fotos=await frtFb('fretesFotos/'+id);if(!fotos||!fotos.length)throw new Error('As imagens deste frete não estão mais guardadas no app.');
     var pdfs=(await frtFb('fretesPdf/'+id).catch(function(){return null;}))||[];var dp=d.fotosDoPdf||[];
     if(pdfs.length)fotos=fotos.filter(function(_b,i){return dp.indexOf(i)<0;}); // o PDF original vai no lugar das páginas convertidas
-    var j=await frtEmailPost({assunto:frtEmailAssunto(d),html:frtEmailHtml(d),texto:frtEmailLinhas(d).map(function(r){return r[0]+': '+r[1];}).join('\n'),nome:frtEmailNome(d),mes:(d.emissao||frtHoje()).slice(0,7),fotos:fotos,pdfs:pdfs});
-    var up={emailEm:Date.now(),emailPor:STATE.usuarioLogado||'',emailPara:j.para||'',emailLink:j.link||'',emailErro:null};
+    var nome=frtEmailNome(d),anexos=pdfs.map(function(p,i){return {nome:nome+(pdfs.length>1?'_'+(i+1):'')+'.pdf',tipo:'application/pdf',b64:p.b64};});
+    if(fotos.length)anexos.push({nome:nome+(pdfs.length?'_fotos':'')+'.pdf',tipo:'application/pdf',b64:await frtPdfDeFotos(fotos)});
+    var j=await frtOutlookEnviar({assunto:frtEmailAssunto(d),html:frtEmailHtml(d),anexos:anexos,interativo:!!interativo});
+    var up={emailEm:Date.now(),emailPor:STATE.usuarioLogado||'',emailPara:j.para||'',emailDe:j.de||'',emailErro:null};
     {try{await frtFb('fretesFotos/'+id,{method:'DELETE'});await frtFb('fretesPdf/'+id,{method:'DELETE'});up.nFotos=0;up.nPdf=0;}catch(e){}}
     await frtFb('fretes/'+id,{method:'PATCH',body:up});Object.assign(d,up);return j;
   }catch(e){try{await frtFb('fretes/'+id,{method:'PATCH',body:{emailErro:e.message}});if(FRT.desp[id])FRT.desp[id].emailErro=e.message;}catch(_e){}throw e;}
@@ -4986,8 +5025,8 @@ async function frtEnviarEmail(id){
 async function frtApagarFotosSePuder(id){var d=FRT.desp[id];if(!d||!d.emailEm||d.status!=='lancado'||(d.pendencias&&d.pendencias.length))return;
   try{await frtFb('fretesFotos/'+id,{method:'DELETE'});await frtFb('fretesPdf/'+id,{method:'DELETE'});await frtFb('fretes/'+id,{method:'PATCH',body:{nFotos:0,nPdf:0}});d.nFotos=0;d.nPdf=0;}catch(e){}}
 function frtEmailChip(d){
-  if(d.emailEm)return '<span class="fin-chip ok" title="'+frtEsc(d.emailPara||'')+'">📧 enviado '+new Date(d.emailEm).toLocaleDateString('pt-BR')+'</span>'+(d.emailLink?' <a href="'+frtEsc(d.emailLink)+'" target="_blank" rel="noopener" class="fin-sw">Drive</a>':'');
-  return (d.emailErro?'<span class="fin-chip err" title="'+frtEsc(d.emailErro)+'">não enviou</span> ':'')+'<button type="button" class="fin-btn sm" data-em="'+frtEsc(d.id)+'"'+(frtEmailCfg().url?'':' disabled title="Configure o envio em Configurações"')+'>📧 Enviar</button>';
+  if(d.emailEm)return '<span class="fin-chip ok" title="'+frtEsc(d.emailPara||'')+'">📧 enviado '+new Date(d.emailEm).toLocaleDateString('pt-BR')+'</span>';
+  return (d.emailErro?'<span class="fin-chip err" title="'+frtEsc(d.emailErro)+'">não enviou</span> ':'')+'<button type="button" class="fin-btn sm" data-em="'+frtEsc(d.id)+'"'+(frtEmailPronto()?'':' disabled title="Configure o envio em Configurações"')+'>📧 Enviar</button>';
 }
 // ---------- conferência ----------
 function frtAbrir(id){FRT.sel=id;FRT.form=null;FRT.tela=FRT.tela==='captura'?'conferencia':FRT.tela;FRT.msg='';FRT.revisao=null;frtDraw();
@@ -5511,7 +5550,7 @@ function frtHtmlLancados(){
   var L=frtLista('lancado').slice(0,50);
   if(!L.length)return '<div class="fin-empty"><b>Nada lançado ainda</b>Os fretes enviados ao Bling ficam listados aqui.</div>';
   var ne=frtLista('lancado').filter(function(d){return !d.emailEm;}).length;
-  return (ne?'<div class="fin-msg warn" style="justify-content:space-between;align-items:center"><span>📧 '+ne+(ne>1?' fretes lançados ainda não foram enviados':' frete lançado ainda não foi enviado')+' à contabilidade.</span><button type="button" class="fin-btn sm pri" id="frtEmTodos"'+(frtEmailCfg().url?'':' disabled title="Configure o envio em Configurações"')+'>Enviar todos</button></div>':'')+'<div class="fin-card" style="overflow-x:auto"><table class="fin-tbl"><tr><th>Lançado em</th><th>Transportadora</th><th>Forma</th><th>Vencimento</th><th style="text-align:right">Valor</th><th>ID Bling</th><th>Pago</th><th>Contabilidade</th><th>Pendência</th></tr>'+
+  return (ne?'<div class="fin-msg warn" style="justify-content:space-between;align-items:center"><span>📧 '+ne+(ne>1?' fretes lançados ainda não foram enviados':' frete lançado ainda não foi enviado')+' à contabilidade.</span><button type="button" class="fin-btn sm pri" id="frtEmTodos"'+(frtEmailPronto()?'':' disabled title="Configure o envio em Configurações"')+'>Enviar todos</button></div>':'')+'<div class="fin-card" style="overflow-x:auto"><table class="fin-tbl"><tr><th>Lançado em</th><th>Transportadora</th><th>Forma</th><th>Vencimento</th><th style="text-align:right">Valor</th><th>ID Bling</th><th>Pago</th><th>Contabilidade</th><th>Pendência</th></tr>'+
     L.map(function(d){var p=frtLancadoPend(d);return '<tr'+(p?' data-lp="'+frtEsc(d.id)+'" style="cursor:pointer" title="Abrir para completar"':'')+'><td>'+new Date(d.lancadoEm).toLocaleDateString('pt-BR')+'</td><td>'+frtEsc((d.contato&&d.contato.nome)||'')+'</td><td>'+frtEsc(frtFormaNome(d.formaId))+'</td><td>'+frtBr(d.vencimento)+'</td><td class="n">'+frtMoney(d.valor)+'</td><td>'+frtEsc(d.blingId||'')+'</td><td>'+(d.baixadoEm?'<span class="fin-chip ok">pago '+frtBr(d.baixaData)+'</span>':(d.parcelas>1?'<span class="fin-mu">parcelado</span>':'<button type="button" class="fin-btn sm" data-bx="'+frtEsc(d.id)+'"'+(frtExtBaixaOk()?'':' disabled title="Atualize a extensão para 2.1.2"')+'>💲 Dar baixa</button>'))+'</td><td>'+frtEmailChip(d)+'</td><td>'+(p?'<span class="fin-chip warn">falta: '+frtEsc(d.pendencias.join(', '))+'</span> <button type="button" class="fin-btn sm">Completar</button>':'<span class="fin-chip ok">ok</span>')+'</td></tr>';}).join('')+'</table></div>';
 }
 function frtBindLancados(){
@@ -5523,9 +5562,9 @@ function frtBindLancados(){
     try{await frtBaixarCore(id,m[3]+'-'+m[2]+'-'+m[1]);FRT.msg='Baixa feita no Bling (pago em '+dt+').';FRT.msgTipo='ok';}catch(e){FRT.msg='Não consegui dar baixa: '+e.message;FRT.msgTipo='err';}
     frtDraw();};});
 FRT.root.querySelectorAll('[data-em]').forEach(function(b){b.onclick=async function(ev){ev.stopPropagation();var id=b.getAttribute('data-em');b.disabled=true;b.textContent='Enviando…';
-    try{await frtEnviarEmail(id);FRT.msg='Enviado à contabilidade.';FRT.msgTipo='ok';}catch(e){FRT.msg='Não enviei: '+e.message;FRT.msgTipo='err';}frtDraw();};});
+    try{await frtEnviarEmail(id,true);FRT.msg='Enviado à contabilidade pelo Outlook.';FRT.msgTipo='ok';}catch(e){FRT.msg='Não enviei: '+e.message;FRT.msgTipo='err';}frtDraw();};});
   var et=frtEl('frtEmTodos');if(et)et.onclick=async function(){et.disabled=true;var L=frtLista('lancado').filter(function(d){return !d.emailEm;}),ok=0,err=[];
-    for(var i=0;i<L.length;i++){et.textContent='Enviando '+(i+1)+' de '+L.length+'…';try{await frtEnviarEmail(L[i].id);ok++;}catch(e){err.push(((L[i].contato&&L[i].contato.nome)||'frete')+': '+e.message);}}
+    for(var i=0;i<L.length;i++){et.textContent='Enviando '+(i+1)+' de '+L.length+'…';try{await frtEnviarEmail(L[i].id,i===0);ok++;}catch(e){err.push(((L[i].contato&&L[i].contato.nome)||'frete')+': '+e.message);}}
     FRT.msg=ok+' enviado(s) à contabilidade.'+(err.length?' Não enviei: '+err.join(' | '):'');FRT.msgTipo=err.length?'warn':'ok';frtDraw();};
 FRT.root.querySelectorAll('[data-lp]').forEach(function(r){r.onclick=function(){FRT.sel=r.getAttribute('data-lp');FRT.form=null;FRT.revisao=null;FRT.tela='conferencia';frtDraw();};});}
 
@@ -5548,12 +5587,21 @@ function frtHtmlConfig(){
    '<div class="fin-f fin-c3"><label for="fcBol">Quando o documento for fatura/boleto, usar</label><select id="fcBol">'+frtOpts(L.formas,(FRT.fcfg||{}).formaBoleto,'Deixar em branco')+'</select></div></div>'+
    '<p class="fin-mu" style="margin:10px 0 0">CT-e não traz vencimento nem boleto: o frete fica na Conferência até você informar o vencimento (e a forma de pagamento, se não estiver no documento). Só depois disso dá para lançar.</p>'+
    '<div style="margin-top:10px"><button type="button" class="fin-btn sm pri" id="fcSalvar">Salvar pagamento dos fretes</button></div></div>'+
-   '<div class="fin-h">Envio à contabilidade</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">Depois de lançar no Bling, o app manda um e-mail para a contabilidade com o PDF do documento e os dados do frete. A imagem/PDF é apagada do app assim que o e-mail sai (fica só no e-mail). Quem envia é um script grátis do Google na sua conta: o e-mail da contabilidade fica dentro do script.</p>'+
-   '<div class="fin-g"><div class="fin-f fin-c4"><label for="emUrl">Endereço do script (App da Web do Google)</label><input class="fin-in" id="emUrl" placeholder="https://script.google.com/macros/s/…/exec" value="'+frtEsc(frtEmailCfg().url||'')+'"></div>'+
-   '<div class="fin-f fin-c2"><label for="emTok">Chave (a mesma do script)</label><input class="fin-in" id="emTok" value="'+frtEsc(frtEmailCfg().token||'')+'"></div></div>'+
+   '<div class="fin-h">Envio à contabilidade (Outlook)</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">Depois de lançar no Bling, o app envia pelo <b>seu Outlook (rauldias@tendfer.com.br)</b> um e-mail para a contabilidade com o CT-e em PDF anexo e todos os dados no corpo. O e-mail fica nos seus Itens enviados. A imagem/PDF é apagada do app assim que o e-mail sai.</p>'+
+   '<div class="fin-g"><div class="fin-f fin-c3"><label for="emPara">E-mail da contabilidade</label><input class="fin-in" id="emPara" type="email" placeholder="fiscal@contabilidade.com.br" value="'+frtEsc(frtEmailCfg().para||'')+'"></div>'+
+   '<div class="fin-f fin-c3"><label for="emCc">Cópia (opcional)</label><input class="fin-in" id="emCc" placeholder="separe por vírgula" value="'+frtEsc(frtEmailCfg().cc||'')+'"></div>'+
+   '<div class="fin-f fin-c3"><label for="emCli">ID do aplicativo (cliente)</label><input class="fin-in" id="emCli" placeholder="00000000-0000-0000-0000-000000000000" value="'+frtEsc(frtEmailCfg().clientId||'')+'"></div>'+
+   '<div class="fin-f fin-c3"><label for="emTen">ID do diretório (locatário)</label><input class="fin-in" id="emTen" placeholder="00000000-0000-0000-0000-000000000000" value="'+frtEsc(frtEmailCfg().tenant||'')+'"></div></div>'+
    '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;font-weight:600"><input type="checkbox" id="emAuto"'+(frtEmailCfg().auto!==false?' checked':'')+'> Enviar sozinho logo depois de lançar no Bling</label>'+
-   '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="fin-btn sm pri" id="emSalvar">Salvar envio</button><button type="button" class="fin-btn sm" id="emTeste">Enviar e-mail de teste</button> <span id="emSt"></span></div>'+
-   '<p class="fin-mu" style="margin:10px 0 0">Código do script: <a class="fin-sw" href="https://github.com/rauldneto/mais-acessivel-app/blob/main/apps-script-fretes.gs" target="_blank" rel="noopener">apps-script-fretes.gs</a> (instruções no topo do arquivo).</p></div>'+
+   '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="fin-btn sm pri" id="emSalvar">Salvar envio</button><button type="button" class="fin-btn sm" id="emConectar">🔗 Conectar ao Outlook</button><button type="button" class="fin-btn sm" id="emTeste">Enviar e-mail de teste</button> <span id="emSt"></span></div>'+
+   '<details style="margin-top:12px"><summary class="fin-sw" style="cursor:pointer">Como pegar os dois IDs (uma vez só, uns 5 minutos)</summary><ol style="font-size:13.5px;line-height:1.55;margin:8px 0 0;padding-left:20px">'+
+   '<li>Entre em <a class="fin-sw" href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noopener">entra.microsoft.com → Registros de aplicativo</a> com rauldias@tendfer.com.br e clique em <b>Novo registro</b>.</li>'+
+   '<li>Nome: <b>Mais Acessível App</b>. Tipos de conta: <b>Somente contas deste diretório organizacional</b>.</li>'+
+   '<li>URI de redirecionamento: plataforma <b>Aplicativo de página única (SPA)</b> e o endereço <b>'+frtEsc(new URL('msal-retorno.html',location.href).href)+'</b>. Clique em Registrar.</li>'+
+   '<li>Na tela que abrir, copie <b>ID do aplicativo (cliente)</b> e <b>ID do diretório (locatário)</b> para os campos acima.</li>'+
+   '<li>Em <b>Permissões de API → Adicionar uma permissão → Microsoft Graph → Permissões delegadas</b>, marque <b>Mail.Send</b>. Se aparecer o botão <b>Conceder consentimento do administrador</b>, clique nele.</li>'+
+   '<li>Volte aqui: <b>Salvar envio → Conectar ao Outlook → Enviar e-mail de teste</b>.</li></ol>'+
+   '<p class="fin-mu" style="margin:8px 0 0">Não tem custo. O login vale para este computador; se a Microsoft pedir de novo (a cada tantos dias), o app avisa e você só clica em 📧 Enviar.</p></details></div>'+
    '<div class="fin-h">Listas do Bling</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">'+L.formas.length+' formas de pagamento, '+L.contas.length+' contas financeiras e '+L.categorias.filter(function(c){return !c.pai;}).length+' categorias'+(L.atualizadoEm?', atualizadas em '+new Date(L.atualizadoEm).toLocaleDateString('pt-BR'):'')+'.</p>'+
    '<button type="button" class="fin-btn sm" id="cListas">🔄 Atualizar do Bling</button> <span id="frtCfgSt"></span><p class="fin-mu" style="margin:8px 0 0">Use quando criar uma forma de pagamento ou conta nova no Bling. Precisa da extensão neste computador.</p></div>';
   return h;
@@ -5570,11 +5618,19 @@ function frtBindConfig(){
     try{await frtSalvarCfg();FRT.msg='Configurações salvas. Valem no celular e no computador.';FRT.msgTipo='ok';}catch(e){FRT.msg='Não consegui salvar: '+e.message;FRT.msgTipo='err';}frtDraw();};
   frtEl('cListas').onclick=frtAtualizarListas;
   frtEl('fcSalvar').onclick=async function(){var e={formaBoleto:frtEl('fcBol').value};try{await frtFb('fretesConfig',{method:'PUT',body:e});FRT.fcfg=e;FRT.msg='Pagamento dos fretes salvo.';FRT.msgTipo='ok';}catch(er){FRT.msg='Não consegui salvar: '+er.message;FRT.msgTipo='err';}frtDraw();};
-  function lerEm(){return {url:frtEl('emUrl').value.trim(),token:frtEl('emTok').value.trim(),auto:frtEl('emAuto').checked};}
-  frtEl('emSalvar').onclick=async function(){var e=lerEm();if(e.url&&!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec/.test(e.url)){frtEl('emSt').innerHTML='<span class="fin-chip err">O endereço deve terminar em /exec</span>';return;}
+  function lerEm(){return {para:frtEl('emPara').value.trim(),cc:frtEl('emCc').value.trim(),clientId:frtEl('emCli').value.trim(),tenant:frtEl('emTen').value.trim(),auto:frtEl('emAuto').checked};}
+  var guid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,st=frtEl('emSt');
+  function valido(e){if(e.clientId&&!guid.test(e.clientId))return 'O ID do aplicativo tem o formato 00000000-0000-0000-0000-000000000000.';if(e.tenant&&!guid.test(e.tenant))return 'O ID do diretório tem o formato 00000000-0000-0000-0000-000000000000.';if(e.para&&!frtEmails(e.para).length)return 'E-mail da contabilidade inválido.';return '';}
+  frtEl('emSalvar').onclick=async function(){var e=lerEm(),v=valido(e);if(v){st.innerHTML='<span class="fin-chip err">'+frtEsc(v)+'</span>';return;}
     try{await frtFb('fretesEmail',{method:'PUT',body:e});FRT.email=e;FRT.msg='Envio à contabilidade salvo.';FRT.msgTipo='ok';}catch(er){FRT.msg='Não consegui salvar: '+er.message;FRT.msgTipo='err';}frtDraw();};
-  frtEl('emTeste').onclick=async function(){var st=frtEl('emSt');FRT.email=Object.assign({},FRT.email||{},lerEm());st.innerHTML='<span class="fin-chip">Enviando teste…</span>';
-    try{var j=await frtEmailPost({teste:true});st.innerHTML='<span class="fin-chip ok">✓ Teste enviado para '+frtEsc(j.para||'a contabilidade')+'</span>';}catch(er){st.innerHTML='<span class="fin-chip err">'+frtEsc(er.message)+'</span>';}};
+  frtEl('emConectar').onclick=async function(){var e=lerEm(),v=valido(e);if(v||!e.clientId){st.innerHTML='<span class="fin-chip err">'+frtEsc(v||'Preencha o ID do aplicativo e o ID do diretório.')+'</span>';return;}
+    FRT.email=Object.assign({},FRT.email||{},e);st.innerHTML='<span class="fin-chip">Abrindo o login da Microsoft…</span>';
+    try{var tk=await frtOutlookToken(true);await frtFb('fretesEmail',{method:'PUT',body:FRT.email}).catch(function(){});st.innerHTML='<span class="fin-chip ok">✓ Conectado como '+frtEsc(tk.account&&tk.account.username||'')+'</span>';}
+    catch(er){st.innerHTML='<span class="fin-chip err">'+frtEsc(er.message)+'</span>';}};
+  frtEl('emTeste').onclick=async function(){FRT.email=Object.assign({},FRT.email||{},lerEm());st.innerHTML='<span class="fin-chip">Enviando teste pelo Outlook…</span>';
+    try{var j=await frtOutlookEnviar({assunto:'Mais Acessível - Teste do envio de fretes',html:'<p>Teste do app Mais Acessível.</p><p>A partir de agora os documentos de frete (CT-e) chegam por este e-mail, com o PDF anexo e os dados no corpo.</p>',anexos:[],interativo:true});
+      st.innerHTML='<span class="fin-chip ok">✓ Teste enviado de '+frtEsc(j.de)+' para '+frtEsc(j.para)+'</span>';}catch(er){st.innerHTML='<span class="fin-chip err">'+frtEsc(er.message)+'</span>';}};
+  if(frtEmailCfg().clientId)frtMsal().then(function(app){var c=frtOutlookConta(app);if(c&&frtEl('emSt')&&!frtEl('emSt').innerHTML)frtEl('emSt').innerHTML='<span class="fin-chip ok">Outlook conectado: '+frtEsc(c.username)+'</span>';}).catch(function(){});
 }
 
 // Aviso flutuante em outras telas: há despesas para conferir (só no computador, admin)
