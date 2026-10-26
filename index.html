@@ -3006,11 +3006,12 @@ function renderModuloNav(){
     {id:'mod12', icon:'🏠', label:'Leilão de imóveis'},
     {id:'mod13', icon:'💲', label:'Formação de preço'},
     {id:'mod14', icon:'💸', label:'Lançamento de despesas'},
+    {id:'mod16', icon:'🚚', label:'Fretes'},
     {id:'mod5',  icon:'🧪', label:'Modelo em Teste'},
     {id:'mod15', icon:'📊', label:'Controle'}
   ];
   // Mapeamento id antigo -> novo
-  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13','mod14':'mod14','mod15':'mod15'};
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13','mod14':'mod14','mod15':'mod15','mod16':'mod16'};
   // Admin ve tudo; outros so veem abas permitidas
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
@@ -3024,7 +3025,7 @@ function renderModuloNav(){
     }
   }
   // Abas só do administrador: Energia solar e Leilão (pessoais) e Formação de preço (mostra custos)
-  var ABAS_SO_ADMIN=['mod11','mod12','mod13','mod14','mod15'];
+  var ABAS_SO_ADMIN=['mod11','mod12','mod13','mod14','mod15','mod16'];
   if(STATE.roleLogado!=='admin'){
     MODULOS=MODULOS.filter(function(m){return ABAS_SO_ADMIN.indexOf(m.id)<0;});
     if(ABAS_SO_ADMIN.indexOf(STATE.modulo)>=0&&MODULOS.length)STATE.modulo=MODULOS[0].id;
@@ -3034,11 +3035,11 @@ function renderModuloNav(){
     {n:'Vendas',i:'ti-shopping-bag',c:'#ff9500',ids:['frete','mod10','mod2','mod7','mod8','mod4','mod5']},
     {n:'Lead',i:'ti-target-arrow',c:'#007aff',ids:['mod9']},
     {n:'Compras',i:'ti-shopping-cart',c:'#34c759',ids:['mod13']},
-    {n:'Financeiro',i:'ti-cash',c:'#0a7d6b',ids:['mod14']},
+    {n:'Financeiro',i:'ti-cash',c:'#0a7d6b',ids:['mod14','mod16']},
     {n:'T.I.',i:'ti-cpu',c:'#5856d6',ids:['mod3','mod15']},
     {n:'Particular',i:'ti-home',c:'#af52de',ids:['mod12','mod11']}
   ];
-  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod13:'ti-currency-dollar',mod14:'ti-receipt-2',mod15:'ti-gauge',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun'};
+  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod13:'ti-currency-dollar',mod14:'ti-receipt-2',mod16:'ti-truck-delivery',mod15:'ti-gauge',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun'};
   if(!document.getElementById('navIosCss')){
     var lk=document.createElement('link');lk.rel='stylesheet';lk.href='https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css';lk.onload=function(){document.documentElement.classList.add('ti-ok');};document.head.appendChild(lk);
     var st=document.createElement('style');st.id='navIosCss';
@@ -3153,7 +3154,7 @@ var CTL_PRECOS=[
   {p:'claude-sonnet',in:3,out:15},
   {p:'claude-opus-4-5',in:5,out:25},{p:'claude-opus-4-6',in:5,out:25},{p:'claude-opus',in:15,out:75}
 ];
-var CTL_AREAS={frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod14:'Despesas (comprovantes)',mod15:'Controle'};
+var CTL_AREAS={frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod14:'Despesas (comprovantes)',mod16:'Fretes (CT-e)',mod15:'Controle'};
 var CTL={cfg:null,ia:null,carregando:false,erro:'',dolar:null,root:null};
 
 function ctlPreco(model){model=model||'';for(var k=0;k<CTL_PRECOS.length;k++){if(model.indexOf(CTL_PRECOS[k].p)===0)return CTL_PRECOS[k];}return {in:3,out:15};}
@@ -4360,7 +4361,7 @@ function dspModoApp(on){
 function dspDrawMob(){
   var n=dspLista('pend').length,t=DSP.mtela,h='';
   var titulo={enviar:'Enviar comprovante',pend:'Pendentes',lanc:'Lançados',item:'Conferir despesa'}[t];
-  h+='<div class="dm-top">'+(t==='item'?'<button type="button" class="dm-back" id="dmVoltar">‹</button>':'')+'<h1>'+titulo+'<small>Financeiro · '+dspEsc(STATE.usuarioLogado||'')+'</small></h1>'+(t==='item'?'':(DSP.forcarMob&&!dspMobile()?'<button type="button" id="dmPc">💻 Tela do PC</button>':'<button type="button" id="dmApp">App completo</button>'))+'</div>';
+  h+='<div class="dm-top">'+(t==='item'?'<button type="button" class="dm-back" id="dmVoltar">‹</button>':'')+'<h1>'+titulo+'<small>Financeiro · '+dspEsc(STATE.usuarioLogado||'')+'</small></h1>'+(t==='item'?'':'<button type="button" id="dmTroca">🚚 Fretes</button>'+(DSP.forcarMob&&!dspMobile()?'<button type="button" id="dmPc">💻 Tela do PC</button>':'<button type="button" id="dmApp">App completo</button>'))+'</div>';
   h+='<div class="dm-body">'+dspMsgHtml();
   if(!DSP.carregado)h+='<div class="fin-card fin-mu">Carregando…</div>';
   else if(t==='enviar')h+=dspMobEnviar();
@@ -4376,6 +4377,7 @@ function dspDrawMob(){
   DSP.root.querySelectorAll('.dm-tab [data-m]').forEach(function(b){b.onclick=function(){DSP.mtela=b.dataset.m;DSP.msg='';dspDraw();window.scrollTo(0,0);};});
   var pc=dspEl('dmPc');if(pc)pc.onclick=function(){DSP.forcarMob=false;DSP.mob=false;DSP.root=null;DSP.sel=null;DSP.form=null;DSP.msg='';if(location.hash==='#celular')history.replaceState(null,'',location.pathname);render();};
   var ap=dspEl('dmApp');if(ap)ap.onclick=function(){DSP.forcarMob=false;DSP.modoPc=true;DSP.mob=false;DSP.root=null;STATE.modulo='frete';STATE.tab='cotacao';render();};
+  var tr=dspEl('dmTroca');if(tr)tr.onclick=function(){DSP.root=null;DSP.mob=false;if(typeof FRT!=='undefined'){FRT.forcarMob=DSP.forcarMob;FRT.mtela='enviar';}STATE.modulo='mod16';render();window.scrollTo(0,0);};
   var vt=dspEl('dmVoltar');if(vt)vt.onclick=function(){if(DSP.form&&DSP.form._editado)dspSalvarForm(true);DSP.mtela='pend';DSP.sel=null;DSP.form=null;DSP.msg='';dspDraw();window.scrollTo(0,0);};
   if(!DSP.carregado)return;
   if(t==='enviar'){
@@ -4426,6 +4428,1161 @@ function dspMobItem(){
   var f=DSP.sel&&DSP.desp[DSP.sel]?dspFormAtual():null;
   if(!f)return '<div class="fin-empty"><b>Despesa não encontrada</b>Volte para a lista de pendentes.</div>';
   return '<div id="dspForm">'+dspHtmlFormCard(f,true,false)+'</div>';
+}
+
+// ===================== MÓDULO FRETES (mod16) — cópia do Lançamento de despesas =====================
+// Foto do CT-e/DACTE ou comprovante de frete -> recorte do documento no próprio aparelho -> leitura pela IA ->
+// conferência -> Contas a Pagar do Bling -> e-mail com o PDF para a contabilidade (Google Apps Script).
+// Firebase: financeiro/fretes/{id}, financeiro/fretesFotos/{id} (apagadas depois de enviar à contabilidade),
+//           financeiro/fretesEmail (envio), financeiro/config e financeiro/listas são os mesmos das despesas.
+// Lançamento de despesas: foto do comprovante (celular) -> leitura pela IA da empresa (Claude, via worker)
+// -> pendente no Firebase -> conferência (computador) -> extensão lança no Contas a Pagar do Bling.
+// Firebase: financeiro/despesas/{id} (dados), financeiro/fotos/{id} (imagens, apagadas depois de lançar),
+//           financeiro/config (cartões, padrões), financeiro/listas (formas, contas, categorias do Bling)
+var FRT={root:null,tela:null,listas:null,cfg:null,desp:{},carregado:false,sel:null,form:null,fotosNovas:[],fila:[],msg:'',msgTipo:'',
+  enviando:false,lendo:{},ext:null,poll:null,ultimoEnvio:null,mostrarFoto:null,avisoVisto:false};
+var FRT_CFG_PADRAO={cartoes:[{formaId:'3677778',fechamento:'',vencimento:''},{formaId:'6642716',fechamento:'',vencimento:''}],padrao:{pix:'3639534',dinheiro:'3750430'},contaPorForma:{}};
+if((location.hash||'')==='#fretes'){STATE.modulo='mod16';}
+if((location.hash||'')==='#fretes-celular'){STATE.modulo='mod16';FRT.forcarMob=true;}
+async function frtPegarCompartilhado(){
+  FRT.compartilhado=false;
+  try{if(!('caches' in window))return;var c=await caches.open('frt-compartilhado-nao-usado');var ks=await c.keys();if(!ks.length)return;
+    var arqs=[],txt='';
+    for(var i=0;i<ks.length;i++){var r=await c.match(ks[i]);if(!r)continue;
+      if(/\/texto$/.test(ks[i].url)){txt=await r.text();continue;}
+      var bl=await r.blob();var nome=decodeURIComponent(r.headers.get('X-Nome')||'comprovante');arqs.push(new File([bl],nome,{type:bl.type||r.headers.get('Content-Type')||'image/jpeg'}));}
+    await Promise.all(ks.map(function(k){return c.delete(k);}));
+    if(arqs.length){FRT.fotosNovas=[];await frtAddArquivos(arqs);FRT.msg='Comprovante recebido pelo compartilhar. Confira e toque em Enviar.';FRT.msgTipo='ok';FRT.obsCompart=txt&&!/^https?:/.test(txt)?txt:'';frtDraw();}
+  }catch(e){FRT.msg='Não consegui receber o arquivo compartilhado. Tente pela Galeria.';FRT.msgTipo='err';frtDraw();}
+}
+
+function frtEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function frtEl(id){return document.getElementById(id);}
+function frtPad(n){return String(n).padStart(2,'0');}
+function frtIso(d){return d.getFullYear()+'-'+frtPad(d.getMonth()+1)+'-'+frtPad(d.getDate());}
+function frtHoje(){return frtIso(new Date());}
+function frtDig(s){return String(s||'').replace(/\D/g,'');}
+function frtNorm(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();}
+function frtMoney(n){return (n>0||n===0)&&isFinite(n)?Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';}
+function frtParseMoney(s){s=String(s||'').trim().replace(/[R$\s]/g,'');if(!s)return null;if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');var n=Number(s);return isFinite(n)?n:null;}
+function frtBr(iso){return iso?String(iso).split('-').reverse().join('/'):'';}
+function frtDoc(d){d=frtDig(d);if(d.length===14)return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');if(d.length===11)return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4');return d;}
+function frtTelaCel(){var sw=Math.min(screen.width||9999,screen.height||9999);return (navigator.maxTouchPoints>0||'ontouchstart' in window)&&sw<=760;}
+function frtMobile(){return (window.matchMedia&&window.matchMedia('(max-width: 760px)').matches)||frtTelaCel();}
+function frtFb(path,opt){opt=opt||{};return fetch(FIREBASE_DB+'/financeiro/'+path+'.json',{method:opt.method||'GET',headers:opt.body?{'Content-Type':'application/json'}:undefined,body:opt.body?JSON.stringify(opt.body):undefined})
+  .then(function(r){if(!r.ok)throw new Error('Firebase '+r.status);return r.json();});}
+function frtListas(){return FRT.listas||DSP_LISTAS_PADRAO;}
+function frtCfg(){return FRT.cfg||FRT_CFG_PADRAO;}
+function frtFormaNome(id){var f=frtListas().formas.filter(function(x){return String(x.id)===String(id);})[0];return f?f.nome:'';}
+function frtContaNome(id){var f=frtListas().contas.filter(function(x){return String(x.id)===String(id);})[0];return f?f.nome:'';}
+function frtCatNome(id){var f=frtListas().categorias.filter(function(x){return String(x.id)===String(id);})[0];return f?f.nome:'';}
+function frtCartao(formaId){return (frtCfg().cartoes||[]).filter(function(c){return String(c.formaId)===String(formaId);})[0];}
+function frtEhCredito(formaId){if(!formaId)return false;if(frtCartao(formaId))return true;var n=frtNorm(frtFormaNome(formaId));return /credi/.test(n)&&!/debito/.test(n);}
+function frtEhPix(formaId){return /pix/.test(frtNorm(frtFormaNome(formaId)));}
+
+// ---------- dias úteis (feriados nacionais + Carnaval e Corpus Christi, sem expediente bancário) ----------
+function frtPascoa(y){var a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1;return new Date(y,mo-1,da,12);}
+var FRT_FER={};
+function frtFeriados(y){if(FRT_FER[y])return FRT_FER[y];var s={};['01-01','04-21','05-01','09-07','10-12','11-02','11-15','11-20','12-25'].forEach(function(x){s[y+'-'+x]=1;});var p=frtPascoa(y);[-48,-47,-2,60].forEach(function(o){var d=new Date(p);d.setDate(d.getDate()+o);s[frtIso(d)]=1;});return FRT_FER[y]=s;}
+function frtDiaUtil(iso){var d=new Date(iso+'T12:00:00');while(d.getDay()===0||d.getDay()===6||frtFeriados(d.getFullYear())[frtIso(d)])d.setDate(d.getDate()+1);return frtIso(d);}
+function frtVencCartao(em,c){var F=parseInt(c.fechamento,10),V=parseInt(c.vencimento,10);if(!F||!V||!em)return '';var d=new Date(em+'T12:00:00'),y=d.getFullYear(),m=d.getMonth();if(d.getDate()>=F)m+=1;var vm=V>F?m:m+1;var last=new Date(y,vm+1,0).getDate();return frtIso(new Date(y,vm,Math.min(V,last),12));}
+function frtVencSugerido(em,formaId){
+  if(!em)return {v:'',dica:''};
+  if(frtEhCredito(formaId)){var c=frtCartao(formaId);
+    if(c&&c.fechamento&&c.vencimento)return {v:frtVencCartao(em,c),dica:'Fatura fecha dia '+c.fechamento+' e vence dia '+c.vencimento};
+    return {v:'',dica:'Cadastre o fechamento deste cartão em Configurações, ou informe a data.'};}
+  if(frtEhPix(formaId)){var u=frtDiaUtil(em);return {v:u,dica:u!==em?'Pix fora de dia útil: vence no próximo dia útil':''};}
+  return {v:em,dica:''};
+}
+// ---------- duplicados (comparação local, sem IA) ----------
+async function frtHash(b64){try{var buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(b64));return Array.from(new Uint8Array(buf)).slice(0,12).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return '';}}
+function frtNumDoc(s){var d=String(s||'').replace(/\D/g,'').replace(/^0+/,'');return d.length>=4?d:'';}
+function frtPalavra(s){var w=frtNorm(s).replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(x){return x.length>2&&['ltda','comercio','com','posto','supermercado','auto','servicos','eireli','me','epp','the'].indexOf(x)<0;});return w[0]||'';}
+function frtDias(a,b){if(!a||!b)return 99;return Math.abs((new Date(a+'T12:00:00')-new Date(b+'T12:00:00'))/864e5);}
+// Duplicidade: verificada no Contas a Pagar do Bling (em aberto, mesmo dia, mesmo valor). O resultado fica em d.dupBling.
+document.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest&&ev.target.closest('[data-naodup]');if(!b)return;
+  var id=b.getAttribute('data-naodup'),d=FRT.desp[id];if(!d)return;
+  if(!confirm('Confirma que este frete NÃO é a mesma conta que já está no Bling?'))return;
+  var lib=(d.naoDup||[]).concat((d.dupBling&&d.dupBling.itens||[]).map(function(x){return x.blingId;}));
+  d.naoDup=lib;d.dupBling={ts:Date.now(),itens:[]};
+  frtFb('fretes/'+id,{method:'PATCH',body:{naoDup:lib,dupBling:d.dupBling}}).catch(function(){});
+  if(FRT.revisao)FRT.revisao=null;frtDraw();});
+document.addEventListener('change',function(ev){var t=ev.target;if(!t||t.id!=='fBaixar')return;FRT.baixaSel=FRT.baixaSel||{};FRT.baixaSel[FRT.sel]=t.checked;var w=frtEl('fBaixaW');if(w)w.style.display=t.checked?'flex':'none';});
+function frtDuplicados(id){var d=FRT.desp[id];var lib=(d&&d.naoDup)||[];return ((d&&d.dupBling&&d.dupBling.itens)||[]).filter(function(x){return lib.indexOf(x.blingId)<0;});}
+async function frtChecarDupBling(id,f){
+  var r=await frtBling('verificarDuplicado',{valor:f.valor,emissao:f.emissao,vencimento:f.vencimento});
+  var info={ts:Date.now(),itens:(r.itens||[]).map(function(x){return {blingId:String(x.id),valor:x.valor,vencimento:x.vencimento,emissao:x.dataEmissao||'',contato:x.contatoNome||'',contatoId:x.contatoId||'',situacao:x.situacao||1,historico:x.historico||''};})};
+  try{await frtFb('fretes/'+id,{method:'PATCH',body:{dupBling:info}});}catch(e){}
+  if(FRT.desp[id])FRT.desp[id].dupBling=info;return info.itens;
+}
+function frtDupHtml(id,curto){
+  var L=frtDuplicados(id);if(!L.length)return '';
+  if(curto)return '<span class="fin-chip err">⚠️ já existe conta igual no Bling</span>';
+  return '<div class="fin-msg err" style="display:block"><b>⚠️ Possível duplicidade no Bling</b>'+L.map(function(x){
+    return '<div style="margin-top:4px">Conta '+(x.situacao==2?'<b>já paga</b>':x.situacao==3?'parcialmente paga':'em aberto')+' no Bling com o mesmo valor e data próxima: R$ '+frtMoney(x.valor)+' · vence '+frtBr(x.vencimento)+(x.historico?' · “'+frtEsc(x.historico.slice(0,80))+'”':'')+(x.contato?' · '+frtEsc(x.contato):'')+' (ID '+frtEsc(x.blingId)+')</div>';}).join('')+
+    '<div style="margin-top:6px;font-weight:400">Se for o mesmo frete, exclua este. Se for outro frete, confirme abaixo para liberar o lançamento.</div>'+
+    '<button type="button" class="fin-btn sm" style="margin-top:6px" data-naodup="'+frtEsc(id)+'">Não é duplicado — é outro frete</button></div>';
+}
+// Só o valor impede o lançamento. O resto é pendência: lança assim mesmo e fica lembrando o que falta.
+function frtFaltas(d){return (d&&d.valor>0)?[]:['Valor'];}
+var FRT_SEM_FORN='TRANSPORTADORA A IDENTIFICAR';
+function frtPendencias(d){var p=[];if(!d)return p;var fn=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'';
+  if(d.fornCand&&d.fornCand.length&&!d.contato)p.push('Escolher fornecedor no Bling');
+  else if(!fn||fn===FRT_SEM_FORN)p.push('Fornecedor');
+  else if([11,14].indexOf(frtDig((d.contato&&d.contato.doc)||(d.fornecedor&&d.fornecedor.doc)).length)<0)p.push('CPF/CNPJ do fornecedor');
+  if(!d.historico)p.push('Histórico');if(!d.categoria)p.push('Categoria');if(!d.formaId)p.push('Forma de pagamento');if(!d.contaId)p.push('Conta financeira');
+  if(!d.numeroDocumento)p.push('Nº do documento');if(!d.vencimento)p.push('Vencimento');if(d.leituraErro)p.push('Conferir a leitura');return p;}
+function frtLancadoPend(d){return d&&d.status==='lancado'&&d.pendencias&&d.pendencias.length;}
+
+// ---------- ponte com a extensão ----------
+var FRT_PEND={};
+window.addEventListener('message',function(e){
+  if(e.source!==window||!e.data||e.data.source!=='ma-ext')return;var m=e.data;
+  if(m.type==='pronta'){FRT.ext=m.versao;if(STATE.modulo==='mod16')frtDraw();return;}
+  if(m.type==='finResp'&&FRT_PEND[m.reqId]){var p=FRT_PEND[m.reqId];delete FRT_PEND[m.reqId];clearTimeout(p.tm);p.res(m);}
+});
+function frtExtVer(){if(!FRT.ext){var a=document.documentElement.getAttribute('data-ma-ext');if(a)FRT.ext=a;}return FRT.ext;}
+function frtExtNum(){var v=frtExtVer();return v?v.split('.').map(Number).reduce(function(a,n,i){return a+n*Math.pow(1000,2-i);},0):0;}
+function frtExtBaixaOk(){return frtExtNum()>=2001002;}
+function frtBaixaPadrao(f){var m=(frtCfg().baixaPorForma)||{};if(f.formaId&&m[f.formaId]!==undefined)return !!m[f.formaId];return !frtEhCredito(f.formaId)&&!(f.parcelas>1);}
+function frtExtDupOk(){return frtExtNum()>=2000005;}
+function frtExtOk(){var v=frtExtVer();return !!v&&v.split('.').map(Number).reduce(function(a,n,i){return a+n*Math.pow(1000,2-i);},0)>=2000004;}
+function frtBling(op,dados){
+  return new Promise(function(res,rej){
+    if(!frtExtOk()){rej(new Error('Para falar com o Bling, instale a extensão Mais Acessível — Vendas e Atendimento (botão 🧩 Extensão no topo) e abra o app neste computador.'));return;}
+    var id='fin'+Date.now()+Math.random().toString(36).slice(2,7);
+    FRT_PEND[id]={res:function(m){if(m.ok)res(m);else rej(new Error(m.erro==='SESSAO'?'Você não está logado no Bling neste computador. Abra o Bling, faça login e tente de novo.':(m.erro||'O Bling recusou a operação')));},
+      tm:setTimeout(function(){if(FRT_PEND[id]){delete FRT_PEND[id];rej(new Error('A extensão não respondeu. Recarregue o app e tente de novo.'));}},60000)};
+    window.postMessage({source:'ma-app',type:'finBling',reqId:id,op:op,dados:dados||{}},'*');
+  });
+}
+
+// ---------- dados ----------
+function frtCarregar(silencioso){
+  frtFb('fretesEmail').then(function(e){FRT.email=e||{};}).catch(function(){});
+  return Promise.all([frtFb('fretes'),frtFb('config'),frtFb('listas')]).then(function(r){
+    FRT.desp=r[0]||{};FRT.cfg=r[1]?Object.assign({},FRT_CFG_PADRAO,r[1]):null;
+    if(FRT.cfg&&!FRT.cfg.contaPorForma)FRT.cfg.contaPorForma={};
+    FRT.listas=(r[2]&&r[2].formas)?r[2]:null;FRT.carregado=true;
+    if(!silencioso||!frtEditando())frtDraw();else frtDrawLista();
+  }).catch(function(e){FRT.carregado=true;FRT.msg='Não consegui ler o Firebase: '+e.message;FRT.msgTipo='err';frtDraw();});
+}
+function frtEditando(){var a=document.activeElement;return !!(a&&FRT.root&&FRT.root.contains(a)&&/INPUT|TEXTAREA|SELECT/.test(a.tagName));}
+function frtSalvarCfg(){return frtFb('config',{method:'PUT',body:frtCfg()});}
+function frtLista(status){return Object.keys(FRT.desp).map(function(k){return Object.assign({id:k},FRT.desp[k]);}).filter(function(d){return status==='lancado'?d.status==='lancado':d.status!=='lancado';})
+  .sort(function(a,b){return status==='lancado'?(b.lancadoEm||0)-(a.lancadoEm||0):(b.criadoEm||0)-(a.criadoEm||0);});}
+
+// ---------- imagens ----------
+function frtJpeg(file,max){max=max||1600;return new Promise(function(res,rej){var u=URL.createObjectURL(file);var img=new Image();
+  img.onload=function(){var s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));var c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*s);c.height=Math.round(img.naturalHeight*s);
+    var x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',0.8).split(',')[1]);};
+  img.onerror=function(){URL.revokeObjectURL(u);rej(new Error('imagem'));};img.src=u;});}
+async function frtPdf(file){var pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;var out=[];
+  for(var p=1;p<=Math.min(pdf.numPages,2);p++){var pg=await pdf.getPage(p);var v0=pg.getViewport({scale:1});var vp=pg.getViewport({scale:Math.min(2.2,1800/Math.max(v0.width,v0.height))});
+    var c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;var x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);await pg.render({canvasContext:x,viewport:vp}).promise;out.push(c.toDataURL('image/jpeg',0.82).split(',')[1]);}
+  return out;}
+async function frtAddArquivos(list){
+  for(var i=0;i<list.length;i++){var f=list[i];
+    try{if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){(await frtPdf(f)).forEach(function(b){FRT.fotosNovas.push(b);});}
+      else{var r=await frtRecortar(f);if(r)FRT.fotosNovas.push(r);}}
+    catch(e){FRT.msg='Não consegui abrir "'+(f.name||'arquivo')+'". Tente uma foto (JPG ou PNG).';FRT.msgTipo='err';}}
+  if(FRT.fotosNovas.length>4){FRT.fotosNovas=FRT.fotosNovas.slice(0,4);FRT.msg='Fiquei com as 4 primeiras imagens, o máximo por frete.';FRT.msgTipo='warn';}
+  frtDraw();
+}
+
+// ---------- recorte: acha o papel na foto, deixa ajustar os 4 cantos e endireita (tudo no aparelho, sem custo) ----------
+function frtCarregarImg(file){return new Promise(function(res,rej){var u=URL.createObjectURL(file);var img=new Image();
+  img.onload=function(){var s=Math.min(1,2400/Math.max(img.naturalWidth,img.naturalHeight));var c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*s);c.height=Math.round(img.naturalHeight*s);
+    var x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c);};
+  img.onerror=function(){URL.revokeObjectURL(u);rej(new Error('imagem'));};img.src=u;});}
+function frtGirar(c){var o=document.createElement('canvas');o.width=c.height;o.height=c.width;var x=o.getContext('2d');x.translate(o.width,0);x.rotate(Math.PI/2);x.drawImage(c,0,0);return o;}
+// Papel claro sobre fundo mais escuro: limiar de Otsu + maior região clara + cantos extremos.
+function frtAcharDoc(c){
+  var s=Math.min(1,320/Math.max(c.width,c.height)),w=Math.max(8,Math.round(c.width*s)),h=Math.max(8,Math.round(c.height*s));
+  var t=document.createElement('canvas');t.width=w;t.height=h;var x=t.getContext('2d');x.drawImage(c,0,0,w,h);
+  var px=x.getImageData(0,0,w,h).data,n=w*h,g=new Uint8Array(n),hist=new Array(256).fill(0),i;
+  for(i=0;i<n;i++){var v=(px[i*4]*77+px[i*4+1]*150+px[i*4+2]*29)>>8;g[i]=v;hist[v]++;}
+  var sum=0;for(i=0;i<256;i++)sum+=i*hist[i];var sB=0,wB=0,best=0,th=128;
+  for(i=0;i<256;i++){wB+=hist[i];if(!wB)continue;var wF=n-wB;if(!wF)break;sB+=i*hist[i];var mB=sB/wB,mF=(sum-sB)/wF,vb=wB*wF*(mB-mF)*(mB-mF);if(vb>best){best=vb;th=i;}}
+  var lab=new Int32Array(n),pilha=new Int32Array(n),melhor=-1,melhorN=0,id=0;
+  for(i=0;i<n;i++){if(g[i]<=th||lab[i])continue;id++;var topo=0,cnt=0;pilha[topo++]=i;lab[i]=id;
+    while(topo){var p=pilha[--topo];cnt++;var px0=p%w,py0=(p/w)|0;
+      if(px0>0&&!lab[p-1]&&g[p-1]>th){lab[p-1]=id;pilha[topo++]=p-1;}
+      if(px0<w-1&&!lab[p+1]&&g[p+1]>th){lab[p+1]=id;pilha[topo++]=p+1;}
+      if(py0>0&&!lab[p-w]&&g[p-w]>th){lab[p-w]=id;pilha[topo++]=p-w;}
+      if(py0<h-1&&!lab[p+w]&&g[p+w]>th){lab[p+w]=id;pilha[topo++]=p+w;}}
+    if(cnt>melhorN){melhorN=cnt;melhor=id;}}
+  if(melhor<0||melhorN<n*0.12)return null;
+  var tl=null,tr=null,br=null,bl=null,a1=1e9,a2=-1e9,a3=-1e9,a4=1e9;
+  for(i=0;i<n;i++){if(lab[i]!==melhor)continue;var X=i%w,Y=(i/w)|0,sp=X+Y,sm=X-Y;
+    if(sp<a1){a1=sp;tl=[X,Y];}if(sp>a2){a2=sp;br=[X+1,Y+1];}if(sm>a3){a3=sm;tr=[X+1,Y];}if(sm<a4){a4=sm;bl=[X,Y+1];}}
+  var q=[tl,tr,br,bl].map(function(p){return [p[0]/w,p[1]/h];});
+  var area=Math.abs((q[0][0]*q[1][1]-q[1][0]*q[0][1])+(q[1][0]*q[2][1]-q[2][0]*q[1][1])+(q[2][0]*q[3][1]-q[3][0]*q[2][1])+(q[3][0]*q[0][1]-q[0][0]*q[3][1]))/2;
+  if(area<0.12||area>0.97)return null;
+  return q;
+}
+function frtResolver(A,bv){var n=bv.length,M=A.map(function(r,i){return r.concat([bv[i]]);}),i,j,k;
+  for(i=0;i<n;i++){var p=i;for(j=i+1;j<n;j++)if(Math.abs(M[j][i])>Math.abs(M[p][i]))p=j;var tmp=M[i];M[i]=M[p];M[p]=tmp;
+    for(j=i+1;j<n;j++){var f=M[j][i]/M[i][i];for(k=i;k<=n;k++)M[j][k]-=f*M[i][k];}}
+  var x=new Array(n);for(i=n-1;i>=0;i--){var s=M[i][n];for(j=i+1;j<n;j++)s-=M[i][j]*x[j];x[i]=s/M[i][i];}return x;}
+// Endireita o quadrilátero (cantos em pixels da imagem: TL, TR, BR, BL) num retângulo.
+function frtEndireitar(c,q){
+  function d(a,b){return Math.hypot(a[0]-b[0],a[1]-b[1]);}
+  var W=Math.max(d(q[0],q[1]),d(q[3],q[2])),H=Math.max(d(q[0],q[3]),d(q[1],q[2]));var s=Math.min(1,1800/Math.max(W,H));
+  var w=Math.max(10,Math.round(W*s)),h=Math.max(10,Math.round(H*s));
+  var dst=[[0,0],[w,0],[w,h],[0,h]],A=[],bv=[];
+  for(var i=0;i<4;i++){var u=dst[i][0],v=dst[i][1],X=q[i][0],Y=q[i][1];
+    A.push([u,v,1,0,0,0,-u*X,-v*X]);bv.push(X);A.push([0,0,0,u,v,1,-u*Y,-v*Y]);bv.push(Y);}
+  var m=frtResolver(A,bv);
+  var sw=c.width,sh=c.height,sd=c.getContext('2d').getImageData(0,0,sw,sh).data;
+  var o=document.createElement('canvas');o.width=w;o.height=h;var ox=o.getContext('2d'),od=ox.createImageData(w,h),dd=od.data;
+  for(var y=0;y<h;y++){for(var x=0;x<w;x++){var z=m[6]*x+m[7]*y+1,sx=(m[0]*x+m[1]*y+m[2])/z,sy=(m[3]*x+m[4]*y+m[5])/z;
+    var x0=Math.floor(sx),y0=Math.floor(sy),fx=sx-x0,fy=sy-y0,k=(y*w+x)*4;
+    if(x0<0||y0<0||x0>=sw-1||y0>=sh-1){dd[k]=dd[k+1]=dd[k+2]=255;dd[k+3]=255;continue;}
+    var a=(y0*sw+x0)*4,b2=a+4,c2=a+sw*4,e=c2+4;
+    for(var ch=0;ch<3;ch++)dd[k+ch]=(sd[a+ch]*(1-fx)+sd[b2+ch]*fx)*(1-fy)+(sd[c2+ch]*(1-fx)+sd[e+ch]*fx)*fy;dd[k+3]=255;}}
+  ox.putImageData(od,0,0);return o;
+}
+function frtCropCss(){if(frtEl('frtCropCss'))return;var st=document.createElement('style');st.id='frtCropCss';st.textContent=
+  '#frtCrop{position:fixed;inset:0;z-index:10001;background:#111;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#fff;touch-action:none}'+
+  '#frtCrop .tp{padding:calc(10px + env(safe-area-inset-top,0px)) 16px 8px;font-size:15px;font-weight:700;text-align:center}#frtCrop .tp small{display:block;font-weight:500;opacity:.75;font-size:12.5px;margin-top:2px}'+
+  '#frtCrop .ar{flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}'+
+  '#frtCrop .st{position:relative}#frtCrop canvas{display:block}#frtCrop svg{position:absolute;inset:0;overflow:visible}'+
+  '#frtCrop .bt{display:grid;grid-template-columns:auto auto 1fr;gap:8px;padding:10px 12px calc(12px + env(safe-area-inset-bottom,0px))}'+
+  '#frtCrop button{font:inherit;font-size:15px;font-weight:700;border-radius:12px;min-height:50px;padding:0 14px;border:1px solid #444;background:#222;color:#fff;cursor:pointer}#frtCrop button.ok{background:#0a7d6b;border-color:#0a7d6b}';
+  document.head.appendChild(st);}
+function frtRecortar(file){
+  return frtCarregarImg(file).then(function(src){return new Promise(function(res){
+    frtCropCss();var ov=document.createElement('div');ov.id='frtCrop';
+    ov.innerHTML='<div class="tp">Ajuste os cantos no documento<small>Arraste as bolinhas até as pontas do papel</small></div><div class="ar"><div class="st"><canvas></canvas><svg></svg></div></div>'+
+      '<div class="bt"><button type="button" data-a="girar">⟳ Girar</button><button type="button" data-a="inteira">Foto inteira</button><button type="button" class="ok" data-a="usar">✓ Usar recorte</button></div>';
+    document.body.appendChild(ov);
+    var cv=ov.querySelector('canvas'),sv=ov.querySelector('svg'),ar=ov.querySelector('.ar'),pts,esc;
+    function montar(auto){
+      var aw=ar.clientWidth-24,ah=ar.clientHeight-24;esc=Math.min(aw/src.width,ah/src.height,1);
+      cv.width=Math.round(src.width*esc);cv.height=Math.round(src.height*esc);cv.getContext('2d').drawImage(src,0,0,cv.width,cv.height);
+      sv.setAttribute('width',cv.width);sv.setAttribute('height',cv.height);
+      var q=auto?frtAcharDoc(src):null;if(!q)q=[[.04,.04],[.96,.04],[.96,.96],[.04,.96]];
+      pts=q.map(function(p){return [p[0]*cv.width,p[1]*cv.height];});desenhar();
+    }
+    function desenhar(){
+      sv.innerHTML='<path fill="rgba(0,0,0,.45)" fill-rule="evenodd" d="M0 0H'+cv.width+'V'+cv.height+'H0Z M'+pts.map(function(p){return p[0]+' '+p[1];}).join(' L')+'Z"/>'+
+        '<polygon points="'+pts.map(function(p){return p.join(',');}).join(' ')+'" fill="none" stroke="#2ee6c4" stroke-width="2.5"/>'+
+        pts.map(function(p,i){return '<circle data-i="'+i+'" cx="'+p[0]+'" cy="'+p[1]+'" r="22" fill="rgba(46,230,196,.18)" stroke="#2ee6c4" stroke-width="2.5" style="cursor:grab"/><circle cx="'+p[0]+'" cy="'+p[1]+'" r="4" fill="#2ee6c4" pointer-events="none"/>';}).join('');
+    }
+    var ativo=-1;
+    sv.addEventListener('pointerdown',function(e){var r=sv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,m=1e9;
+      pts.forEach(function(p,i){var dd=Math.hypot(p[0]-x,p[1]-y);if(dd<m){m=dd;ativo=i;}});if(m>60){ativo=-1;return;}try{sv.setPointerCapture(e.pointerId);}catch(_e){}e.preventDefault();});
+    sv.addEventListener('pointermove',function(e){if(ativo<0)return;var r=sv.getBoundingClientRect();
+      pts[ativo]=[Math.max(0,Math.min(cv.width,e.clientX-r.left)),Math.max(0,Math.min(cv.height,e.clientY-r.top))];desenhar();e.preventDefault();});
+    sv.addEventListener('pointerup',function(){ativo=-1;});sv.addEventListener('pointercancel',function(){ativo=-1;});
+    ov.querySelector('.bt').onclick=function(e){var a=e.target.closest('[data-a]');if(!a)return;a=a.dataset.a;
+      if(a==='girar'){src=frtGirar(src);montar(true);return;}
+      var out=src;
+      if(a==='usar'){var q=pts.map(function(p){return [p[0]/esc,p[1]/esc];});try{out=frtEndireitar(src,q);}catch(_e){out=src;}}
+      else{var s=Math.min(1,1800/Math.max(src.width,src.height));if(s<1){var o=document.createElement('canvas');o.width=Math.round(src.width*s);o.height=Math.round(src.height*s);o.getContext('2d').drawImage(src,0,0,o.width,o.height);out=o;}}
+      var b64=out.toDataURL('image/jpeg',0.82).split(',')[1];ov.remove();res(b64);};
+    requestAnimationFrame(function(){montar(true);});
+  });});
+}
+
+// ---------- leitura com a IA ----------
+var FRT_CAT_VENDA='14700094019',FRT_CAT_COMPRA='14634451798'; // Fretes e seguros - Venda / Compra (Bling)
+function frtPrompt(){
+  return 'Você vai ler imagens de um documento de FRETE pago por uma empresa brasileira de Goiânia/GO (revenda de materiais de construção: JDFER Comércio e Serviços / Mais Acessível, CNPJ 35.017.646/0001-66). '+
+  'Normalmente é um DACTE (CT-e, conhecimento de transporte eletrônico), mas pode ser fatura/boleto de transportadora, recibo de frete autônomo (RPA) ou comprovante de Pix/cartão de pagamento de frete. Podem vir juntos o CT-e e o comprovante do mesmo frete.\n'+
+  'Responda SOMENTE com um JSON neste formato:\n{\n "tipo_documento": "cte"|"fatura"|"boleto"|"recibo"|"comprovante_pix"|"comprovante_cartao"|"outro",\n "transportadora_nome": string,\n "transportadora_documento": string,\n "transportadora_documento_parcial": string,\n "valor_frete": number,\n "data_emissao": "AAAA-MM-DD",\n "vencimento": "AAAA-MM-DD",\n "numero_cte": string,\n "serie": string,\n "chave_acesso": string,\n "notas_fiscais": [string],\n "remetente_nome": string,\n "remetente_documento": string,\n "destinatario_nome": string,\n "destinatario_documento": string,\n "tomador": "remetente"|"destinatario"|"outro"|"",\n "origem": string,\n "destino": string,\n "sentido": "venda"|"compra"|"",\n "forma_pagamento": "pix"|"cartao_credito"|"cartao_debito"|"dinheiro"|"boleto"|"desconhecida",\n "banco_ou_cartao": string,\n "peso_kg": number,\n "volumes": number,\n "campos_incertos": [string]\n}\n'+
+  'Regras: transportadora_nome é o EMITENTE do CT-e (a transportadora), nunca o remetente nem o destinatário; num Pix, é o recebedor. transportadora_documento é o CNPJ/CPF só com dígitos ("" se não aparecer completo); transportadora_documento_parcial: se vier mascarado, só os dígitos visíveis em ordem, senão "". '+
+  'valor_frete é o valor total da prestação do serviço / valor a receber, em reais (0 se ilegível). numero_cte é só o número do CT-e (sem zeros à esquerda); chave_acesso são os 44 dígitos se aparecerem. notas_fiscais são os números das NF-e transportadas (só os números, sem zeros à esquerda). '+
+  'origem e destino no formato "Cidade/UF". sentido: "venda" se o remetente for a nossa empresa (CNPJ 35.017.646/0001-66, JDFER, Mais Acessível) ou se a origem for Goiânia/GO levando mercadoria a cliente; "compra" se a nossa empresa for o destinatário (mercadoria chegando de fornecedor); "" se não der para saber. '+
+  'vencimento só se aparecer fatura/boleto/duplicata com vencimento; senão "". Não invente nada: o que não estiver visível fica vazio e vai para campos_incertos.';
+}
+async function frtLerIA(fotos,obs){
+  var content=[{type:'text',text:frtPrompt()+(obs?'\n\nObservação de quem enviou: '+obs:'')}];
+  fotos.forEach(function(b){content.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:b}});});
+  var r=await fetch(DSP_IA_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1500,messages:[{role:'user',content:content}]})});
+  if(!r.ok)throw new Error('IA respondeu '+r.status);
+  var j=await r.json();
+  if(j&&j.error){var em=(j.error.message||j.error.type||'erro');if(/credit balance/i.test(em))throw new Error('Acabou o crédito da API da Anthropic (console.anthropic.com → Plans & Billing)');throw new Error('IA: '+em);}
+  var t=(j.content||[]).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('');
+  t=t.replace(/```json|```/g,'').trim();var a=t.indexOf('{'),b=t.lastIndexOf('}');if(a<0||b<a)throw new Error('Resposta da IA sem dados');
+  return JSON.parse(t.slice(a,b+1));
+}
+function frtFormaDaLeitura(r){
+  var cfg=frtCfg();
+  if(r.forma_pagamento==='pix')return (cfg.padrao&&cfg.padrao.pix)||'';
+  if(r.forma_pagamento==='dinheiro')return (cfg.padrao&&cfg.padrao.dinheiro)||'';
+  if(r.forma_pagamento==='cartao_credito'){var b=frtNorm(r.banco_ou_cartao);
+    var c=(cfg.cartoes||[]).filter(function(c){var n=frtNorm(frtFormaNome(c.formaId));return b&&((b.indexOf('sicoob')>=0&&/sicoob|siccob/.test(n))||(b.indexOf('inter')>=0&&n.indexOf('inter')>=0));})[0];
+    return c?c.formaId:((cfg.cartoes||[]).length===1?cfg.cartoes[0].formaId:'');}
+  return '';
+}
+function frtContaSugerida(formaId){
+  var cfg=frtCfg();if(cfg.contaPorForma&&cfg.contaPorForma[formaId])return cfg.contaPorForma[formaId];
+  var n=frtNorm(frtFormaNome(formaId));var L=frtListas().contas;
+  function ach(re){var c=L.filter(function(x){return re.test(frtNorm(x.nome));})[0];return c?String(c.id):'';}
+  if(/sicoob|siccob/.test(n))return ach(/sicoob/);if(/inter/.test(n))return ach(/inter/);if(/bling conta/.test(n))return ach(/bling conta/);if(/caixa|dinheiro/.test(n))return ach(/^caixa$/);return '';
+}
+// ---------- fornecedor: dados da Receita (grátis) e cadastro automático no Bling ----------
+async function frtConsultaCnpj(doc){
+  doc=frtDig(doc);if(doc.length!==14)return null;
+  function ok(r){if(!r.ok)throw new Error(r.status);return r.json();}
+  try{var j=await fetch('https://brasilapi.com.br/api/cnpj/v1/'+doc).then(ok);
+    return {nome:j.razao_social||'',fantasia:j.nome_fantasia||'',cep:frtDig(j.cep),uf:j.uf||'',cidade:j.municipio||'',bairro:j.bairro||'',
+      endereco:[j.descricao_tipo_de_logradouro,j.logradouro].filter(Boolean).join(' '),numero:j.numero||'',complemento:j.complemento||'',fone:frtDig(j.ddd_telefone_1),email:(j.email||'').toLowerCase(),fonte:'Receita (BrasilAPI)'};}
+  catch(e){}
+  try{var w=await fetch('https://publica.cnpj.ws/cnpj/'+doc).then(ok);var est=w.estabelecimento||{};
+    return {nome:w.razao_social||'',fantasia:est.nome_fantasia||'',cep:frtDig(est.cep),uf:(est.estado&&est.estado.sigla)||'',cidade:(est.cidade&&est.cidade.nome)||'',bairro:est.bairro||'',
+      endereco:[est.tipo_logradouro,est.logradouro].filter(Boolean).join(' '),numero:est.numero||'',complemento:est.complemento||'',fone:frtDig((est.ddd1||'')+(est.telefone1||'')),email:(est.email||'').toLowerCase(),fonte:'Receita (CNPJ.ws)'};}
+  catch(e){return null;}
+}
+async function frtEnriquecer(d){
+  if(!d||!d.fornecedor||frtDig(d.fornecedor.doc).length!==14)return d;
+  var x=await frtConsultaCnpj(d.fornecedor.doc);if(!x||!x.nome)return d;
+  d.fornecedor.dados=x;d.fornecedor.nome=x.nome;return d;
+}
+function frtNum(s){var d=String(s||'').replace(/\D/g,'').replace(/^0+/,'');return d;}
+function frtHistoricoFrete(r){
+  var p=['Frete'];var n=frtNum(r.numero_cte);if(n)p.push('CT-e '+n);
+  var nfs=(Array.isArray(r.notas_fiscais)?r.notas_fiscais:[]).map(frtNum).filter(Boolean);if(nfs.length)p.push('NF '+nfs.slice(0,4).join(', '));
+  if(r.origem||r.destino)p.push((r.origem||'?')+' → '+(r.destino||'?'));
+  var outro=r.sentido==='compra'?r.remetente_nome:r.destinatario_nome;if(outro)p.push(String(outro).slice(0,40));
+  return p.join(' · ').slice(0,200);
+}
+function frtAplicarLeitura(r){
+  var unc=r.campos_incertos||[];var formaId=frtFormaDaLeitura(r);var em=/^\d{4}-\d{2}-\d{2}$/.test(r.data_emissao||'')?r.data_emissao:'';
+  var cat=r.sentido==='venda'?FRT_CAT_VENDA:r.sentido==='compra'?FRT_CAT_COMPRA:'';
+  var nCte=frtNum(r.numero_cte);
+  var d={tipoDoc:String(r.tipo_documento||'outro'),fornecedor:{nome:r.transportadora_nome||'',doc:frtDig(r.transportadora_documento),docParcial:frtDig(r.transportadora_documento_parcial)},
+    valor:r.valor_frete>0?Number(r.valor_frete):null,emissao:em,competencia:em,
+    numeroDocumento:nCte?'CT-e '+nCte:'',historico:frtHistoricoFrete(r),formaId:formaId,contaId:'',categoria:cat,parcelas:1,itens:[],incertos:unc,leituraErro:null,
+    cte:{numero:nCte,serie:r.serie||'',chave:frtDig(r.chave_acesso).length===44?frtDig(r.chave_acesso):'',nfs:(Array.isArray(r.notas_fiscais)?r.notas_fiscais:[]).map(frtNum).filter(Boolean).slice(0,20),
+      remetente:r.remetente_nome||'',remetenteDoc:frtDig(r.remetente_documento),destinatario:r.destinatario_nome||'',destinatarioDoc:frtDig(r.destinatario_documento),
+      tomador:r.tomador||'',origem:r.origem||'',destino:r.destino||'',sentido:r.sentido||'',peso:r.peso_kg>0?Number(r.peso_kg):null,volumes:r.volumes>0?Number(r.volumes):null}};
+  // forma de pagamento: a da leitura; se não tiver, a última usada com esta transportadora
+  if(!d.formaId){var fu=frtUltimo(d,'formaId');if(fu)d.formaId=fu;}
+  if(!d.formaId)unc.push('forma');
+  d.contaId=d.formaId?frtContaSugerida(d.formaId):'';
+  var vl=/^\d{4}-\d{2}-\d{2}$/.test(r.vencimento||'')?r.vencimento:'';
+  d.vencimento=vl||frtVencSugerido(em,d.formaId).v;
+  if(!d.categoria){var hc=frtCatSugerida(d);if(hc)d.categoria=hc;}
+  return d;
+}
+// último valor de um campo usado com a mesma transportadora (pelo cadastro do Bling, CNPJ ou nome)
+function frtUltimo(d,campo){var ks=frtChavesForn(d);if(!ks.length)return '';var melhor=null;
+  Object.keys(FRT.desp||{}).forEach(function(k){var x=FRT.desp[k];if(!x||x===d||!x[campo])return;var kx=frtChavesForn(x);if(!kx.some(function(c){return ks.indexOf(c)>=0;}))return;
+    var t=x.lancadoEm||x.atualizadoEm||x.criadoEm||0;if(!melhor||t>melhor.t)melhor={t:t,v:String(x[campo])};});
+  return melhor?melhor.v:'';}
+
+// ---------- envio pelo celular ----------
+function frtFilaLer(){try{return JSON.parse(localStorage.getItem('frt_fila')||'[]');}catch(e){return [];}}
+function frtFilaGravar(f){try{localStorage.setItem('frt_fila',JSON.stringify(f));return true;}catch(e){return false;}}
+async function frtEnviar(){
+  if(!FRT.fotosNovas.length||FRT.enviando)return;
+  var obs=(frtEl('frtObs')||{}).value||'';
+  var item={fotos:FRT.fotosNovas.slice(),obs:obs.trim(),ts:Date.now()};
+  FRT.enviando=true;FRT.msg='Enviando…';FRT.msgTipo='info';frtDraw();
+  try{var id=await frtSubir(item);FRT.fotosNovas=[];FRT.obsCompart='';FRT.ultimoEnvio=id;FRT.msg='';frtDraw();frtLerDespesa(id,item.fotos,item.obs);}
+  catch(e){var f=frtFilaLer();f.push(item);if(frtFilaGravar(f)){FRT.fotosNovas=[];FRT.msg='Sem conexão agora. A foto ficou guardada neste celular e sobe sozinha quando a internet voltar.';FRT.msgTipo='warn';}
+    else{FRT.msg='Sem conexão e sem espaço para guardar no celular. Tente de novo quando a internet voltar.';FRT.msgTipo='err';}}
+  FRT.enviando=false;frtDraw();
+}
+async function frtSubir(item){
+  var agora=Date.now();
+  var doc={status:'lendo',criadoEm:item.ts||agora,atualizadoEm:agora,criadoPor:STATE.usuarioLogado||'',origem:frtMobile()?'celular':'computador',obs:item.obs||'',nFotos:item.fotos.length,emissao:frtIso(new Date(item.ts||agora))};
+  doc.fotoHash=item.fotos[0]?await frtHash(item.fotos[0]):'';
+  var r=await frtFb('fretes',{method:'POST',body:doc});var id=r.name;
+  await frtFb('fretesFotos/'+id,{method:'PUT',body:item.fotos});
+  FRT.desp[id]=doc;return id;
+}
+async function frtFilaEnviar(){
+  var f=frtFilaLer();if(!f.length||!navigator.onLine)return;var resto=[];
+  for(var i=0;i<f.length;i++){try{var id=await frtSubir(f[i]);frtLerDespesa(id,f[i].fotos,f[i].obs);}catch(e){resto.push(f[i]);}}
+  frtFilaGravar(resto);if(resto.length<f.length){FRT.msg=(f.length-resto.length)+' frete(s) guardado(s) no celular foram enviados.';FRT.msgTipo='ok';frtDraw();}
+}
+window.addEventListener('online',function(){frtFilaEnviar();});
+async function frtLerDespesa(id,fotos,obs){
+  FRT.lendo[id]=true;if(STATE.modulo==='mod16')frtDraw();
+  var upd;
+  try{if(!fotos)fotos=await frtFb('fretesFotos/'+id);var r=await frtLerIA(fotos||[],obs);upd=await frtEnriquecer(frtAplicarLeitura(r));}
+  catch(e){upd={leituraErro:'A leitura automática falhou ('+e.message+'). Preencha à mão ou toque em Ler de novo.'};}
+  upd.status='pendente';upd.atualizadoEm=Date.now();
+  try{await frtFb('fretes/'+id,{method:'PATCH',body:upd});}catch(e){}
+  FRT.desp[id]=Object.assign({},FRT.desp[id]||{},upd);delete FRT.lendo[id];
+  if(FRT.sel===id&&FRT.form&&!FRT.form._editado){FRT.form=null;}
+  if(!frtMobile()&&frtExtOk()&&upd.valor>0){try{await frtConferirUma(id);}catch(e){}}
+  if(STATE.modulo==='mod16'){if(frtEditando())frtDrawLista();else frtDraw();}
+}
+
+// ---------- envio à contabilidade (Google Apps Script: e-mail com PDF + cópia no Google Drive) ----------
+function frtEmailCfg(){return FRT.email||{};}
+function frtEmailAuto(){var c=frtEmailCfg();return !!(c.url&&c.auto!==false);}
+function frtEmailAssunto(d){return ['Frete'+(d.numeroDocumento?' '+d.numeroDocumento:''),(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'Transportadora','R$ '+frtMoney(d.valor),frtBr(d.emissao)].filter(Boolean).join(' — ');}
+function frtEmailLinhas(d){var c=d.cte||{};return [['Transportadora',(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||''],['CNPJ/CPF',frtDoc((d.contato&&d.contato.doc)||(d.fornecedor&&d.fornecedor.doc)||'')],
+  ['Documento',d.numeroDocumento||''],['Chave do CT-e',c.chave||''],['NF-e transportadas',(c.nfs||[]).join(', ')],['Remetente',c.remetente||''],['Destinatário',c.destinatario||''],
+  ['Trajeto',(c.origem||c.destino)?(c.origem||'?')+' → '+(c.destino||'?'):''],['Emissão',frtBr(d.emissao)],['Vencimento',frtBr(d.vencimento)],['Valor','R$ '+frtMoney(d.valor)],
+  ['Categoria',frtCatNome(d.categoria)],['Forma de pagamento',frtFormaNome(d.formaId)],['Pago em',d.baixaData?frtBr(d.baixaData):''],['Lançado no Bling',d.blingId?'ID '+d.blingId:''],['Histórico',d.historico||'']].filter(function(r){return r[1];});}
+function frtEmailHtml(d){return '<p>Segue o documento do frete para lançamento como despesa.</p><table style="border-collapse:collapse;font:14px Arial,sans-serif">'+
+  frtEmailLinhas(d).map(function(r){return '<tr><td style="padding:4px 12px 4px 0;color:#555">'+frtEsc(r[0])+'</td><td style="padding:4px 0;font-weight:bold">'+frtEsc(r[1])+'</td></tr>';}).join('')+
+  '</table><p style="color:#888;font-size:12px">Enviado pelo app Mais Acessível (JDFER Comércio e Serviços Ltda).</p>';}
+function frtEmailNome(d){return ('Frete_'+(d.numeroDocumento||'sem-numero')+'_'+((d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'transportadora')+'_'+(d.emissao||frtHoje())).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_\-]+/g,'-').slice(0,90);}
+async function frtEmailPost(corpo){
+  var c=frtEmailCfg();if(!c.url)throw new Error('Configure o envio à contabilidade em Configurações.');
+  var r=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({token:c.token||''},corpo))});
+  var j;try{j=await r.json();}catch(e){throw new Error('O script do Google não respondeu direito (confira se a implantação é "Qualquer pessoa").');}
+  if(!j.ok)throw new Error(j.erro||'O script do Google recusou o envio.');return j;
+}
+var FRT_ENVIANDO={};
+async function frtEnviarEmail(id){
+  if(FRT_ENVIANDO[id])throw new Error('Já está enviando este frete.');FRT_ENVIANDO[id]=1;
+  try{
+    var d=FRT.desp[id];if(!d)throw new Error('Frete não encontrado.');
+    var fotos=await frtFb('fretesFotos/'+id);if(!fotos||!fotos.length)throw new Error('As imagens deste frete não estão mais guardadas no app.');
+    var j=await frtEmailPost({assunto:frtEmailAssunto(d),html:frtEmailHtml(d),texto:frtEmailLinhas(d).map(function(r){return r[0]+': '+r[1];}).join('\n'),nome:frtEmailNome(d),mes:(d.emissao||frtHoje()).slice(0,7),fotos:fotos});
+    var up={emailEm:Date.now(),emailPor:STATE.usuarioLogado||'',emailPara:j.para||'',emailLink:j.link||'',emailErro:null};
+    if(d.status==='lancado'&&!(d.pendencias&&d.pendencias.length)){try{await frtFb('fretesFotos/'+id,{method:'DELETE'});up.nFotos=0;}catch(e){}}
+    await frtFb('fretes/'+id,{method:'PATCH',body:up});Object.assign(d,up);return j;
+  }catch(e){try{await frtFb('fretes/'+id,{method:'PATCH',body:{emailErro:e.message}});if(FRT.desp[id])FRT.desp[id].emailErro=e.message;}catch(_e){}throw e;}
+  finally{delete FRT_ENVIANDO[id];}
+}
+// As imagens só saem do Firebase depois de lançadas sem pendência E enviadas à contabilidade.
+async function frtApagarFotosSePuder(id){var d=FRT.desp[id];if(!d||!d.emailEm||d.status!=='lancado'||(d.pendencias&&d.pendencias.length))return;
+  try{await frtFb('fretesFotos/'+id,{method:'DELETE'});await frtFb('fretes/'+id,{method:'PATCH',body:{nFotos:0}});d.nFotos=0;}catch(e){}}
+function frtEmailChip(d){
+  if(d.emailEm)return '<span class="fin-chip ok" title="'+frtEsc(d.emailPara||'')+'">📧 enviado '+new Date(d.emailEm).toLocaleDateString('pt-BR')+'</span>'+(d.emailLink?' <a href="'+frtEsc(d.emailLink)+'" target="_blank" rel="noopener" class="fin-sw">Drive</a>':'');
+  return (d.emailErro?'<span class="fin-chip err" title="'+frtEsc(d.emailErro)+'">não enviou</span> ':'')+'<button type="button" class="fin-btn sm" data-em="'+frtEsc(d.id)+'"'+(frtEmailCfg().url?'':' disabled title="Configure o envio em Configurações"')+'>📧 Enviar</button>';
+}
+// ---------- conferência ----------
+function frtAbrir(id){FRT.sel=id;FRT.form=null;FRT.tela=FRT.tela==='captura'?'conferencia':FRT.tela;FRT.msg='';FRT.revisao=null;frtDraw();
+  setTimeout(function(){var el=frtEl('frtForm');if(el&&frtMobile())el.scrollIntoView({behavior:'smooth',block:'start'});},50);}
+function frtFormAtual(){
+  if(FRT.form)return FRT.form;var d=FRT.desp[FRT.sel];if(!d)return null;
+  FRT.form=JSON.parse(JSON.stringify(d));FRT.form.fornecedor=FRT.form.fornecedor||{nome:'',doc:''};
+  if(!FRT.form.emissao)FRT.form.emissao=frtHoje();if(!FRT.form.competencia)FRT.form.competencia=FRT.form.emissao;
+  if(!FRT.form.parcelas)FRT.form.parcelas=1;return FRT.form;
+}
+function frtLerCampos(){
+  var f=FRT.form;if(!f||!frtEl('fNome'))return f;
+  var _ant=f.fornecedor||{};var _doc=frtDig(frtEl('fDoc').value);
+  f.fornecedor={nome:frtEl('fNome').value.trim(),doc:_doc};if(_ant.dados&&_ant.doc===_doc)f.fornecedor.dados=_ant.dados;if(_ant.docParcial)f.fornecedor.docParcial=_ant.docParcial;
+  f.valor=frtParseMoney(frtEl('fValor').value);f.emissao=frtEl('fEm').value;f.vencimento=frtEl('fVenc').value;f.competencia=frtEl('fComp').value;
+  f.numeroDocumento=frtEl('fNum').value.trim();f.historico=frtEl('fHist').value.trim();
+  f.formaId=frtEl('fForma').value;f.contaId=frtEl('fConta').value;f.categoria=frtEl('fCat').value;
+  f.parcelas=frtEhCredito(f.formaId)?Math.max(1,parseInt(frtEl('fParc').value,10)||1):1;
+  return f;
+}
+async function frtSalvarForm(quieto){
+  var f=frtLerCampos();if(!f||!FRT.sel)return false;
+  var campos=['fornecedor','contato','valor','emissao','vencimento','competencia','numeroDocumento','historico','formaId','contaId','categoria','parcelas'];
+  var upd={atualizadoEm:Date.now()};campos.forEach(function(k){upd[k]=f[k]===undefined?null:f[k];});
+  try{await frtFb('fretes/'+FRT.sel,{method:'PATCH',body:upd});FRT.desp[FRT.sel]=Object.assign({},FRT.desp[FRT.sel],upd);f._editado=false;
+    if(!quieto){FRT.msg='Salvo. Continua em Pendentes.';FRT.msgTipo='ok';}return true;}
+  catch(e){FRT.msg='Não consegui salvar: '+e.message;FRT.msgTipo='err';return false;}
+}
+async function frtBuscarFornecedor(){
+  var f=frtLerCampos();var box=frtEl('fForStatus');if(!box)return;
+  if(!f.fornecedor.doc&&!f.fornecedor.nome){box.innerHTML='<span class="fin-chip warn">Informe nome ou CNPJ</span>';return;}
+  box.innerHTML='<span class="fin-chip">Buscando no Bling…</span>';
+  try{var a=await frtAcharFornecedor(f);
+    try{await frtFb('fretes/'+FRT.sel,{method:'PATCH',body:{fornChecado:Date.now()}});FRT.desp[FRT.sel].fornChecado=Date.now();}catch(e){}
+    if(a.match){f.contato=a.match;f._editado=true;await frtSalvarForm(true);await frtFb('fretes/'+FRT.sel,{method:'PATCH',body:{fornCand:null}});delete FRT.desp[FRT.sel].fornCand;frtDraw();return;}
+    if(a.cand.length){await frtFb('fretes/'+FRT.sel,{method:'PATCH',body:{fornCand:a.cand.slice(0,6)}});FRT.desp[FRT.sel].fornCand=a.cand.slice(0,6);frtDraw();return;}
+    box.innerHTML='<span class="fin-chip">Não existe no Bling: será cadastrado ao lançar</span>';
+  }catch(e){box.innerHTML='<span class="fin-chip err">'+frtEsc(e.message)+'</span>';}
+}
+function frtHtmlCandidatos(id){
+  var d=FRT.desp[id];if(!d||d.contato||!d.fornCand||!d.fornCand.length)return '';
+  return '<div class="fin-msg warn" style="display:block"><b>Encontrei fornecedor parecido no Bling. É algum destes?</b><div class="fin-match">'+d.fornCand.map(function(c,i){return '<button type="button" data-cand="'+i+'">'+frtEsc(c.nome)+(c.doc?' · '+frtEsc(frtDoc(c.doc)):'')+'</button>';}).join('')+
+    '</div><button type="button" class="fin-btn sm" id="fCandNovo">Nenhum destes: cadastrar novo no Bling</button></div>';
+}
+function frtCadastrarFornecedor(){
+  var f=frtLerCampos();var txt=(f.fornecedor.nome||'')+(f.fornecedor.doc?' — '+frtDoc(f.fornecedor.doc):'');
+  try{navigator.clipboard.writeText(f.fornecedor.doc?frtDoc(f.fornecedor.doc):f.fornecedor.nome);}catch(e){}
+  window.open('https://www.bling.com.br/contatos.php#add','_blank');
+  frtEl('fForStatus').innerHTML='<span class="fin-chip warn">Abri o cadastro de contatos do Bling. Copiei o '+(f.fornecedor.doc?'CNPJ/CPF':'nome')+': '+frtEsc(txt)+'. Depois de salvar lá, toque em Buscar no Bling.</span>';
+}
+async function frtCadastrarAgora(){
+  var f=frtLerCampos(),sel=FRT.sel;var b=frtEl('fCadAgora');if(b){b.disabled=true;b.textContent='Cadastrando no Bling…';}
+  f.fornNovoOk=true;
+  try{await frtFb('fretes/'+sel,{method:'PATCH',body:{fornCand:null,fornNovoOk:true}});if(FRT.desp[sel]){delete FRT.desp[sel].fornCand;FRT.desp[sel].fornNovoOk=true;}
+    await frtResolverFornecedor(sel,f,true,function(t){if(b)b.textContent=t;});
+    f._editado=true;await frtSalvarForm(true);FRT.fornSt=FRT.fornSt||{};FRT.fornSt[sel]='criado';
+  }catch(e){FRT.fornSt=FRT.fornSt||{};FRT.fornSt[sel]='erro:'+e.message;}
+  frtDraw();
+}
+function frtRevFornHtml(f){
+  var st=(FRT.fornSt||{})[FRT.sel]||'';
+  if(f.contato)return '<div class="fin-msg ok" style="display:block;margin:0"><b>✓ '+(st==='criado'?'Cadastrado agora no Bling':'Já cadastrado no Bling')+':</b> '+frtEsc(f.contato.nome)+(f.contato.doc?' · '+frtEsc(frtDoc(f.contato.doc)):'')+'</div>';
+  if(FRT.desp[FRT.sel]&&FRT.desp[FRT.sel].fornCand&&FRT.desp[FRT.sel].fornCand.length)return frtHtmlCandidatos(FRT.sel);
+  if(!f.fornecedor||!f.fornecedor.nome||f.fornecedor.nome===FRT_SEM_FORN)return '<div class="fin-msg warn" style="display:block;margin:0"><b>Sem fornecedor.</b> Lanço como "'+FRT_SEM_FORN+'" e fica pendente.</div>';
+  if(st.indexOf('erro:')===0)return '<div class="fin-msg err" style="display:block;margin:0"><b>Não consegui conferir o fornecedor no Bling:</b> '+frtEsc(st.slice(5))+'</div>';
+  return '<div class="fin-msg warn" style="display:block;margin:0"><b>⚠️ Não está cadastrado no Bling:</b> '+frtEsc(f.fornecedor.nome)+(f.fornecedor.doc?' · '+frtEsc(frtDoc(f.fornecedor.doc)):' (sem CPF/CNPJ)')+
+    (f.fornecedor.dados?'<div class="fin-mu">Dados da Receita: '+frtEsc(f.fornecedor.dados.cidade||'')+'/'+frtEsc(f.fornecedor.dados.uf||'')+'</div>':'')+
+    '<div style="margin-top:6px"><button type="button" class="fin-btn sm pri" id="fCadAgora">Cadastrar agora no Bling</button></div></div>';
+}
+async function frtRevisar(){
+  var f=frtLerCampos();var falta=frtFaltas(f);if(falta.length){FRT.msg='Para lançar ainda falta: '+falta.join(', ')+'.';FRT.msgTipo='warn';frtDraw();return;}
+  var b=frtEl('fRevisar');if(b){b.disabled=true;b.textContent='Conferindo no Bling…';}
+  FRT.fornSt=FRT.fornSt||{};delete FRT.fornSt[FRT.sel];
+  if(frtExtOk()){var sel=FRT.sel;try{await frtSalvarForm(true);}catch(e){}
+    // fornecedor: confere no Bling na hora para mostrar se já está cadastrado
+    var nm=f.fornecedor&&f.fornecedor.nome;
+    if(!f.contato&&nm&&nm!==FRT_SEM_FORN){if(b)b.textContent='Procurando o fornecedor no Bling…';
+      try{var a=await frtAcharFornecedor(f);
+        if(a.match){f.contato=a.match;f._editado=true;await frtSalvarForm(true);await frtFb('fretes/'+sel,{method:'PATCH',body:{fornCand:null,fornChecado:Date.now()}});delete FRT.desp[sel].fornCand;}
+        else if(a.cand.length&&!(FRT.desp[sel]&&FRT.desp[sel].fornNovoOk)){await frtFb('fretes/'+sel,{method:'PATCH',body:{fornCand:a.cand.slice(0,6)}});FRT.desp[sel].fornCand=a.cand.slice(0,6);}
+        else FRT.fornSt[sel]='novo';
+      }catch(e){FRT.fornSt[sel]='erro:'+e.message;}}
+    if(b)b.textContent='Conferindo duplicidade no Bling…';
+    try{await frtChecarDupBling(sel,Object.assign({},f,{vencimento:f.vencimento||f.emissao}));}catch(e){}}
+  FRT.revisao=true;FRT.msg='';frtDraw();var el=frtEl('frtRev');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});
+}
+// ---------- fornecedor: achar no Bling sem nunca cadastrar em dobro ----------
+var FRT_GENERICAS=['ltda','me','epp','eireli','sa','s','a','cia','e','de','da','do','das','dos','comercio','comercial','servicos','servico','industria','distribuidora','eirelli','mei','limitada'];
+function frtTokens(n){return frtNorm(n).replace(/&/g,' e ').replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(w){return w&&FRT_GENERICAS.indexOf(w)<0;});}
+function frtSimNome(a,b){var x=frtTokens(a),y=frtTokens(b);if(!x.length||!y.length)return 0;var c=x.filter(function(w){return y.indexOf(w)>=0;}).length;return c/Math.min(x.length,y.length);}
+function frtDocParcial(f){var p=frtDig(f.fornecedor&&f.fornecedor.docParcial);if(p.length>=4)return p;
+  var t=(f.incertos||[]).join(' ');var m=t.match(/[\*x•]{0,3}[.\s]?\d{2,3}[.\s]?\d{3}[\/.\-\s]?\d{0,4}[\-\s]?[\*x•]{0,2}/i);return m?frtDig(m[0]):'';}
+async function frtAcharFornecedor(f){
+  var nome=(f.fornecedor&&f.fornecedor.nome)||'',doc=frtDig(f.fornecedor&&f.fornecedor.doc),parc=frtDocParcial(f);
+  if(nome===FRT_SEM_FORN)nome='';
+  var qs=[];if(doc.length===14||doc.length===11)qs.push({doc:doc});if(nome){qs.push({nome:nome});var tk=frtTokens(nome);if(tk.length>=2)qs.push({nome:tk.slice(0,2).join(' ')});}
+  var cand={};
+  for(var i=0;i<qs.length;i++){var r=await frtBling('buscarContato',qs[i]);(r.itens||[]).forEach(function(c){cand[c.id]={id:String(c.id),nome:c.nome,doc:frtDig(c.doc)};});}
+  var L=Object.keys(cand).map(function(k){return cand[k];});
+  var porDoc=L.filter(function(c){return doc&&c.doc===doc;});if(porDoc.length)return {match:porDoc[0],cand:L};
+  var porParc=L.filter(function(c){return parc.length>=4&&c.doc&&c.doc.indexOf(parc)>=0&&frtSimNome(c.nome,nome)>=0.5;});if(porParc.length===1)return {match:porParc[0],cand:L};
+  var iguais=L.filter(function(c){return frtTokens(c.nome).join(' ')===frtTokens(nome).join(' ');});if(iguais.length===1)return {match:iguais[0],cand:L};
+  var parecidos=L.filter(function(c){return frtSimNome(c.nome,nome)>=0.5;});
+  return {match:null,cand:parecidos};
+}
+// Liga o fornecedor ao cadastro do Bling. Só cadastra se não houver nenhum parecido.
+async function frtResolverFornecedor(id,f,podeCriar,passo){
+  if(f.contato)return f.contato;passo=passo||function(){};
+  passo('Procurando o fornecedor no Bling…');
+  var a=await frtAcharFornecedor(f);
+  if(a.match){f.contato=a.match;await frtFb('fretes/'+id,{method:'PATCH',body:{contato:a.match,fornCand:null}});if(FRT.desp[id]){FRT.desp[id].contato=a.match;delete FRT.desp[id].fornCand;}return a.match;}
+  var novoOk=f.fornNovoOk||(FRT.desp[id]&&FRT.desp[id].fornNovoOk);
+  if(a.cand.length&&!novoOk){await frtFb('fretes/'+id,{method:'PATCH',body:{fornCand:a.cand.slice(0,6)}});if(FRT.desp[id])FRT.desp[id].fornCand=a.cand.slice(0,6);
+    var e=new Error('Há fornecedor parecido no Bling ('+a.cand.slice(0,3).map(function(c){return c.nome;}).join('; ')+'). Escolha qual é no frete antes de lançar, para não cadastrar em dobro.');e.ambiguo=true;throw e;}
+  if(!podeCriar)return null;
+  passo('Cadastrando o fornecedor no Bling…');
+  var nc=await frtBling('criarContato',Object.assign({nome:f.fornecedor.nome,doc:f.fornecedor.doc},f.fornecedor.dados||{}));
+  f.contato={id:String(nc.id),nome:f.fornecedor.nome,doc:frtDig(f.fornecedor.doc)};
+  await frtFb('fretes/'+id,{method:'PATCH',body:{contato:f.contato,fornCand:null}});if(FRT.desp[id])FRT.desp[id].contato=f.contato;
+  return f.contato;
+}
+// Lança uma despesa no Bling a partir dos dados (sem depender da tela). Usado pelo botão e pelo lançamento automático.
+var FRT_TRAVA={};
+async function frtLancarCore(id,f,passo){
+  if(FRT_TRAVA[id])throw new Error('Este frete já está sendo lançado.');
+  FRT_TRAVA[id]=1;try{return await frtLancarCore2(id,f,passo);}finally{delete FRT_TRAVA[id];}
+}
+async function frtLancarCore2(id,f,passo){
+  passo=passo||function(){};
+  // nunca lançar a mesma despesa duas vezes: confere no Firebase se já tem ID do Bling
+  try{var atual=await frtFb('fretes/'+id);if(atual&&(atual.blingId||atual.status==='lancado')){if(FRT.desp[id])Object.assign(FRT.desp[id],atual);throw new Error('Este frete já foi lançado no Bling (ID '+(atual.blingId||'?')+').');}}catch(e){if(/já foi lançada/.test(e.message))throw e;}
+  // duplicidade: confere no Bling na hora (mesmo valor e mesma data, em aberto)
+  if(!frtExtDupOk())throw new Error('Atualize a extensão Mais Acessível — Vendas e Atendimento para a versão 2.0.5 (botão 🧩 Extensão). A versão instalada ('+(frtExtVer()||'?')+') não enxerga contas já pagas e pode deixar passar duplicidade.');
+  passo('Conferindo duplicidade no Bling…');
+  var dups=await frtChecarDupBling(id,Object.assign({},f,{vencimento:f.vencimento||f.emissao}));
+  var lib=(FRT.desp[id]&&FRT.desp[id].naoDup)||[];
+  var novos=dups.filter(function(x){return lib.indexOf(x.blingId)<0;});
+  if(novos.length)throw new Error('Já existe conta no Bling (em aberto ou paga) com o mesmo valor e data próxima (ID '+novos.map(function(x){return x.blingId;}).join(', ')+'). Se for outra compra, clique em "Não é duplicado" e lance de novo.');
+  var semVenc=!f.vencimento;
+  if(!f.vencimento)f.vencimento=f.emissao||frtHoje();
+  if(!f.competencia)f.competencia=f.emissao||f.vencimento;
+  var pend=frtPendencias(f);if(semVenc)pend.push('Conferir vencimento');
+  if(!f.contato&&!(f.fornecedor&&f.fornecedor.nome))f.fornecedor={nome:FRT_SEM_FORN,doc:''};
+  if(!f.contato)await frtResolverFornecedor(id,f,true,passo);
+  passo('Lançando no Bling…');
+  var r=await frtBling('lancar',{idContato:f.contato.id,contato:f.contato.nome,valor:f.valor,vencimento:f.vencimento,emissao:f.emissao,competencia:f.competencia,
+    historico:f.historico,numeroDocumento:f.numeroDocumento,categoria:f.categoria,portador:f.contaId,forma:f.formaId,parcelas:f.parcelas});
+  var upd={status:'lancado',blingId:String(r.id||''),lancadoEm:Date.now(),lancadoPor:STATE.usuarioLogado||'',atualizadoEm:Date.now(),pendencias:pend,precisaAtualizar:false,
+    vencimento:f.vencimento,competencia:f.competencia,contato:f.contato,lancando:null,autoErro:null};
+  await frtFb('fretes/'+id,{method:'PATCH',body:upd});
+  FRT.desp[id]=Object.assign({},FRT.desp[id]||{},upd);
+  if(f.categoria){var cfc=frtCfg();cfc.catPorForn=cfc.catPorForn||{};var mud=false;frtChavesForn(f).forEach(function(k){if(cfc.catPorForn[k]!==f.categoria){cfc.catPorForn[k]=f.categoria;mud=true;}});if(mud){FRT.cfg=cfc;frtSalvarCfg().catch(function(){});}}
+  if(f.formaId&&f.contaId){var cfg=frtCfg();cfg.contaPorForma=cfg.contaPorForma||{};if(cfg.contaPorForma[f.formaId]!==f.contaId){cfg.contaPorForma[f.formaId]=f.contaId;FRT.cfg=cfg;frtSalvarCfg().catch(function(){});}}
+  if(f._baixa){
+    var cfb=frtCfg();cfb.baixaPorForma=cfb.baixaPorForma||{};if(f.formaId&&cfb.baixaPorForma[f.formaId]!==true){cfb.baixaPorForma[f.formaId]=true;FRT.cfg=cfb;frtSalvarCfg().catch(function(){});}
+    passo('Dando baixa no Bling…');
+    try{await frtBaixarCore(id,f._baixa.data);}catch(e){pend=FRT.desp[id].pendencias||pend;upd.baixaErro=e.message;}
+  }else if(f.formaId&&f._baixaOff){var cfn=frtCfg();cfn.baixaPorForma=cfn.baixaPorForma||{};if(cfn.baixaPorForma[f.formaId]!==false){cfn.baixaPorForma[f.formaId]=false;FRT.cfg=cfn;frtSalvarCfg().catch(function(){});}}
+  var em=null,emErro='';if(frtEmailAuto()){passo('Enviando à contabilidade…');try{await frtEnviarEmail(id);em=true;}catch(e){em=false;emErro=e.message;}}
+  return {blingId:upd.blingId,pend:(FRT.desp[id]&&FRT.desp[id].pendencias)||pend,baixa:f._baixa?!upd.baixaErro:null,baixaErro:upd.baixaErro,email:em,emailErro:emErro};
+}
+// Dá baixa (marca como paga) numa despesa já lançada no Bling.
+async function frtBaixarCore(id,data){
+  var d=FRT.desp[id];if(!d||!d.blingId)throw new Error('Este frete ainda não foi lançado no Bling.');
+  if(d.baixadoEm)return;
+  try{await frtBling('baixar',{id:d.blingId,data:data||d.emissao||d.vencimento,portador:d.contaId,categoria:d.categoria,valor:d.valor,historico:d.historico});}
+  catch(e){var p0=(d.pendencias||[]).filter(function(x){return x!=='Dar baixa no Bling';}).concat(['Dar baixa no Bling']);
+    await frtFb('fretes/'+id,{method:'PATCH',body:{pendencias:p0,baixaErro:e.message}}).catch(function(){});d.pendencias=p0;d.baixaErro=e.message;throw e;}
+  var p=(d.pendencias||[]).filter(function(x){return x!=='Dar baixa no Bling';});
+  var up={baixadoEm:Date.now(),baixaData:data||d.emissao||d.vencimento,baixaErro:null,pendencias:p};
+  await frtFb('fretes/'+id,{method:'PATCH',body:up});Object.assign(d,up);
+}
+function frtBaixaHtml(f){
+  if(f.parcelas>1)return '<div class="fin-mu" style="margin:4px 0">Parcelado: a baixa de cada parcela é feita quando ela for paga.</div>';
+  if(!frtExtBaixaOk())return '<div class="fin-msg warn" style="margin:0">Para dar baixa junto com o lançamento, atualize a extensão para a versão 2.1.2 (botão 🧩 Extensão).</div>';
+  FRT.baixaSel=FRT.baixaSel||{};var on=FRT.baixaSel[FRT.sel]!==undefined?FRT.baixaSel[FRT.sel]:frtBaixaPadrao(f);
+  return '<div class="fin-card" style="margin:0;padding:10px 12px;background:var(--fin-bg2,rgba(10,125,107,.06))"><label style="display:flex;gap:8px;align-items:center;font-weight:700;cursor:pointer"><input type="checkbox" id="fBaixar"'+(on?' checked':'')+'> 💲 Dar baixa (já está pago)</label>'+
+    '<div id="fBaixaW" style="display:'+(on?'flex':'none')+';gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px"><label for="fBaixaData" class="fin-mu">Data do pagamento</label><input class="fin-in" id="fBaixaData" type="date" style="max-width:170px" value="'+frtEsc(f.emissao||frtHoje())+'">'+
+    (f.contaId?'<span class="fin-mu">sai da conta: '+frtEsc(frtContaNome(f.contaId))+'</span>':'<span class="fin-chip warn">escolha a conta financeira para dar baixa</span>')+'</div>'+
+    (frtEhCredito(f.formaId)?'<div class="fin-mu" style="margin-top:4px">Cartão de crédito: normalmente a baixa é quando a fatura é paga.</div>':'')+'</div>';
+}
+async function frtLancar(){
+  var f=frtLerCampos();if(frtFaltas(f).length)return;
+  var cbx=frtEl('fBaixar');if(cbx&&cbx.checked){if(!f.contaId){FRT.msg='Para dar baixa, escolha a conta financeira (ou desmarque "Dar baixa").';FRT.msgTipo='warn';frtDraw();return;}f._baixa={data:(frtEl('fBaixaData')||{}).value||f.emissao||frtHoje()};}else if(cbx)f._baixaOff=true;
+  var b=frtEl('fLancar');if(b){b.disabled=true;b.textContent='Lançando no Bling…';}
+  await frtSalvarForm(true);var id=FRT.sel;
+  try{
+    var r=await frtLancarCore(id,f,function(t){if(b)b.textContent=t;});
+    FRT.msg='Lançado no Contas a Pagar do Bling (ID '+(r.blingId||'?')+')'+(r.baixa===true?' e baixado (pago).':r.baixa===false?'. ⚠️ A baixa não foi feita: '+r.baixaErro+' Use "Dar baixa" na aba Lançados.':'.')+(r.email===true?' 📧 Enviado à contabilidade.':r.email===false?' ⚠️ Não enviei à contabilidade: '+r.emailErro+' Use "📧 Enviar" na aba Lançados.':' Envie à contabilidade pela aba Lançados.')+(r.pend.length?' Ficou pendente: '+r.pend.join(', ')+'. Fica na aba Lançados para você completar.':'');FRT.msgTipo=(r.pend.length||r.baixa===false||r.email===false)?'warn':'ok';
+    var prox=frtLista('pend').filter(function(x){return x.id!==id&&x.status!=='lancado';})[0];FRT.sel=prox?prox.id:null;FRT.form=null;FRT.revisao=null;frtDraw();
+  }catch(e){FRT.msg='Não lancei: '+e.message+' O frete continua em Pendentes.';FRT.msgTipo='err';FRT.revisao=null;frtDraw();}
+}
+// ---------- conferência no Bling: roda ao abrir o Financeiro no PC (uma vez) e ao clicar em Conferir ----------
+// Liga cada despesa ao cadastro do fornecedor e verifica duplicidade no Contas a Pagar em aberto. Nada é lançado sozinho.
+var FRT_CONF={rodando:false,feita:false,feitos:0,total:0,ts:0};
+async function frtConferirUma(k){
+  var d=FRT.desp[k];if(!d||d.status!=='pendente'||FRT.lendo[k])return;
+  var f=JSON.parse(JSON.stringify(d));
+  if(!f.contato&&f.fornecedor&&f.fornecedor.nome&&f.fornecedor.nome!==FRT_SEM_FORN){try{await frtResolverFornecedor(k,f,false);}catch(e){}}
+  if(f.valor>0){try{await frtChecarDupBling(k,Object.assign({},f,{vencimento:f.vencimento||f.emissao}));}catch(e){}}
+  try{await frtFb('fretes/'+k,{method:'PATCH',body:{conferidoEm:Date.now(),fornChecado:Date.now()}});FRT.desp[k].conferidoEm=Date.now();FRT.desp[k].fornChecado=Date.now();}catch(e){}
+}
+async function frtConferirTudo(){
+  if(FRT_CONF.rodando||frtMobile()||!frtExtOk())return;
+  FRT_CONF.rodando=true;
+  var ks=Object.keys(FRT.desp).filter(function(k){var d=FRT.desp[k];return d&&d.status==='pendente'&&!FRT.lendo[k];});
+  FRT_CONF.total=ks.length;FRT_CONF.feitos=0;if(!frtEditando())frtDraw();
+  for(var i=0;i<ks.length;i++){await frtConferirUma(ks[i]);FRT_CONF.feitos++;if(!frtEditando())frtDraw();else frtDrawLista();}
+  FRT_CONF.rodando=false;FRT_CONF.feita=true;FRT_CONF.ts=Date.now();if(!frtEditando())frtDraw();else frtDrawLista();
+}
+function frtConfHtml(){
+  if(frtMobile()||!frtExtOk())return '';
+  if(FRT_CONF.rodando)return '<div class="fin-msg info"><span>🔄 Conferindo no Bling: fornecedores e duplicidade ('+FRT_CONF.feitos+' de '+FRT_CONF.total+')…</span></div>';
+  if(FRT_CONF.feita)return '<div class="fin-msg ok" style="justify-content:space-between;align-items:center"><span>✓ Conferido no Bling às '+new Date(FRT_CONF.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'.</span><button type="button" class="fin-btn sm" id="frtConfNovo">🔄 Conferir de novo</button></div>';
+  return '';
+}
+async function frtAtualizarBling(){
+  var f=frtLerCampos();if(!f||!f.blingId)return;var b=frtEl('fAtualizar');if(b){b.disabled=true;b.textContent='Atualizando no Bling…';}
+  try{
+    if(!f.contato&&f.fornecedor&&f.fornecedor.nome&&f.fornecedor.nome!==FRT_SEM_FORN)await frtResolverFornecedor(FRT.sel,f,true);
+    await frtBling('atualizar',{blingId:f.blingId,idContato:f.contato&&f.contato.id,contato:f.contato&&f.contato.nome,valor:f.valor,vencimento:f.vencimento,emissao:f.emissao,competencia:f.competencia,
+      historico:f.historico,numeroDocumento:f.numeroDocumento,categoria:f.categoria,portador:f.contaId,forma:f.formaId});
+    var pend=frtPendencias(f);f._editado=true;await frtSalvarForm(true);
+    var upd={pendencias:pend,precisaAtualizar:false,atualizadoEm:Date.now()};
+    await frtFb('fretes/'+FRT.sel,{method:'PATCH',body:upd});FRT.desp[FRT.sel]=Object.assign({},FRT.desp[FRT.sel],upd);await frtApagarFotosSePuder(FRT.sel);
+    FRT.msg=pend.length?'Atualizado no Bling. Ainda falta: '+pend.join(', ')+'.':'Atualizado no Bling. Pendência resolvida.';FRT.msgTipo=pend.length?'warn':'ok';
+    if(!pend.length){FRT.sel=null;FRT.form=null;}frtDraw();
+  }catch(e){FRT.msg='Não atualizei no Bling: '+e.message;FRT.msgTipo='err';frtDraw();}
+}
+async function frtResolvido(){
+  if(!FRT.sel)return;var upd={pendencias:[],precisaAtualizar:false,resolvidoEm:Date.now(),atualizadoEm:Date.now()};
+  try{await frtFb('fretes/'+FRT.sel,{method:'PATCH',body:upd});}catch(e){}
+  FRT.desp[FRT.sel]=Object.assign({},FRT.desp[FRT.sel],upd);await frtApagarFotosSePuder(FRT.sel);FRT.msg='Marcado como resolvido.';FRT.msgTipo='ok';FRT.sel=null;FRT.form=null;if(FRT.mob)FRT.mtela='pend';frtDraw();
+}
+async function frtExcluir(){
+  if(!FRT.sel)return;if(!confirm('Excluir este frete do app? (Nada é apagado no Bling.)'))return;
+  var id=FRT.sel;try{await frtFb('fretes/'+id,{method:'DELETE'});await frtFb('fretesFotos/'+id,{method:'DELETE'});}catch(e){}
+  delete FRT.desp[id];FRT.sel=null;FRT.form=null;if(FRT.mob)FRT.mtela='pend';FRT.msg='Frete excluído do app.';FRT.msgTipo='ok';frtDraw();
+}
+async function frtVerFotos(id,alvo){
+  alvo.innerHTML='<div class="fin-mu">Carregando fotos…</div>';
+  try{var f=await frtFb('fretesFotos/'+id);if(!f||!f.length){alvo.innerHTML='<div class="fin-mu">Sem fotos guardadas.</div>';return;}
+    alvo.innerHTML=f.map(function(b,i){return '<img src="data:image/jpeg;base64,'+b+'" alt="Documento '+(i+1)+'" data-i="'+i+'">';}).join('');
+    alvo.querySelectorAll('img').forEach(function(im){im.onclick=function(){FRT.mostrarFoto=im.src;frtDrawZoom();};});
+  }catch(e){alvo.innerHTML='<div class="fin-mu">Não consegui carregar as fotos.</div>';}
+}
+function frtDrawZoom(){var z=frtEl('frtZoom');if(!z)return;if(!FRT.mostrarFoto){z.hidden=true;z.innerHTML='';return;}
+  z.hidden=false;z.innerHTML='<img src="'+FRT.mostrarFoto+'" alt="Documento ampliado"><button type="button" class="fin-btn">Fechar</button>';
+  z.onclick=function(){FRT.mostrarFoto=null;frtDrawZoom();};}
+
+// ---------- listas do Bling ----------
+async function frtAtualizarListas(){
+  var st=frtEl('frtCfgSt');if(st)st.innerHTML='<span class="fin-chip">Lendo o Bling…</span>';
+  try{var r=await frtBling('listas',{});var L=JSON.parse(JSON.stringify(frtListas()));
+    if(r.formas&&r.formas.length)L.formas=r.formas;if(r.contas&&r.contas.length)L.contas=r.contas;if(r.categorias&&r.categorias.length)L.categorias=r.categorias;
+    L.atualizadoEm=Date.now();await frtFb('listas',{method:'PUT',body:L});FRT.listas=L;
+    FRT.msg='Listas atualizadas: '+L.formas.length+' formas de pagamento, '+L.contas.length+' contas financeiras, '+L.categorias.filter(function(c){return !c.pai;}).length+' categorias.';FRT.msgTipo='ok';frtDraw();
+  }catch(e){if(st)st.innerHTML='<span class="fin-chip err">'+frtEsc(e.message)+'</span>';}
+}
+
+// ---------- CSS ----------
+function frtCss(){
+  if(frtEl('frtCss'))return;var st=document.createElement('style');st.id='frtCss';
+  st.textContent=
+  '.fin-wrap [hidden],#frtZoom[hidden]{display:none!important}'+
+  '.fin-wrap{max-width:1100px;margin:16px auto 40px;padding:0 16px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;color:#1c1c1e}'+
+  '.fin-tabs{display:flex;gap:4px;background:#fff;border:1px solid #e5e5ea;border-radius:12px;padding:4px;margin-bottom:14px;overflow-x:auto}'+
+  '.fin-tabs button{flex:1;border:none;background:transparent;border-radius:9px;padding:9px 12px;font:inherit;font-size:13.5px;font-weight:600;color:#3a3a3c;cursor:pointer;white-space:nowrap;display:flex;align-items:center;justify-content:center;gap:6px}'+
+  '.fin-tabs button.on{background:#0a7d6b;color:#fff}'+
+  '@media(max-width:520px){.fin-tabs button{padding:8px 7px;font-size:12.5px}}'+
+  '.fin-badge{background:#ff9500;color:#fff;border-radius:999px;font-size:11px;font-weight:800;min-width:19px;height:19px;padding:0 5px;display:inline-grid;place-items:center}'+
+  '.fin-tabs button.on .fin-badge{background:#fff;color:#0a7d6b}'+
+  '.fin-card{background:#fff;border:1px solid #e5e5ea;border-radius:14px;padding:16px}'+
+  '.fin-h{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#636366;margin:18px 2px 8px}'+
+  '.fin-msg{border-radius:10px;padding:10px 12px;font-size:13.5px;margin-bottom:12px;display:flex;gap:8px;align-items:flex-start}'+
+  '.fin-msg.ok{background:#e7f6ec;color:#166534}.fin-msg.warn{background:#fff4e0;color:#8a4b00}.fin-msg.err{background:#fde8e7;color:#a11d14}.fin-msg.info{background:#e6f3f1;color:#0a5d51}'+
+  '.fin-btn{font:inherit;font-size:14px;font-weight:700;border-radius:10px;padding:10px 14px;border:1px solid #d1d1d6;background:#fff;color:#1c1c1e;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:42px}'+
+  '.fin-btn.pri{background:#0a7d6b;border-color:#0a7d6b;color:#fff}.fin-btn.dan{color:#c0392b;border-color:#f3c2bd}.fin-btn.sm{min-height:32px;padding:5px 10px;font-size:12.5px}'+
+  '.fin-btn:disabled{opacity:.5;cursor:not-allowed}'+
+  '.fin-big{display:grid;gap:10px}.fin-big .fin-btn{min-height:64px;font-size:17px;border-radius:14px}'+
+  '.fin-thumbs{display:flex;gap:8px;flex-wrap:wrap}.fin-thumbs div{position:relative;width:76px;height:76px;border-radius:10px;overflow:hidden;border:1px solid #e5e5ea}'+
+  '.fin-thumbs img{width:100%;height:100%;object-fit:cover}.fin-thumbs button{position:absolute;top:3px;right:3px;width:24px;height:24px;border-radius:50%;border:none;background:rgba(0,0,0,.7);color:#fff;cursor:pointer}'+
+  '.fin-in,.fin-wrap select,.fin-wrap textarea{font:inherit;font-size:15px;width:100%;min-width:0;border:1px solid #d1d1d6;border-radius:9px;padding:9px 10px;background:#fff;color:#1c1c1e;box-sizing:border-box}'+
+  '.fin-wrap textarea{resize:vertical;min-height:60px}'+
+  '.fin-f{display:grid;gap:4px;min-width:0;align-content:start}.fin-f label{font-size:12px;font-weight:600;color:#636366;display:flex;gap:6px;align-items:center;flex-wrap:wrap}'+
+  '.fin-g{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.fin-c2{grid-column:span 2}.fin-c3{grid-column:span 3}.fin-c4{grid-column:span 4}.fin-c6{grid-column:span 6}'+
+  '@media(max-width:640px){.fin-c2,.fin-c3,.fin-c4{grid-column:span 6}.fin-c2.h,.fin-c3.h{grid-column:span 3}}'+
+  '.fin-sec{display:grid;gap:12px;padding:14px 0;border-top:1px solid #f0f0f3}.fin-sec:first-child{border-top:none;padding-top:0}'+
+  '.fin-st{font-size:14px;font-weight:700;margin:0;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}'+
+  '.fin-money{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}'+
+  '.fin-read{background:#fff7ec!important;border-color:#f5c98a!important}'+
+  '.fin-tag{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;border-radius:4px;padding:1px 5px;background:#fff1dc;color:#a35a00}.fin-tag.unc{background:#fde8e7;color:#b3261e}'+
+  '.fin-chip{display:inline-flex;align-items:center;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;background:#f2f2f7;color:#3a3a3c}.fin-chip.ok{background:#e7f6ec;color:#166534}.fin-chip.warn{background:#fff4e0;color:#8a4b00}.fin-chip.err{background:#fde8e7;color:#a11d14}'+
+  '.fin-match{display:grid;gap:6px;margin:6px 0}.fin-match button{text-align:left;font:inherit;font-size:13.5px;padding:8px 10px;border:1px solid #d1d1d6;border-radius:8px;background:#fff;cursor:pointer}'+
+  '.fin-cols{display:grid;grid-template-columns:330px minmax(0,1fr);gap:16px;align-items:start}@media(max-width:900px){.fin-cols{grid-template-columns:1fr}}'+
+  '.fin-list{display:grid;gap:8px}.fin-it{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;text-align:left;font:inherit;background:#fff;border:1px solid #e5e5ea;border-left:4px solid #ff9500;border-radius:12px;padding:10px 12px;cursor:pointer;width:100%}'+
+  '.fin-it.lancpend{border-left-color:#5856d6}.fin-it.on{border-color:#0a7d6b;box-shadow:0 0 0 2px #0a7d6b33}.fin-it.pronto{border-left-color:#34c759}.fin-it.lendo{border-left-color:#8e8e93}'+
+  '.fin-it .t{font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fin-it .v{font-weight:800;font-variant-numeric:tabular-nums;font-size:14px}'+
+  '.fin-it .m{grid-column:1/-1;font-size:12px;color:#636366;display:flex;gap:6px;flex-wrap:wrap}'+
+  '.fin-fotos{display:flex;gap:8px;overflow-x:auto}.fin-fotos img{height:150px;border-radius:8px;border:1px solid #e5e5ea;cursor:zoom-in}'+
+  '#frtZoom{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px}#frtZoom img{max-width:100%;max-height:85vh;border-radius:8px}'+
+  '.fin-rev{border:2px solid #0a7d6b;border-radius:14px;padding:14px;margin-top:14px;display:grid;gap:10px;background:#f4fbf9}'+
+  '.fin-rev dl{margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:5px 14px;font-size:14px}.fin-rev dt{color:#636366}.fin-rev dd{margin:0;font-weight:600;overflow-wrap:anywhere}'+
+  '.fin-act{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:12px}'+
+  '.fin-mu{color:#8e8e93;font-size:13px}'+
+  '.fin-empty{text-align:center;color:#636366;padding:26px 14px;border:1px dashed #d1d1d6;border-radius:14px;background:#fff}.fin-empty b{display:block;color:#1c1c1e;margin-bottom:4px}'+
+  '.fin-cardrow{display:grid;grid-template-columns:minmax(0,1fr) 7rem 7rem auto;gap:8px;align-items:end;padding:10px 0;border-top:1px solid #f0f0f3}@media(max-width:560px){.fin-cardrow{grid-template-columns:1fr 1fr}.fin-cardrow .fin-f:first-child{grid-column:1/-1}}'+
+  '.fin-tbl{width:100%;border-collapse:collapse;font-size:13px}.fin-tbl td,.fin-tbl th{padding:5px 6px;border-bottom:1px solid #f0f0f3;text-align:left}.fin-tbl td.n{text-align:right;font-variant-numeric:tabular-nums}'+
+  '.fin-sw{font-size:12px;color:#0a7d6b;background:none;border:none;text-decoration:underline;cursor:pointer;font:inherit;padding:0}'+
+  '#frtAviso{position:fixed;right:16px;bottom:70px;z-index:9000;background:#0a7d6b;color:#fff;border:none;border-radius:999px;padding:11px 16px;font:inherit;font-weight:700;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer}';
+  document.head.appendChild(st);
+}
+
+// ---------- render ----------
+function renderFretes(){
+  frtCss();
+  var wrap=document.createElement('div');wrap.className='fin-wrap';FRT.root=wrap;FRT.mob=false;
+  if(!FRT.tela)FRT.tela=frtMobile()?'captura':'conferencia';
+  window.postMessage({source:'ma-app',type:'ping'},'*');
+  if(!FRT.carregado)frtCarregar().then(function(){if(!FRT_CONF.feita)setTimeout(frtConferirTudo,600);});else{setTimeout(frtDraw,0);if(!FRT_CONF.feita)setTimeout(frtConferirTudo,600);}
+  frtFilaEnviar();
+  if(!FRT.poll)FRT.poll=setInterval(function(){if(STATE.modulo==='mod16'&&!document.hidden&&FRT.root&&document.body.contains(FRT.root))frtCarregar(true);},30000);
+  return wrap;
+}
+function frtTabs(){
+  var n=frtLista('pend').length,nlp=frtLista('lancado').filter(frtLancadoPend).length;
+  var t=[['captura','📷 Envio'],['conferencia','🧾 Conferência'+(n?' <span class="fin-badge">'+n+'</span>':'')],['lancados','✅ Lançados'+(nlp?' <span class="fin-badge" title="Lançados com pendência">'+nlp+'</span>':'')],['config','⚙️ Configurações']];
+  return '<div style="display:flex;justify-content:flex-end;margin:-4px 0 8px"><button type="button" class="fin-btn sm" id="frtVerMob">📱 Ver tela do celular</button></div><div class="fin-tabs" role="tablist">'+t.map(function(x){return '<button type="button" role="tab" data-t="'+x[0]+'" class="'+(FRT.tela===x[0]?'on':'')+'">'+x[1]+'</button>';}).join('')+'</div>';
+}
+function frtMsgHtml(){return FRT.msg?'<div class="fin-msg '+(FRT.msgTipo||'info')+'" role="status">'+frtEsc(FRT.msg)+'</div>':'';}
+function frtDraw(){
+  if(!FRT.root||!document.body.contains(FRT.root))return;
+  if(FRT.form&&frtEl('fNome'))frtLerCampos();
+  if(FRT.mob){frtDrawMob();return;}
+  var h=frtTabs()+frtMsgHtml();
+  if(!FRT.carregado)h+='<div class="fin-card fin-mu">Carregando fretes…</div>';
+  else if(FRT.tela==='captura')h+=frtHtmlCaptura();
+  else if(FRT.tela==='conferencia')h+=frtHtmlConferencia();
+  else if(FRT.tela==='lancados')h+=frtHtmlLancados();
+  else h+=frtHtmlConfig();
+  h+='<div id="frtZoom" hidden></div>';
+  FRT.root.innerHTML=h;
+  var vm=frtEl('frtVerMob');if(vm)vm.onclick=function(){if(FRT.form&&FRT.form._editado)frtSalvarForm(true);FRT.forcarMob=true;FRT.modoPc=false;FRT.sel=null;FRT.form=null;FRT.msg='';render();window.scrollTo(0,0);};
+  FRT.root.querySelectorAll('.fin-tabs [data-t]').forEach(function(b){b.onclick=function(){if(FRT.form&&FRT.form._editado)frtSalvarForm(true);FRT.tela=b.dataset.t;FRT.msg='';FRT.revisao=null;frtDraw();};});
+  if(FRT.carregado){if(FRT.tela==='captura')frtBindCaptura();else if(FRT.tela==='conferencia')frtBindConferencia();else if(FRT.tela==='config')frtBindConfig();else frtBindLancados();}
+}
+function frtDrawLista(){if(FRT.mob)return;var l=frtEl('frtPendList');if(l){l.innerHTML=frtHtmlListaItens();frtBindLista();}var b=FRT.root&&FRT.root.querySelector('.fin-tabs [data-t="conferencia"]');if(b){var n=frtLista('pend').length;b.innerHTML='🧾 Conferência'+(n?' <span class="fin-badge">'+n+'</span>':'');}}
+
+// Captura (celular)
+function frtHtmlCaptura(){
+  var fila=frtFilaLer().length;
+  var h='<div class="fin-card"><div class="fin-big">'+
+    '<label class="fin-btn pri" for="frtCam">📷 Fotografar o CT-e / documento do frete</label><input id="frtCam" type="file" accept="image/*" capture="environment" hidden>'+
+    '<label class="fin-btn" for="frtArq">🖼️ Escolher da galeria ou PDF</label><input id="frtArq" type="file" accept="image/*,application/pdf" multiple hidden></div>';
+  if(FRT.fotosNovas.length){
+    h+='<div class="fin-h">'+FRT.fotosNovas.length+' imagem(ns) deste frete</div><div class="fin-thumbs">'+FRT.fotosNovas.map(function(b,i){return '<div><img src="data:image/jpeg;base64,'+b+'" alt=""><button type="button" data-rm="'+i+'" aria-label="Remover">×</button></div>';}).join('')+'</div>'+
+      '<p class="fin-mu" style="margin:8px 0 0">CT-e e comprovante de pagamento do mesmo frete podem ir juntos.</p>'+
+      '<div class="fin-f" style="margin-top:12px"><label for="frtObs">Observação (opcional)</label><input class="fin-in" id="frtObs" placeholder="Ex.: frete pedido 1234 · cliente Construtora X"></div>'+
+      '<div class="fin-big" style="margin-top:12px"><button type="button" class="fin-btn pri" id="frtEnviar"'+(FRT.enviando?' disabled':'')+'>'+(FRT.enviando?'Enviando…':'Enviar para conferência')+'</button></div>';
+  } else h+='<p class="fin-mu" style="margin:12px 0 0;text-align:center">Fotografe o CT-e (DACTE), a fatura ou o recibo do frete. O app recorta só o documento e a leitura é automática.</p>';
+  h+='</div>';
+  if(fila)h+='<div class="fin-msg warn" style="margin-top:12px">'+fila+' documento(s) aguardando internet neste celular. <button type="button" class="fin-sw" id="frtFila">Enviar agora</button></div>';
+  var ult=frtLista('pend').slice(0,6);
+  h+='<div class="fin-h">Enviados recentemente</div>';
+  if(!ult.length)h+='<div class="fin-empty"><b>Nada pendente</b>O que você enviar aparece aqui e na Conferência do computador.</div>';
+  else h+='<div class="fin-list" id="frtPendList">'+frtHtmlListaItens(ult)+'</div>';
+  return h;
+}
+function frtBindCaptura(){
+  frtEl('frtCam').onchange=function(e){frtAddArquivos([].slice.call(e.target.files));e.target.value='';};
+  frtEl('frtArq').onchange=function(e){frtAddArquivos([].slice.call(e.target.files));e.target.value='';};
+  FRT.root.querySelectorAll('[data-rm]').forEach(function(b){b.onclick=function(){FRT.fotosNovas.splice(+b.dataset.rm,1);frtDraw();};});
+  var en=frtEl('frtEnviar');if(en)en.onclick=frtEnviar;var fl=frtEl('frtFila');if(fl)fl.onclick=frtFilaEnviar;
+  frtBindLista();
+}
+function frtChips(d){
+  var lendo=d.status==='lendo'||FRT.lendo[d.id];if(lendo)return '<span class="fin-chip">⏳ lendo</span>';
+  var h='';if(d.status==='lancado'){h+='<span class="fin-chip ok">✓ Lançado no Bling</span>';(d.pendencias||[]).forEach(function(x){h+='<span class="fin-chip warn">falta: '+frtEsc(x)+'</span>';});return h;}
+  if(d.leituraErro)h+='<span class="fin-chip err">leitura falhou</span>';
+  if(d.autoErro)h+='<span class="fin-chip err" title="'+frtEsc(d.autoErro.msg||'')+'">não lançou: '+frtEsc(String(d.autoErro.msg||'').slice(0,60))+'</span>';
+  if(!(d.valor>0))h+='<span class="fin-chip err">sem valor</span>';
+  var p=frtPendencias(d).filter(function(x){return x!=='Conferir a leitura';});
+  h+=p.length?'<span class="fin-chip warn">lança com pendência: '+frtEsc(p.join(', '))+'</span>':'<span class="fin-chip ok">Completo · pronto para lançar</span>';
+  if(d.contato)h+='<span class="fin-chip ok">no Bling: '+frtEsc(d.contato.nome)+'</span>';else if(d.fornChecado&&!(d.fornCand&&d.fornCand.length))h+='<span class="fin-chip">fornecedor novo (será cadastrado)</span>';
+  return h+frtDupHtml(d.id,true);
+}
+function frtHtmlListaItens(lista){
+  lista=lista||frtLista('pend');
+  if(!lista.length)return '<div class="fin-empty"><b>Nenhuma pendência</b>Fretes enviados pelo celular aparecem aqui para conferir.</div>';
+  return lista.map(function(d){
+    var lendo=d.status==='lendo'||FRT.lendo[d.id];var lan=d.status==='lancado';
+    var cls='fin-it'+(FRT.sel===d.id?' on':'')+(lendo?' lendo':(lan?' lancpend':(!frtPendencias(d).length?' pronto':'')));
+    var nome=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||(lendo?'Lendo documento…':'Transportadora não identificada');
+    return '<button type="button" class="'+cls+'" data-id="'+d.id+'"><span class="t">'+frtEsc(nome)+'</span><span class="v">'+(d.valor>0?'R$ '+frtMoney(d.valor):'')+'</span>'+
+      '<span class="m">'+frtEsc(frtBr(d.emissao))+(d.formaId?' · '+frtEsc(frtFormaNome(d.formaId)):'')+(d.criadoPor?' · '+frtEsc(d.criadoPor):'')+'</span>'+
+      '<span class="m">'+frtChips(d)+'</span></button>';
+  }).join('');
+}
+function frtBindLista(){FRT.root.querySelectorAll('.fin-it[data-id]').forEach(function(b){b.onclick=function(){if(FRT.form&&FRT.form._editado)frtSalvarForm(true);frtAbrir(b.dataset.id);};});}
+
+// Conferência (computador)
+function frtOpts(list,val,vazio,filtro){return '<option value="">'+frtEsc(vazio)+'</option>'+(filtro?list.filter(filtro):list).map(function(x){return '<option value="'+frtEsc(x.id)+'"'+(String(x.id)===String(val||'')?' selected':'')+'>'+frtEsc(x.nome)+'</option>';}).join('');}
+function frtOptsCat(val,filtro){var q=frtNorm(filtro||'').trim(),h=q?'':'<option value="">Sem categoria</option>',aberto=false,grupo='',n=0;
+  frtListas().categorias.forEach(function(c){if(c.pai){if(aberto)h+='</optgroup>';aberto=false;grupo=c.nome;
+      if(!q){h+='<optgroup label="'+frtEsc(c.nome)+'">';aberto=true;}return;}
+    if(!c.grupo){if(aberto){h+='</optgroup>';aberto=false;}grupo='';}
+    var sel=String(c.id)===String(val||'');
+    if(q&&frtNorm(c.nome+' '+grupo).indexOf(q)<0)return;
+    n++;h+='<option value="'+c.id+'"'+(sel?' selected':'')+'>'+frtEsc(q&&grupo?grupo+' › '+c.nome:c.nome)+'</option>';});
+  if(aberto)h+='</optgroup>';
+  if(q&&!n)h='<option value="'+frtEsc(val||'')+'">Nada com "'+frtEsc(filtro)+'"</option>';
+  return h;}
+// última categoria usada com o mesmo fornecedor (pelo cadastro do Bling, CNPJ ou nome)
+function frtChavesForn(d){var k=[];if(!d)return k;if(d.contato&&d.contato.id)k.push('c'+d.contato.id);
+  var doc=frtDig((d.contato&&d.contato.doc)||(d.fornecedor&&d.fornecedor.doc));if(doc.length>=11)k.push('d'+doc);
+  var nm=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'';if(nm&&nm!==FRT_SEM_FORN){var t=frtTokens(nm).join('_');if(t)k.push('n'+t);}return k;}
+function frtCatSugerida(d,eu){var ks=frtChavesForn(d);if(!ks.length)return '';
+  var ok=function(id){return id&&frtListas().categorias.some(function(c){return String(c.id)===String(id)&&!c.pai;});};
+  var melhor=null;Object.keys(FRT.desp||{}).forEach(function(k){var x=FRT.desp[k];if(!x||x===d||k===eu||!x.categoria||!ok(x.categoria))return;
+    var kx=frtChavesForn(x);if(!kx.some(function(c){return ks.indexOf(c)>=0;}))return;
+    var t=x.lancadoEm||x.atualizadoEm||x.criadoEm||0;if(!melhor||t>melhor.t)melhor={t:t,c:String(x.categoria)};});
+  if(melhor)return melhor.c;
+  var m=(frtCfg().catPorForn)||{};for(var i=0;i<ks.length;i++){if(ok(m[ks[i]]))return String(m[ks[i]]);}return '';}
+function frtHtmlConferencia(){
+  var ext=frtExtOk();
+  var h=frtConfHtml()+(ext&&!frtExtDupOk()?'<div class="fin-msg err"><b>Atualize a extensão para a versão 2.0.5</b> (botão 🧩 Extensão no topo). Sem ela o app não enxerga contas já pagas no Bling e o lançamento fica bloqueado.</div>':'')+(ext?'':'<div class="fin-msg warn">Para lançar no Bling, use o app no computador com a extensão Mais Acessível — Vendas e Atendimento'+(frtExtVer()?' (este tem a v'+frtEsc(frtExtVer())+')':'')+'. Baixe pelo botão 🧩 Extensão no topo e atualize a pasta.</div>');
+  h+='<div class="fin-cols"><div><div class="fin-h" style="margin-top:0">Para conferir</div><div class="fin-list" id="frtPendList">'+frtHtmlListaItens()+'</div>'+
+    '<p class="fin-mu" style="margin-top:10px">Também dá para enviar daqui: <button type="button" class="fin-sw" id="frtIrCap">anexar documento</button></p></div><div id="frtForm">';
+  var f=FRT.sel&&FRT.desp[FRT.sel]?frtFormAtual():null;
+  if(!f){h+='<div class="fin-empty"><b>Escolha um frete</b>Clique em um item da lista para conferir e lançar.</div></div></div>';return h;}
+  h+=frtHtmlFormCard(f,false,ext);
+  h+='</div></div></div>';
+  return h;
+}
+function frtHtmlFormCard(f,mob,ext){
+  var lendo=FRT.desp[FRT.sel].status==='lendo'||FRT.lendo[FRT.sel];
+  var unc={};(f.incertos||[]).forEach(function(k){unc[k]=1;});
+  var catSug=frtCatSugerida(f,FRT.sel);if(!f.categoria&&catSug&&!f._catSugOk){f.categoria=catSug;f._editado=true;}f._catSugOk=1;
+  function tag(k){return f.incertos?(unc[k]?'<span class="fin-tag unc">conferir</span>':'<span class="fin-tag">lido</span>'):'';}
+  function rd(k){return f.incertos&&!f._toq?' fin-read':'';}
+  var vs=frtVencSugerido(f.emissao,f.formaId);
+  var lan=FRT.desp[FRT.sel].status==='lancado';var pnd=lan?(FRT.desp[FRT.sel].pendencias||[]):[];
+  var h='<div class="fin-card">'+(lan?'<div class="fin-msg '+(pnd.length?'warn':'ok')+'" style="display:block"><b>✓ Já lançado no Bling'+(f.blingId?' (ID '+frtEsc(f.blingId)+')':'')+'.</b>'+(pnd.length?' Ainda falta: <b>'+frtEsc(pnd.join(', '))+'</b>. Complete aqui e clique em <b>Atualizar no Bling</b>, ou corrija direto no Bling e clique em <b>Já resolvi</b>.':'')+'</div>':'')+(lendo||lan?'':frtDupHtml(FRT.sel,false))+
+   (lendo?'<div class="fin-msg info">⏳ A IA está lendo este documento. Os campos se preenchem sozinhos em alguns segundos.</div>':'')+
+   (f.leituraErro?'<div class="fin-msg warn">'+frtEsc(f.leituraErro)+'</div>':'')+
+   (f.obs?'<div class="fin-msg info">Observação de quem enviou: '+frtEsc(f.obs)+'</div>':'')+
+   '<div class="fin-sec"><p class="fin-st">Documento do frete <span class="fin-mu">'+(f.nFotos?f.nFotos+' imagem(ns) · toque para ampliar':'')+'</span></p><div class="fin-fotos" id="frtFotos"></div></div>'+
+   '<div class="fin-sec"><p class="fin-st">Transportadora '+(f.contato?'<span class="fin-chip ok">No Bling: '+frtEsc(f.contato.nome)+'</span>':'<span class="fin-chip">Se não existir no Bling, é cadastrado ao lançar</span>')+'</p>'+
+    (FRT.revisao?'':frtHtmlCandidatos(FRT.sel))+'<div class="fin-g"><div class="fin-f fin-c4"><label for="fNome">Nome / razão social '+tag('fornecedor_nome')+'</label><input class="fin-in'+rd()+'" id="fNome" value="'+frtEsc(f.fornecedor.nome)+'"></div>'+
+    '<div class="fin-f fin-c2"><label for="fDoc">CPF/CNPJ '+tag('fornecedor_documento')+'</label><input class="fin-in'+rd()+'" id="fDoc" inputmode="numeric" value="'+frtEsc(frtDoc(f.fornecedor.doc))+'"></div></div>'+
+    (ext?'<div><button type="button" class="fin-btn sm" id="fBuscar">'+(f.contato?'Trocar fornecedor':'Buscar no Bling')+'</button> <span id="fForStatus"></span></div>':(f.contato?'':'<p class="fin-mu" style="margin:0">O vínculo com o cadastro do Bling é feito no computador.</p>'))+'</div>'+
+   '<div class="fin-sec"><p class="fin-st">Pagamento</p><div class="fin-g">'+
+    '<div class="fin-f fin-c3"><label for="fForma">Forma de pagamento '+(f.incertos&&!f.formaId?'<span class="fin-tag unc">escolher</span>':'')+'</label><select id="fForma">'+frtOpts(frtListas().formas,f.formaId,'Selecione')+'</select></div>'+
+    '<div class="fin-f fin-c3"><label for="fConta">Conta financeira</label><select id="fConta">'+frtOpts(frtListas().contas,f.contaId,'Selecione')+'</select></div>'+
+    '<div class="fin-f fin-c4"><label for="fCat">Categoria'+(catSug&&String(catSug)===String(f.categoria)?' <span class="fin-tag" id="fCatTag">última usada com este fornecedor</span>':'')+'</label><input class="fin-in" id="fCatBusca" type="search" autocomplete="off" placeholder="🔎 Buscar categoria pelo nome" style="margin-bottom:6px"><select id="fCat">'+frtOptsCat(f.categoria)+'</select></div>'+
+    '<div class="fin-f fin-c2" id="fParcW"'+(frtEhCredito(f.formaId)?'':' hidden')+'><label for="fParc">Parcelas</label><input class="fin-in" id="fParc" type="number" min="1" max="24" value="'+(f.parcelas||1)+'"></div></div></div>'+
+   '<div class="fin-sec"><p class="fin-st">Valores e datas</p><div class="fin-g">'+
+    '<div class="fin-f fin-c2"><label for="fValor">Valor (R$) '+tag('valor_total')+'</label><input class="fin-in fin-money'+rd()+'" id="fValor" inputmode="decimal" value="'+frtEsc(f.valor>0?frtMoney(f.valor):'')+'" placeholder="0,00"></div>'+
+    '<div class="fin-f fin-c2 h"><label for="fEm">Emissão do CT-e '+tag('data_emissao')+'</label><input class="fin-in'+rd()+'" id="fEm" type="date" value="'+frtEsc(f.emissao)+'"></div>'+
+    '<div class="fin-f fin-c2 h"><label for="fVenc">Vencimento</label><input class="fin-in" id="fVenc" type="date" value="'+frtEsc(f.vencimento||'')+'"><span class="fin-mu" id="fVencDica">'+frtEsc(vs.dica)+'</span></div>'+
+    '<div class="fin-f fin-c2 h"><label for="fComp">Competência</label><input class="fin-in" id="fComp" type="date" value="'+frtEsc(f.competencia||'')+'"></div>'+
+    '<div class="fin-f fin-c4"><label for="fNum">Nº do documento '+tag('numero_documento')+'</label><input class="fin-in'+rd()+'" id="fNum" value="'+frtEsc(f.numeroDocumento||'')+'"></div>'+
+    '<div class="fin-f fin-c6"><label for="fHist">Histórico '+tag('historico')+'</label><textarea id="fHist" class="'+rd().trim()+'" rows="2" placeholder="Ex.: Frete CT-e 1234 · NF 5678 · Goiânia/GO → Anápolis/GO">'+frtEsc(f.historico||'')+'</textarea></div></div></div>'+
+   (f.cte&&(f.cte.chave||f.cte.remetente||f.cte.destinatario||(f.cte.nfs&&f.cte.nfs.length))?'<div class="fin-sec"><p class="fin-st">Dados do CT-e <span class="fin-tag">lido</span></p><table class="fin-tbl" style="font-family:inherit">'+[['Remetente',f.cte.remetente],['Destinatário',f.cte.destinatario],['Trajeto',(f.cte.origem||f.cte.destino)?(f.cte.origem||'?')+' → '+(f.cte.destino||'?'):''],['NF-e',(f.cte.nfs||[]).join(', ')],['Chave',f.cte.chave],['Peso / volumes',[f.cte.peso?f.cte.peso+' kg':'',f.cte.volumes?f.cte.volumes+' vol.':''].filter(Boolean).join(' · ')],['Sentido',f.cte.sentido==='venda'?'Frete de venda (saída)':f.cte.sentido==='compra'?'Frete de compra (entrada)':'']].filter(function(r){return r[1];}).map(function(r){return '<tr><td style="color:#636366">'+r[0]+'</td><td style="overflow-wrap:anywhere">'+frtEsc(r[1])+'</td></tr>';}).join('')+'</table></div>':'')+
+   ((f.itens&&f.itens.length)?'<div class="fin-sec"><p class="fin-st">Itens lidos <span class="fin-tag">para conferência</span></p><div style="overflow-x:auto"><table class="fin-tbl"><tr><th>Descrição</th><th style="text-align:right">Qtd</th><th style="text-align:right">Valor</th></tr>'+f.itens.map(function(i){return '<tr><td>'+frtEsc(i.descricao)+'</td><td class="n">'+frtEsc(i.quantidade||'')+'</td><td class="n">'+frtMoney(i.valor)+'</td></tr>';}).join('')+'</table></div></div>':'')+
+   (mob?'</div>':(lan?'<div class="fin-act"><button type="button" class="fin-btn" id="fResolvido">Já resolvi no Bling</button><button type="button" class="fin-btn" id="fSalvar">Salvar</button><button type="button" class="fin-btn pri" id="fAtualizar"'+(ext?'':' disabled')+'>Atualizar no Bling</button></div>':
+   '<div class="fin-act"><button type="button" class="fin-btn dan" id="fExcluir">Excluir</button>'+(f.nFotos?'<button type="button" class="fin-btn" id="fReler">Ler de novo</button>':'')+
+   '<button type="button" class="fin-btn" id="fSalvar">Salvar e terminar depois</button><button type="button" class="fin-btn pri" id="fRevisar">Revisar e lançar</button></div>'));
+  if(FRT.revisao&&!mob){
+    var catN=frtCatNome(f.categoria);
+    var rows=[['Valor','R$ '+frtMoney(f.valor)+(f.parcelas>1?' em '+f.parcelas+'x':'')],['Forma de pagamento',frtFormaNome(f.formaId)],['Conta financeira',frtContaNome(f.contaId)||'—'],['Categoria',catN||'Sem categoria'],
+      ['Emissão do CT-e',frtBr(f.emissao)],['Vencimento',frtBr(f.vencimento)],['Competência',frtBr(f.competencia)],['Nº documento',f.numeroDocumento||'—'],['Histórico',f.historico]];
+    h+='<div class="fin-rev" id="frtRev"><b style="font-size:16px">Confirme antes de lançar</b><div style="margin:8px 0"><div class="fin-mu" style="margin-bottom:4px">Transportadora</div>'+frtRevFornHtml(f)+'</div><dl>'+rows.map(function(r){return '<dt>'+r[0]+'</dt><dd>'+frtEsc(r[1])+'</dd>';}).join('')+'</dl>'+
+      (f.parcelas>1?'<p class="fin-mu" style="margin:0">Parcelado: o Bling divide o valor total nas parcelas a partir deste vencimento.</p>':'')+
+      (frtPendencias(f).length?'<div class="fin-msg warn" style="margin:0">Vai lançar com pendência: <b>'+frtEsc(frtPendencias(f).join(', '))+'</b>. Depois fica na lista para você completar.'+(!f.vencimento?' Sem vencimento: uso a data da compra.':'')+((!f.contato&&!(f.fornecedor&&f.fornecedor.nome))?' Sem fornecedor: lanço como "'+FRT_SEM_FORN+'".':'')+'</div>':'')+
+      (frtDuplicados(FRT.sel).length?'<div class="fin-msg err" style="margin:0">⚠️ Este frete parece duplicado. Confira o aviso no topo antes de lançar.</div>':'')+
+      frtBaixaHtml(f)+
+      '<div class="fin-act" style="margin-top:0"><button type="button" class="fin-btn" id="fVoltar">Voltar e editar</button><button type="button" class="fin-btn pri" id="fLancar"'+(ext&&!frtDuplicados(FRT.sel).length&&!(FRT.desp[FRT.sel].fornCand&&FRT.desp[FRT.sel].fornCand.length&&!f.contato)?'':' disabled')+'>'+(frtDuplicados(FRT.sel).length?'Bloqueado: possível duplicidade':(FRT.desp[FRT.sel].fornCand&&FRT.desp[FRT.sel].fornCand.length&&!f.contato)?'Escolha o fornecedor acima':f.contato?'Confirmar e lançar no Contas a Pagar':'Cadastrar fornecedor e lançar')+'</button></div></div>';
+  }
+  return h;
+}
+function frtBindConferencia(){
+  FRT.root.querySelectorAll('[data-dup]').forEach(function(b){b.onclick=function(e){e.preventDefault();if(FRT.form&&FRT.form._editado)frtSalvarForm(true);if(FRT.mob)frtMobAbrir(b.dataset.dup);else frtAbrir(b.dataset.dup);};});
+  frtBindLista();var cf=frtEl('frtConfNovo');if(cf)cf.onclick=frtConferirTudo;var ic=frtEl('frtIrCap');if(ic)ic.onclick=function(){FRT.tela='captura';frtDraw();};
+  if(!FRT.sel||!frtEl('fNome'))return;var f=FRT.form;
+  if(f.nFotos)frtVerFotos(FRT.sel,frtEl('frtFotos'));
+  FRT.root.querySelectorAll('#frtForm input,#frtForm select,#frtForm textarea').forEach(function(el){if(el.closest('#frtRev'))return;el.addEventListener('input',function(){f._editado=true;el.classList.remove('fin-read');if(FRT.revisao){FRT.revisao=null;var r=frtEl('frtRev');if(r)r.remove();}});});
+  frtEl('fDoc').addEventListener('change',async function(){var nd=frtDig(frtEl('fDoc').value);if(f.contato&&nd!==f.fornecedor.doc){f.contato=null;}
+    if(nd.length===14){var x=await frtConsultaCnpj(nd);if(x&&x.nome){frtLerCampos();f.fornecedor={nome:x.nome,doc:nd,dados:x};f._editado=true;await frtSalvarForm(true);frtDraw();}}});
+  function reVenc(){var v=frtVencSugerido(frtEl('fEm').value,frtEl('fForma').value);frtEl('fVencDica').textContent=v.dica;if(!frtEl('fVenc').dataset.toq)frtEl('fVenc').value=v.v;}
+  frtEl('fVenc').addEventListener('input',function(){frtEl('fVenc').dataset.toq='1';});
+  frtEl('fEm').addEventListener('change',function(){if(!frtEl('fComp').dataset.toq)frtEl('fComp').value=frtEl('fEm').value;reVenc();});
+  frtEl('fComp').addEventListener('input',function(){frtEl('fComp').dataset.toq='1';});
+  frtEl('fForma').addEventListener('change',function(){var id=frtEl('fForma').value;frtEl('fParcW').hidden=!frtEhCredito(id);var c=frtContaSugerida(id);if(c)frtEl('fConta').value=c;delete frtEl('fVenc').dataset.toq;reVenc();});
+  var bb=frtEl('fBuscar');if(bb)bb.onclick=frtBuscarFornecedor;
+  var cb=frtEl('fCatBusca'),cs=frtEl('fCat');if(cb&&cs){cb.addEventListener('input',function(){var v=cs.value;cs.innerHTML=frtOptsCat(v,cb.value);
+      var reais=[].filter.call(cs.options,function(o){return o.value&&!/^Nada com/.test(o.text);});
+      if(cb.value.trim()&&reais.length){cs.value=reais[0].value;f.categoria=cs.value;cs.dispatchEvent(new Event('input'));}});
+    var tg=frtEl('fCatTag'),cat0=cs.value;var vtg=function(){if(tg)tg.hidden=cs.value!==cat0;};cs.addEventListener('input',vtg);cs.addEventListener('change',function(){f.categoria=cs.value;vtg();});
+    cb.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();cb.blur();}});}
+  FRT.root.querySelectorAll('[data-cand]').forEach(function(b){b.onclick=async function(){var c=FRT.desp[FRT.sel].fornCand[+b.dataset.cand];f.contato={id:String(c.id),nome:c.nome,doc:c.doc||''};f._editado=true;await frtSalvarForm(true);
+    await frtFb('fretes/'+FRT.sel,{method:'PATCH',body:{fornCand:null}});delete FRT.desp[FRT.sel].fornCand;frtDraw();};});
+  var cn=frtEl('fCandNovo');if(cn)cn.onclick=function(){if(!confirm('Nenhum destes é o fornecedor? Vou cadastrar um novo no Bling.'))return;cn.disabled=true;frtCadastrarAgora();};
+  var ca=frtEl('fCadAgora');if(ca)ca.onclick=frtCadastrarAgora;
+  var sv=frtEl('fSalvar');if(sv)sv.onclick=async function(){sv.disabled=true;await frtSalvarForm(false);frtDraw();};
+  var rv=frtEl('fRevisar');if(rv)rv.onclick=frtRevisar;
+  var ex=frtEl('fExcluir');if(ex)ex.onclick=frtExcluir;
+  var rl=frtEl('fReler');if(rl)rl.onclick=function(){FRT.form=null;frtLerDespesa(FRT.sel,null,FRT.desp[FRT.sel].obs);};
+  var vt=frtEl('fVoltar');if(vt)vt.onclick=function(){FRT.revisao=null;frtDraw();};
+  var la=frtEl('fLancar');if(la)la.onclick=frtLancar;
+  var at=frtEl('fAtualizar');if(at)at.onclick=frtAtualizarBling;var rs=frtEl('fResolvido');if(rs)rs.onclick=frtResolvido;
+  if(!f.contato&&(f.fornecedor.doc||f.fornecedor.nome)&&frtExtOk()&&!f._buscou&&FRT.desp[FRT.sel].status!=='lendo'){f._buscou=true;frtBuscarFornecedor();}
+}
+
+// Lançados
+function frtHtmlLancados(){
+  var L=frtLista('lancado').slice(0,50);
+  if(!L.length)return '<div class="fin-empty"><b>Nada lançado ainda</b>Os fretes enviados ao Bling ficam listados aqui.</div>';
+  var ne=frtLista('lancado').filter(function(d){return !d.emailEm;}).length;
+  return (ne?'<div class="fin-msg warn" style="justify-content:space-between;align-items:center"><span>📧 '+ne+(ne>1?' fretes lançados ainda não foram enviados':' frete lançado ainda não foi enviado')+' à contabilidade.</span><button type="button" class="fin-btn sm pri" id="frtEmTodos"'+(frtEmailCfg().url?'':' disabled title="Configure o envio em Configurações"')+'>Enviar todos</button></div>':'')+'<div class="fin-card" style="overflow-x:auto"><table class="fin-tbl"><tr><th>Lançado em</th><th>Transportadora</th><th>Forma</th><th>Vencimento</th><th style="text-align:right">Valor</th><th>ID Bling</th><th>Pago</th><th>Contabilidade</th><th>Pendência</th></tr>'+
+    L.map(function(d){var p=frtLancadoPend(d);return '<tr'+(p?' data-lp="'+frtEsc(d.id)+'" style="cursor:pointer" title="Abrir para completar"':'')+'><td>'+new Date(d.lancadoEm).toLocaleDateString('pt-BR')+'</td><td>'+frtEsc((d.contato&&d.contato.nome)||'')+'</td><td>'+frtEsc(frtFormaNome(d.formaId))+'</td><td>'+frtBr(d.vencimento)+'</td><td class="n">'+frtMoney(d.valor)+'</td><td>'+frtEsc(d.blingId||'')+'</td><td>'+(d.baixadoEm?'<span class="fin-chip ok">pago '+frtBr(d.baixaData)+'</span>':(d.parcelas>1?'<span class="fin-mu">parcelado</span>':'<button type="button" class="fin-btn sm" data-bx="'+frtEsc(d.id)+'"'+(frtExtBaixaOk()?'':' disabled title="Atualize a extensão para 2.1.2"')+'>💲 Dar baixa</button>'))+'</td><td>'+frtEmailChip(d)+'</td><td>'+(p?'<span class="fin-chip warn">falta: '+frtEsc(d.pendencias.join(', '))+'</span> <button type="button" class="fin-btn sm">Completar</button>':'<span class="fin-chip ok">ok</span>')+'</td></tr>';}).join('')+'</table></div>';
+}
+function frtBindLancados(){
+  FRT.root.querySelectorAll('[data-bx]').forEach(function(b){b.onclick=async function(ev){ev.stopPropagation();var id=b.getAttribute('data-bx'),d=FRT.desp[id];if(!d)return;
+    if(!d.contaId){FRT.msg='Para dar baixa, abra o frete e escolha a conta financeira.';FRT.msgTipo='warn';frtDraw();return;}
+    var dt=prompt('Dar baixa (pago) em '+((d.contato&&d.contato.nome)||'')+' — R$ '+frtMoney(d.valor)+'\nConta: '+frtContaNome(d.contaId)+'\n\nData do pagamento (dd/mm/aaaa):',frtBr(d.emissao||d.vencimento));
+    if(dt===null)return;var m=String(dt).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);if(!m){alert('Data inválida. Use dd/mm/aaaa.');return;}
+    b.disabled=true;b.textContent='Dando baixa…';
+    try{await frtBaixarCore(id,m[3]+'-'+m[2]+'-'+m[1]);FRT.msg='Baixa feita no Bling (pago em '+dt+').';FRT.msgTipo='ok';}catch(e){FRT.msg='Não consegui dar baixa: '+e.message;FRT.msgTipo='err';}
+    frtDraw();};});
+FRT.root.querySelectorAll('[data-em]').forEach(function(b){b.onclick=async function(ev){ev.stopPropagation();var id=b.getAttribute('data-em');b.disabled=true;b.textContent='Enviando…';
+    try{await frtEnviarEmail(id);FRT.msg='Enviado à contabilidade.';FRT.msgTipo='ok';}catch(e){FRT.msg='Não enviei: '+e.message;FRT.msgTipo='err';}frtDraw();};});
+  var et=frtEl('frtEmTodos');if(et)et.onclick=async function(){et.disabled=true;var L=frtLista('lancado').filter(function(d){return !d.emailEm;}),ok=0,err=[];
+    for(var i=0;i<L.length;i++){et.textContent='Enviando '+(i+1)+' de '+L.length+'…';try{await frtEnviarEmail(L[i].id);ok++;}catch(e){err.push(((L[i].contato&&L[i].contato.nome)||'frete')+': '+e.message);}}
+    FRT.msg=ok+' enviado(s) à contabilidade.'+(err.length?' Não enviei: '+err.join(' | '):'');FRT.msgTipo=err.length?'warn':'ok';frtDraw();};
+FRT.root.querySelectorAll('[data-lp]').forEach(function(r){r.onclick=function(){FRT.sel=r.getAttribute('data-lp');FRT.form=null;FRT.revisao=null;FRT.tela='conferencia';frtDraw();};});}
+
+// Configurações
+function frtHtmlConfig(){
+  var cfg=frtCfg(),L=frtListas();var cred=function(f){var n=frtNorm(f.nome);return /credi/.test(n)&&!/debito/.test(n);};
+  var h='<div class="fin-msg info">Cartões, padrões de leitura e listas do Bling são os mesmos da aba Lançamento de despesas: o que mudar aqui vale lá também.</div><div class="fin-h" style="margin-top:0">Cartões de crédito</div><div class="fin-card"><p class="fin-mu" style="margin:0 0 4px">O cartão abre no dia seguinte ao fechamento. Compras a partir do dia do fechamento vão para a fatura seguinte.</p>';
+  (cfg.cartoes||[]).forEach(function(c,i){h+='<div class="fin-cardrow"><div class="fin-f"><label for="cc'+i+'">Cartão (forma de pagamento no Bling)</label><select id="cc'+i+'">'+frtOpts(L.formas,c.formaId,'Selecione',cred)+'</select></div>'+
+    '<div class="fin-f"><label for="cf'+i+'">Fecha no dia</label><input class="fin-in" id="cf'+i+'" type="number" min="1" max="31" value="'+frtEsc(c.fechamento||'')+'"></div>'+
+    '<div class="fin-f"><label for="cv'+i+'">Vence no dia</label><input class="fin-in" id="cv'+i+'" type="number" min="1" max="31" value="'+frtEsc(c.vencimento||'')+'"></div>'+
+    '<button type="button" class="fin-btn sm dan" data-rmc="'+i+'">Remover</button></div>';});
+  h+='<div style="margin-top:10px"><button type="button" class="fin-btn sm" id="ccAdd">Adicionar cartão</button></div></div>'+
+   '<div class="fin-h">Leitura automática</div><div class="fin-card"><div class="fin-g">'+
+   '<div class="fin-f fin-c3"><label for="cPix">Comprovante de Pix usa</label><select id="cPix">'+frtOpts(L.formas,cfg.padrao&&cfg.padrao.pix,'Escolher na hora')+'</select></div>'+
+   '<div class="fin-f fin-c3"><label for="cDin">Pagamento em dinheiro usa</label><select id="cDin">'+frtOpts(L.formas,cfg.padrao&&cfg.padrao.dinheiro,'Escolher na hora')+'</select></div></div>'+
+   '<p class="fin-mu" style="margin:10px 0 0">Pix feito em sábado, domingo ou feriado vence no próximo dia útil.</p></div>'+
+   '<div class="fin-h">Conferência no Bling</div><div class="fin-card"><p style="margin:0;font-size:13.5px">Nada é lançado sozinho. Ao abrir Fretes neste computador, o app confere no Bling o fornecedor e se já existe conta igual em aberto (mesmo valor e mesma data). O lançamento é sempre feito por você, em <b>Revisar e lançar</b>.</p></div>'+
+   '<div class="fin-act"><button type="button" class="fin-btn pri" id="cSalvar">Salvar configurações</button></div>'+
+   '<div class="fin-h">Envio à contabilidade</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">Depois de lançar no Bling, o app manda um e-mail para a contabilidade com o PDF do documento recortado e os dados do frete, e guarda uma cópia no seu Google Drive (pasta <b>Fretes - Contabilidade</b>, separada por mês). Quem envia é um script grátis do Google na sua conta: o e-mail da contabilidade fica dentro do script.</p>'+
+   '<div class="fin-g"><div class="fin-f fin-c4"><label for="emUrl">Endereço do script (App da Web do Google)</label><input class="fin-in" id="emUrl" placeholder="https://script.google.com/macros/s/…/exec" value="'+frtEsc(frtEmailCfg().url||'')+'"></div>'+
+   '<div class="fin-f fin-c2"><label for="emTok">Chave (a mesma do script)</label><input class="fin-in" id="emTok" value="'+frtEsc(frtEmailCfg().token||'')+'"></div></div>'+
+   '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;font-weight:600"><input type="checkbox" id="emAuto"'+(frtEmailCfg().auto!==false?' checked':'')+'> Enviar sozinho logo depois de lançar no Bling</label>'+
+   '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="fin-btn sm pri" id="emSalvar">Salvar envio</button><button type="button" class="fin-btn sm" id="emTeste">Enviar e-mail de teste</button> <span id="emSt"></span></div>'+
+   '<p class="fin-mu" style="margin:10px 0 0">Código do script: <a class="fin-sw" href="https://github.com/rauldneto/mais-acessivel-app/blob/main/apps-script-fretes.gs" target="_blank" rel="noopener">apps-script-fretes.gs</a> (instruções no topo do arquivo).</p></div>'+
+   '<div class="fin-h">Listas do Bling</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">'+L.formas.length+' formas de pagamento, '+L.contas.length+' contas financeiras e '+L.categorias.filter(function(c){return !c.pai;}).length+' categorias'+(L.atualizadoEm?', atualizadas em '+new Date(L.atualizadoEm).toLocaleDateString('pt-BR'):'')+'.</p>'+
+   '<button type="button" class="fin-btn sm" id="cListas">🔄 Atualizar do Bling</button> <span id="frtCfgSt"></span><p class="fin-mu" style="margin:8px 0 0">Use quando criar uma forma de pagamento ou conta nova no Bling. Precisa da extensão neste computador.</p></div>';
+  return h;
+}
+function frtLerCfgTela(){var cfg=JSON.parse(JSON.stringify(frtCfg()));
+  cfg.cartoes=(cfg.cartoes||[]).map(function(c,i){return {formaId:frtEl('cc'+i).value,fechamento:frtEl('cf'+i).value,vencimento:frtEl('cv'+i).value};});
+  cfg.padrao={pix:frtEl('cPix').value,dinheiro:frtEl('cDin').value};return cfg;}
+function frtBindConfig(){
+  frtEl('ccAdd').onclick=function(){FRT.cfg=frtLerCfgTela();FRT.cfg.cartoes.push({formaId:'',fechamento:'',vencimento:''});frtDraw();};
+  FRT.root.querySelectorAll('[data-rmc]').forEach(function(b){b.onclick=function(){FRT.cfg=frtLerCfgTela();FRT.cfg.cartoes.splice(+b.dataset.rmc,1);frtDraw();};});
+  frtEl('cSalvar').onclick=async function(){var cfg=frtLerCfgTela();
+    if(cfg.cartoes.some(function(c){return [c.fechamento,c.vencimento].some(function(v){return v&&(v<1||v>31);});})){FRT.msg='Os dias de fechamento e vencimento vão de 1 a 31.';FRT.msgTipo='err';frtDraw();return;}
+    cfg.cartoes=cfg.cartoes.filter(function(c){return c.formaId;});FRT.cfg=cfg;
+    try{await frtSalvarCfg();FRT.msg='Configurações salvas. Valem no celular e no computador.';FRT.msgTipo='ok';}catch(e){FRT.msg='Não consegui salvar: '+e.message;FRT.msgTipo='err';}frtDraw();};
+  frtEl('cListas').onclick=frtAtualizarListas;
+  function lerEm(){return {url:frtEl('emUrl').value.trim(),token:frtEl('emTok').value.trim(),auto:frtEl('emAuto').checked};}
+  frtEl('emSalvar').onclick=async function(){var e=lerEm();if(e.url&&!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec/.test(e.url)){frtEl('emSt').innerHTML='<span class="fin-chip err">O endereço deve terminar em /exec</span>';return;}
+    try{await frtFb('fretesEmail',{method:'PUT',body:e});FRT.email=e;FRT.msg='Envio à contabilidade salvo.';FRT.msgTipo='ok';}catch(er){FRT.msg='Não consegui salvar: '+er.message;FRT.msgTipo='err';}frtDraw();};
+  frtEl('emTeste').onclick=async function(){var st=frtEl('emSt');FRT.email=Object.assign({},FRT.email||{},lerEm());st.innerHTML='<span class="fin-chip">Enviando teste…</span>';
+    try{var j=await frtEmailPost({teste:true});st.innerHTML='<span class="fin-chip ok">✓ Teste enviado para '+frtEsc(j.para||'a contabilidade')+'</span>';}catch(er){st.innerHTML='<span class="fin-chip err">'+frtEsc(er.message)+'</span>';}};
+}
+
+// Aviso flutuante em outras telas: há despesas para conferir (só no computador, admin)
+function frtAvisoGlobal(){
+  if(FRT.avisoVisto||STATE.roleLogado!=='admin'||frtMobile())return;FRT.avisoVisto=true;
+  frtFb('fretes').then(function(d){d=d||{};var n=Object.keys(d).filter(function(k){var x=d[k];return x&&(x.status!=='lancado'||(x.pendencias&&x.pendencias.length)||(x.status==='lancado'&&!x.emailEm));}).length;
+    if(!n||STATE.modulo==='mod16'||frtEl('frtAviso'))return;
+    var b=document.createElement('button');b.id='frtAviso';b.type='button';b.textContent='🚚 '+n+(n>1?' fretes com pendência':' frete com pendência');
+    b.onclick=function(){b.remove();STATE.modulo='mod16';FRT.tela='conferencia';render();};
+    frtCss();document.body.appendChild(b);setTimeout(function(){if(b.parentNode)b.remove();},60000);}).catch(function(){});
+}
+
+
+
+// ---------- TELA DO CELULAR (layout próprio, sem cabeçalho e menu do app) ----------
+function frtUsarMobile(){return STATE.modulo==='mod16'&&STATE.roleLogado==='admin'&&(FRT.forcarMob||(frtMobile()&&!FRT.modoPc));}
+function frtMobCss(){
+  if(frtEl('frtMobCss'))return;var st=document.createElement('style');st.id='frtMobCss';
+  st.textContent=
+  '.dm{min-height:100vh;background:#f2f2f7;color:#1c1c1e;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))}'+
+  '.dm [hidden]{display:none!important}'+
+  '.dm.pc{max-width:430px;margin:0 auto;box-shadow:0 0 0 1px #e5e5ea,0 10px 40px rgba(0,0,0,.12)}.dm.pc .dm-cta,.dm.pc .dm-tab{max-width:430px;margin:0 auto}'+
+  '.dm{overflow-x:hidden}.dm .fin-f{min-width:0}.dm select{width:100%;max-width:100%;min-width:0}.dm .fin-card{min-width:0;overflow:hidden}'+
+  '.dm-top{position:sticky;top:0;z-index:20;background:#0a7d6b;color:#fff;display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 12px}'+
+  '.dm-top{box-shadow:0 2px 10px rgba(0,0,0,.12)}.dm-top h1{margin:0;font-size:21px;font-weight:800;flex:1;letter-spacing:-.2px}.dm-top small{display:block;font-size:12px;font-weight:500;opacity:.85}'+
+  '.dm-top button{border:none;background:rgba(255,255,255,.18);color:#fff;font:inherit;font-size:13px;font-weight:700;border-radius:999px;padding:7px 12px;cursor:pointer}'+
+  '.dm-back{background:none!important;padding:4px 6px 4px 0!important;font-size:16px!important}'+
+  '.dm-body{padding:16px;display:grid;gap:14px}'+
+  '.dm-cam{display:flex;flex-direction:column;align-items:center;gap:12px;padding:26px 16px 22px;background:#fff;border-radius:20px;border:1px solid #e5e5ea}'+
+  '.dm-cam label.big{width:150px;height:150px;border-radius:50%;background:#0a7d6b;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-size:15px;font-weight:800;box-shadow:0 10px 26px rgba(10,125,107,.35);cursor:pointer}'+
+  '.dm-cam label.big span{font-size:46px;line-height:1}'+
+  '.dm-cam label.sec{font-size:15px;font-weight:700;color:#0a7d6b;padding:10px 16px;border-radius:12px;background:#e6f3f1;cursor:pointer}'+
+  '.dm-cam p{margin:0;font-size:13px;color:#636366;text-align:center;max-width:280px}'+
+  '.dm-thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.dm-thumbs div{position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;background:#fff;border:1px solid #e5e5ea}'+
+  '.dm-thumbs img{width:100%;height:100%;object-fit:cover}.dm-thumbs button{position:absolute;top:5px;right:5px;width:28px;height:28px;border-radius:50%;border:none;background:rgba(0,0,0,.65);color:#fff;font-size:16px}'+
+  '.dm-thumbs label{aspect-ratio:1;border-radius:12px;border:2px dashed #b9c9c6;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#0a7d6b;font-weight:700;font-size:13px;gap:2px;cursor:pointer}.dm-thumbs label span{font-size:26px}'+
+  '.dm-in{font:inherit;font-size:16px;width:100%;box-sizing:border-box;border:1px solid #d1d1d6;border-radius:12px;padding:12px;background:#fff;color:#1c1c1e}'+
+  '.dm-lbl{font-size:13px;font-weight:700;color:#636366;margin:0 2px 6px}'+
+  '.dm-cta{position:fixed;left:0;right:0;bottom:calc(62px + env(safe-area-inset-bottom,0px));padding:10px 16px;background:linear-gradient(rgba(242,242,247,0),#f2f2f7 30%);z-index:15}'+
+  '.dm-cta button,.dm-btn{width:100%;min-height:54px;border:none;border-radius:14px;background:#0a7d6b;color:#fff;font:inherit;font-size:17px;font-weight:800;cursor:pointer}'+
+  '.dm-cta button:disabled{opacity:.6}'+
+  '.dm-cta.dupla{bottom:0;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:auto 1fr;gap:10px}.dm-cta .sec{background:#fff;color:#c0392b;border:1px solid #f3c2bd;padding:0 16px;width:auto}'+
+  '.dm-h{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#636366;margin:6px 4px -4px}'+
+  '.dm-card{background:#fff;border-radius:16px;border:1px solid #e5e5ea;padding:14px;display:grid;gap:6px;text-align:left;font:inherit;color:inherit;width:100%;cursor:pointer}'+
+  '.dm-card .l1{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.dm-card .n{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}'+
+  '.dm-card .v{font-weight:800;font-size:17px;font-variant-numeric:tabular-nums;white-space:nowrap}.dm-card .m{font-size:13px;color:#636366}.dm-card .c{display:flex;gap:5px;flex-wrap:wrap}'+
+  '.dm-card.pronto{border-left:5px solid #34c759}.dm-card.falta{border-left:5px solid #ff9500}.dm-card.lendo{border-left:5px solid #8e8e93}'+
+  '.dm-ok{background:#e7f6ec;border-radius:16px;padding:14px;display:grid;gap:8px}.dm-ok b{font-size:15px;color:#166534}'+
+  '.dm-tab{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(255,255,255,.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid #e5e5ea;display:grid;grid-template-columns:repeat(3,1fr);box-sizing:border-box;height:calc(62px + env(safe-area-inset-bottom,0px));padding:6px 6px env(safe-area-inset-bottom,0px)}'+
+  '.dm-tab::before,.dm-tab::after{content:none!important;display:none!important}'+
+  '.dm-tab button{border:none;background:none;font:inherit;font-size:11.5px;font-weight:700;color:#8e8e93;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px;cursor:pointer;position:relative}'+
+  '.dm-tab button span{font-size:22px;line-height:1.1}.dm-tab button.on{color:#0a7d6b}'+
+  '.dm-tab i{position:absolute;top:0;left:calc(50% + 6px);background:#ff3b30;color:#fff;font-style:normal;font-size:11px;font-weight:800;min-width:18px;height:18px;border-radius:999px;display:grid;place-items:center;padding:0 4px}'+
+  '.dm .fin-card{border-radius:16px}.dm .fin-in,.dm select,.dm textarea{font-size:16px!important;padding:11px 12px!important;border-radius:11px!important}'+
+  '.dm .fin-g{grid-template-columns:repeat(2,minmax(0,1fr))}.dm .fin-c2,.dm .fin-c3,.dm .fin-c4,.dm .fin-c6{grid-column:span 2}.dm .fin-c2.h{grid-column:span 1}'+
+  '.dm .fin-fotos img{height:auto;width:100%;max-height:340px;object-fit:contain;background:#fafafa}.dm .fin-fotos{flex-direction:column}'+
+  '.dm .fin-msg{margin:0}';
+  document.head.appendChild(st);
+}
+function renderFretesMobile(){
+  frtCss();frtMobCss();
+  var wrap=document.createElement('div');wrap.className='dm';FRT.root=wrap;FRT.mob=true;
+  frtModoApp(true);
+  if(!frtTelaCel()&&!(window.matchMedia&&window.matchMedia('(max-width: 760px)').matches))wrap.classList.add('pc');
+  else{var f=window.innerWidth/Math.min(screen.width||window.innerWidth,screen.height||window.innerWidth);if(f>1.25){wrap.style.zoom=f.toFixed(3);wrap.style.minHeight=(window.innerHeight/f)+'px';}}
+  if(!FRT.mtela)FRT.mtela='enviar';
+  if(FRT.compartilhado)setTimeout(frtPegarCompartilhado,50);
+  if(!FRT.carregado)frtCarregar();else setTimeout(frtDraw,0);
+  frtFilaEnviar();
+  if(!FRT.poll)FRT.poll=setInterval(function(){if(STATE.modulo==='mod16'&&!document.hidden&&FRT.root&&document.body.contains(FRT.root))frtCarregar(true);},30000);
+  return wrap;
+}
+function frtModoApp(on){
+  var hd=document.head;function meta(n,c){var m=hd.querySelector('meta[name="'+n+'"]');if(!m){m=document.createElement('meta');m.name=n;hd.appendChild(m);}m.content=c;return m;}
+  if(on){
+    meta('theme-color','#0a7d6b');meta('apple-mobile-web-app-capable','yes');meta('mobile-web-app-capable','yes');meta('apple-mobile-web-app-title','Fretes');
+    var v=hd.querySelector('meta[name="viewport"]');if(v){if(!v.dataset.orig)v.dataset.orig=v.content;v.content='width=device-width,initial-scale=1,viewport-fit=cover';}
+    if(!hd.querySelector('link[rel="manifest"]')){var l=document.createElement('link');l.rel='manifest';l.href='despesas.webmanifest';hd.appendChild(l);}
+    if(!hd.querySelector('link[rel="apple-touch-icon"]')){var a=document.createElement('link');a.rel='apple-touch-icon';a.href='despesas-192.png';hd.appendChild(a);}
+    document.body.style.background='#f2f2f7';
+  } else {
+    var t=hd.querySelector('meta[name="theme-color"]');if(t)t.remove();document.body.style.background='';
+  }
+}
+function frtDrawMob(){
+  var n=frtLista('pend').length,t=FRT.mtela,h='';
+  var titulo={enviar:'Enviar frete',pend:'Pendentes',lanc:'Lançados',item:'Conferir frete'}[t];
+  h+='<div class="dm-top">'+(t==='item'?'<button type="button" class="dm-back" id="dmVoltar">‹</button>':'')+'<h1>'+titulo+'<small>Fretes · '+frtEsc(STATE.usuarioLogado||'')+'</small></h1>'+(t==='item'?'':'<button type="button" id="dmTroca">💸 Despesas</button>'+(FRT.forcarMob&&!frtMobile()?'<button type="button" id="dmPc">💻 Tela do PC</button>':'<button type="button" id="dmApp">App completo</button>'))+'</div>';
+  h+='<div class="dm-body">'+frtMsgHtml();
+  if(!FRT.carregado)h+='<div class="fin-card fin-mu">Carregando…</div>';
+  else if(t==='enviar')h+=frtMobEnviar();
+  else if(t==='pend')h+=frtMobLista(frtLista('pend'),'Nenhuma pendência','Tudo o que você enviar fica aqui até ser lançado no computador.');
+  else if(t==='lanc')h+=frtMobLista(frtLista('lancado').slice(0,40),'Nada lançado ainda','Os fretes lançados no Bling aparecem aqui.',true);
+  else h+=frtMobItem();
+  h+='</div>';
+  if(t==='enviar'&&FRT.fotosNovas.length)h+='<div class="dm-cta"><button type="button" id="frtEnviar"'+(FRT.enviando?' disabled':'')+'>'+(FRT.enviando?'Enviando…':'Enviar '+(FRT.fotosNovas.length>1?FRT.fotosNovas.length+' imagens':'para conferência'))+'</button></div>';
+  if(t==='item'&&FRT.form)h+=(FRT.desp[FRT.sel]&&FRT.desp[FRT.sel].status==='lancado')?'<div class="dm-cta dupla"><button type="button" class="sec" id="fResolvido" style="color:#166534;border-color:#bbf7d0">Já resolvi</button><button type="button" id="dmSalvar">Salvar</button></div>':'<div class="dm-cta dupla"><button type="button" class="sec" id="fExcluir">Excluir</button><button type="button" id="dmSalvar">Salvar</button></div>';
+  if(t!=='item')h+='<div class="dm-tab" role="tablist" aria-label="Telas de fretes">'+[['enviar','📷','Enviar'],['pend','🧾','Pendentes'],['lanc','✅','Lançados']].map(function(x){return '<button type="button" data-m="'+x[0]+'" class="'+(t===x[0]?'on':'')+'"><span>'+x[1]+'</span>'+x[2]+(x[0]==='pend'&&n?'<i>'+n+'</i>':'')+'</button>';}).join('')+'</div>';
+  h+='<div id="frtZoom" hidden></div>';
+  FRT.root.innerHTML=h;
+  FRT.root.querySelectorAll('.dm-tab [data-m]').forEach(function(b){b.onclick=function(){FRT.mtela=b.dataset.m;FRT.msg='';frtDraw();window.scrollTo(0,0);};});
+  var pc=frtEl('dmPc');if(pc)pc.onclick=function(){FRT.forcarMob=false;FRT.mob=false;FRT.root=null;FRT.sel=null;FRT.form=null;FRT.msg='';if(location.hash==='#celular')history.replaceState(null,'',location.pathname);render();};
+  var ap=frtEl('dmApp');if(ap)ap.onclick=function(){FRT.forcarMob=false;FRT.modoPc=true;FRT.mob=false;FRT.root=null;STATE.modulo='frete';STATE.tab='cotacao';render();};
+  var tr=frtEl('dmTroca');if(tr)tr.onclick=function(){FRT.root=null;FRT.mob=false;if(typeof DSP!=='undefined'){DSP.forcarMob=FRT.forcarMob;DSP.mtela='enviar';}STATE.modulo='mod14';render();window.scrollTo(0,0);};
+  var vt=frtEl('dmVoltar');if(vt)vt.onclick=function(){if(FRT.form&&FRT.form._editado)frtSalvarForm(true);FRT.mtela='pend';FRT.sel=null;FRT.form=null;FRT.msg='';frtDraw();window.scrollTo(0,0);};
+  if(!FRT.carregado)return;
+  if(t==='enviar'){
+    ['frtCam','frtArq','dmMais'].forEach(function(id){var el=frtEl(id);if(el)el.onchange=function(e){frtAddArquivos([].slice.call(e.target.files));e.target.value='';};});
+    FRT.root.querySelectorAll('[data-rm]').forEach(function(b){b.onclick=function(){FRT.fotosNovas.splice(+b.dataset.rm,1);frtDraw();};});
+    var en=frtEl('frtEnviar');if(en)en.onclick=frtEnviar;var fl=frtEl('frtFila');if(fl)fl.onclick=frtFilaEnviar;
+    var vu=frtEl('dmVerUlt');if(vu)vu.onclick=function(){frtMobAbrir(FRT.ultimoEnvio);};
+  }
+  FRT.root.querySelectorAll('.dm-card[data-id]').forEach(function(b){b.onclick=function(){frtMobAbrir(b.dataset.id);};});
+  if(t==='item'&&FRT.form){frtBindConferencia();var sv=frtEl('dmSalvar');if(sv)sv.onclick=async function(){sv.disabled=true;sv.textContent='Salvando…';var ok=await frtSalvarForm(true);
+    if(ok&&FRT.desp[FRT.sel]&&FRT.desp[FRT.sel].status==='lancado'){var pnd=frtPendencias(FRT.form);try{await frtFb('fretes/'+FRT.sel,{method:'PATCH',body:{precisaAtualizar:true,pendencias:pnd.length?pnd:['Atualizar no Bling']}});}catch(e){}FRT.desp[FRT.sel].precisaAtualizar=true;FRT.desp[FRT.sel].pendencias=pnd.length?pnd:['Atualizar no Bling'];}
+    if(ok){FRT.msg='Salvo. O lançamento no Bling é feito na Conferência do computador.';FRT.msgTipo='ok';FRT.mtela='pend';FRT.sel=null;FRT.form=null;}frtDraw();window.scrollTo(0,0);};}
+}
+function frtMobAbrir(id){if(!id||!FRT.desp[id])return;FRT.sel=id;FRT.form=null;FRT.msg='';FRT.mtela='item';frtDraw();window.scrollTo(0,0);}
+function frtMobEnviar(){
+  var h='',fila=frtFilaLer().length;
+  if(!FRT.fotosNovas.length){
+    h+='<div class="dm-cam"><label class="big" for="frtCam"><span>📷</span>Tirar foto</label><input id="frtCam" type="file" accept="image/*" capture="environment" hidden>'+
+      '<label class="sec" for="frtArq">🖼️ Galeria ou PDF</label><input id="frtArq" type="file" accept="image/*,application/pdf" multiple hidden>'+
+      '<p>CT-e, fatura ou recibo do frete. O app recorta o documento, lê sozinho e deixa pendente para você conferir.</p></div>';
+  } else {
+    h+='<div class="dm-lbl">'+FRT.fotosNovas.length+' imagem(ns) deste frete</div><div class="dm-thumbs">'+FRT.fotosNovas.map(function(b,i){return '<div><img src="data:image/jpeg;base64,'+b+'" alt=""><button type="button" data-rm="'+i+'" aria-label="Remover">×</button></div>';}).join('')+
+      (FRT.fotosNovas.length<4?'<label for="dmMais"><span>＋</span>Mais uma</label><input id="dmMais" type="file" accept="image/*" capture="environment" hidden>':'')+'</div>'+
+      '<div><div class="dm-lbl">Observação (opcional)</div><input class="dm-in" id="frtObs" value="'+frtEsc(FRT.obsCompart||'')+'" placeholder="Ex.: frete pedido 1234 · cliente Construtora X"></div>'+
+      '<p class="fin-mu" style="margin:0">CT-e e comprovante de pagamento do mesmo frete podem ir juntos.</p>';
+  }
+  if(fila)h+='<div class="fin-msg warn">'+fila+' documento(s) aguardando internet neste celular. <button type="button" class="fin-sw" id="frtFila">Enviar agora</button></div>';
+  var u=FRT.ultimoEnvio&&FRT.desp[FRT.ultimoEnvio];
+  if(u&&!FRT.fotosNovas.length){var lendo=u.status==='lendo'||FRT.lendo[FRT.ultimoEnvio];
+    h+='<div class="dm-ok"><b>'+(lendo?'⏳ Enviado. Lendo o documento…':'✅ Enviado e lido')+'</b>'+
+      (lendo?'<span class="fin-mu">Pode guardar o celular. Fica pendente para conferir.</span>':
+       '<span style="font-size:14px">'+frtEsc((u.fornecedor&&u.fornecedor.nome)||'Transportadora não identificada')+(u.valor>0?' · <b style="color:inherit">R$ '+frtMoney(u.valor)+'</b>':'')+(u.formaId?' · '+frtEsc(frtFormaNome(u.formaId)):'')+'</span>'+
+       (frtDuplicados(FRT.ultimoEnvio).length?'<span class="fin-chip err" style="justify-self:start">⚠️ Parece duplicado de outra despesa</span>':'')+
+       '<button type="button" class="dm-btn" id="dmVerUlt" style="min-height:44px;font-size:15px">Conferir agora</button>')+'</div>';}
+  return h;
+}
+function frtMobLista(L,vazioT,vazioD,lanc){
+  if(!L.length)return '<div class="fin-empty"><b>'+vazioT+'</b>'+vazioD+'</div>';
+  return L.map(function(d){
+    var lendo=d.status==='lendo'||FRT.lendo[d.id];var pend=d.status==='lancado'?(d.pendencias||[]):frtPendencias(d);
+    var nome=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||(lendo?'Lendo documento…':'Transportadora não identificada');
+    var cls=lendo?'lendo':(pend.length||!(d.valor>0)?'falta':'pronto');var abre=!lanc||pend.length;
+    return (abre?'<button type="button" data-id="'+d.id+'"':'<div')+' class="dm-card '+cls+'"><div class="l1"><span class="n">'+frtEsc(nome)+'</span><span class="v">'+(d.valor>0?'R$ '+frtMoney(d.valor):'—')+'</span></div>'+
+      '<div class="m">'+frtEsc(frtBr(d.status==='lancado'?d.vencimento:d.emissao))+(d.status==='lancado'?' (venc.)':'')+(d.formaId?' · '+frtEsc(frtFormaNome(d.formaId)):'')+'</div><div class="c">'+frtChips(d)+'</div>'+(abre?'</button>':'</div>');
+  }).join('');
+}
+function frtMobItem(){
+  var f=FRT.sel&&FRT.desp[FRT.sel]?frtFormAtual():null;
+  if(!f)return '<div class="fin-empty"><b>Frete não encontrado</b>Volte para a lista de pendentes.</div>';
+  return '<div id="frtForm">'+frtHtmlFormCard(f,true,false)+'</div>';
 }
 
 // ===================== MÓDULO FORMAÇÃO DE PREÇO (mod13) =====================
@@ -10609,8 +11766,11 @@ async function lcUpload(file){
 }
 function renderApp(){
   if(STATE.modulo!=='mod14'&&typeof DSP!=='undefined')DSP.modoPc=false;
+  if(STATE.modulo!=='mod16'&&typeof FRT!=='undefined')FRT.modoPc=false;
   if(typeof dspUsarMobile==='function'&&dspUsarMobile())return renderFinanceiroMobile();
+  if(typeof frtUsarMobile==='function'&&frtUsarMobile())return renderFretesMobile();
   if(typeof dspModoApp==='function'&&typeof DSP!=='undefined'&&DSP.mob===false)dspModoApp(false);
+  if(typeof frtModoApp==='function'&&typeof FRT!=='undefined'&&FRT.mob===false)frtModoApp(false);
   var wrap=document.createElement('div');
   // header
   wrap.appendChild(renderHeader());
@@ -10660,8 +11820,10 @@ function renderApp(){
     main.appendChild(renderFinanceiro());
   } else if(STATE.modulo==='mod15'&&STATE.roleLogado==='admin'){
     main.appendChild(renderControle());
+  } else if(STATE.modulo==='mod16'&&STATE.roleLogado==='admin'){
+    main.appendChild(renderFretes());
   }
-  setTimeout(dspAvisoGlobal,1500);
+  setTimeout(dspAvisoGlobal,1500);setTimeout(frtAvisoGlobal,1600);
   wrap.appendChild(main);
   if(STATE.showConfigPanel && STATE.roleLogado==='admin'){
     var overlay=document.createElement('div');
