@@ -4941,7 +4941,15 @@ document.addEventListener('click',function(ev){var b=ev.target&&ev.target.closes
 // ---------- envio à contabilidade (Google Apps Script: e-mail com PDF + cópia no Google Drive) ----------
 function frtEmailCfg(){return FRT.email||{};}
 function frtEmailAuto(){var c=frtEmailCfg();return !!(c.url&&c.auto!==false);}
-function frtEmailAssunto(d){return ['Frete'+(d.numeroDocumento?' '+d.numeroDocumento:''),(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'Transportadora','R$ '+frtMoney(d.valor),frtBr(d.emissao)].filter(Boolean).join(' — ');}
+function frtEmailAssunto(d){
+  // Mais Acessível - Frete CT-e 4223496 - NF 3712 - RODONAVES TRANSPORTES E ENCOMENDAS LTDA
+  var c=d.cte||{},f=d.fatura,doc,nfs;
+  if(f){doc='Frete Fatura '+(f.numero||'')+((f.ctes||[]).length?' (CT-e '+f.ctes.map(function(x){return x.numero;}).filter(Boolean).join(', ')+')':'');nfs=(f.ctes||[]).map(function(x){return x.nf;});}
+  else{doc='Frete CT-e '+(c.numero||String(d.numeroDocumento||'').replace(/^CT-e\s*/i,'')||'s/n');nfs=(c.nfs||[]).map(function(x){return x.numero;});}
+  nfs=nfs.filter(Boolean);
+  var transp=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'Transportadora';
+  return ['Mais Acessível',doc.trim(),nfs.length?'NF '+nfs.join(', '):'',transp].filter(Boolean).join(' - ');
+}
 function frtEmailLinhas(d){
   var base=[['Transportadora',(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||''],['CNPJ/CPF',frtDoc((d.contato&&d.contato.doc)||(d.fornecedor&&d.fornecedor.doc)||'')],
     ['Documento',d.numeroDocumento||''],['Emissão',frtBr(d.emissao)],['Vencimento',frtBr(d.vencimento)],['Valor',frtR$(d.valor)],
@@ -4969,7 +4977,7 @@ async function frtEnviarEmail(id){
     if(pdfs.length)fotos=fotos.filter(function(_b,i){return dp.indexOf(i)<0;}); // o PDF original vai no lugar das páginas convertidas
     var j=await frtEmailPost({assunto:frtEmailAssunto(d),html:frtEmailHtml(d),texto:frtEmailLinhas(d).map(function(r){return r[0]+': '+r[1];}).join('\n'),nome:frtEmailNome(d),mes:(d.emissao||frtHoje()).slice(0,7),fotos:fotos,pdfs:pdfs});
     var up={emailEm:Date.now(),emailPor:STATE.usuarioLogado||'',emailPara:j.para||'',emailLink:j.link||'',emailErro:null};
-    if(d.status==='lancado'&&!(d.pendencias&&d.pendencias.length)){try{await frtFb('fretesFotos/'+id,{method:'DELETE'});await frtFb('fretesPdf/'+id,{method:'DELETE'});up.nFotos=0;up.nPdf=0;}catch(e){}}
+    {try{await frtFb('fretesFotos/'+id,{method:'DELETE'});await frtFb('fretesPdf/'+id,{method:'DELETE'});up.nFotos=0;up.nPdf=0;}catch(e){}}
     await frtFb('fretes/'+id,{method:'PATCH',body:up});Object.assign(d,up);return j;
   }catch(e){try{await frtFb('fretes/'+id,{method:'PATCH',body:{emailErro:e.message}});if(FRT.desp[id])FRT.desp[id].emailErro=e.message;}catch(_e){}throw e;}
   finally{delete FRT_ENVIANDO[id];}
@@ -5540,7 +5548,7 @@ function frtHtmlConfig(){
    '<div class="fin-f fin-c3"><label for="fcBol">Quando o documento for fatura/boleto, usar</label><select id="fcBol">'+frtOpts(L.formas,(FRT.fcfg||{}).formaBoleto,'Deixar em branco')+'</select></div></div>'+
    '<p class="fin-mu" style="margin:10px 0 0">CT-e não traz vencimento nem boleto: o frete fica na Conferência até você informar o vencimento (e a forma de pagamento, se não estiver no documento). Só depois disso dá para lançar.</p>'+
    '<div style="margin-top:10px"><button type="button" class="fin-btn sm pri" id="fcSalvar">Salvar pagamento dos fretes</button></div></div>'+
-   '<div class="fin-h">Envio à contabilidade</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">Depois de lançar no Bling, o app manda um e-mail para a contabilidade com o PDF do documento recortado e os dados do frete, e guarda uma cópia no seu Google Drive (pasta <b>Fretes - Contabilidade</b>, separada por mês). Quem envia é um script grátis do Google na sua conta: o e-mail da contabilidade fica dentro do script.</p>'+
+   '<div class="fin-h">Envio à contabilidade</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">Depois de lançar no Bling, o app manda um e-mail para a contabilidade com o PDF do documento e os dados do frete. A imagem/PDF é apagada do app assim que o e-mail sai (fica só no e-mail). Quem envia é um script grátis do Google na sua conta: o e-mail da contabilidade fica dentro do script.</p>'+
    '<div class="fin-g"><div class="fin-f fin-c4"><label for="emUrl">Endereço do script (App da Web do Google)</label><input class="fin-in" id="emUrl" placeholder="https://script.google.com/macros/s/…/exec" value="'+frtEsc(frtEmailCfg().url||'')+'"></div>'+
    '<div class="fin-f fin-c2"><label for="emTok">Chave (a mesma do script)</label><input class="fin-in" id="emTok" value="'+frtEsc(frtEmailCfg().token||'')+'"></div></div>'+
    '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;font-weight:600"><input type="checkbox" id="emAuto"'+(frtEmailCfg().auto!==false?' checked':'')+'> Enviar sozinho logo depois de lançar no Bling</label>'+

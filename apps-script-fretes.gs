@@ -2,8 +2,8 @@
  * Mais Acessível — envio dos fretes para a contabilidade
  * -------------------------------------------------------
  * Recebe do app (aba Lançamento de frete) as imagens recortadas do CT-e e os dados do lançamento,
- * anexa o PDF original (ou monta um PDF com as fotos), envia por e-mail para a contabilidade e guarda uma cópia no Google Drive
- * (pasta "Fretes - Contabilidade", com uma subpasta por mês).
+ * anexa o PDF original (ou monta um PDF com as fotos), envia por e-mail para a contabilidade.
+ * Não guarda cópia (o documento fica só no e-mail). Para guardar no Drive, mude GUARDAR_NO_DRIVE para true.
  *
  * COMO INSTALAR (uma vez só, uns 5 minutos):
  *  1. Entre em https://script.google.com com a conta da empresa (rauldias@tendfer.com.br) → "Novo projeto".
@@ -23,7 +23,8 @@
 const DESTINO = 'contabilidade@exemplo.com.br'; // e-mail da contabilidade (pode pôr mais de um separados por vírgula)
 const COPIA = '';                               // opcional: alguém em cópia (ex.: o seu e-mail)
 const CHAVE = 'TROQUE-ESTA-CHAVE';              // a mesma que vai no app
-const PASTA = 'Fretes - Contabilidade';         // pasta no Google Drive
+const GUARDAR_NO_DRIVE = false;                 // true = guarda também uma cópia no Google Drive
+const PASTA = 'Fretes - Contabilidade';         // pasta no Google Drive (só se GUARDAR_NO_DRIVE = true)
 const REMETENTE_NOME = 'Mais Acessível - Fretes';
 
 function doPost(e) {
@@ -54,7 +55,7 @@ function doPost(e) {
     }
 
     let link = '';
-    try {
+    if (GUARDAR_NO_DRIVE) try {
       const pasta = subpasta(PASTA, p.mes);
       anexos.forEach((a, i) => { const f = pasta.createFile(a.copyBlob().setName(a.getName())); if (!i) link = f.getUrl(); });
     } catch (err) { /* sem cópia no Drive, mas o e-mail segue */ }
