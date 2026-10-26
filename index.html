@@ -4524,7 +4524,7 @@ function frtDupHtml(id,curto){
     '<button type="button" class="fin-btn sm" style="margin-top:6px" data-naodup="'+frtEsc(id)+'">Não é duplicado — é outro frete</button></div>';
 }
 // Só o valor impede o lançamento. O resto é pendência: lança assim mesmo e fica lembrando o que falta.
-function frtFaltas(d){var f=[];if(!(d&&d.valor>0))f.push('Valor');if(!(d&&(d.nFotos>0||d.status==='lancado')))f.push('Imagem do documento');return f;}
+function frtFaltas(d){var f=[];if(!(d&&d.valor>0))f.push('Valor');if(!(d&&d.vencimento))f.push('Vencimento');if(!(d&&(d.nFotos>0||d.status==='lancado')))f.push('Imagem do documento');return f;}
 var FRT_SEM_FORN='TRANSPORTADORA A IDENTIFICAR';
 function frtPendencias(d){var p=[];if(!d)return p;var fn=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'';
   if(d.fornCand&&d.fornCand.length&&!d.contato)p.push('Escolher fornecedor no Bling');
@@ -4837,18 +4837,14 @@ function frtAplicarLeitura(r){
     numeroDocumento:ehFat?(fatura.numero?'Fatura '+fatura.numero:''):(nCte?'CT-e '+nCte:''),historico:'',formaId:'',contaId:'',
     categoria:sent==='venda'?FRT_CAT_VENDA:sent==='compra'?FRT_CAT_COMPRA:'',parcelas:1,itens:[],incertos:unc,leituraErro:null,cte:cte,fatura:fatura};
   d.historico=frtHistoricoFrete(d);
-  // forma de pagamento: lida no documento > padrão da aba (boleto/à vista) > última usada com a transportadora
+  // forma de pagamento: só quando o documento diz qual é; senão fica em branco para preencher na conferência
   var fp=r.forma_pagamento,fc=FRT.fcfg||{};
   if(fp==='pix'||fp==='dinheiro'||fp==='cartao_credito')d.formaId=frtFormaDaLeitura(r);
-  if(!d.formaId&&(ehFat||fp==='boleto'||cte.condicao==='a_prazo'))d.formaId=fc.formaBoleto||'';
-  if(!d.formaId&&(cte.condicao==='a_vista'||cte.condicao==='pago'||fp==='debito_conta'))d.formaId=fc.formaVista||'';
-  if(!d.formaId)d.formaId=frtUltimo(d,'formaId');
+  if(!d.formaId&&(ehFat||fp==='boleto'))d.formaId=fc.formaBoleto||'';
   if(!d.formaId)unc.push('forma');
   d.contaId=d.formaId?frtContaSugerida(d.formaId):'';
-  // vencimento: o do boleto/fatura; à vista = emissão; a prazo sem boleto fica pendente até o boleto chegar
-  if(fatura&&fatura.vencimento)d.vencimento=fatura.vencimento;
-  else if(cte.condicao==='a_prazo')d.vencimento='';
-  else d.vencimento=frtVencSugerido(em,d.formaId).v;
+  // vencimento: só o que estiver impresso (fatura/boleto). CT-e não traz vencimento: fica em branco e você informa na conferência
+  d.vencimento=(fatura&&fatura.vencimento)||'';
   if(!d.categoria){var hc=frtCatSugerida(d);if(hc)d.categoria=hc;}
   return d;
 }
@@ -5367,7 +5363,7 @@ function frtChips(d){
   var h='';if(d.status==='lancado'){h+='<span class="fin-chip ok">✓ Lançado no Bling</span>';(d.pendencias||[]).forEach(function(x){h+='<span class="fin-chip warn">falta: '+frtEsc(x)+'</span>';});return h;}
   if(d.leituraErro)h+='<span class="fin-chip err">leitura falhou</span>';
   if(d.autoErro)h+='<span class="fin-chip err" title="'+frtEsc(d.autoErro.msg||'')+'">não lançou: '+frtEsc(String(d.autoErro.msg||'').slice(0,60))+'</span>';
-  if(!(d.valor>0))h+='<span class="fin-chip err">sem valor</span>';if(!(d.nFotos>0))h+='<span class="fin-chip err">sem imagem</span>';
+  if(!(d.valor>0))h+='<span class="fin-chip err">sem valor</span>';if(!d.vencimento)h+='<span class="fin-chip err">informar vencimento</span>';if(!(d.nFotos>0))h+='<span class="fin-chip err">sem imagem</span>';
   if(d.tipoDoc==='fatura')h+='<span class="fin-chip">fatura · '+((d.fatura&&d.fatura.ctes||[]).length)+' CT-e</span>';if(frtCruzados(d.id).length)h+='<span class="fin-chip err">CT-e em outro lançamento</span>';
   var p=frtPendencias(d).filter(function(x){return x!=='Conferir a leitura';});
   h+=p.length?'<span class="fin-chip warn">lança com pendência: '+frtEsc(p.join(', '))+'</span>':'<span class="fin-chip ok">Completo · pronto para lançar</span>';
@@ -5447,7 +5443,7 @@ function frtHtmlFormCard(f,mob,ext){
    '<div class="fin-sec"><p class="fin-st">Valores e datas</p><div class="fin-g">'+
     '<div class="fin-f fin-c2"><label for="fValor">Valor (R$) '+tag('valor_total')+'</label><input class="fin-in fin-money'+rd()+'" id="fValor" inputmode="decimal" value="'+frtEsc(f.valor>0?frtMoney(f.valor):'')+'" placeholder="0,00"></div>'+
     '<div class="fin-f fin-c2 h"><label for="fEm">Emissão do CT-e '+tag('data_emissao')+'</label><input class="fin-in'+rd()+'" id="fEm" type="date" value="'+frtEsc(f.emissao)+'"></div>'+
-    '<div class="fin-f fin-c2 h"><label for="fVenc">Vencimento</label><input class="fin-in" id="fVenc" type="date" value="'+frtEsc(f.vencimento||'')+'"><span class="fin-mu" id="fVencDica">'+frtEsc(vs.dica)+'</span></div>'+
+    '<div class="fin-f fin-c2 h"><label for="fVenc">Vencimento '+(f.vencimento?'':'<span class="fin-tag unc">informar</span>')+'</label><input class="fin-in" id="fVenc" type="date" value="'+frtEsc(f.vencimento||'')+'"><span class="fin-mu" id="fVencDica">'+frtEsc(vs.dica)+'</span></div>'+
     '<div class="fin-f fin-c2 h"><label for="fComp">Competência</label><input class="fin-in" id="fComp" type="date" value="'+frtEsc(f.competencia||'')+'"></div>'+
     '<div class="fin-f fin-c4"><label for="fNum">Nº do documento '+tag('numero_documento')+'</label><input class="fin-in'+rd()+'" id="fNum" value="'+frtEsc(f.numeroDocumento||'')+'"></div>'+
     '<div class="fin-f fin-c6"><label for="fHist">Histórico '+tag('historico')+'</label><textarea id="fHist" class="'+rd().trim()+'" rows="2" placeholder="Ex.: Frete CT-e 1234 · NF 5678 · Goiânia/GO → Anápolis/GO">'+frtEsc(f.historico||'')+'</textarea></div></div></div>'+
@@ -5477,7 +5473,7 @@ function frtBindConferencia(){
   FRT.root.querySelectorAll('#frtForm input,#frtForm select,#frtForm textarea').forEach(function(el){if(el.closest('#frtRev'))return;el.addEventListener('input',function(){f._editado=true;el.classList.remove('fin-read');if(FRT.revisao){FRT.revisao=null;var r=frtEl('frtRev');if(r)r.remove();}});});
   frtEl('fDoc').addEventListener('change',async function(){var nd=frtDig(frtEl('fDoc').value);if(f.contato&&nd!==f.fornecedor.doc){f.contato=null;}
     if(nd.length===14){var x=await frtConsultaCnpj(nd);if(x&&x.nome){frtLerCampos();f.fornecedor={nome:x.nome,doc:nd,dados:x};f._editado=true;await frtSalvarForm(true);frtDraw();}}});
-  function reVenc(){var v=frtVencSugerido(frtEl('fEm').value,frtEl('fForma').value);frtEl('fVencDica').textContent=v.dica;if(!frtEl('fVenc').dataset.toq)frtEl('fVenc').value=v.v;}
+  function reVenc(){var v=frtVencSugerido(frtEl('fEm').value,frtEl('fForma').value);frtEl('fVencDica').textContent=frtEl('fVenc').value?'':(v.v?'Sugestão: '+frtBr(v.v)+(v.dica?' ('+v.dica+')':''):'Informe o vencimento do boleto');}
   frtEl('fVenc').addEventListener('input',function(){frtEl('fVenc').dataset.toq='1';});
   frtEl('fEm').addEventListener('change',function(){if(!frtEl('fComp').dataset.toq)frtEl('fComp').value=frtEl('fEm').value;reVenc();});
   frtEl('fComp').addEventListener('input',function(){frtEl('fComp').dataset.toq='1';});
@@ -5541,9 +5537,8 @@ function frtHtmlConfig(){
    '<div class="fin-h">Conferência no Bling</div><div class="fin-card"><p style="margin:0;font-size:13.5px">Nada é lançado sozinho. Ao abrir Fretes neste computador, o app confere no Bling o fornecedor e se já existe conta igual em aberto (mesmo valor e mesma data). O lançamento é sempre feito por você, em <b>Revisar e lançar</b>.</p></div>'+
    '<div class="fin-act"><button type="button" class="fin-btn pri" id="cSalvar">Salvar configurações</button></div>'+
    '<div class="fin-h">Pagamento dos fretes</div><div class="fin-card"><div class="fin-g">'+
-   '<div class="fin-f fin-c3"><label for="fcBol">CT-e a prazo e faturas (boleto) usam</label><select id="fcBol">'+frtOpts(L.formas,(FRT.fcfg||{}).formaBoleto,'Escolher na hora')+'</select></div>'+
-   '<div class="fin-f fin-c3"><label for="fcVis">CT-e à vista / já pago usa</label><select id="fcVis">'+frtOpts(L.formas,(FRT.fcfg||{}).formaVista,'Escolher na hora')+'</select></div></div>'+
-   '<p class="fin-mu" style="margin:10px 0 0">CT-e a prazo entra no Contas a Pagar com a pendência "Vencimento do boleto" até a fatura/boleto chegar. Fatura já vem com vencimento.</p>'+
+   '<div class="fin-f fin-c3"><label for="fcBol">Quando o documento for fatura/boleto, usar</label><select id="fcBol">'+frtOpts(L.formas,(FRT.fcfg||{}).formaBoleto,'Deixar em branco')+'</select></div></div>'+
+   '<p class="fin-mu" style="margin:10px 0 0">CT-e não traz vencimento nem boleto: o frete fica na Conferência até você informar o vencimento (e a forma de pagamento, se não estiver no documento). Só depois disso dá para lançar.</p>'+
    '<div style="margin-top:10px"><button type="button" class="fin-btn sm pri" id="fcSalvar">Salvar pagamento dos fretes</button></div></div>'+
    '<div class="fin-h">Envio à contabilidade</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">Depois de lançar no Bling, o app manda um e-mail para a contabilidade com o PDF do documento recortado e os dados do frete, e guarda uma cópia no seu Google Drive (pasta <b>Fretes - Contabilidade</b>, separada por mês). Quem envia é um script grátis do Google na sua conta: o e-mail da contabilidade fica dentro do script.</p>'+
    '<div class="fin-g"><div class="fin-f fin-c4"><label for="emUrl">Endereço do script (App da Web do Google)</label><input class="fin-in" id="emUrl" placeholder="https://script.google.com/macros/s/…/exec" value="'+frtEsc(frtEmailCfg().url||'')+'"></div>'+
@@ -5566,7 +5561,7 @@ function frtBindConfig(){
     cfg.cartoes=cfg.cartoes.filter(function(c){return c.formaId;});FRT.cfg=cfg;
     try{await frtSalvarCfg();FRT.msg='Configurações salvas. Valem no celular e no computador.';FRT.msgTipo='ok';}catch(e){FRT.msg='Não consegui salvar: '+e.message;FRT.msgTipo='err';}frtDraw();};
   frtEl('cListas').onclick=frtAtualizarListas;
-  frtEl('fcSalvar').onclick=async function(){var e={formaBoleto:frtEl('fcBol').value,formaVista:frtEl('fcVis').value};try{await frtFb('fretesConfig',{method:'PUT',body:e});FRT.fcfg=e;FRT.msg='Pagamento dos fretes salvo.';FRT.msgTipo='ok';}catch(er){FRT.msg='Não consegui salvar: '+er.message;FRT.msgTipo='err';}frtDraw();};
+  frtEl('fcSalvar').onclick=async function(){var e={formaBoleto:frtEl('fcBol').value};try{await frtFb('fretesConfig',{method:'PUT',body:e});FRT.fcfg=e;FRT.msg='Pagamento dos fretes salvo.';FRT.msgTipo='ok';}catch(er){FRT.msg='Não consegui salvar: '+er.message;FRT.msgTipo='err';}frtDraw();};
   function lerEm(){return {url:frtEl('emUrl').value.trim(),token:frtEl('emTok').value.trim(),auto:frtEl('emAuto').checked};}
   frtEl('emSalvar').onclick=async function(){var e=lerEm();if(e.url&&!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec/.test(e.url)){frtEl('emSt').innerHTML='<span class="fin-chip err">O endereço deve terminar em /exec</span>';return;}
     try{await frtFb('fretesEmail',{method:'PUT',body:e});FRT.email=e;FRT.msg='Envio à contabilidade salvo.';FRT.msgTipo='ok';}catch(er){FRT.msg='Não consegui salvar: '+er.message;FRT.msgTipo='err';}frtDraw();};
