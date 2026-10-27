@@ -3803,21 +3803,24 @@ async function dspRevisar(){
 }
 // ---------- fornecedor: achar no Bling sem nunca cadastrar em dobro ----------
 var DSP_GENERICAS=['ltda','me','epp','eireli','sa','s','a','cia','e','de','da','do','das','dos','comercio','comercial','servicos','servico','industria','distribuidora','eirelli','mei','limitada'];
-function dspTokens(n){return dspNorm(n).replace(/&/g,' e ').replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(w){return w&&DSP_GENERICAS.indexOf(w)<0;});}
+function dspTokens(n){return dspNorm(n).replace(/&/g,' e ').replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(w){return w&&DSP_GENERICAS.indexOf(w)<0;}).map(function(w){return w.length>4?w.replace(/s$/,''):w;});}
 function dspSimNome(a,b){var x=dspTokens(a),y=dspTokens(b);if(!x.length||!y.length)return 0;var c=x.filter(function(w){return y.indexOf(w)>=0;}).length;return c/Math.min(x.length,y.length);}
 function dspDocParcial(f){var p=dspDig(f.fornecedor&&f.fornecedor.docParcial);if(p.length>=4)return p;
   var t=(f.incertos||[]).join(' ');var m=t.match(/[\*x•]{0,3}[.\s]?\d{2,3}[.\s]?\d{3}[\/.\-\s]?\d{0,4}[\-\s]?[\*x•]{0,2}/i);return m?dspDig(m[0]):'';}
 async function dspAcharFornecedor(f){
   var nome=(f.fornecedor&&f.fornecedor.nome)||'',doc=dspDig(f.fornecedor&&f.fornecedor.doc),parc=dspDocParcial(f);
   if(nome===DSP_SEM_FORN)nome='';
-  var qs=[];if(doc.length===14||doc.length===11)qs.push({doc:doc});if(nome){qs.push({nome:nome});var tk=dspTokens(nome);if(tk.length>=2)qs.push({nome:tk.slice(0,2).join(' ')});}
+  var qs=[];if(doc.length===14||doc.length===11)qs.push({doc:doc});if(nome){qs.push({nome:nome});var tk=dspTokens(nome);if(tk.length>=2)qs.push({nome:tk.slice(0,2).join(' ')});var t0=dspNorm(nome).replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(w){return w.length>=4&&DSP_GENERICAS.indexOf(w)<0;})[0];if(t0)qs.push({nome:t0});}
   var cand={};
   for(var i=0;i<qs.length;i++){var r=await dspBling('buscarContato',qs[i]);(r.itens||[]).forEach(function(c){cand[c.id]={id:String(c.id),nome:c.nome,doc:dspDig(c.doc)};});}
   var L=Object.keys(cand).map(function(k){return cand[k];});
   var porDoc=L.filter(function(c){return doc&&c.doc===doc;});if(porDoc.length)return {match:porDoc[0],cand:L};
+  // mesma empresa (raiz do CNPJ igual): mesma filial e nome parecido = só o dígito errado num dos dois -> é ele; outra filial -> pergunta
+  var mesmaRaiz=L.filter(function(c){return doc.length===14&&c.doc&&c.doc.length===14&&c.doc.slice(0,8)===doc.slice(0,8);});
+  var mesmaFilial=mesmaRaiz.filter(function(c){return c.doc.slice(8,12)===doc.slice(8,12)&&dspSimNome(c.nome,nome)>=0.5;});if(mesmaFilial.length===1)return {match:mesmaFilial[0],cand:L};
   var porParc=L.filter(function(c){return parc.length>=4&&c.doc&&c.doc.indexOf(parc)>=0&&dspSimNome(c.nome,nome)>=0.5;});if(porParc.length===1)return {match:porParc[0],cand:L};
   var iguais=L.filter(function(c){return dspTokens(c.nome).join(' ')===dspTokens(nome).join(' ');});if(iguais.length===1)return {match:iguais[0],cand:L};
-  var parecidos=L.filter(function(c){return dspSimNome(c.nome,nome)>=0.5;});
+  var parecidos=L.filter(function(c){return dspSimNome(c.nome,nome)>=0.5||mesmaRaiz.indexOf(c)>=0;});
   return {match:null,cand:parecidos};
 }
 // Liga o fornecedor ao cadastro do Bling. Só cadastra se não houver nenhum parecido.
@@ -5216,21 +5219,24 @@ async function frtRevisar(){
 }
 // ---------- fornecedor: achar no Bling sem nunca cadastrar em dobro ----------
 var FRT_GENERICAS=['ltda','me','epp','eireli','sa','s','a','cia','e','de','da','do','das','dos','comercio','comercial','servicos','servico','industria','distribuidora','eirelli','mei','limitada'];
-function frtTokens(n){return frtNorm(n).replace(/&/g,' e ').replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(w){return w&&FRT_GENERICAS.indexOf(w)<0;});}
+function frtTokens(n){return frtNorm(n).replace(/&/g,' e ').replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(w){return w&&FRT_GENERICAS.indexOf(w)<0;}).map(function(w){return w.length>4?w.replace(/s$/,''):w;});}
 function frtSimNome(a,b){var x=frtTokens(a),y=frtTokens(b);if(!x.length||!y.length)return 0;var c=x.filter(function(w){return y.indexOf(w)>=0;}).length;return c/Math.min(x.length,y.length);}
 function frtDocParcial(f){var p=frtDig(f.fornecedor&&f.fornecedor.docParcial);if(p.length>=4)return p;
   var t=(f.incertos||[]).join(' ');var m=t.match(/[\*x•]{0,3}[.\s]?\d{2,3}[.\s]?\d{3}[\/.\-\s]?\d{0,4}[\-\s]?[\*x•]{0,2}/i);return m?frtDig(m[0]):'';}
 async function frtAcharFornecedor(f){
   var nome=(f.fornecedor&&f.fornecedor.nome)||'',doc=frtDig(f.fornecedor&&f.fornecedor.doc),parc=frtDocParcial(f);
   if(nome===FRT_SEM_FORN)nome='';
-  var qs=[];if(doc.length===14||doc.length===11)qs.push({doc:doc});if(nome){qs.push({nome:nome});var tk=frtTokens(nome);if(tk.length>=2)qs.push({nome:tk.slice(0,2).join(' ')});}
+  var qs=[];if(doc.length===14||doc.length===11)qs.push({doc:doc});if(nome){qs.push({nome:nome});var tk=frtTokens(nome);if(tk.length>=2)qs.push({nome:tk.slice(0,2).join(' ')});var t0=frtNorm(nome).replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(w){return w.length>=4&&FRT_GENERICAS.indexOf(w)<0;})[0];if(t0)qs.push({nome:t0});}
   var cand={};
   for(var i=0;i<qs.length;i++){var r=await frtBling('buscarContato',qs[i]);(r.itens||[]).forEach(function(c){cand[c.id]={id:String(c.id),nome:c.nome,doc:frtDig(c.doc)};});}
   var L=Object.keys(cand).map(function(k){return cand[k];});
   var porDoc=L.filter(function(c){return doc&&c.doc===doc;});if(porDoc.length)return {match:porDoc[0],cand:L};
+  // mesma empresa (raiz do CNPJ igual): mesma filial e nome parecido = só o dígito errado num dos dois -> é ele; outra filial -> pergunta
+  var mesmaRaiz=L.filter(function(c){return doc.length===14&&c.doc&&c.doc.length===14&&c.doc.slice(0,8)===doc.slice(0,8);});
+  var mesmaFilial=mesmaRaiz.filter(function(c){return c.doc.slice(8,12)===doc.slice(8,12)&&frtSimNome(c.nome,nome)>=0.5;});if(mesmaFilial.length===1)return {match:mesmaFilial[0],cand:L};
   var porParc=L.filter(function(c){return parc.length>=4&&c.doc&&c.doc.indexOf(parc)>=0&&frtSimNome(c.nome,nome)>=0.5;});if(porParc.length===1)return {match:porParc[0],cand:L};
   var iguais=L.filter(function(c){return frtTokens(c.nome).join(' ')===frtTokens(nome).join(' ');});if(iguais.length===1)return {match:iguais[0],cand:L};
-  var parecidos=L.filter(function(c){return frtSimNome(c.nome,nome)>=0.5;});
+  var parecidos=L.filter(function(c){return frtSimNome(c.nome,nome)>=0.5||mesmaRaiz.indexOf(c)>=0;});
   return {match:null,cand:parecidos};
 }
 // Liga o fornecedor ao cadastro do Bling. Só cadastra se não houver nenhum parecido.
