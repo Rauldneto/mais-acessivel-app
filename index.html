@@ -3582,6 +3582,7 @@ function dspBling(op,dados){
 
 // ---------- dados ----------
 function dspCarregar(silencioso){
+  dspFb('emailLidos').then(function(e){DSP.lidos=e||{};}).catch(function(){});
   if(typeof FRT!=='undefined'&&!FRT.email)dspFb('fretesEmail').then(function(e){if(!FRT.email)FRT.email=e||{};}).catch(function(){});
   return Promise.all([dspFb('despesas'),dspFb('config'),dspFb('listas')]).then(function(r){
     DSP.desp=r[0]||{};DSP.cfg=r[1]?Object.assign({},DSP_CFG_PADRAO,r[1]):null;
@@ -3906,7 +3907,7 @@ async function dspEnviarEmail(id,interativo){
     var d=DSP.desp[id];if(!d)throw new Error('Despesa não encontrada.');
     if(!dspEmailPronto())throw new Error('Configure o envio à contabilidade em Lançamento de frete → Configurações.');
     var fotos=await dspFb('fotos/'+id);if(!fotos||!fotos.length)throw new Error('A imagem desta despesa não está mais guardada no app.');
-    var j=await frtOutlookEnviar({assunto:dspEmailAssunto(d),html:dspEmailHtml(d),anexos:[{nome:dspEmailNome(d)+'.pdf',tipo:'application/pdf',b64:await frtPdfDeFotos(fotos)}],interativo:!!interativo});
+    var j=await frtOutlookEnviar({rastreio:'d'+id,assunto:dspEmailAssunto(d),html:dspEmailHtml(d),anexos:[{nome:dspEmailNome(d)+'.pdf',tipo:'application/pdf',b64:await frtPdfDeFotos(fotos)}],interativo:!!interativo});
     var up={emailEm:Date.now(),emailPor:STATE.usuarioLogado||'',emailPara:j.para||'',emailDe:j.de||'',emailErro:null};
     if(d.status==='lancado'&&!(d.pendencias&&d.pendencias.length)){try{await dspFb('fotos/'+id,{method:'DELETE'});up.nFotos=0;}catch(e){}}
     await dspFb('despesas/'+id,{method:'PATCH',body:up});Object.assign(d,up);return j;
@@ -3914,7 +3915,8 @@ async function dspEnviarEmail(id,interativo){
   finally{delete DSP_ENVIANDO[id];}
 }
 function dspEmailChip(d){
-  if(d.emailEm)return '<span class="fin-chip ok" title="'+dspEsc(d.emailPara||'')+'">📧 enviado '+new Date(d.emailEm).toLocaleDateString('pt-BR')+'</span>';
+  if(d.emailEm){var l=(DSP.lidos||{})['d'+d.id];return '<span class="fin-chip ok" title="'+dspEsc(d.emailPara||'')+'">📧 enviado '+new Date(d.emailEm).toLocaleDateString('pt-BR')+'</span> '+
+    (l?'<span class="fin-chip ok" title="Aberto '+(l.vezes||1)+'x">📬 aberto '+new Date(l.primeiro).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span>':'<span class="fin-mu" title="A contabilidade ainda não abriu (ou o leitor bloqueia imagens)">não aberto ainda</span>');}
   if(!d.nFotos)return '<span class="fin-mu">sem imagem</span>';
   return (d.emailErro?'<span class="fin-chip err" title="'+dspEsc(d.emailErro)+'">não enviou</span> ':'')+'<button type="button" class="fin-btn sm" data-dem="'+dspEsc(d.id)+'"'+(dspEmailPronto()?'':' disabled title="Configure o envio em Lançamento de frete → Configurações"')+'>📧 Enviar</button>';
 }
@@ -4633,7 +4635,7 @@ function frtBling(op,dados){
 
 // ---------- dados ----------
 function frtCarregar(silencioso){
-  frtFb('fretesEmail').then(function(e){FRT.email=e||{};}).catch(function(){});frtFb('fretesConfig').then(function(e){FRT.fcfg=e||{};}).catch(function(){});
+  frtFb('fretesEmail').then(function(e){FRT.email=e||{};}).catch(function(){});frtFb('emailLidos').then(function(e){FRT.lidos=e||{};}).catch(function(){});frtFb('fretesConfig').then(function(e){FRT.fcfg=e||{};}).catch(function(){});
   return Promise.all([frtFb('fretes'),frtFb('config'),frtFb('listas')]).then(function(r){
     FRT.desp=r[0]||{};FRT.cfg=r[1]?Object.assign({},FRT_CFG_PADRAO,r[1]):null;
     if(FRT.cfg&&!FRT.cfg.contaPorForma)FRT.cfg.contaPorForma={};
@@ -5089,7 +5091,7 @@ async function frtOutlookEnviar(o){
   var c=frtEmailCfg();if(!frtEmails(c.para).length)throw new Error('Informe o e-mail da contabilidade em Configurações.');
   var tam=(o.anexos||[]).reduce(function(t,a){return t+a.b64.length*0.75;},0);if(tam>(c.smtpUrl?14e6:3.4e6))throw new Error('Os anexos passam do limite do envio ('+(c.smtpUrl?'14':'3')+' MB). Reenvie com menos imagens.');
   if(c.smtpUrl){ // e-mail da Locaweb (SMTP) pelo Worker do Cloudflare; a senha fica só no Worker
-    var rs;try{rs=await fetch(c.smtpUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({para:c.para,cc:c.cc||'',assunto:o.assunto,html:o.html,anexos:o.anexos||[]})});}
+    var rs;try{rs=await fetch(c.smtpUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({para:c.para,cc:c.cc||'',assunto:o.assunto,html:o.html,anexos:o.anexos||[],rastreio:o.rastreio||''})});}
     catch(e){throw new Error('Não consegui falar com o Worker de e-mail ('+e.message+'). Confira o endereço em Configurações.');}
     var js=null;try{js=await rs.json();}catch(e){}
     if(!js||!js.ok)throw new Error('E-mail não enviado: '+((js&&js.erro)||('Worker respondeu '+rs.status)));
@@ -5112,7 +5114,7 @@ async function frtEnviarEmail(id,interativo){
     if(pdfs.length)fotos=fotos.filter(function(_b,i){return dp.indexOf(i)<0;}); // o PDF original vai no lugar das páginas convertidas
     var nome=frtEmailNome(d),anexos=pdfs.map(function(p,i){return {nome:nome+(pdfs.length>1?'_'+(i+1):'')+'.pdf',tipo:'application/pdf',b64:p.b64};});
     if(fotos.length)anexos.push({nome:nome+(pdfs.length?'_fotos':'')+'.pdf',tipo:'application/pdf',b64:await frtPdfDeFotos(fotos)});
-    var j=await frtOutlookEnviar({assunto:frtEmailAssunto(d),html:frtEmailHtml(d),anexos:anexos,interativo:!!interativo});
+    var j=await frtOutlookEnviar({rastreio:'f'+id,assunto:frtEmailAssunto(d),html:frtEmailHtml(d),anexos:anexos,interativo:!!interativo});
     var up={emailEm:Date.now(),emailPor:STATE.usuarioLogado||'',emailPara:j.para||'',emailDe:j.de||'',emailErro:null};
     {try{await frtFb('fretesFotos/'+id,{method:'DELETE'});await frtFb('fretesPdf/'+id,{method:'DELETE'});up.nFotos=0;up.nPdf=0;}catch(e){}}
     await frtFb('fretes/'+id,{method:'PATCH',body:up});Object.assign(d,up);return j;
@@ -5123,7 +5125,8 @@ async function frtEnviarEmail(id,interativo){
 async function frtApagarFotosSePuder(id){var d=FRT.desp[id];if(!d||!d.emailEm||d.status!=='lancado'||(d.pendencias&&d.pendencias.length))return;
   try{await frtFb('fretesFotos/'+id,{method:'DELETE'});await frtFb('fretesPdf/'+id,{method:'DELETE'});await frtFb('fretes/'+id,{method:'PATCH',body:{nFotos:0,nPdf:0}});d.nFotos=0;d.nPdf=0;}catch(e){}}
 function frtEmailChip(d){
-  if(d.emailEm)return '<span class="fin-chip ok" title="'+frtEsc(d.emailPara||'')+'">📧 enviado '+new Date(d.emailEm).toLocaleDateString('pt-BR')+'</span>';
+  if(d.emailEm){var l=(FRT.lidos||{})['f'+d.id];return '<span class="fin-chip ok" title="'+frtEsc(d.emailPara||'')+'">📧 enviado '+new Date(d.emailEm).toLocaleDateString('pt-BR')+'</span> '+
+    (l?'<span class="fin-chip ok" title="Aberto '+(l.vezes||1)+'x">📬 aberto '+new Date(l.primeiro).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span>':'<span class="fin-mu" title="A contabilidade ainda não abriu (ou o leitor bloqueia imagens)">não aberto ainda</span>');}
   return (d.emailErro?'<span class="fin-chip err" title="'+frtEsc(d.emailErro)+'">não enviou</span> ':'')+'<button type="button" class="fin-btn sm" data-em="'+frtEsc(d.id)+'"'+(frtEmailPronto()?'':' disabled title="Configure o envio em Configurações"')+'>📧 Enviar</button>';
 }
 // ---------- conferência ----------

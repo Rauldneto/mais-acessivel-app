@@ -8,9 +8,14 @@
 //   SMTP_HOST / SMTP_PORT  (opcional; padrão Locaweb: email-ssl.com.br : 465 SSL)
 // Uso: POST JSON {para:"a@b, c@d", cc:"", assunto:"...", html:"...", anexos:[{nome:"x.pdf", tipo:"application/pdf", b64:"..."}]}
 // Resposta: {ok:true, de:"rauldias@tendfer.com.br"} ou {ok:false, erro:"..."}
+// Confirmação de leitura: o e-mail pede confirmação ao destinatário (Disposition-Notification-To, chega na sua caixa)
+// e leva uma imagem invisível; quando a contabilidade abre o e-mail com imagens, o Worker grava a hora em
+// financeiro/emailLidos/{rastreio} no Firebase e o app mostra "📬 aberto". Nenhum dos dois é garantido (o leitor pode bloquear).
 import { connect } from 'cloudflare:sockets';
 
 const ORIGENS = ['https://rauldneto.github.io'];
+const FIREBASE = 'https://maisacessivel-1d0ad-default-rtdb.firebaseio.com';
+const GIF = Uint8Array.from(atob('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), c => c.charCodeAt(0));
 
 export default {
   async fetch(req, env) {
@@ -23,6 +28,19 @@ export default {
     };
     const resp = (o, st) => new Response(JSON.stringify(o), { status: st || 200, headers: cors });
     if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
+    const url = new URL(req.url);
+    if (url.pathname === '/lido') { // imagem invisível do e-mail: registra a abertura
+      const t = (url.searchParams.get('t') || '').replace(/[^A-Za-z0-9_\-]/g, '').slice(0, 60);
+      if (t) {
+        const chave = FIREBASE + '/financeiro/emailLidos/' + t + '.json';
+        try {
+          const atual = await (await fetch(chave)).json();
+          const agora = Date.now();
+          await fetch(chave, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ primeiro: (atual && atual.primeiro) || agora, ultimo: agora, vezes: ((atual && atual.vezes) || 0) + 1 }) });
+        } catch (e) {}
+      }
+      return new Response(GIF, { headers: { 'Content-Type': 'image/gif', 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' } });
+    }
     if (origem && !ORIGENS.includes(origem)) return resp({ ok: false, erro: 'origem não permitida' }, 403);
     if (req.method === 'GET') return resp({ ok: true, pronto: !!(env.SMTP_USER && env.SMTP_PASS && env.DESTINOS), de: env.SMTP_USER || '' });
     if (req.method !== 'POST') return resp({ ok: false, erro: 'use POST' }, 405);
@@ -41,7 +59,10 @@ export default {
     if (tam > 15e6) return resp({ ok: false, erro: 'anexos passam de 15 MB' }, 413);
 
     try {
-      await enviarSmtp(env, { de: env.SMTP_USER, para, cc, bcc, assunto: String(d.assunto || '(sem assunto)'), html: String(d.html || ''), anexos });
+      const rast = String(d.rastreio || '').replace(/[^A-Za-z0-9_\-]/g, '').slice(0, 60);
+      let html = String(d.html || '');
+      if (rast) html += '<img src="' + url.origin + '/lido?t=' + rast + '" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0">';
+      await enviarSmtp(env, { de: env.SMTP_USER, para, cc, bcc, assunto: String(d.assunto || '(sem assunto)'), html, anexos, confirmar: d.confirmarLeitura !== false });
       return resp({ ok: true, de: env.SMTP_USER, para: para.join(', ') });
     } catch (e) {
       return resp({ ok: false, erro: String(e.message || e) }, 502);
@@ -63,6 +84,8 @@ function montarMime(m) {
     'Subject: ' + cab(m.assunto),
     'Date: ' + new Date().toUTCString().replace('GMT', '+0000'),
     'Message-ID: <' + crypto.randomUUID() + '@' + dom + '>',
+    m.confirmar ? 'Disposition-Notification-To: <' + m.de + '>' : '',
+    m.confirmar ? 'Return-Receipt-To: <' + m.de + '>' : '',
     'MIME-Version: 1.0',
     'Content-Type: multipart/mixed; boundary="' + fr + '"',
   ].filter(Boolean);
