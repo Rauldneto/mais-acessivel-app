@@ -6885,7 +6885,7 @@ function cqEtqChips(i,ws){
   var et=ws.w.e||[];if(!et.length)return '<span style="background:#fee2e2;color:#b91c1c;border-radius:10px;padding:2px 8px;font-size:11.5px;font-weight:800">🏷️ sem etiqueta</span>';
   var vends={};(CQ.itens||[]).forEach(function(x){if(x.vendedor)vends[cqNorm(x.vendedor).split(' ')[0]]=1;});
   return et.map(function(e){var at=vends[cqNorm(e).split(' ')[0]];var arq=/arquiv|standby/i.test(e);
-    return '<span style="background:'+(at?'#1c1917':arq?'#e7e5e4':'#7c3aed')+';color:'+(at?'#fff':arq?'#57534e':'#fff')+';border-radius:10px;padding:2px 9px;font-size:11.5px;font-weight:800">'+(at?'💬 atendendo: ':'🏷️ ')+cqEsc(e)+'</span>';}).join('');
+    return '<span style="background:'+(at?'linear-gradient(135deg,#0ea5e9,#6366f1)':arq?'#e7e5e4':'#7c3aed')+';color:'+(at?'#fff':arq?'#57534e':'#fff')+';border-radius:10px;padding:2px 9px;font-size:11.5px;font-weight:800'+(at?';box-shadow:0 4px 10px -4px rgba(99,102,241,.6)':'')+'">'+(at?'💬 atendendo: ':'🏷️ ')+cqEsc(e)+'</span>';}).join('');
 }
 // ===================== COTAÇÕES: sub-abas ⚠️ Erros e 💰 Vendas =====================
 // As duas usam a mesma busca no Bling (período, situação, cliente). Erros = só campos faltando/errados.
@@ -7437,10 +7437,10 @@ function cqCorpoVendas(card,sel){
   // 🟢 disponíveis · 🔒 em atendimento · 👤 minhas · todas
   var etqOk=function(i){return (CQ.fEtqP||'prop')!=='prop'||cqTemEtqProp(i);},cntAt=function(f){return CQ.itens.filter(function(i){return etqOk(i)&&f(i);}).length;},asOf=function(i){return cqAssum(i);};
   var nDisp=cntAt(function(i){var a=asOf(i);return cqAberta(i)&&!(a&&!a.meu);}),nAt=cntAt(function(i){return !!asOf(i);}),nMin=cntAt(function(i){var a=asOf(i);return a&&a.meu;});
-  var bA=function(id,l,n){var on=(CQ.fAt||'disp')===id;return '<button class="cqFAt" data-f="'+id+'" style="border:1.5px solid '+(on?'#1c1917':'#e7e5e4')+';background:'+(on?'#1c1917':'#fff')+';color:'+(on?'#fff':'#44403c')+';border-radius:20px;padding:6px 14px;font-weight:800;font-size:12.5px;cursor:pointer;font-family:inherit">'+l+(n!==null?' ('+n+')':'')+'</button>';};
-  var nProp=CQ.itens.filter(cqTemEtqProp).length,bE=function(id,l,n){var on=(CQ.fEtqP||'prop')===id;return '<button class="cqFEtq" data-f="'+id+'" style="border:1.5px solid '+(on?'#7c3aed':'#e7e5e4')+';background:'+(on?'#7c3aed':'#fff')+';color:'+(on?'#fff':'#44403c')+';border-radius:20px;padding:6px 14px;font-weight:800;font-size:12.5px;cursor:pointer;font-family:inherit">'+l+' ('+n+')</button>';};
-  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 8px;align-items:center"><span style="font-size:12px;font-weight:800;color:#57534e">Mostrar:</span>'+bE('prop','🏷️ Só PROPOSTA ALTA / BAIXA PROB.',nProp)+bE('todas','Todas as cotações',CQ.itens.length)+'</div>';
-  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px">'+bA('disp','🟢 Disponíveis',nDisp)+bA('atend','🔒 Em atendimento',nAt)+bA('minhas','👤 Minhas',nMin)+bA('todas','Todas',null)+'</div>';
+  var bA=function(id,l,n){var on=(CQ.fAt||'disp')===id;return '<button class="cqFAt seg-b'+(on?' on':'')+'" data-f="'+id+'">'+l+(n!==null?' <span class="seg-n">'+n+'</span>':'')+'</button>';};
+  var nProp=CQ.itens.filter(cqTemEtqProp).length,bE=function(id,l,n){var on=(CQ.fEtqP||'prop')===id;return '<button class="cqFEtq seg-b'+(on?' on':'')+'" data-f="'+id+'">'+l+' <span class="seg-n">'+n+'</span></button>';};
+  h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin:0 0 14px;align-items:center"><div class="seg">'+bE('prop','🏷️ Só PROPOSTA ALTA / BAIXA',nProp)+bE('todas','Todas as cotações',CQ.itens.length)+'</div>'+
+    '<div class="seg">'+bA('disp','Disponíveis',nDisp)+bA('atend','Em atendimento',nAt)+bA('minhas','Minhas',nMin)+bA('todas','Todas',null)+'</div></div>';
   var ordem=CQ.ordV||'chance';
   var porData=function(a,b){return (b.data||'').localeCompare(a.data||'')||(parseInt(b.numero,10)-parseInt(a.numero,10));};
   var PR={};F.forEach(function(i){PR[i.id]=cqPrior(i);});
@@ -7982,10 +7982,10 @@ function cqTopCobrar(F){
   var G={};base.forEach(function(i){var p=cqPrior(i);if(p.s<=0)return;var k=cqContato(i),g=G[k]||(G[k]={k:k,cots:[],s:0,v:0,esp:0,ch:0,mot:{}});
     g.cots.push(i);g.s+=p.s;g.v+=cqVal(i);g.esp+=p.esp;g.ch=Math.max(g.ch,p.ch);p.mot.forEach(function(m){g.mot[m]=1;});});
   var L=Object.keys(G).map(function(k){return G[k];}).sort(function(a,b){return b.s-a.s;}).slice(0,CQ.topMais?10:5);
-  var bt=function(id,l){var on=modo===id;return '<button class="cqTopModo" data-m="'+id+'" style="border:1px solid '+(on?'#1c1917':'#e7e5e4')+';background:'+(on?'#1c1917':'#fff')+';color:'+(on?'#fff':'#44403c')+';border-radius:999px;padding:4px 12px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit">'+l+'</button>';};
-  var x='<div class="ctop"><div class="ctop-h"><div><div class="ctop-t">'+cqIc('flame',18)+' Quem cobrar agora</div>'+
-    '<div class="ctop-s">Clientes com maior <b>valor esperado</b> (valor × chance de fechar) e mais urgência. Comece pelo 1º.</div></div>'+
-    '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+(temMeu?bt('meus','👤 Meus clientes'):'')+bt('todos','👥 Todos')+'</div></div>';
+  var bt=function(id,l){var on=modo===id;return '<button class="cqTopModo seg-b'+(on?' on':'')+'" data-m="'+id+'">'+l+'</button>';};
+  var x='<div class="ctop"><div class="ctop-h"><div style="display:flex;gap:12px;align-items:center"><span class="ctop-ic">'+cqIc('flame',18)+'</span><div><div class="ctop-t">Quem cobrar agora</div>'+
+    '<div class="ctop-s">Clientes com maior <b>valor esperado</b> (valor × chance de fechar) e mais urgência. Comece pelo 1º.</div></div></div>'+
+    '<div class="seg">'+(temMeu?bt('meus','Meus clientes'):'')+bt('todos','Todos')+'</div></div>';
   if(!L.length)return x+'<div style="padding:14px 4px;color:#78716c;font-size:13px">✅ Nada urgente '+(modo==='meus'?'nos seus clientes':'')+' agora.</div></div>';
   var URG=/atrasad|esperando|hoje/;
   x+='<div class="ctop-g">'+L.map(function(g,k){
@@ -7993,31 +7993,58 @@ function cqTopCobrar(F){
     var tag=urg?'<span class="ctop-tag r">'+cqEsc(urg)+'</span>':mot.indexOf('nunca foi cobrada')!==-1?'<span class="ctop-tag o">nunca foi cobrada</span>':mot.filter(function(m){return /sem cobrança/.test(m);})[0]?'<span class="ctop-tag o">'+cqEsc(mot.filter(function(m){return /sem cobrança/.test(m);})[0])+'</span>':'<span class="ctop-tag g">'+(g.ch>=65?'alta chance':'retomar contato')+'</span>';
     var outros=mot.filter(function(m){return m!==urg&&!(tag.indexOf(m)!==-1);}).slice(0,2);
     var f=cqFones(i)[0];
-    return '<div class="ctop-c'+(k===0?' um':'')+'"><div class="ctop-ch"><span class="ctop-n">'+(k+1)+'º</span>'+tag+'</div>'+
+    return '<div class="ctop-c'+(k===0?' um':'')+'" style="--c:'+c+'"><div class="ctop-ch"><span class="ctop-n">'+(k+1)+'</span>'+tag+'</div>'+
       '<div class="ctop-cli" title="'+cqEsc(i.cliente)+'">'+cqEsc(i.cliente)+'</div>'+
       '<div class="ctop-sub">'+(g.cots.length>1?g.cots.length+' cotações: '+g.cots.map(function(c){return 'Nº '+cqEsc(c.numero);}).join(', '):'Nº '+cqEsc(i.numero))+' · '+cqEsc((i.vendedor||'').split(' ')[0])+'</div>'+
-      '<div class="ctop-v">'+cqBRL(g.v)+'</div>'+
+      '<div class="ctop-sep"></div><div class="ctop-v">'+cqBRL(g.v)+'</div>'+
       '<div class="ctop-bar"><i style="width:'+g.ch+'%;background:'+c+'"></i></div>'+
       '<div class="ctop-pc"><b style="color:'+c+'">'+g.ch+'% de chance</b> · esperado '+cqBRL(g.esp).replace(/,\d\d$/,'')+'</div>'+
       (outros.length?'<div class="ctop-why">'+outros.map(function(m){return '• '+cqEsc(m);}).join('<br>')+'</div>':'<div class="ctop-why"></div>')+
-      '<div class="ctop-ac">'+(f?'<a class="vb sm grn cqLigar" href="'+cqEsc(cqFoneHref(f.d))+'" data-id="'+cqEsc(i.id)+'" data-t="'+cqEsc(cqFoneFmt(f.d))+'" title="Ligar pelo MicroSIP: '+cqEsc(cqFoneFmt(f.d))+'">'+cqIc('phone',13)+' Ligar</a>':'')+
-      '<button class="vb sm cqIrPara" data-id="'+cqEsc(i.id)+'">Ver cotação '+cqIc('right',12)+'</button></div></div>';}).join('')+'</div>';
+      '<div class="ctop-ac">'+(f?'<a class="ctop-call cqLigar" href="'+cqEsc(cqFoneHref(f.d))+'" data-id="'+cqEsc(i.id)+'" data-t="'+cqEsc(cqFoneFmt(f.d))+'" title="Ligar pelo MicroSIP: '+cqEsc(cqFoneFmt(f.d))+'">'+cqIc('phone',13)+' Ligar</a>':'')+
+      '<button class="ctop-see cqIrPara" data-id="'+cqEsc(i.id)+'">Ver cotação '+cqIc('right',12)+'</button></div></div>';}).join('')+'</div>';
   var tot=L.reduce(function(s,g){return s+g.v;},0);
-  x+='<div class="ctop-f"><span>'+L.length+' cliente(s) · <b>'+cqBRL(tot)+'</b> em jogo</span><button class="cqTopMais" style="border:none;background:none;color:#b45309;font-weight:800;cursor:pointer;font-family:inherit;font-size:12px">'+(CQ.topMais?'mostrar só 5':'mostrar 10')+'</button></div>';
+  x+='<div class="ctop-f"><span class="ctop-tot">'+L.length+' cliente(s) · <b>'+cqBRL(tot)+'</b> em jogo</span><button class="cqTopMais ctop-mais">'+(CQ.topMais?'Mostrar só 5':'Mostrar 10')+' '+cqIc(CQ.topMais?'down':'right',12)+'</button></div>';
   return x+'</div>';
 }
-var CQ_TOP_CSS='.ctop{background:#fff;border:1px solid #e7e5e4;border-top:4px solid #f59e0b;border-radius:14px;padding:14px 16px 10px;margin-bottom:14px;box-shadow:0 1px 3px rgba(28,25,23,.06)}'+
-  '.ctop-h{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px}.ctop-t{font-size:16px;font-weight:900;color:#1c1917;display:flex;gap:6px;align-items:center}.ctop-s{font-size:12px;color:#78716c;margin-top:2px}'+
-  '.ctop-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}'+
-  '.ctop-c{border:1px solid #e7e5e4;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;background:#fcfcfb;transition:box-shadow .15s,border-color .15s}.ctop-c:hover{border-color:#d6d3d1;box-shadow:0 4px 12px rgba(28,25,23,.08)}'+
-  '.ctop-c.um{border-color:#f59e0b;background:#fffbeb}'+
-  '.ctop-ch{display:flex;justify-content:space-between;align-items:center;gap:6px}.ctop-n{font-weight:900;font-size:13px;color:#fff;background:#1c1917;border-radius:7px;padding:2px 8px}.ctop-c.um .ctop-n{background:#d97706}'+
-  '.ctop-tag{font-size:10.5px;font-weight:800;border-radius:999px;padding:2px 8px;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}.ctop-tag.r{background:#fee2e2;color:#b91c1c}.ctop-tag.o{background:#ffedd5;color:#c2410c}.ctop-tag.g{background:#dcfce7;color:#15803d}'+
-  '.ctop-cli{font-size:14px;font-weight:900;color:#1c1917;line-height:1.2;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ctop-sub{font-size:11px;color:#78716c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
-  '.ctop-v{font-size:19px;font-weight:900;color:#1c1917;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:4px}'+
-  '.ctop-bar{height:6px;border-radius:4px;background:#f0efed;overflow:hidden}.ctop-bar i{display:block;height:100%;border-radius:4px}.ctop-pc{font-size:11.5px;color:#57534e}'+
-  '.ctop-why{font-size:11px;color:#78716c;min-height:14px;line-height:1.4}.ctop-ac{display:flex;gap:6px;margin-top:6px}.ctop-ac .vb{flex:1;justify-content:center}'+
-  '.ctop-f{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#57534e;margin-top:10px;padding-top:8px;border-top:1px solid #f0efed}';
+var CQ_TOP_CSS=
+  '.seg{display:inline-flex;gap:4px;padding:4px;border-radius:14px;background:linear-gradient(180deg,#f1f5f9,#e9eef5);border:1px solid rgba(148,163,184,.28);box-shadow:inset 0 1px 2px rgba(15,23,42,.06)}'+
+  '.seg-b{border:none;background:transparent;color:#475569;font-family:inherit;font-size:12.5px;font-weight:700;padding:7px 14px;border-radius:10px;cursor:pointer;display:inline-flex;gap:6px;align-items:center;transition:all .18s;white-space:nowrap}'+
+  '.seg-b:hover{color:#1e293b;background:rgba(255,255,255,.7)}'+
+  '.seg-b.on{color:#fff;background:linear-gradient(135deg,#6366f1,#8b5cf6);box-shadow:0 6px 16px -6px rgba(99,102,241,.75),inset 0 1px 0 rgba(255,255,255,.25)}'+
+  '.seg-n{font-size:11px;font-weight:800;padding:1px 7px;border-radius:999px;background:rgba(100,116,139,.14);color:inherit}.seg-b.on .seg-n{background:rgba(255,255,255,.22)}'+
+  '.ctop{position:relative;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);border:1px solid rgba(148,163,184,.25);border-radius:22px;padding:20px 22px 14px;margin-bottom:18px;overflow:hidden;box-shadow:0 1px 0 rgba(255,255,255,.9) inset,0 24px 48px -28px rgba(15,23,42,.35),0 2px 8px rgba(15,23,42,.05)}'+
+  '.ctop:before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:linear-gradient(90deg,#f59e0b,#ec4899,#6366f1,#06b6d4)}'+
+  '.ctop:after{content:"";position:absolute;right:-120px;top:-140px;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,rgba(99,102,241,.10),transparent 65%);pointer-events:none}'+
+  '.ctop-h{position:relative;z-index:1;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}'+
+  '.ctop-ic{width:40px;height:40px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;color:#fff;background:linear-gradient(135deg,#f59e0b,#ef4444);box-shadow:0 10px 20px -8px rgba(239,68,68,.6)}'+
+  '.ctop-t{font-size:17px;font-weight:900;color:#0f172a;letter-spacing:-.01em}.ctop-s{font-size:12.5px;color:#64748b;margin-top:2px}.ctop-s b{color:#334155}'+
+  '.ctop-g{position:relative;z-index:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}'+
+  '.ctop-c{position:relative;background:#fff;border:1px solid rgba(148,163,184,.22);border-radius:18px;padding:16px 16px 14px;display:flex;flex-direction:column;gap:5px;box-shadow:0 1px 2px rgba(15,23,42,.05),0 14px 28px -18px rgba(15,23,42,.45);transition:transform .2s,box-shadow .2s}'+
+  '.ctop-c{overflow:hidden}.ctop-c:before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,var(--c),transparent 85%);opacity:.95}.ctop-c.um:before{display:none}'+
+  '.ctop-c:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(15,23,42,.06),0 22px 40px -18px rgba(15,23,42,.5)}'+
+  '.ctop-c.um{border:1.5px solid transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,#f59e0b,#ec4899,#6366f1) border-box;box-shadow:0 1px 2px rgba(15,23,42,.05),0 18px 36px -16px rgba(236,72,153,.45)}'+
+  '.ctop-ch{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:2px}'+
+  '.ctop-n{width:30px;height:30px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;color:#334155;background:linear-gradient(135deg,#f1f5f9,#e2e8f0);box-shadow:inset 0 1px 0 #fff,0 2px 6px -2px rgba(15,23,42,.25)}'+
+  '.ctop-c.um .ctop-n{color:#fff;background:linear-gradient(135deg,#f59e0b,#ef4444);box-shadow:0 8px 16px -6px rgba(239,68,68,.65)}'+
+  '.ctop-tag{display:inline-flex;gap:6px;align-items:center;font-size:10.5px;font-weight:800;border-radius:999px;padding:3px 10px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;border:1px solid transparent}'+
+  '.ctop-tag:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor;flex:none}'+
+  '.ctop-tag.r{background:#fef2f2;color:#dc2626;border-color:#fecaca}.ctop-tag.o{background:#fff7ed;color:#ea580c;border-color:#fed7aa}.ctop-tag.g{background:#ecfdf5;color:#059669;border-color:#a7f3d0}'+
+  '.ctop-cli{font-size:14.5px;font-weight:900;color:#0f172a;line-height:1.25;margin-top:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
+  '.ctop-sub{font-size:11.5px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
+  '.ctop-sep{height:1px;margin:8px 0 4px;background:linear-gradient(90deg,transparent,rgba(148,163,184,.45),transparent)}'+
+  '.ctop-v{font-size:22px;font-weight:900;letter-spacing:-.02em;font-variant-numeric:tabular-nums;background:linear-gradient(135deg,#0f172a,#334155);-webkit-background-clip:text;background-clip:text;color:transparent}'+
+  '.ctop-bar{height:7px;border-radius:6px;background:#eef2f7;overflow:hidden;box-shadow:inset 0 1px 2px rgba(15,23,42,.08)}.ctop-bar i{display:block;height:100%;border-radius:6px;box-shadow:0 0 12px var(--c)}'+
+  '.ctop-pc{font-size:11.5px;color:#64748b}'+
+  '.ctop-why{font-size:11px;color:#64748b;min-height:15px;line-height:1.45}'+
+  '.ctop-ac{display:flex;gap:8px;margin-top:8px}'+
+  '.ctop-call,.ctop-see{flex:1;display:inline-flex;gap:6px;align-items:center;justify-content:center;border-radius:11px;padding:8px 10px;font-size:12.5px;font-weight:800;font-family:inherit;cursor:pointer;text-decoration:none;transition:all .18s;white-space:nowrap}'+
+  '.ctop-call{color:#fff;border:none;background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 8px 18px -8px rgba(16,185,129,.8),inset 0 1px 0 rgba(255,255,255,.25)}.ctop-call:hover{filter:brightness(1.06);transform:translateY(-1px)}'+
+  '.ctop-see{color:#334155;background:#f8fafc;border:1px solid rgba(148,163,184,.45)}.ctop-see:hover{color:#4f46e5;border-color:#a5b4fc;background:#eef2ff}'+
+  '.ctop-f{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:12px;border-top:1px solid rgba(148,163,184,.25)}'+
+  '.ctop-tot{font-size:12.5px;color:#475569}.ctop-tot b{color:#0f172a}'+
+  '.ctop-mais{display:inline-flex;gap:4px;align-items:center;border:1px solid rgba(148,163,184,.4);background:#fff;color:#4f46e5;font-weight:800;font-size:12px;font-family:inherit;padding:6px 12px;border-radius:10px;cursor:pointer}.ctop-mais:hover{background:#eef2ff;border-color:#a5b4fc}'+
+  '.vc-rank{background:linear-gradient(135deg,#f1f5f9,#e2e8f0)!important;color:#334155!important;box-shadow:inset 0 1px 0 #fff,0 3px 8px -3px rgba(15,23,42,.3)}.vc-rank.r1{background:linear-gradient(135deg,#f59e0b,#ef4444)!important;color:#fff!important;box-shadow:0 8px 16px -6px rgba(239,68,68,.6)}'+
+  '.vb.pri{background:linear-gradient(135deg,#6366f1,#8b5cf6);border-color:transparent;box-shadow:0 6px 14px -6px rgba(99,102,241,.7)}.vb.pri:hover{filter:brightness(1.06);background:linear-gradient(135deg,#6366f1,#8b5cf6)}';
 
 // ── 📘 GUIA DE COBRANÇA E NEGOCIAÇÃO ──
 function cqGuiaDraw(root){
