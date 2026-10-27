@@ -5613,22 +5613,19 @@ function frtBindLista(){FRT.root.querySelectorAll('.fin-it[data-id]').forEach(fu
 
 // Conferência (computador)
 function frtOpts(list,val,vazio,filtro){return '<option value="">'+frtEsc(vazio)+'</option>'+(filtro?list.filter(filtro):list).map(function(x){return '<option value="'+frtEsc(x.id)+'"'+(String(x.id)===String(val||'')?' selected':'')+'>'+frtEsc(x.nome)+'</option>';}).join('');}
-function frtOptsCat(val,filtro){var q=frtNorm(filtro||'').trim(),h=q?'':'<option value="">Sem categoria</option>',aberto=false,grupo='',n=0;
-  frtListas().categorias.forEach(function(c){if(c.pai){if(aberto)h+='</optgroup>';aberto=false;grupo=c.nome;
-      if(!q){h+='<optgroup label="'+frtEsc(c.nome)+'">';aberto=true;}return;}
-    if(!c.grupo){if(aberto){h+='</optgroup>';aberto=false;}grupo='';}
-    var sel=String(c.id)===String(val||'');
-    if(q&&frtNorm(c.nome+' '+grupo).indexOf(q)<0)return;
-    n++;h+='<option value="'+c.id+'"'+(sel?' selected':'')+'>'+frtEsc(q&&grupo?grupo+' › '+c.nome:c.nome)+'</option>';});
-  if(aberto)h+='</optgroup>';
-  if(q&&!n)h='<option value="'+frtEsc(val||'')+'">Nada com "'+frtEsc(filtro)+'"</option>';
+// Só as 2 categorias de frete (Compra / Venda). Se um item antigo já tiver outra categoria, ela continua aparecendo selecionada para não se perder.
+function frtOptsCat(val){
+  var ids=[FRT_CAT_COMPRA,FRT_CAT_VENDA],h='<option value="">Selecione</option>';
+  function nome(id){return frtCatNome(id)||(id===FRT_CAT_VENDA?'Fretes e seguros - Venda':'Fretes e seguros - Compra');}
+  ids.forEach(function(id){h+='<option value="'+id+'"'+(String(id)===String(val||'')?' selected':'')+'>'+frtEsc(nome(id))+'</option>';});
+  if(val&&ids.indexOf(String(val))<0)h+='<option value="'+frtEsc(val)+'" selected>'+frtEsc(frtCatNome(val)||val)+' (categoria antiga)</option>';
   return h;}
 // última categoria usada com o mesmo fornecedor (pelo cadastro do Bling, CNPJ ou nome)
 function frtChavesForn(d){var k=[];if(!d)return k;if(d.contato&&d.contato.id)k.push('c'+d.contato.id);
   var doc=frtDig((d.contato&&d.contato.doc)||(d.fornecedor&&d.fornecedor.doc));if(doc.length>=11)k.push('d'+doc);
   var nm=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'';if(nm&&nm!==FRT_SEM_FORN){var t=frtTokens(nm).join('_');if(t)k.push('n'+t);}return k;}
 function frtCatSugerida(d,eu){var ks=frtChavesForn(d);if(!ks.length)return '';
-  var ok=function(id){return id&&frtListas().categorias.some(function(c){return String(c.id)===String(id)&&!c.pai;});};
+  var ok=function(id){return id&&(String(id)===FRT_CAT_COMPRA||String(id)===FRT_CAT_VENDA);};
   var melhor=null;Object.keys(FRT.desp||{}).forEach(function(k){var x=FRT.desp[k];if(!x||x===d||k===eu||!x.categoria||!ok(x.categoria))return;
     var kx=frtChavesForn(x);if(!kx.some(function(c){return ks.indexOf(c)>=0;}))return;
     var t=x.lancadoEm||x.atualizadoEm||x.criadoEm||0;if(!melhor||t>melhor.t)melhor={t:t,c:String(x.categoria)};});
@@ -5665,7 +5662,7 @@ function frtHtmlFormCard(f,mob,ext){
    '<div class="fin-sec"><p class="fin-st">Pagamento</p><div class="fin-g">'+
     '<div class="fin-f fin-c3"><label for="fForma">Forma de pagamento '+(f.incertos&&!f.formaId?'<span class="fin-tag unc">escolher</span>':'')+'</label><select id="fForma">'+frtOpts(frtListas().formas,f.formaId,'Selecione')+'</select></div>'+
     '<div class="fin-f fin-c3"><label for="fConta">Conta financeira</label><select id="fConta">'+frtOpts(frtListas().contas,f.contaId,'Selecione')+'</select></div>'+
-    '<div class="fin-f fin-c4"><label for="fCat">Categoria'+(catSug&&String(catSug)===String(f.categoria)?' <span class="fin-tag" id="fCatTag">última usada com este fornecedor</span>':'')+'</label><input class="fin-in" id="fCatBusca" type="search" autocomplete="off" placeholder="🔎 Buscar categoria pelo nome" style="margin-bottom:6px"><select id="fCat">'+frtOptsCat(f.categoria)+'</select></div>'+
+    '<div class="fin-f fin-c4"><label for="fCat">Categoria'+(catSug&&String(catSug)===String(f.categoria)?' <span class="fin-tag" id="fCatTag">última usada com este fornecedor</span>':'')+'</label><select id="fCat">'+frtOptsCat(f.categoria)+'</select></div>'+
     '<div class="fin-f fin-c2" id="fParcW"'+(frtEhCredito(f.formaId)?'':' hidden')+'><label for="fParc">Parcelas</label><input class="fin-in" id="fParc" type="number" min="1" max="24" value="'+(f.parcelas||1)+'"></div></div></div>'+
    '<div class="fin-sec"><p class="fin-st">Valores e datas</p><div class="fin-g">'+
     '<div class="fin-f fin-c2"><label for="fValor">Valor (R$) '+tag('valor_total')+'</label><input class="fin-in fin-money'+rd()+'" id="fValor" inputmode="decimal" value="'+frtEsc(f.valor>0?frtMoney(f.valor):'')+'" placeholder="0,00"></div>'+
@@ -5706,6 +5703,7 @@ function frtBindConferencia(){
   frtEl('fComp').addEventListener('input',function(){frtEl('fComp').dataset.toq='1';});
   frtEl('fForma').addEventListener('change',function(){var id=frtEl('fForma').value;frtEl('fParcW').hidden=!frtEhCredito(id);var c=frtContaSugerida(id);if(c)frtEl('fConta').value=c;delete frtEl('fVenc').dataset.toq;reVenc();});
   var bb=frtEl('fBuscar');if(bb)bb.onclick=frtBuscarFornecedor;
+  var cs0=frtEl('fCat');if(cs0&&!frtEl('fCatBusca'))cs0.addEventListener('change',function(){f.categoria=cs0.value;var tg0=frtEl('fCatTag');if(tg0)tg0.hidden=true;});
   var cb=frtEl('fCatBusca'),cs=frtEl('fCat');if(cb&&cs){cb.addEventListener('input',function(){var v=cs.value;cs.innerHTML=frtOptsCat(v,cb.value);
       var reais=[].filter.call(cs.options,function(o){return o.value&&!/^Nada com/.test(o.text);});
       if(cb.value.trim()&&reais.length){cs.value=reais[0].value;f.categoria=cs.value;cs.dispatchEvent(new Event('input'));}});
