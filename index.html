@@ -3804,6 +3804,9 @@ async function dspRevisar(){
 // ---------- fornecedor: achar no Bling sem nunca cadastrar em dobro ----------
 var DSP_GENERICAS=['ltda','me','epp','eireli','sa','s','a','cia','e','de','da','do','das','dos','comercio','comercial','servicos','servico','industria','distribuidora','eirelli','mei','limitada'];
 function dspTokens(n){return dspNorm(n).replace(/&/g,' e ').replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(w){return w&&DSP_GENERICAS.indexOf(w)<0;}).map(function(w){return w.length>4?w.replace(/s$/,''):w;});}
+function dspDocValido(d){d=String(d||'').replace(/\D/g,'');if(/^(\d)\1+$/.test(d))return false;var dv=function(c,p){var s=0;for(var i=0;i<p.length;i++)s+=Number(c[i])*p[i];var r=s%11;return r<2?0:11-r;};
+  if(d.length===14){var p1=[5,4,3,2,9,8,7,6,5,4,3,2],p2=[6].concat(p1);return dv(d,p1)===Number(d[12])&&dv(d,p2)===Number(d[13]);}
+  if(d.length===11){var q1=[10,9,8,7,6,5,4,3,2],q2=[11].concat(q1);return dv(d,q1)===Number(d[9])&&dv(d,q2)===Number(d[10]);}return false;}
 function dspSimNome(a,b){var x=dspTokens(a),y=dspTokens(b);if(!x.length||!y.length)return 0;var c=x.filter(function(w){return y.indexOf(w)>=0;}).length;return c/Math.min(x.length,y.length);}
 function dspDocParcial(f){var p=dspDig(f.fornecedor&&f.fornecedor.docParcial);if(p.length>=4)return p;
   var t=(f.incertos||[]).join(' ');var m=t.match(/[\*x•]{0,3}[.\s]?\d{2,3}[.\s]?\d{3}[\/.\-\s]?\d{0,4}[\-\s]?[\*x•]{0,2}/i);return m?dspDig(m[0]):'';}
@@ -3815,9 +3818,12 @@ async function dspAcharFornecedor(f){
   for(var i=0;i<qs.length;i++){var r=await dspBling('buscarContato',qs[i]);(r.itens||[]).forEach(function(c){cand[c.id]={id:String(c.id),nome:c.nome,doc:dspDig(c.doc)};});}
   var L=Object.keys(cand).map(function(k){return cand[k];});
   var porDoc=L.filter(function(c){return doc&&c.doc===doc;});if(porDoc.length)return {match:porDoc[0],cand:L};
-  // mesma empresa (raiz do CNPJ igual): mesma filial e nome parecido = só o dígito errado num dos dois -> é ele; outra filial -> pergunta
-  var mesmaRaiz=L.filter(function(c){return doc.length===14&&c.doc&&c.doc.length===14&&c.doc.slice(0,8)===doc.slice(0,8);});
-  var mesmaFilial=mesmaRaiz.filter(function(c){return c.doc.slice(8,12)===doc.slice(8,12)&&dspSimNome(c.nome,nome)>=0.5;});if(mesmaFilial.length===1)return {match:mesmaFilial[0],cand:L};
+  // CNPJ/CPF válido e diferente = outro cadastro: nunca liga nem sugere um cadastro com documento diferente.
+  // Se o documento LIDO é inválido (dígito verificador errado = erro de leitura) e os 12 primeiros números batem com um cadastro válido, é ele.
+  var docOk=dspDocValido(doc);
+  if(doc.length===14&&!docOk){var lido12=L.filter(function(c){return c.doc&&c.doc.length===14&&dspDocValido(c.doc)&&c.doc.slice(0,12)===doc.slice(0,12);});if(lido12.length===1)return {match:lido12[0],cand:L,docCorrigido:lido12[0].doc};}
+  if(docOk)L=L.filter(function(c){return !(c.doc&&(c.doc.length===14||c.doc.length===11)&&c.doc!==doc);});
+  var mesmaRaiz=[];
   var porParc=L.filter(function(c){return parc.length>=4&&c.doc&&c.doc.indexOf(parc)>=0&&dspSimNome(c.nome,nome)>=0.5;});if(porParc.length===1)return {match:porParc[0],cand:L};
   var iguais=L.filter(function(c){return dspTokens(c.nome).join(' ')===dspTokens(nome).join(' ');});if(iguais.length===1)return {match:iguais[0],cand:L};
   var parecidos=L.filter(function(c){return dspSimNome(c.nome,nome)>=0.5||mesmaRaiz.indexOf(c)>=0;});
@@ -4213,7 +4219,7 @@ function dspHtmlFormCard(f,mob,ext){
    '<div class="fin-sec"><p class="fin-st">Comprovante <span class="fin-mu">'+(f.nFotos?f.nFotos+' imagem(ns) · toque para ampliar':'')+'</span></p><div class="fin-fotos" id="dspFotos"></div></div>'+
    '<div class="fin-sec"><p class="fin-st">Fornecedor '+(f.contato?'<span class="fin-chip ok">No Bling: '+dspEsc(f.contato.nome)+'</span>':'<span class="fin-chip">Se não existir no Bling, é cadastrado ao lançar</span>')+'</p>'+
     (DSP.revisao?'':dspHtmlCandidatos(DSP.sel))+'<div class="fin-g"><div class="fin-f fin-c4"><label for="fNome">Nome / razão social '+tag('fornecedor_nome')+'</label><input class="fin-in'+rd()+'" id="fNome" value="'+dspEsc(f.fornecedor.nome)+'"></div>'+
-    '<div class="fin-f fin-c2"><label for="fDoc">CPF/CNPJ '+tag('fornecedor_documento')+'</label><input class="fin-in'+rd()+'" id="fDoc" inputmode="numeric" value="'+dspEsc(dspDoc(f.fornecedor.doc))+'"></div></div>'+
+    '<div class="fin-f fin-c2"><label for="fDoc">CPF/CNPJ '+tag('fornecedor_documento')+(f.fornecedor.doc&&!dspDocValido(f.fornecedor.doc)?' <span class="fin-tag unc" title="Os dígitos verificadores não batem: provável erro de leitura">inválido</span>':'')+'</label><input class="fin-in'+rd()+'" id="fDoc" inputmode="numeric" value="'+dspEsc(dspDoc(f.fornecedor.doc))+'"></div></div>'+
     (ext?'<div><button type="button" class="fin-btn sm" id="fBuscar">'+(f.contato?'Trocar fornecedor':'Buscar no Bling')+'</button> <span id="fForStatus"></span></div>':(f.contato?'':'<p class="fin-mu" style="margin:0">O vínculo com o cadastro do Bling é feito no computador.</p>'))+'</div>'+
    '<div class="fin-sec"><p class="fin-st">Pagamento</p><div class="fin-g">'+
     '<div class="fin-f fin-c3"><label for="fForma">Forma de pagamento '+(f.incertos&&!f.formaId?'<span class="fin-tag unc">escolher</span>':'')+'</label><select id="fForma">'+dspOpts(dspListas().formas,f.formaId,'Selecione')+'</select></div>'+
@@ -5220,6 +5226,9 @@ async function frtRevisar(){
 // ---------- fornecedor: achar no Bling sem nunca cadastrar em dobro ----------
 var FRT_GENERICAS=['ltda','me','epp','eireli','sa','s','a','cia','e','de','da','do','das','dos','comercio','comercial','servicos','servico','industria','distribuidora','eirelli','mei','limitada'];
 function frtTokens(n){return frtNorm(n).replace(/&/g,' e ').replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(function(w){return w&&FRT_GENERICAS.indexOf(w)<0;}).map(function(w){return w.length>4?w.replace(/s$/,''):w;});}
+function frtDocValido(d){d=String(d||'').replace(/\D/g,'');if(/^(\d)\1+$/.test(d))return false;var dv=function(c,p){var s=0;for(var i=0;i<p.length;i++)s+=Number(c[i])*p[i];var r=s%11;return r<2?0:11-r;};
+  if(d.length===14){var p1=[5,4,3,2,9,8,7,6,5,4,3,2],p2=[6].concat(p1);return dv(d,p1)===Number(d[12])&&dv(d,p2)===Number(d[13]);}
+  if(d.length===11){var q1=[10,9,8,7,6,5,4,3,2],q2=[11].concat(q1);return dv(d,q1)===Number(d[9])&&dv(d,q2)===Number(d[10]);}return false;}
 function frtSimNome(a,b){var x=frtTokens(a),y=frtTokens(b);if(!x.length||!y.length)return 0;var c=x.filter(function(w){return y.indexOf(w)>=0;}).length;return c/Math.min(x.length,y.length);}
 function frtDocParcial(f){var p=frtDig(f.fornecedor&&f.fornecedor.docParcial);if(p.length>=4)return p;
   var t=(f.incertos||[]).join(' ');var m=t.match(/[\*x•]{0,3}[.\s]?\d{2,3}[.\s]?\d{3}[\/.\-\s]?\d{0,4}[\-\s]?[\*x•]{0,2}/i);return m?frtDig(m[0]):'';}
@@ -5231,9 +5240,12 @@ async function frtAcharFornecedor(f){
   for(var i=0;i<qs.length;i++){var r=await frtBling('buscarContato',qs[i]);(r.itens||[]).forEach(function(c){cand[c.id]={id:String(c.id),nome:c.nome,doc:frtDig(c.doc)};});}
   var L=Object.keys(cand).map(function(k){return cand[k];});
   var porDoc=L.filter(function(c){return doc&&c.doc===doc;});if(porDoc.length)return {match:porDoc[0],cand:L};
-  // mesma empresa (raiz do CNPJ igual): mesma filial e nome parecido = só o dígito errado num dos dois -> é ele; outra filial -> pergunta
-  var mesmaRaiz=L.filter(function(c){return doc.length===14&&c.doc&&c.doc.length===14&&c.doc.slice(0,8)===doc.slice(0,8);});
-  var mesmaFilial=mesmaRaiz.filter(function(c){return c.doc.slice(8,12)===doc.slice(8,12)&&frtSimNome(c.nome,nome)>=0.5;});if(mesmaFilial.length===1)return {match:mesmaFilial[0],cand:L};
+  // CNPJ/CPF válido e diferente = outro cadastro: nunca liga nem sugere um cadastro com documento diferente.
+  // Se o documento LIDO é inválido (dígito verificador errado = erro de leitura) e os 12 primeiros números batem com um cadastro válido, é ele.
+  var docOk=frtDocValido(doc);
+  if(doc.length===14&&!docOk){var lido12=L.filter(function(c){return c.doc&&c.doc.length===14&&frtDocValido(c.doc)&&c.doc.slice(0,12)===doc.slice(0,12);});if(lido12.length===1)return {match:lido12[0],cand:L,docCorrigido:lido12[0].doc};}
+  if(docOk)L=L.filter(function(c){return !(c.doc&&(c.doc.length===14||c.doc.length===11)&&c.doc!==doc);});
+  var mesmaRaiz=[];
   var porParc=L.filter(function(c){return parc.length>=4&&c.doc&&c.doc.indexOf(parc)>=0&&frtSimNome(c.nome,nome)>=0.5;});if(porParc.length===1)return {match:porParc[0],cand:L};
   var iguais=L.filter(function(c){return frtTokens(c.nome).join(' ')===frtTokens(nome).join(' ');});if(iguais.length===1)return {match:iguais[0],cand:L};
   var parecidos=L.filter(function(c){return frtSimNome(c.nome,nome)>=0.5||mesmaRaiz.indexOf(c)>=0;});
@@ -5587,7 +5599,7 @@ function frtHtmlFormCard(f,mob,ext){
    '<div class="fin-sec"><p class="fin-st">Documento do frete <span class="fin-mu">'+(f.nFotos?f.nFotos+' imagem(ns) · toque para ampliar':'')+'</span>'+(f.nFotos&&!lendo?'<button type="button" class="fin-btn sm" id="fGirar">↻ Girar imagem e ler de novo</button>':'')+'</p><div class="fin-fotos" id="frtFotos"></div></div>'+
    '<div class="fin-sec"><p class="fin-st">Transportadora '+(f.contato?'<span class="fin-chip ok">No Bling: '+frtEsc(f.contato.nome)+'</span>':'<span class="fin-chip">Se não existir no Bling, é cadastrado ao lançar</span>')+'</p>'+
     (FRT.revisao?'':frtHtmlCandidatos(FRT.sel))+'<div class="fin-g"><div class="fin-f fin-c4"><label for="fNome">Nome / razão social '+tag('fornecedor_nome')+'</label><input class="fin-in'+rd()+'" id="fNome" value="'+frtEsc(f.fornecedor.nome)+'"></div>'+
-    '<div class="fin-f fin-c2"><label for="fDoc">CPF/CNPJ '+tag('fornecedor_documento')+'</label><input class="fin-in'+rd()+'" id="fDoc" inputmode="numeric" value="'+frtEsc(frtDoc(f.fornecedor.doc))+'"></div></div>'+
+    '<div class="fin-f fin-c2"><label for="fDoc">CPF/CNPJ '+tag('fornecedor_documento')+(f.fornecedor.doc&&!frtDocValido(f.fornecedor.doc)?' <span class="fin-tag unc" title="Os dígitos verificadores não batem: provável erro de leitura">inválido</span>':'')+'</label><input class="fin-in'+rd()+'" id="fDoc" inputmode="numeric" value="'+frtEsc(frtDoc(f.fornecedor.doc))+'"></div></div>'+
     (ext?'<div><button type="button" class="fin-btn sm" id="fBuscar">'+(f.contato?'Trocar fornecedor':'Buscar no Bling')+'</button> <span id="fForStatus"></span></div>':(f.contato?'':'<p class="fin-mu" style="margin:0">O vínculo com o cadastro do Bling é feito no computador.</p>'))+'</div>'+
    '<div class="fin-sec"><p class="fin-st">Pagamento</p><div class="fin-g">'+
     '<div class="fin-f fin-c3"><label for="fForma">Forma de pagamento '+(f.incertos&&!f.formaId?'<span class="fin-tag unc">escolher</span>':'')+'</label><select id="fForma">'+frtOpts(frtListas().formas,f.formaId,'Selecione')+'</select></div>'+
