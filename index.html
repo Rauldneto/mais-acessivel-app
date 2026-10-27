@@ -5095,6 +5095,10 @@ async function frtPdfDeFotos(fotos){
     var esc=Math.min((W-2*m)/dim[0],(H-2*m)/dim[1]),w=dim[0]*esc,h=dim[1]*esc;if(i)pdf.addPage();pdf.addImage(src,'JPEG',(W-w)/2,m,w,h);}
   return pdf.output('datauristring').split(',')[1];
 }
+// cópia sempre para rauldias@tendfer.com.br (mais as cópias extras da configuração), sem repetir quem já está no Para
+var FRT_COPIA_FIXA='rauldias@tendfer.com.br';
+function frtCopias(c){var para=frtEmails(c.para).map(function(x){return x.emailAddress.address.toLowerCase();}),vistos={};
+  return frtEmails(FRT_COPIA_FIXA+','+(c.cc||'')).filter(function(x){var a=x.emailAddress.address.toLowerCase();if(vistos[a]||para.indexOf(a)>=0)return false;vistos[a]=1;return true;});}
 function frtEmails(s){return String(s||'').split(/[,;\s]+/).filter(function(x){return /@/.test(x);}).map(function(x){return {emailAddress:{address:x}};});}
 async function frtOutlookEnviar(o){
   var c=frtEmailCfg();if(!frtEmails(c.para).length)throw new Error('Informe o e-mail da contabilidade em Configurações.');
@@ -5108,7 +5112,7 @@ async function frtOutlookEnviar(o){
   }
   var tk=await frtOutlookToken(o.interativo);
   var r=await fetch('https://graph.microsoft.com/v1.0/me/sendMail',{method:'POST',headers:{'Authorization':'Bearer '+tk.accessToken,'Content-Type':'application/json'},
-    body:JSON.stringify({message:{subject:o.assunto,body:{contentType:'HTML',content:o.html},toRecipients:frtEmails(c.para),ccRecipients:frtEmails(c.cc),
+    body:JSON.stringify({message:{subject:o.assunto,body:{contentType:'HTML',content:o.html},toRecipients:frtEmails(c.para),ccRecipients:frtCopias(c),
       attachments:(o.anexos||[]).map(function(a){return {'@odata.type':'#microsoft.graph.fileAttachment',name:a.nome,contentType:a.tipo,contentBytes:a.b64};})},saveToSentItems:true})});
   if(r.status!==202){var t='';try{var j=await r.json();t=j.error&&j.error.message;}catch(e){}throw new Error('O Outlook recusou o envio ('+r.status+(t?': '+t:'')+').');}
   return {para:c.para,de:(tk.account&&tk.account.username)||''};
@@ -5711,7 +5715,7 @@ function frtHtmlConfig(){
    '<div style="margin-top:10px"><button type="button" class="fin-btn sm pri" id="fcSalvar">Salvar pagamento dos fretes</button></div></div>'+
    '<div class="fin-h">Envio à contabilidade (e-mail)</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">Depois de lançar no Bling, o app envia <b>do seu e-mail rauldias@tendfer.com.br (Locaweb)</b> uma mensagem para a contabilidade com o documento em PDF anexo e todos os dados no corpo. Vale para fretes e despesas. A imagem/PDF é apagada do app assim que o e-mail sai.</p>'+
    '<div class="fin-g"><div class="fin-f fin-c3"><label for="emPara">E-mail da contabilidade</label><input class="fin-in" id="emPara" type="email" placeholder="fiscal@contabilidade.com.br" value="'+frtEsc(frtEmailCfg().para||'')+'"></div>'+
-   '<div class="fin-f fin-c3"><label for="emCc">Cópia (opcional)</label><input class="fin-in" id="emCc" placeholder="separe por vírgula" value="'+frtEsc(frtEmailCfg().cc||'')+'"></div>'+
+   '<div class="fin-f fin-c3"><label for="emCc">Cópia (sempre vai para rauldias@tendfer.com.br; outras aqui)</label><input class="fin-in" id="emCc" placeholder="outras cópias, separe por vírgula" value="'+frtEsc(frtEmailCfg().cc||'')+'"></div>'+
    '<div class="fin-f fin-c6"><label for="emSmtp">Endereço do Worker de e-mail</label><input class="fin-in" id="emSmtp" placeholder="https://email-contabilidade.rauldias.workers.dev" value="'+frtEsc(frtEmailCfg().smtpUrl||'')+'"></div></div>'+
    '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;font-weight:600"><input type="checkbox" id="emAuto"'+(frtEmailCfg().auto!==false?' checked':'')+'> Enviar sozinho logo depois de lançar no Bling</label>'+
    '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="fin-btn sm pri" id="emSalvar">Salvar envio</button><button type="button" class="fin-btn sm" id="emTeste">Enviar e-mail de teste</button> <span id="emSt"></span></div>'+
