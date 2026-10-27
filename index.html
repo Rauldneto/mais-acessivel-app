@@ -5014,6 +5014,24 @@ async function frtFilaEnviar(){
   frtFilaGravar(resto);if(resto.length<f.length){FRT.msg=(f.length-resto.length)+' frete(s) guardado(s) no celular foram enviados.';FRT.msgTipo='ok';frtDraw();}
 }
 window.addEventListener('online',function(){frtFilaEnviar();});
+// anexa a foto/PDF do CT-e a um item que veio sem imagem (ex.: do botão Lançar financeiro) e manda a IA ler
+async function frtAnexarAoItem(arquivos){
+  var id=FRT.sel;if(!id||!FRT.desp[id]||!arquivos.length)return;
+  if(FRT.form&&FRT.form._editado)await frtSalvarForm(true);
+  FRT.fotosNovas=[];FRT.pdfsNovos=[];FRT.msg='Preparando o documento…';FRT.msgTipo='info';
+  await frtAddArquivos(arquivos);
+  var fts=FRT.fotosNovas.slice(),pdfs=(FRT.pdfsNovos||[]).filter(function(p){return p.imgs.some(function(x){return fts.indexOf(x)>=0;});});
+  if(!fts.length){FRT.msg=FRT.msg||'Não consegui abrir o arquivo.';FRT.msgTipo='err';frtDraw();return;}
+  try{
+    var dpdf=fts.map(function(x,i){return pdfs.some(function(p){return p.imgs.indexOf(x)>=0;})?i:-1;}).filter(function(i){return i>=0;});
+    await frtFb('fretesFotos/'+id,{method:'PUT',body:fts});
+    if(pdfs.length)await frtFb('fretesPdf/'+id,{method:'PUT',body:pdfs.map(function(p){return {nome:p.nome,b64:p.b64};})});
+    var upd={nFotos:fts.length,nPdf:pdfs.length,fotosDoPdf:dpdf,fotoHash:await frtHash(fts[0]),atualizadoEm:Date.now()};
+    await frtFb('fretes/'+id,{method:'PATCH',body:upd});FRT.desp[id]=Object.assign({},FRT.desp[id],upd);
+    FRT.fotosNovas=[];FRT.pdfsNovos=[];FRT.form=null;FRT.msg='Documento anexado. A IA está lendo para completar os dados.';FRT.msgTipo='ok';frtDraw();
+    frtLerDespesa(id,fts,FRT.desp[id].obs);
+  }catch(e){FRT.msg='Não consegui anexar: '+e.message;FRT.msgTipo='err';frtDraw();}
+}
 async function frtLerDespesa(id,fotos,obs){
   FRT.lendo[id]=true;if(STATE.modulo==='mod16')frtDraw();
   var upd;
@@ -5024,7 +5042,12 @@ async function frtLerDespesa(id,fotos,obs){
       var dp=FRT_FOTOS_PDF_IDX;for(var i=0;i<fotos.length;i++){if(dp.indexOf(i)<0)fotos[i]=await frtGirarB64(fotos[i],gi);}
       try{await frtFb('fretesFotos/'+id,{method:'PUT',body:fotos});}catch(e){}
       try{var r2=await frtLerIA(fotos,obs,[]);if(r2)r=r2;}catch(e){}}
-    upd=await frtEnriquecer(frtAplicarLeitura(r));}
+    upd=await frtEnriquecer(frtAplicarLeitura(r));
+    var o0=FRT.desp[id]||{};
+    if(o0.origem==='cotacao'){ // veio do botão Lançar financeiro: mantém o que o colaborador negociou; o documento só completa o resto
+      ['formaId','contaId','categoria','parcelas','historico','numeroDocumento'].forEach(function(k){if(o0[k])upd[k]=o0[k];});
+      if(o0.vencimento&&!upd.vencimento)upd.vencimento=o0.vencimento;
+      if(o0.obs)upd.obs=o0.obs;}}
   catch(e){upd={leituraErro:'A leitura automática falhou ('+e.message+'). Preencha à mão ou toque em Ler de novo.'};}
   upd.status='pendente';upd.atualizadoEm=Date.now();
   try{await frtFb('fretes/'+id,{method:'PATCH',body:upd});}catch(e){}
@@ -5634,7 +5657,7 @@ function frtHtmlFormCard(f,mob,ext){
    (lendo?'<div class="fin-msg info">⏳ A IA está lendo este documento. Os campos se preenchem sozinhos em alguns segundos.</div>':'')+
    (f.leituraErro?'<div class="fin-msg warn">'+frtEsc(f.leituraErro)+'</div>':'')+
    (f.obs?'<div class="fin-msg info">Observação de quem enviou: '+frtEsc(f.obs)+'</div>':'')+
-   '<div class="fin-sec"><p class="fin-st">Documento do frete <span class="fin-mu">'+(f.nFotos?f.nFotos+' imagem(ns) · toque para ampliar':'')+'</span>'+(f.nFotos&&!lendo?'<button type="button" class="fin-btn sm" id="fGirar">↻ Girar imagem e ler de novo</button>':'')+'</p><div class="fin-fotos" id="frtFotos"></div></div>'+
+   '<div class="fin-sec"><p class="fin-st">Documento do frete <span class="fin-mu">'+(f.nFotos?f.nFotos+' imagem(ns) · toque para ampliar':'')+'</span>'+(!f.nFotos&&!lendo&&!lan&&!mob?'<label class="fin-btn pri sm" for="fAnexo">📎 Anexar foto / PDF do CT-e</label><input id="fAnexo" type="file" accept="image/*,application/pdf" multiple hidden>':'')+(f.nFotos&&!lendo?'<button type="button" class="fin-btn sm" id="fGirar">↻ Girar imagem e ler de novo</button>':'')+'</p><div class="fin-fotos" id="frtFotos"></div></div>'+
    '<div class="fin-sec"><p class="fin-st">Transportadora '+(f.contato?'<span class="fin-chip ok">No Bling: '+frtEsc(f.contato.nome)+'</span>':'<span class="fin-chip">Se não existir no Bling, é cadastrado ao lançar</span>')+'</p>'+
     (FRT.revisao?'':frtHtmlCandidatos(FRT.sel))+'<div class="fin-g"><div class="fin-f fin-c4"><label for="fNome">Nome / razão social '+tag('fornecedor_nome')+'</label><input class="fin-in'+rd()+'" id="fNome" value="'+frtEsc(f.fornecedor.nome)+'"></div>'+
     '<div class="fin-f fin-c2"><label for="fDoc">CPF/CNPJ '+tag('fornecedor_documento')+(f.fornecedor.doc&&!frtDocValido(f.fornecedor.doc)?' <span class="fin-tag unc" title="Os dígitos verificadores não batem: provável erro de leitura">inválido</span>':'')+'</label><input class="fin-in'+rd()+'" id="fDoc" inputmode="numeric" value="'+frtEsc(frtDoc(f.fornecedor.doc))+'"></div></div>'+
@@ -5696,6 +5719,7 @@ function frtBindConferencia(){
   var rv=frtEl('fRevisar');if(rv)rv.onclick=frtRevisar;
   var ex=frtEl('fExcluir');if(ex)ex.onclick=frtExcluir;
   var rl=frtEl('fReler');if(rl)rl.onclick=function(){FRT.form=null;frtLerDespesa(FRT.sel,null,FRT.desp[FRT.sel].obs);};
+  var an=frtEl('fAnexo');if(an)an.onchange=function(e){var l=[].slice.call(e.target.files);e.target.value='';frtAnexarAoItem(l);};
   var gr=frtEl('fGirar');if(gr)gr.onclick=async function(){gr.disabled=true;gr.textContent='Girando…';var id=FRT.sel;
     try{var fts=await frtFb('fretesFotos/'+id);var dp=(FRT.desp[id]&&FRT.desp[id].fotosDoPdf)||[];for(var i=0;i<(fts||[]).length;i++){if(dp.indexOf(i)<0)fts[i]=await frtGirarB64(fts[i],90);}
       await frtFb('fretesFotos/'+id,{method:'PUT',body:fts});FRT.form=null;frtLerDespesa(id,fts,FRT.desp[id].obs);}catch(e){FRT.msg='Não consegui girar: '+e.message;FRT.msgTipo='err';frtDraw();}};
@@ -13106,7 +13130,7 @@ function finTop3(c){
 }
 function finStatusLabel(c){
   var f=c&&c.financeiro; if(!f||!f.status) return null;
-  return ({pendente:'⏳ Pendente de lançamento',lancado:'✅ Lançado',pago:'💲 Pago'})[f.status]||f.status;
+  return ({pendente:'⏳ No Lançamento de frete (pendente)',lancado:'✅ Lançado',pago:'💲 Pago'})[f.status]||f.status;
 }
 function finGerarHistorico(c,d){
   var partes=['Frete '+(d.frete||'CIF'),FIN_ORIGEM+' → '+(c.destCity||'—')+'/'+(c.destUF||'—')];
@@ -13137,7 +13161,7 @@ function abrirLancarFinanceiro(c,onSaved){
   }).join(''):'<div style="color:#b91c1c;font-size:12px">Esta cotação não tem transportadora com valor. Informe o fornecedor e o valor manualmente.</div>';
   box.innerHTML=
    '<div style="display:flex;align-items:center;margin-bottom:6px"><div style="font-size:16px;font-weight:800;flex:1">Conta a pagar — Frete Nº '+esc(c.id)+'</div><button id="finX" style="border:none;background:none;font-size:20px;cursor:pointer">✕</button></div>'+
-   '<div style="font-size:11px;color:#888;margin-bottom:8px">Mesmos campos do Bling. Campos com * são obrigatórios. Ao salvar, fica como <b>pendente de lançamento</b>.</div>'+
+   '<div style="font-size:11px;color:#888;margin-bottom:8px">Os dados da cotação já vêm preenchidos. Informe a <b>forma de pagamento negociada</b> com a transportadora e as observações. Ao salvar, o frete vai para o <b>Lançamento de frete</b> como <b>pendente</b> (falta a foto do CT-e).</div>'+
    '<div style="font-weight:700;margin:8px 0 4px">Transportadora escolhida (3 menores valores)</div>'+candHtml+
    '<label style="'+L+'">Fornecedor *</label><input id="finFornecedor" style="'+I+'" list="finFornList">'+
    '<datalist id="finFornList">'+FIN_TRANSP_BLING.map(function(b){return '<option value="'+esc(b[0])+'">';}).join('')+'</datalist>'+
@@ -13150,7 +13174,7 @@ function abrirLancarFinanceiro(c,onSaved){
    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">'+
    '<div><label style="'+L+'">Frete (CIF/FOB) *</label><select id="finFrete" style="'+I+'"><option>CIF</option><option>FOB</option></select></div>'+
    '<div><label style="'+L+'">Nº NF *</label><input id="finNF" style="'+I+'" value="'+esc(prev.nf||'')+'"></div>'+
-   '<div><label style="'+L+'">Despacho (data e hora) *</label><input id="finDesp" type="datetime-local" style="'+I+'" value="'+esc(prev.despacho||'')+'"></div></div>'+
+   '<div><label style="'+L+'">Despacho (data e hora)</label><input id="finDesp" type="datetime-local" style="'+I+'" value="'+esc(prev.despacho||'')+'"></div></div>'+
    '<div id="finFobWarn" style="display:none;margin-top:6px;border:1px solid #fca5a5;background:#fef2f2;border-radius:6px;padding:8px;font-size:12px;color:#991b1b">⚠ Frete FOB: normalmente o cliente paga a transportadora. Confirme que a empresa realmente pagará este frete.</div>'+
    '<div style="display:grid;grid-template-columns:1fr;gap:10px">'+
    '<div><label style="'+L+'">Observações</label><input id="finObs" style="'+I+'" value="'+esc(prev.obs||'')+'"></div></div>'+
@@ -13158,8 +13182,9 @@ function abrirLancarFinanceiro(c,onSaved){
    '<textarea id="finHist" maxlength="2000" rows="3" style="'+I+';margin-top:3px"></textarea>'+
    '<div style="margin-top:12px;border-top:1px solid #e8e8e6;padding-top:8px"><div style="font-weight:700;margin-bottom:2px">Pagamento</div>'+
    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
-   '<div><label style="'+L+'">Forma de pagamento *</label><select id="finForma" style="'+I+'"><option value="">Selecione...</option>'+opts(FIN_FORMAS,prev.forma||'',true)+'</select></div>'+
-   '<div><label style="'+L+'">Conta financeira (portador) *</label><select id="finConta" style="'+I+'"><option value="">Selecione...</option>'+opts(FIN_CONTAS,prev.conta||'',true)+'</select></div>'+
+   '<div><label style="'+L+'">Forma de pagamento negociada *</label><select id="finForma" style="'+I+'"><option value="">Selecione...</option>'+opts(FIN_FORMAS,prev.forma||'',true)+'</select></div>'+
+   '<div><label style="'+L+'">Prazo / condição negociada</label><input id="finCond" style="'+I+'" placeholder="Ex.: 28 dias, à vista no PIX" value="'+esc(prev.condicao||'')+'"></div>'+
+   '<div><label style="'+L+'">Conta financeira (portador) — o financeiro define</label><select id="finConta" style="'+I+'"><option value="">Selecione...</option>'+opts(FIN_CONTAS,prev.conta||'',true)+'</select></div>'+
    '<div><label style="'+L+'">Categoria *</label><select id="finCat" style="'+I+'">'+opts(FIN_CATEGORIAS,prev.categoria||FIN_CATEGORIAS[0],false)+'</select></div>'+
    '<div><label style="'+L+'">Juros %</label><input id="finJuros" style="'+I+'" value="'+esc(prev.juros||'')+'"></div>'+
    '<div><label style="'+L+'">Multa %</label><input id="finMulta" style="'+I+'" value="'+esc(prev.multa||'')+'"></div></div></div>'+
@@ -13232,9 +13257,10 @@ function abrirLancarFinanceiro(c,onSaved){
   function fechar(){ov.remove();}
   $('finX').onclick=fechar; $('finCancel').onclick=fechar;
   $('finSave').onclick=function(){
+    var btn=$('finSave');
     var d={
       fornecedor:$('finFornecedor').value.trim(),valor:$('finValor').value.trim(),emissao:$('finEmissao').value,competencia:$('finCompet').value,vencimento:$('finVenc').value,
-      frete:$('finFrete').value,nf:$('finNF').value.trim(),despacho:$('finDesp').value,obs:$('finObs').value.trim(),
+      frete:$('finFrete').value,nf:$('finNF').value.trim(),despacho:$('finDesp').value,obs:$('finObs').value.trim(),condicao:$('finCond').value.trim(),
       historico:$('finHist').value.trim(),forma:$('finForma').value,formaNome:$('finForma').selectedOptions[0]?$('finForma').selectedOptions[0].textContent:'',
       conta:$('finConta').value,contaNome:$('finConta').selectedOptions[0]?$('finConta').selectedOptions[0].textContent:'',
       categoria:$('finCat').value,documento:$('finNF').value.trim(),juros:$('finJuros').value.trim(),multa:$('finMulta').value.trim(),ocorrencia:'Única'
@@ -13243,25 +13269,48 @@ function abrirLancarFinanceiro(c,onSaved){
     var existeBling=finNoBling(d.fornecedor,(box.querySelector('[data-cad=cnpj]')||{}).value); d.fornecedorBling=existeBling?{nome:existeBling[0],cnpj:existeBling[1]}:null;
     var cadObj={}; box.querySelectorAll('[data-cad]').forEach(function(el){cadObj[el.getAttribute('data-cad')]=el.value.trim();});
     if(!existeBling) d.cadastro=cadObj;
+    function numBR(v){v=String(v||'').trim();if(v.indexOf(',')>=0)v=v.replace(/\./g,'').replace(',','.');return parseFloat(v);}
+    var valorNum=numBR(d.valor);
     var erros=[];
     if(!d.fornecedor) erros.push('Fornecedor');
-    if(!(parseFloat(d.valor.replace(',','.'))>0)) erros.push('Valor');
-    if(!d.emissao) erros.push('Emissão'); if(!d.competencia) erros.push('Competência'); if(!d.vencimento) erros.push('Vencimento');
-    if(!d.nf) erros.push('Nº NF'); if(!d.despacho) erros.push('Despacho');
-    if(!d.historico) erros.push('Histórico'); if(!d.forma) erros.push('Forma de pagamento'); if(!d.conta) erros.push('Conta financeira');
+    if(!(valorNum>0)) erros.push('Valor');
+    if(!d.emissao) erros.push('Emissão'); if(!d.vencimento) erros.push('Vencimento');
+    if(!d.nf) erros.push('Nº NF');
+    if(!d.historico) erros.push('Histórico'); if(!d.forma) erros.push('Forma de pagamento negociada');
     if(!d.categoria) erros.push('Categoria');
-    if(!existeBling){ if(!cadObj.nome) erros.push('Cadastro: Nome'); if(!cadObj.cnpj) erros.push('Cadastro: CNPJ'); if(!cadObj.cep) erros.push('Cadastro: CEP'); }
+    if(!existeBling){ if(!cadObj.cnpj) erros.push('Cadastro: CNPJ'); }
     if(erros.length){var e=$('finErr'); e.style.display='block'; e.textContent='Preencha: '+erros.join(', '); return;}
     var agora=Date.now();
-    var fin={status:'pendente',dados:d,criadoEm:(c.financeiro&&c.financeiro.criadoEm)||agora,atualizadoEm:agora,blingId:(c.financeiro&&c.financeiro.blingId)||null};
-    c.financeiro=fin;
-    c._savedAt=agora;
-    var alvo=SAVED.find(function(s){return s&&String(s.id)===String(c.id);});
-    if(alvo&&alvo!==c) alvo.financeiro=fin, alvo._savedAt=agora;
-    persistSaved(c.id);
-    fbPut('financeiro/'+String(c.id).replace(/[^a-zA-Z0-9_-]/g,'_'),{cotacaoId:c.id,destino:(c.destCity||'')+'/'+(c.destUF||''),status:'pendente',dados:d,criadoEm:fin.criadoEm,atualizadoEm:agora,blingId:fin.blingId});
-    fechar();
-    if(typeof onSaved==='function') onSaved();
+    var chave='cot_'+String(c.id).replace(/[^a-zA-Z0-9_-]/g,'_');
+    var url=FIREBASE_DB+'/financeiro/fretes/'+chave+'.json';
+    var docCnpj=String((existeBling?existeBling[1]:cadObj.cnpj)||'').replace(/\D/g,'');
+    var catId=/venda/i.test(d.categoria)?'14700094019':'14634451798';
+    var contaId=d.conta||'';
+    if(!contaId){try{contaId=(typeof frtContaSugerida==='function'&&d.forma)?(frtContaSugerida(d.forma)||''):'';}catch(_){contaId='';}}
+    var obsDoc=[d.condicao?('Condição negociada: '+d.condicao):'','Cotação Nº '+c.id+(c.solicitante?' · solicitante '+c.solicitante:''),d.obs].filter(Boolean).join(' | ');
+    var dados={status:'pendente',origem:'cotacao',cotacaoId:String(c.id),atualizadoEm:agora,
+      fornecedor:{nome:existeBling?existeBling[0]:d.fornecedor,doc:[11,14].indexOf(docCnpj.length)>=0?docCnpj:'',docParcial:''},
+      valor:valorNum,emissao:d.emissao,competencia:d.competencia||d.emissao,vencimento:d.vencimento,numeroDocumento:d.nf,historico:d.historico,
+      formaId:d.forma,contaId:contaId,categoria:catId,parcelas:1,condicaoNegociada:d.condicao,obs:obsDoc,
+      freteTipo:d.frete,cotacaoDestino:(c.destCity||'')+'/'+(c.destUF||''),tipoDoc:'',itens:[],incertos:[],leituraErro:null};
+    if(!existeBling&&cadObj.cnpj) dados.cadastroApp=cadObj;
+    btn.disabled=true; btn.textContent='Enviando...';
+    function erroSalvar(t){var e=$('finErr'); e.style.display='block'; e.textContent=t; btn.disabled=false; btn.textContent='Salvar como pendente';}
+    fetch(url,{cache:'no-store'}).then(function(x){return x.ok?x.json():Promise.reject(new Error('HTTP '+x.status));}).then(function(ex){
+      if(ex&&ex.status==='lancado'){erroSalvar('Este frete já foi lançado no Bling pelo financeiro. Não dá para alterar por aqui.');return null;}
+      var corpo=ex?dados:Object.assign({criadoEm:agora,criadoPor:(typeof STATE!=='undefined'&&STATE.usuarioLogado)||'',nFotos:0},dados);
+      return fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(corpo)}).then(function(x){if(!x.ok)throw new Error('HTTP '+x.status);return true;});
+    }).then(function(ok){
+      if(!ok) return;
+      var fin={status:'pendente',dados:d,criadoEm:(c.financeiro&&c.financeiro.criadoEm)||agora,atualizadoEm:agora,blingId:(c.financeiro&&c.financeiro.blingId)||null,freteDocId:chave};
+      c.financeiro=fin;
+      c._savedAt=agora;
+      var alvo=SAVED.find(function(s){return s&&String(s.id)===String(c.id);});
+      if(alvo&&alvo!==c) alvo.financeiro=fin, alvo._savedAt=agora;
+      persistSaved(c.id);
+      fechar();
+      if(typeof onSaved==='function') onSaved();
+    }).catch(function(e){erroSalvar('Não consegui enviar agora ('+e.message+'). Nada foi perdido: tente de novo.');});
   };
 }
 
