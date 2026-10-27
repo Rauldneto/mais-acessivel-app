@@ -4575,6 +4575,12 @@ function frtDupHtml(id,curto){
     '<button type="button" class="fin-btn sm" style="margin-top:6px" data-naodup="'+frtEsc(id)+'">Não é duplicado — é outro frete</button></div>';
 }
 // Só o valor impede o lançamento. O resto é pendência: lança assim mesmo e fica lembrando o que falta.
+function frtDataIn(id,iso,extra){return '<input class="fin-in'+(extra||'')+'" id="'+id+'" type="text" inputmode="numeric" autocomplete="off" placeholder="dd/mm/aaaa" maxlength="10" data-data="1" value="'+frtEsc(frtBr(iso||''))+'">';}
+function frtDataVal(id){var el=frtEl(id);if(!el)return '';var m=String(el.value||'').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);if(!m)return '';var d=new Date(+m[3],+m[2]-1,+m[1]);
+  return (d.getDate()===+m[1]&&d.getMonth()===+m[2]-1)?m[3]+'-'+m[2]+'-'+m[1]:'';}
+document.addEventListener('input',function(ev){var t=ev.target;if(!t||!t.dataset||!t.dataset.data)return;var d=t.value.replace(/\D/g,'').slice(0,8);
+  t.value=d.length>4?d.slice(0,2)+'/'+d.slice(2,4)+'/'+d.slice(4):d.length>2?d.slice(0,2)+'/'+d.slice(2):d;
+  t.style.borderColor=(d.length===8&&!frtDataVal(t.id))?'#c0392b':'';});
 function frtFaltas(d){var f=[];if(!(d&&d.valor>0))f.push('Valor');if(!(d&&d.vencimento))f.push('Vencimento');if(!(d&&(d.nFotos>0||d.status==='lancado')))f.push('Imagem do documento');return f;}
 var FRT_SEM_FORN='TRANSPORTADORA A IDENTIFICAR';
 function frtPendencias(d){var p=[];if(!d)return p;var fn=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'';
@@ -4666,6 +4672,13 @@ function frtCarregarImg(file){return new Promise(function(res,rej){var u=URL.cre
   img.onload=function(){var s=Math.min(1,2400/Math.max(img.naturalWidth,img.naturalHeight));var c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*s);c.height=Math.round(img.naturalHeight*s);
     var x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c);};
   img.onerror=function(){URL.revokeObjectURL(u);rej(new Error('imagem'));};img.src=u;});}
+// gira uma imagem (base64 JPEG) no sentido horário: 90, 180 ou 270 graus
+function frtGirarB64(b64,graus){graus=((+graus||90)%360+360)%360;if(!graus)return Promise.resolve(b64);
+  return new Promise(function(res,rej){var im=new Image();im.onload=function(){var c=document.createElement('canvas'),q=graus%180!==0;c.width=q?im.height:im.width;c.height=q?im.width:im.height;
+    var x=c.getContext('2d');x.translate(c.width/2,c.height/2);x.rotate(graus*Math.PI/180);x.drawImage(im,-im.width/2,-im.height/2);res(c.toDataURL('image/jpeg',0.85).split(',')[1]);};
+    im.onerror=function(){rej(new Error('imagem'));};im.src='data:image/jpeg;base64,'+b64;});}
+async function frtGirarNova(i){var a=FRT.fotosNovas[i];if(!a)return;var n=await frtGirarB64(a,90);FRT.fotosNovas[i]=n;
+  (FRT.pdfsNovos||[]).forEach(function(p){var k=p.imgs.indexOf(a);if(k>=0)p.imgs[k]=n;});frtDraw();}
 function frtGirar(c){var o=document.createElement('canvas');o.width=c.height;o.height=c.width;var x=o.getContext('2d');x.translate(o.width,0);x.rotate(Math.PI/2);x.drawImage(c,0,0);return o;}
 // Papel claro sobre fundo mais escuro: limiar de Otsu + maior região clara + cantos extremos.
 function frtAcharDoc(c){
@@ -4699,7 +4712,7 @@ function frtResolver(A,bv){var n=bv.length,M=A.map(function(r,i){return r.concat
 // Endireita o quadrilátero (cantos em pixels da imagem: TL, TR, BR, BL) num retângulo.
 function frtEndireitar(c,q){
   function d(a,b){return Math.hypot(a[0]-b[0],a[1]-b[1]);}
-  var W=Math.max(d(q[0],q[1]),d(q[3],q[2])),H=Math.max(d(q[0],q[3]),d(q[1],q[2]));var s=Math.min(1,1800/Math.max(W,H));
+  var W=Math.max(d(q[0],q[1]),d(q[3],q[2])),H=Math.max(d(q[0],q[3]),d(q[1],q[2]));var s=Math.min(1,2200/Math.max(W,H));
   var w=Math.max(10,Math.round(W*s)),h=Math.max(10,Math.round(H*s));
   var dst=[[0,0],[w,0],[w,h],[0,h]],A=[],bv=[];
   for(var i=0;i<4;i++){var u=dst[i][0],v=dst[i][1],X=q[i][0],Y=q[i][1];
@@ -4725,8 +4738,8 @@ function frtCropCss(){if(frtEl('frtCropCss'))return;var st=document.createElemen
 function frtRecortar(file){
   return frtCarregarImg(file).then(function(src){return new Promise(function(res){
     frtCropCss();var ov=document.createElement('div');ov.id='frtCrop';
-    ov.innerHTML='<div class="tp">Ajuste os cantos no documento<small>Arraste as bolinhas até as pontas do papel</small></div><div class="ar"><div class="st"><canvas></canvas><svg></svg></div></div>'+
-      '<div class="bt"><button type="button" data-a="girar">⟳ Girar</button><button type="button" data-a="inteira">Foto inteira</button><button type="button" class="ok" data-a="usar">✓ Usar recorte</button></div>';
+    ov.innerHTML='<div class="tp">Ajuste os cantos no documento<small>Arraste as bolinhas até as pontas do papel. Se o texto estiver de lado, toque em ↻ Girar até ficar de pé.</small></div><div class="ar"><div class="st"><canvas></canvas><svg></svg></div></div>'+
+      '<div class="bt"><button type="button" data-a="girar">↻ Girar 90°</button><button type="button" data-a="inteira">Foto inteira</button><button type="button" class="ok" data-a="usar">✓ Usar recorte</button></div>';
     document.body.appendChild(ov);
     var cv=ov.querySelector('canvas'),sv=ov.querySelector('svg'),ar=ov.querySelector('.ar'),pts,esc;
     function montar(auto){
@@ -4762,7 +4775,7 @@ var FRT_CAT_VENDA='14700094019',FRT_CAT_COMPRA='14634451798'; // Fretes e seguro
 function frtPrompt(){
   return 'Você vai ler um documento de FRETE pago pela JDFER Comércio e Serviços Ltda / Mais Acessível (CNPJ 35.017.646/0001-66, Goiânia/GO). '+
   'Pode ser: DACTE (CT-e modelo 57, layout SSW das transportadoras TG, BBT, Accert e outras, ou layout próprio como o da Rodonaves); FATURA de transportadora com boleto cobrando um ou vários CT-e (ex.: Braspress); recibo de frete; ou comprovante de pagamento. '+
-  'Muitos DACTE vêm com 2 vias iguais na mesma página ("Corte aqui"): leia uma só.\n'+
+  'Muitos DACTE vêm com 2 vias iguais na mesma página ("Corte aqui"): leia uma só. A foto pode estar de lado ou de cabeça para baixo.\n'+
   'Responda SOMENTE com um JSON neste formato (use "" ou 0 para o que não existir):\n'+
   '{"tipo_documento":"cte"|"fatura"|"recibo"|"comprovante_pix"|"outro",\n'+
   ' "transportadora":{"nome":"","cnpj":"","ie":"","rntrc":"","cidade_uf":""},\n'+
@@ -4782,6 +4795,7 @@ function frtPrompt(){
   ' "forma_pagamento":"boleto"|"pix"|"cartao_credito"|"debito_conta"|"dinheiro"|"desconhecida",\n'+
   ' "sentido":"venda"|"compra"|"",\n'+
   ' "observacoes":"",\n'+
+  ' "orientacao":0,\n'+
   ' "campos_incertos":[""]}\n'+
   'Regras: transportadora é o EMITENTE do CT-e (no topo, com CNPJ/IE/RNTRC), nunca remetente/destinatário; numa fatura, é o beneficiário do boleto. '+
   'chave: os 44 dígitos da chave de acesso, só números. numero e serie do CT-e sem zeros à esquerda. CNPJs só com dígitos. '+
@@ -4791,6 +4805,10 @@ function frtPrompt(){
   'condicao_pagamento: "a_prazo" se aparecer COBRAR A PRAZO/faturado; "a_vista" se COBRAR A VISTA/CIF A VISTA; "pago" se FRETE PAGO/débito em conta já feito; condicao_texto é o texto exato (ex.: "TOMADOR REMET COBRAR A PRAZO", "FORMA DE RECEBIMENTO: DEBITO EM C/C"). '+
   'fatura: preencha só se for fatura/boleto (número da fatura, emissão, vencimento, valor cobrado, linha digitável com 47 dígitos, banco, e a lista de CT-e cobrados com número, chave, data, nota fiscal, destinatário e valor do frete); num CT-e simples deixe vazio. '+
   'sentido: "venda" se a JDFER for remetente/expedidor (mercadoria saindo para cliente); "compra" se a JDFER for destinatária (mercadoria chegando de fornecedor). '+
+  'orientacao: quantos graus a IMAGEM precisa girar no sentido horário para o texto ficar de pé (0 se já está certo; 90 se o topo do documento está à esquerda; 180 se está de cabeça para baixo; 270 se o topo está à direita). '+
+  'Como ler o DACTE (layout SSW: Accert, TG, BBT e outras): o valor do frete é o "VALOR A RECEBER (R$)" e o "FRETE TOTAL (R$)", na última linha do quadro de componentes/ICMS, e normalmente é igual à "BASE CÁLCULO(R$)" do ICMS e à soma dos componentes; '+
+  'NÃO confunda com o "TOTAL" do "DESTAQUE DE TRIBUTOS" (soma de impostos), nem com o "VALOR MERCADORIA". Os números usam vírgula decimal e ponto de milhar: "9.868,83" = 9868.83 e "87,180" kg = 87.18. '+
+  'Em CNPJ use o campo CNPJ (14 dígitos), nunca a IE. O número da NF-e são os 9 dígitos das posições 26 a 34 da chave da NF-e (ex.: chave 3526...550010000044141220036852 → NF 4414); copie a chave inteira em notas_fiscais.chave e o número curto em notas_fiscais.numero. '+
   'observacoes: até 200 caracteres com o que importa (redespacho/subcontratação, nº de pedido, apólice). Não invente nada: o que não estiver legível fica vazio e o nome do campo vai para campos_incertos.';
 }
 // chave de acesso (44 dígitos): confere o dígito verificador e extrai CNPJ do emitente, modelo, série e número
@@ -4858,7 +4876,18 @@ function frtHistoricoFrete(d){
   return p.join(' · ').slice(0,200);
 }
 var FRT_NOSSO='35017646000166';
-function frtPessoa(x){x=x||{};return {nome:String(x.nome||'').trim(),doc:frtDig(x.cnpj)};}
+// O valor do frete aparece em vários lugares do DACTE (valor a receber, frete total, base do ICMS, soma dos componentes).
+// Fica o valor em que mais deles concordam; se não houver acordo, marca para conferir.
+function frtValorFrete(r,unc){
+  var soma=(Array.isArray(r.componentes)?r.componentes:[]).reduce(function(t,c){return t+(c&&c.valor>0?Number(c.valor):0);},0);
+  var C=[['receber',+r.valor_a_receber],['total',+r.valor_total_servico],['base',+(r.impostos&&r.impostos.icms_base)],['soma',Math.round(soma*100)/100]].filter(function(x){return x[1]>0;});
+  if(!C.length)return null;
+  var melhor=null;C.forEach(function(x){var n=C.filter(function(y){return Math.abs(y[1]-x[1])<=0.05;}).length;var pri=x[0]==='receber'?3:x[0]==='total'?2:1;
+    if(!melhor||n>melhor.n||(n===melhor.n&&pri>melhor.p))melhor={v:x[1],n:n,p:pri};});
+  if(melhor.n<2&&C.length>1)unc.push('valor_a_receber');
+  return melhor.v;
+}
+function frtPessoa(x){x=x||{};var d=frtDig(x.cnpj);return {nome:String(x.nome||'').trim(),doc:[11,14].indexOf(d.length)>=0?d:''};}
 function frtData(v){return /^\d{4}-\d{2}-\d{2}$/.test(v||'')?v:'';}
 function frtAplicarLeitura(r){
   var unc=(r.campos_incertos||[]).filter(Boolean);var tr=r.transportadora||{},ct=r.cte||{},fa=r.fatura||{},imp=r.impostos||{},cg=r.carga||{};
@@ -4869,10 +4898,15 @@ function frtAplicarLeitura(r){
   else if(ct.chave){unc.push('chave_acesso');}
   var rem=frtPessoa(r.remetente),des=frtPessoa(r.destinatario);
   var sent=rem.doc===FRT_NOSSO?'venda':des.doc===FRT_NOSSO?'compra':(r.sentido||'');
-  var nfs=(Array.isArray(r.notas_fiscais)?r.notas_fiscais:[]).map(function(n){var k=frtChave(n.chave);return {numero:frtNum(n.numero)||(k&&k.ok?k.numero:''),serie:String(n.serie||''),chave:k&&k.ok?k.chave:frtDig(n.chave)};}).filter(function(n){return n.numero||n.chave;}).slice(0,30);
+  var nfs=(Array.isArray(r.notas_fiscais)?r.notas_fiscais:[]).map(function(n){
+    var ch=frtDig(n.chave),nu=frtDig(n.numero);if(nu.length>9&&!ch){ch=nu;nu='';} // número veio com a chave inteira
+    var k=frtChave(ch);if(!(k&&k.ok)&&nu.length>9)k=frtChave(nu);
+    var num=k&&k.ok?k.numero:(nu.length&&nu.length<=9?String(+nu):(ch.length>=34?String(+ch.slice(25,34)):''));
+    if(!(k&&k.ok)&&ch)unc.push('chave da NF '+(num||'?'));
+    return {numero:num,serie:k&&k.ok?k.serie:String(n.serie||''),chave:k&&k.ok?k.chave:ch};}).filter(function(n){return n.numero||n.chave;}).slice(0,30);
   var fctes=(Array.isArray(fa.ctes)?fa.ctes:[]).map(function(c){var k=frtChave(c.chave);return {numero:frtNum(c.numero)||(k&&k.ok?k.numero:''),chave:k&&k.ok?k.chave:frtDig(c.chave),data:frtData(c.data),nf:frtNum(c.nf),destinatario:c.destinatario||'',valor:c.valor>0?Number(c.valor):null};}).filter(function(c){return c.numero||c.chave;}).slice(0,60);
   var em=ehFat?(frtData(fa.emissao)||frtData(ct.data_emissao)):frtData(ct.data_emissao);
-  var valor=ehFat?(fa.valor>0?Number(fa.valor):null):(r.valor_a_receber>0?Number(r.valor_a_receber):(r.valor_total_servico>0?Number(r.valor_total_servico):null));
+  var valor=ehFat?(fa.valor>0?Number(fa.valor):null):frtValorFrete(r,unc);
   var cte={modelo:String(ct.modelo||'57'),serie:serie,numero:nCte,hora:String(ct.hora_emissao||''),chave:ck?ck.chave:'',chaveOk:!!(ck&&ck.ok),protocolo:frtDig(ct.protocolo),cfop:String(ct.cfop||''),natureza:String(ct.natureza||''),
     tipoCte:String(ct.tipo_cte||''),tipoServico:String(ct.tipo_servico||''),modal:String(ct.modal||''),emitidoPor:String(ct.emitido_por||''),
     transportadora:{nome:String(tr.nome||''),doc:trDoc,ie:String(tr.ie||''),rntrc:String(tr.rntrc||''),cidade:String(tr.cidade_uf||'')},
@@ -4939,7 +4973,13 @@ async function frtLerDespesa(id,fotos,obs){
   FRT.lendo[id]=true;if(STATE.modulo==='mod16')frtDraw();
   var upd;
   try{if(!fotos)fotos=await frtFb('fretesFotos/'+id);var pdfs=await frtFb('fretesPdf/'+id).catch(function(){return null;});
-    FRT_FOTOS_PDF_IDX=(FRT.desp[id]&&FRT.desp[id].fotosDoPdf)||[];var r=await frtLerIA(fotos||[],obs,pdfs||[]);upd=await frtEnriquecer(frtAplicarLeitura(r));}
+    FRT_FOTOS_PDF_IDX=(FRT.desp[id]&&FRT.desp[id].fotosDoPdf)||[];var r=await frtLerIA(fotos||[],obs,pdfs||[]);
+    var gi=parseInt(r&&r.orientacao,10);
+    if(!(pdfs&&pdfs.length)&&[90,180,270].indexOf(gi)>=0&&fotos&&fotos.length){ // foto de lado: endireita, guarda endireitada e lê de novo (uma vez)
+      var dp=FRT_FOTOS_PDF_IDX;for(var i=0;i<fotos.length;i++){if(dp.indexOf(i)<0)fotos[i]=await frtGirarB64(fotos[i],gi);}
+      try{await frtFb('fretesFotos/'+id,{method:'PUT',body:fotos});}catch(e){}
+      try{var r2=await frtLerIA(fotos,obs,[]);if(r2)r=r2;}catch(e){}}
+    upd=await frtEnriquecer(frtAplicarLeitura(r));}
   catch(e){upd={leituraErro:'A leitura automática falhou ('+e.message+'). Preencha à mão ou toque em Ler de novo.'};}
   upd.status='pendente';upd.atualizadoEm=Date.now();
   try{await frtFb('fretes/'+id,{method:'PATCH',body:upd});}catch(e){}
@@ -5092,7 +5132,7 @@ function frtLerCampos(){
   var f=FRT.form;if(!f||!frtEl('fNome'))return f;
   var _ant=f.fornecedor||{};var _doc=frtDig(frtEl('fDoc').value);
   f.fornecedor={nome:frtEl('fNome').value.trim(),doc:_doc};if(_ant.dados&&_ant.doc===_doc)f.fornecedor.dados=_ant.dados;if(_ant.docParcial)f.fornecedor.docParcial=_ant.docParcial;
-  f.valor=frtParseMoney(frtEl('fValor').value);f.emissao=frtEl('fEm').value;f.vencimento=frtEl('fVenc').value;f.competencia=frtEl('fComp').value;
+  f.valor=frtParseMoney(frtEl('fValor').value);f.emissao=frtDataVal('fEm');f.vencimento=frtDataVal('fVenc');f.competencia=frtDataVal('fComp');
   f.numeroDocumento=frtEl('fNum').value.trim();f.historico=frtEl('fHist').value.trim();
   f.formaId=frtEl('fForma').value;f.contaId=frtEl('fConta').value;f.categoria=frtEl('fCat').value;
   f.parcelas=frtEhCredito(f.formaId)?Math.max(1,parseInt(frtEl('fParc').value,10)||1):1;
@@ -5436,7 +5476,7 @@ function frtHtmlCaptura(){
     '<label class="fin-btn pri" for="frtCam">📷 Fotografar o CT-e / documento do frete</label><input id="frtCam" type="file" accept="image/*" capture="environment" hidden>'+
     '<label class="fin-btn" for="frtArq">🖼️ Escolher da galeria ou PDF</label><input id="frtArq" type="file" accept="image/*,application/pdf" multiple hidden></div>';
   if(FRT.fotosNovas.length){
-    h+='<div class="fin-h">'+FRT.fotosNovas.length+' imagem(ns) deste frete</div><div class="fin-thumbs">'+FRT.fotosNovas.map(function(b,i){return '<div><img src="data:image/jpeg;base64,'+b+'" alt=""><button type="button" data-rm="'+i+'" aria-label="Remover">×</button></div>';}).join('')+'</div>'+
+    h+='<div class="fin-h">'+FRT.fotosNovas.length+' imagem(ns) deste frete</div><div class="fin-thumbs">'+FRT.fotosNovas.map(function(b,i){return '<div><img src="data:image/jpeg;base64,'+b+'" alt=""><button type="button" data-rm="'+i+'" aria-label="Remover">×</button><button type="button" data-gira="'+i+'" aria-label="Girar" style="top:auto;bottom:4px;right:auto;left:4px">↻</button></div>';}).join('')+'</div>'+
       '<p class="fin-mu" style="margin:8px 0 0">CT-e e comprovante de pagamento do mesmo frete podem ir juntos.</p>'+
       '<div class="fin-f" style="margin-top:12px"><label for="frtObs">Observação (opcional)</label><input class="fin-in" id="frtObs" placeholder="Ex.: frete pedido 1234 · cliente Construtora X"></div>'+
       '<div class="fin-big" style="margin-top:12px"><button type="button" class="fin-btn pri" id="frtEnviar"'+(FRT.enviando?' disabled':'')+'>'+(FRT.enviando?'Enviando…':'Enviar para conferência')+'</button></div>';
@@ -5452,7 +5492,7 @@ function frtHtmlCaptura(){
 function frtBindCaptura(){
   frtEl('frtCam').onchange=function(e){frtAddArquivos([].slice.call(e.target.files));e.target.value='';};
   frtEl('frtArq').onchange=function(e){frtAddArquivos([].slice.call(e.target.files));e.target.value='';};
-  FRT.root.querySelectorAll('[data-rm]').forEach(function(b){b.onclick=function(){FRT.fotosNovas.splice(+b.dataset.rm,1);frtDraw();};});
+  FRT.root.querySelectorAll('[data-rm]').forEach(function(b){b.onclick=function(){FRT.fotosNovas.splice(+b.dataset.rm,1);frtDraw();};});FRT.root.querySelectorAll('[data-gira]').forEach(function(b){b.onclick=function(){b.disabled=true;frtGirarNova(+b.dataset.gira);};});
   var en=frtEl('frtEnviar');if(en)en.onclick=frtEnviar;var fl=frtEl('frtFila');if(fl)fl.onclick=frtFilaEnviar;
   frtBindLista();
 }
@@ -5528,7 +5568,7 @@ function frtHtmlFormCard(f,mob,ext){
    (lendo?'<div class="fin-msg info">⏳ A IA está lendo este documento. Os campos se preenchem sozinhos em alguns segundos.</div>':'')+
    (f.leituraErro?'<div class="fin-msg warn">'+frtEsc(f.leituraErro)+'</div>':'')+
    (f.obs?'<div class="fin-msg info">Observação de quem enviou: '+frtEsc(f.obs)+'</div>':'')+
-   '<div class="fin-sec"><p class="fin-st">Documento do frete <span class="fin-mu">'+(f.nFotos?f.nFotos+' imagem(ns) · toque para ampliar':'')+'</span></p><div class="fin-fotos" id="frtFotos"></div></div>'+
+   '<div class="fin-sec"><p class="fin-st">Documento do frete <span class="fin-mu">'+(f.nFotos?f.nFotos+' imagem(ns) · toque para ampliar':'')+'</span>'+(f.nFotos&&!lendo?'<button type="button" class="fin-btn sm" id="fGirar">↻ Girar imagem e ler de novo</button>':'')+'</p><div class="fin-fotos" id="frtFotos"></div></div>'+
    '<div class="fin-sec"><p class="fin-st">Transportadora '+(f.contato?'<span class="fin-chip ok">No Bling: '+frtEsc(f.contato.nome)+'</span>':'<span class="fin-chip">Se não existir no Bling, é cadastrado ao lançar</span>')+'</p>'+
     (FRT.revisao?'':frtHtmlCandidatos(FRT.sel))+'<div class="fin-g"><div class="fin-f fin-c4"><label for="fNome">Nome / razão social '+tag('fornecedor_nome')+'</label><input class="fin-in'+rd()+'" id="fNome" value="'+frtEsc(f.fornecedor.nome)+'"></div>'+
     '<div class="fin-f fin-c2"><label for="fDoc">CPF/CNPJ '+tag('fornecedor_documento')+'</label><input class="fin-in'+rd()+'" id="fDoc" inputmode="numeric" value="'+frtEsc(frtDoc(f.fornecedor.doc))+'"></div></div>'+
@@ -5540,9 +5580,9 @@ function frtHtmlFormCard(f,mob,ext){
     '<div class="fin-f fin-c2" id="fParcW"'+(frtEhCredito(f.formaId)?'':' hidden')+'><label for="fParc">Parcelas</label><input class="fin-in" id="fParc" type="number" min="1" max="24" value="'+(f.parcelas||1)+'"></div></div></div>'+
    '<div class="fin-sec"><p class="fin-st">Valores e datas</p><div class="fin-g">'+
     '<div class="fin-f fin-c2"><label for="fValor">Valor (R$) '+tag('valor_total')+'</label><input class="fin-in fin-money'+rd()+'" id="fValor" inputmode="decimal" value="'+frtEsc(f.valor>0?frtMoney(f.valor):'')+'" placeholder="0,00"></div>'+
-    '<div class="fin-f fin-c2 h"><label for="fEm">Emissão do CT-e '+tag('data_emissao')+'</label><input class="fin-in'+rd()+'" id="fEm" type="date" value="'+frtEsc(f.emissao)+'"></div>'+
-    '<div class="fin-f fin-c2 h"><label for="fVenc">Vencimento '+(f.vencimento?'':'<span class="fin-tag unc">informar</span>')+'</label><input class="fin-in" id="fVenc" type="date" value="'+frtEsc(f.vencimento||'')+'"><span class="fin-mu" id="fVencDica">'+frtEsc(vs.dica)+'</span></div>'+
-    '<div class="fin-f fin-c2 h"><label for="fComp">Competência</label><input class="fin-in" id="fComp" type="date" value="'+frtEsc(f.competencia||'')+'"></div>'+
+    '<div class="fin-f fin-c2 h"><label for="fEm">Emissão do CT-e '+tag('data_emissao')+'</label>'+frtDataIn('fEm',f.emissao,rd())+'</div>'+
+    '<div class="fin-f fin-c2 h"><label for="fVenc">Vencimento '+(f.vencimento?'':'<span class="fin-tag unc">informar</span>')+'</label>'+frtDataIn('fVenc',f.vencimento)+'<span class="fin-mu" id="fVencDica">'+frtEsc(vs.dica)+'</span></div>'+
+    '<div class="fin-f fin-c2 h"><label for="fComp">Competência</label>'+frtDataIn('fComp',f.competencia)+'</div>'+
     '<div class="fin-f fin-c4"><label for="fNum">Nº do documento '+tag('numero_documento')+'</label><input class="fin-in'+rd()+'" id="fNum" value="'+frtEsc(f.numeroDocumento||'')+'"></div>'+
     '<div class="fin-f fin-c6"><label for="fHist">Histórico '+tag('historico')+'</label><textarea id="fHist" class="'+rd().trim()+'" rows="2" placeholder="Ex.: Frete CT-e 1234 · NF 5678 · Goiânia/GO → Anápolis/GO">'+frtEsc(f.historico||'')+'</textarea></div></div></div>'+
    frtCteHtml(f)+
@@ -5571,9 +5611,9 @@ function frtBindConferencia(){
   FRT.root.querySelectorAll('#frtForm input,#frtForm select,#frtForm textarea').forEach(function(el){if(el.closest('#frtRev'))return;el.addEventListener('input',function(){f._editado=true;el.classList.remove('fin-read');if(FRT.revisao){FRT.revisao=null;var r=frtEl('frtRev');if(r)r.remove();}});});
   frtEl('fDoc').addEventListener('change',async function(){var nd=frtDig(frtEl('fDoc').value);if(f.contato&&nd!==f.fornecedor.doc){f.contato=null;}
     if(nd.length===14){var x=await frtConsultaCnpj(nd);if(x&&x.nome){frtLerCampos();f.fornecedor={nome:x.nome,doc:nd,dados:x};f._editado=true;await frtSalvarForm(true);frtDraw();}}});
-  function reVenc(){var v=frtVencSugerido(frtEl('fEm').value,frtEl('fForma').value);frtEl('fVencDica').textContent=frtEl('fVenc').value?'':(v.v?'Sugestão: '+frtBr(v.v)+(v.dica?' ('+v.dica+')':''):'Informe o vencimento do boleto');}
+  function reVenc(){var v=frtVencSugerido(frtDataVal('fEm'),frtEl('fForma').value);frtEl('fVencDica').textContent=frtDataVal('fVenc')?'':(v.v?'Sugestão: '+frtBr(v.v)+(v.dica?' ('+v.dica+')':''):'Informe o vencimento do boleto');}
   frtEl('fVenc').addEventListener('input',function(){frtEl('fVenc').dataset.toq='1';});
-  frtEl('fEm').addEventListener('change',function(){if(!frtEl('fComp').dataset.toq)frtEl('fComp').value=frtEl('fEm').value;reVenc();});
+  frtEl('fEm').addEventListener('input',function(){if(!frtEl('fComp').dataset.toq&&frtDataVal('fEm'))frtEl('fComp').value=frtEl('fEm').value;reVenc();});frtEl('fVenc').addEventListener('input',reVenc);
   frtEl('fComp').addEventListener('input',function(){frtEl('fComp').dataset.toq='1';});
   frtEl('fForma').addEventListener('change',function(){var id=frtEl('fForma').value;frtEl('fParcW').hidden=!frtEhCredito(id);var c=frtContaSugerida(id);if(c)frtEl('fConta').value=c;delete frtEl('fVenc').dataset.toq;reVenc();});
   var bb=frtEl('fBuscar');if(bb)bb.onclick=frtBuscarFornecedor;
@@ -5590,6 +5630,9 @@ function frtBindConferencia(){
   var rv=frtEl('fRevisar');if(rv)rv.onclick=frtRevisar;
   var ex=frtEl('fExcluir');if(ex)ex.onclick=frtExcluir;
   var rl=frtEl('fReler');if(rl)rl.onclick=function(){FRT.form=null;frtLerDespesa(FRT.sel,null,FRT.desp[FRT.sel].obs);};
+  var gr=frtEl('fGirar');if(gr)gr.onclick=async function(){gr.disabled=true;gr.textContent='Girando…';var id=FRT.sel;
+    try{var fts=await frtFb('fretesFotos/'+id);var dp=(FRT.desp[id]&&FRT.desp[id].fotosDoPdf)||[];for(var i=0;i<(fts||[]).length;i++){if(dp.indexOf(i)<0)fts[i]=await frtGirarB64(fts[i],90);}
+      await frtFb('fretesFotos/'+id,{method:'PUT',body:fts});FRT.form=null;frtLerDespesa(id,fts,FRT.desp[id].obs);}catch(e){FRT.msg='Não consegui girar: '+e.message;FRT.msgTipo='err';frtDraw();}};
   var vt=frtEl('fVoltar');if(vt)vt.onclick=function(){FRT.revisao=null;frtDraw();};
   var la=frtEl('fLancar');if(la)la.onclick=frtLancar;
   var at=frtEl('fAtualizar');if(at)at.onclick=frtAtualizarBling;var rs=frtEl('fResolvido');if(rs)rs.onclick=frtResolvido;
@@ -5790,7 +5833,7 @@ function frtDrawMob(){
   if(!FRT.carregado)return;
   if(t==='enviar'){
     ['frtCam','frtArq','dmMais'].forEach(function(id){var el=frtEl(id);if(el)el.onchange=function(e){frtAddArquivos([].slice.call(e.target.files));e.target.value='';};});
-    FRT.root.querySelectorAll('[data-rm]').forEach(function(b){b.onclick=function(){FRT.fotosNovas.splice(+b.dataset.rm,1);frtDraw();};});
+    FRT.root.querySelectorAll('[data-rm]').forEach(function(b){b.onclick=function(){FRT.fotosNovas.splice(+b.dataset.rm,1);frtDraw();};});FRT.root.querySelectorAll('[data-gira]').forEach(function(b){b.onclick=function(){b.disabled=true;frtGirarNova(+b.dataset.gira);};});
     var en=frtEl('frtEnviar');if(en)en.onclick=frtEnviar;var fl=frtEl('frtFila');if(fl)fl.onclick=frtFilaEnviar;
     var vu=frtEl('dmVerUlt');if(vu)vu.onclick=function(){frtMobAbrir(FRT.ultimoEnvio);};
   }
@@ -5807,7 +5850,7 @@ function frtMobEnviar(){
       '<label class="sec" for="frtArq">🖼️ Galeria ou PDF</label><input id="frtArq" type="file" accept="image/*,application/pdf" multiple hidden>'+
       '<p>CT-e (DACTE) ou fatura/boleto da transportadora. Foto ou PDF. O app lê tudo do CT-e e deixa pendente para você conferir.</p></div>';
   } else {
-    h+='<div class="dm-lbl">'+FRT.fotosNovas.length+' imagem(ns) deste frete</div><div class="dm-thumbs">'+FRT.fotosNovas.map(function(b,i){return '<div><img src="data:image/jpeg;base64,'+b+'" alt=""><button type="button" data-rm="'+i+'" aria-label="Remover">×</button></div>';}).join('')+
+    h+='<div class="dm-lbl">'+FRT.fotosNovas.length+' imagem(ns) deste frete</div><div class="dm-thumbs">'+FRT.fotosNovas.map(function(b,i){return '<div><img src="data:image/jpeg;base64,'+b+'" alt=""><button type="button" data-rm="'+i+'" aria-label="Remover">×</button><button type="button" data-gira="'+i+'" aria-label="Girar" style="top:auto;bottom:4px;right:auto;left:4px">↻</button></div>';}).join('')+
       (FRT.fotosNovas.length<4?'<label for="dmMais"><span>＋</span>Mais uma</label><input id="dmMais" type="file" accept="image/*" capture="environment" hidden>':'')+'</div>'+
       '<div><div class="dm-lbl">Observação (opcional)</div><input class="dm-in" id="frtObs" value="'+frtEsc(FRT.obsCompart||'')+'" placeholder="Ex.: frete pedido 1234 · cliente Construtora X"></div>'+
       '<p class="fin-mu" style="margin:0">CT-e e comprovante de pagamento do mesmo frete podem ir juntos.</p>';
