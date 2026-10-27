@@ -7138,11 +7138,25 @@ function cqCarregarLemb(){
 }
 // 📞 cobrança atrasada (mesma regra da extensão): prazo = data que o cliente pediu (lembrete) ou próximo dia útil às 9h após a cotação
 function cqProxUtil9h(iso){iso=cqIso(iso)||iso;var d=new Date(String(iso)+'T09:00:00');if(isNaN(d))return 0;do{d.setDate(d.getDate()+1);}while(d.getDay()===0||d.getDay()===6);return d.getTime();}
+// ⏭ PRÓXIMA COBRANÇA automática pela situação marcada na última cobrança (prazos combinados com o Raul)
+var CQ_PROX={preco_melhor:['mesmo','mandar contraproposta / cobrir a oferta'],duvidas:['mesmo','responder as dúvidas'],negociando:['util1','retomar a negociação'],vai_fechar:['util1','confirmar o fechamento'],
+  prazo:['util1','checar prazo e alternativas'],aprovacao:['util2','perguntar se já aprovaram'],sem_tempo:['util3','retomar o contato'],sem_resposta:['util2','tentar por outro canal (ligar)'],obra_parada:['d15','ver se a obra já voltou']};
+function cqUteis(ms,n){var d=new Date(ms);d.setHours(9,0,0,0);var k=0;while(k<n){d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)k++;}return d.getTime();}
+function cqProxCob(ts,humor){
+  var r=CQ_PROX[humor];if(!r)return null;var t;
+  if(r[0]==='mesmo'){t=ts+2*3600000;var d=new Date(t);if(d.getHours()>=18||d.getDay()===0||d.getDay()===6||new Date(ts).toDateString()!==d.toDateString())t=cqUteis(ts,1);}
+  else if(r[0]==='d15'){var x=new Date(ts+15*86400000);x.setHours(9,0,0,0);while(x.getDay()===0||x.getDay()===6)x.setDate(x.getDate()+1);t=x.getTime();}
+  else t=cqUteis(ts,+r[0].slice(4));
+  return {ts:t,acao:r[1]};
+}
 function cqCobAtraso(i){
   if(['Rascunho','Pendente','Aguardando'].indexOf(i.situacao)===-1)return null;
   var v=CQ.vi&&CQ.vi[i.id];if(v&&v.fech&&v.fech.st)return null;
   var cobs=cqCobs(i.id).map(function(c){return c.ts||0;}),l=CQ.lemb&&CQ.lemb[i.id],prazo,tipo;
-  if(l&&l.quando&&!l.feito){prazo=l.quando;tipo='retorno';}else if(!cobs.length&&!(l&&l.feito)){prazo=cqProxUtil9h(i.data);tipo='nova';}else return null;
+  if(l&&l.quando&&!l.feito){prazo=l.quando;tipo='retorno';}else if(!cobs.length&&!(l&&l.feito)){prazo=cqProxUtil9h(i.data);tipo='nova';}
+  else{var uc=cqCobs(i.id)[0],px=uc&&cqProxCob(uc.ts,uc.humor);if(!px)return null;
+    if(cqWaUn(i)>uc.ts+30*60000)return null;// já falou com o cliente pelo WhatsApp depois da última cobrança
+    return {prazo:px.ts,tipo:'proxima',acao:px.acao,humor:uc.humor,atrasada:Date.now()>=px.ts+3600000};}
   if(!prazo)return null;
   var ok=tipo==='retorno'?cobs.some(function(t){return t>=prazo-12*3600000;}):cobs.length>0;if(ok)return null;
   if(cqWaUn(i)>=prazo-12*3600000)return null;// já falamos com o cliente pelo WhatsApp depois do prazo
@@ -7747,7 +7761,8 @@ function cqEstiloV(){
 }
 
 // ── chance e prioridade ──
-var CQ_HUM_AJ={vai_fechar:15,negociando:5,duvidas:0,aprovacao:-5,sem_tempo:-5,prazo:-10,preco_melhor:-10,obra_parada:-20,sem_resposta:-10};
+// pesos combinados com o Raul (out/2026): concorrente e dúvidas são oportunidade; prazo e aprovação não tiram chance
+var CQ_HUM_AJ={vai_fechar:15,negociando:10,preco_melhor:5,duvidas:5,prazo:0,aprovacao:0,sem_tempo:-5,sem_resposta:-10,obra_parada:-20};
 function cqChance(i){
   var pb=cqProb(i),c=pb?(+pb.pct||{alta:75,media:50,baixa:25}[pb.n]||40):35;
   var u=cqCobs(i.id)[0];if(u&&u.humor&&CQ_HUM_AJ[u.humor]!=null)c+=CQ_HUM_AJ[u.humor];
@@ -7759,6 +7774,7 @@ function cqPrior(i){
   if(ca&&ca.atrasada){u+=.35;mot.push(ca.tipo==='retorno'?'retorno combinado atrasado':'cobrança atrasada');}
   if(ws&&ws.tipo==='esperando'){u+=.3;mot.push('cliente esperando resposta');}
   if(lm&&new Date(lm.quando).toDateString()===new Date().toDateString()&&lm.quando>ag){u+=.2;mot.push('retorno marcado para hoje');}
+  if(ca&&ca.tipo==='proxima'&&!ca.atrasada&&new Date(ca.prazo).toDateString()===new Date().toDateString()){u+=.2;mot.push('cobrar hoje: '+ca.acao);}
   var wun=cqWaUn(i);
   if(!cobs.length&&!(ca&&ca.atrasada)&&!(wun&&wun>=cqProxUtil9h(i.data)-12*3600000)){u+=.1;mot.push('nunca foi cobrada');}
   else if(cobs.length&&ag-cobs[0].ts>3*86400000){u+=.1;mot.push('sem cobrança há '+Math.round((ag-cobs[0].ts)/86400000)+' dias');}
@@ -8021,7 +8037,8 @@ function cqCardVenda(i,card,sel,rank){
   // sinais: só o que exige ação. O histórico fica em "Atualizações"
   var S=[],ca=cqCobAtraso(i),lm=cqLembDe(i.id),ag=Date.now(),conc=cqConcDe(i.id);
   if(asI)S.push('<span class="vp '+(asI.meu?'vp-grn':'vp-gry')+'">'+cqIc('lock',12)+' '+(asI.meu?'Você está atendendo':'Em atendimento: '+cqEsc(asI.u))+' desde '+new Date(asI.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'</span>');
-  if(ca&&(ca.atrasada||ca.tipo==='nova'))S.push('<span class="vp '+(ca.atrasada?'vp-red':'vp-blu')+'">'+cqIc('phone',12)+' '+(ca.atrasada?'Cobrança atrasada':'Cobrar')+' · '+(ca.tipo==='retorno'?'retorno era ':'prazo ')+new Date(ca.prazo).toLocaleString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span>');
+  if(ca&&ca.tipo==='proxima')S.push('<span class="vp '+(ca.atrasada?'vp-red':'vp-blu')+'" title="Marcada sozinha pela situação da última cobrança: '+cqEsc(cqHumorTxt(ca.humor))+'. Para outra data, use Agendar retorno.">'+cqIc('clock',12)+' '+(ca.atrasada?'Próxima cobrança ATRASADA · era ':'Próxima cobrança: ')+cqEsc(cqQuando(ca.prazo))+' · '+cqEsc(ca.acao)+'</span>');
+  else if(ca&&(ca.atrasada||ca.tipo==='nova'))S.push('<span class="vp '+(ca.atrasada?'vp-red':'vp-blu')+'">'+cqIc('phone',12)+' '+(ca.atrasada?'Cobrança atrasada':'Cobrar')+' · '+(ca.tipo==='retorno'?'retorno era ':'prazo ')+new Date(ca.prazo).toLocaleString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span>');
   if(lm)S.push('<span class="vp '+(lm.quando<=ag?'vp-red':'vp-blu')+'">'+cqIc('bell',12)+' Retorno '+cqQuando(lm.quando)+(lm.obs?' — '+cqEsc(lm.obs.slice(0,60)):'')+(!outro?'<button class="cqLmFeito" data-id="'+id+'">feito</button>':'')+'</span>');
   if(ws&&ws.tipo==='esperando')S.push('<span class="vp vp-red">'+cqIc('msg',12)+' '+cqEsc(ws.txt)+(ws.w.nl?' · '+ws.w.nl+' não lida(s)':'')+'</span>');
   else if(aberta&&!cobs[0]&&!cqWaContato(i)&&!(ws&&ws.w.un*1000>=cqProxUtil9h(i.data)-12*3600000))S.push('<span class="vp vp-org">'+cqIc('phone',12)+' Nunca cobrada</span>');
@@ -8040,7 +8057,7 @@ function cqCardVenda(i,card,sel,rank){
   if(!outro){
     if(fAb)x+='<div class="vc-pn amb"><h4>'+cqIc('phone')+' Registrar cobrança</h4><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">'+
       '<label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px">Como cobrou<select class="cqCobCanal" data-id="'+id+'" style="'+sel+';padding:6px 8px">'+CQ_CANAIS.map(function(c){return '<option>'+c+'</option>';}).join('')+'</select></label>'+
-      '<label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px">Situação do cliente<select class="cqCobHum" data-id="'+id+'" style="'+sel+';padding:6px 8px"><option value="">— escolha —</option>'+CQ_HUMOR.map(function(h){return '<option value="'+h[0]+'">'+h[1]+'</option>';}).join('')+'</select></label>'+
+      '<label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px">Situação do cliente<select class="cqCobHum" data-id="'+id+'" style="'+sel+';padding:6px 8px"><option value="">— escolha —</option>'+CQ_HUMOR.map(function(h){return '<option value="'+h[0]+'">'+h[1]+'</option>';}).join('')+'</select><span style="font-size:10.5px;color:#64748b">a próxima cobrança é marcada sozinha pela situação</span></label>'+
       '<label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px;flex:1;min-width:200px">O que o cliente disse<input class="cqCobObs" data-id="'+id+'" placeholder="ex.: vai decidir na sexta, pediu desconto..." style="'+sel+';padding:6px 8px"></label>'+
       (asI&&asI.meu?'<label style="font-size:11.5px;color:#57534e;display:flex;flex-direction:column;gap:3px">Depois deste atendimento<select class="cqCobDepois" data-id="'+id+'" style="'+sel+';padding:6px 8px"><option value="auto">Automático pela situação</option><option value="libera">🔓 Liberar para outros</option><option value="continua">🔒 Continuar comigo</option></select></label>':'')+
       cqRetCampos(id,'cqCobRet',0,true)+
