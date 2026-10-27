@@ -3873,8 +3873,8 @@ async function dspLancarCore2(id,f,passo){
     historico:f.historico,numeroDocumento:f.numeroDocumento,categoria:f.categoria,portador:f.contaId,forma:f.formaId,parcelas:f.parcelas});
   var upd={status:'lancado',blingId:String(r.id||''),lancadoEm:Date.now(),lancadoPor:STATE.usuarioLogado||'',atualizadoEm:Date.now(),pendencias:pend,precisaAtualizar:false,
     vencimento:f.vencimento,competencia:f.competencia,contato:f.contato,lancando:null,autoErro:null};
+  if(!pend.length&&!dspEmailAuto()){try{await dspFb('fotos/'+id,{method:'DELETE'});upd.nFotos=0;}catch(e){}}
   await dspFb('despesas/'+id,{method:'PATCH',body:upd});
-  if(!pend.length&&!dspEmailAuto()){try{await dspFb('fotos/'+id,{method:'DELETE'});}catch(e){}upd.nFotos=0;}
   DSP.desp[id]=Object.assign({},DSP.desp[id]||{},upd);
   if(f.categoria){var cfc=dspCfg();cfc.catPorForn=cfc.catPorForn||{};var mud=false;dspChavesForn(f).forEach(function(k){if(cfc.catPorForn[k]!==f.categoria){cfc.catPorForn[k]=f.categoria;mud=true;}});if(mud){DSP.cfg=cfc;dspSalvarCfg().catch(function(){});}}
   if(f.formaId&&f.contaId){var cfg=dspCfg();cfg.contaPorForma=cfg.contaPorForma||{};if(cfg.contaPorForma[f.formaId]!==f.contaId){cfg.contaPorForma[f.formaId]=f.contaId;DSP.cfg=cfg;dspSalvarCfg().catch(function(){});}}
@@ -3926,7 +3926,7 @@ async function dspEnviarEmail(id,interativo){
 function dspEmailChip(d){
   if(d.emailEm){var l=(DSP.lidos||{})['d'+d.id];return '<span class="fin-chip ok" title="'+dspEsc(d.emailPara||'')+'">📧 enviado '+new Date(d.emailEm).toLocaleDateString('pt-BR')+'</span> '+
     (l?'<span class="fin-chip ok" title="Aberto '+(l.vezes||1)+'x">📬 aberto '+new Date(l.primeiro).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span>':'<span class="fin-mu" title="A contabilidade ainda não abriu (ou o leitor bloqueia imagens)">não aberto ainda</span>');}
-  if(!d.nFotos)return '<span class="fin-mu">sem imagem</span>';
+  if(!d.nFotos)return '<button type="button" class="fin-btn sm" data-danx="'+dspEsc(d.id)+'"'+(dspEmailPronto()?'':' disabled')+' title="A imagem já foi apagada do app: anexe de novo a foto ou o PDF para enviar">📎 Anexar e enviar</button>';
   return (d.emailErro?'<span class="fin-chip err" title="'+dspEsc(d.emailErro)+'">não enviou</span> ':'')+'<button type="button" class="fin-btn sm" data-dem="'+dspEsc(d.id)+'"'+(dspEmailPronto()?'':' disabled title="Configure o envio em Lançamento de frete → Configurações"')+'>📧 Enviar</button>';
 }
 // Dá baixa (marca como paga) numa despesa já lançada no Bling.
@@ -3993,7 +3993,7 @@ async function dspAtualizarBling(){
       historico:f.historico,numeroDocumento:f.numeroDocumento,categoria:f.categoria,portador:f.contaId,forma:f.formaId});
     var pend=dspPendencias(f);f._editado=true;await dspSalvarForm(true);
     var upd={pendencias:pend,precisaAtualizar:false,atualizadoEm:Date.now()};
-    if(!pend.length&&dspPodeApagarFotos(DSP.desp[DSP.sel])){try{await dspFb('fotos/'+DSP.sel,{method:'DELETE'});}catch(e){}upd.nFotos=0;}
+    if(!pend.length&&dspPodeApagarFotos(DSP.desp[DSP.sel])){try{await dspFb('fotos/'+DSP.sel,{method:'DELETE'});upd.nFotos=0;}catch(e){}}
     await dspFb('despesas/'+DSP.sel,{method:'PATCH',body:upd});DSP.desp[DSP.sel]=Object.assign({},DSP.desp[DSP.sel],upd);
     DSP.msg=pend.length?'Atualizado no Bling. Ainda falta: '+pend.join(', ')+'.':'Atualizado no Bling. Pendência resolvida.';DSP.msgTipo=pend.length?'warn':'ok';
     if(!pend.length){DSP.sel=null;DSP.form=null;}dspDraw();
@@ -4292,6 +4292,14 @@ function dspHtmlLancados(){
     L.map(function(d){var p=dspLancadoPend(d);return '<tr'+(p?' data-lp="'+dspEsc(d.id)+'" style="cursor:pointer" title="Abrir para completar"':'')+'><td>'+new Date(d.lancadoEm).toLocaleDateString('pt-BR')+'</td><td>'+dspEsc((d.contato&&d.contato.nome)||'')+'</td><td>'+dspEsc(dspFormaNome(d.formaId))+'</td><td>'+dspBr(d.vencimento)+'</td><td class="n">'+dspMoney(d.valor)+'</td><td>'+dspEsc(d.blingId||'')+'</td><td>'+(d.baixadoEm?'<span class="fin-chip ok">pago '+dspBr(d.baixaData)+'</span>':(d.parcelas>1?'<span class="fin-mu">parcelado</span>':'<button type="button" class="fin-btn sm" data-bx="'+dspEsc(d.id)+'"'+(dspExtBaixaOk()?'':' disabled title="Atualize a extensão para 2.1.2"')+'>💲 Dar baixa</button>'))+'</td><td>'+dspEmailChip(d)+'</td><td>'+(p?'<span class="fin-chip warn">falta: '+dspEsc(d.pendencias.join(', '))+'</span> <button type="button" class="fin-btn sm">Completar</button>':'<span class="fin-chip ok">ok</span>')+'</td></tr>';}).join('')+'</table></div>';
 }
 function dspBindLancados(){
+  DSP.root.querySelectorAll('[data-danx]').forEach(function(b){b.onclick=function(ev){ev.stopPropagation();var id=b.getAttribute('data-danx');
+    var inp=document.createElement('input');inp.type='file';inp.accept='image/*,application/pdf';inp.multiple=true;
+    inp.onchange=async function(){if(!inp.files||!inp.files.length)return;b.disabled=true;b.textContent='Enviando…';
+      try{var fotos=[];for(var i=0;i<inp.files.length;i++){var fl=inp.files[i];if(fl.type==='application/pdf'||/\.pdf$/i.test(fl.name))(await dspPdf(fl)).forEach(function(x){fotos.push(x);});else fotos.push(await dspJpeg(fl));}
+        fotos=fotos.slice(0,4);await dspFb('fotos/'+id,{method:'PUT',body:fotos});await dspFb('despesas/'+id,{method:'PATCH',body:{nFotos:fotos.length}});DSP.desp[id].nFotos=fotos.length;
+        await dspEnviarEmail(id,true);DSP.msg='Enviado à contabilidade.';DSP.msgTipo='ok';}catch(e){DSP.msg='Não enviei: '+e.message;DSP.msgTipo='err';}dspDraw();};
+    inp.click();};});
+
   DSP.root.querySelectorAll('[data-dem]').forEach(function(b){b.onclick=async function(ev){ev.stopPropagation();var id=b.getAttribute('data-dem');b.disabled=true;b.textContent='Enviando…';
     try{await dspEnviarEmail(id,true);DSP.msg='Enviado à contabilidade pelo Outlook.';DSP.msgTipo='ok';}catch(e){DSP.msg='Não enviei: '+e.message;DSP.msgTipo='err';}dspDraw();};});
 
