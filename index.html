@@ -4307,7 +4307,7 @@ function dspHtmlConfig(){
    '<div class="fin-f fin-c3"><label for="cDin">Pagamento em dinheiro usa</label><select id="cDin">'+dspOpts(L.formas,cfg.padrao&&cfg.padrao.dinheiro,'Escolher na hora')+'</select></div></div>'+
    '<p class="fin-mu" style="margin:10px 0 0">Pix feito em sábado, domingo ou feriado vence no próximo dia útil.</p></div>'+
    '<div class="fin-h">Envio à contabilidade</div><div class="fin-card"><label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:600"><input type="checkbox" id="cEmail"'+(cfg.emailContab!==false?' checked':'')+'> Enviar à contabilidade logo depois de lançar no Bling</label>'+
-   '<p class="fin-mu" style="margin:8px 0 0">Vai pelo seu Outlook (rauldias@tendfer.com.br), com a imagem em PDF anexa e os dados no corpo, para o mesmo e-mail configurado em <b>Lançamento de frete → Configurações</b>'+(dspEmailPronto()?' ('+dspEsc(frtEmailCfg().para)+')':' — <b>ainda não configurado</b>')+'. A imagem é apagada do app depois que o e-mail sai.</p></div>'+
+   '<p class="fin-mu" style="margin:8px 0 0">Sai do seu e-mail rauldias@tendfer.com.br, com a imagem em PDF anexa e os dados no corpo, para o mesmo e-mail configurado em <b>Lançamento de frete → Configurações</b>'+(dspEmailPronto()?' ('+dspEsc(frtEmailCfg().para)+')':' — <b>ainda não configurado</b>')+'. A imagem é apagada do app depois que o e-mail sai.</p></div>'+
    '<div class="fin-h">Conferência no Bling</div><div class="fin-card"><p style="margin:0;font-size:13.5px">Nada é lançado sozinho. Ao abrir o Financeiro neste computador, o app confere no Bling o fornecedor e se já existe conta igual em aberto (mesmo valor e mesma data). O lançamento é sempre feito por você, em <b>Revisar e lançar</b>.</p></div>'+
    '<div class="fin-act"><button type="button" class="fin-btn pri" id="cSalvar">Salvar configurações</button></div>'+
    '<div class="fin-h">Listas do Bling</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">'+L.formas.length+' formas de pagamento, '+L.contas.length+' contas financeiras e '+L.categorias.filter(function(c){return !c.pai;}).length+' categorias'+(L.atualizadoEm?', atualizadas em '+new Date(L.atualizadoEm).toLocaleDateString('pt-BR'):'')+'.</p>'+
@@ -5031,7 +5031,7 @@ function frtCteHtml(f){var L=frtCteLinhas(f);if(!L.length)return '';
 document.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest&&ev.target.closest('[data-copia]');if(!b)return;try{navigator.clipboard.writeText(b.getAttribute('data-copia'));b.textContent='copiado ✓';}catch(e){}});
 // ---------- envio à contabilidade (Google Apps Script: e-mail com PDF + cópia no Google Drive) ----------
 function frtEmailCfg(){return FRT.email||{};}
-function frtEmailPronto(){var c=frtEmailCfg();return !!(c.clientId&&c.para);}
+function frtEmailPronto(){var c=frtEmailCfg();return !!((c.smtpUrl||c.clientId)&&c.para);}
 function frtEmailAuto(){return frtEmailPronto()&&frtEmailCfg().auto!==false;}
 function frtEmailAssunto(d){
   // Mais Acessível - Frete CT-e 4223496 - NF 3712 - RODONAVES TRANSPORTES E ENCOMENDAS LTDA
@@ -5087,7 +5087,14 @@ async function frtPdfDeFotos(fotos){
 function frtEmails(s){return String(s||'').split(/[,;\s]+/).filter(function(x){return /@/.test(x);}).map(function(x){return {emailAddress:{address:x}};});}
 async function frtOutlookEnviar(o){
   var c=frtEmailCfg();if(!frtEmails(c.para).length)throw new Error('Informe o e-mail da contabilidade em Configurações.');
-  var tam=(o.anexos||[]).reduce(function(t,a){return t+a.b64.length*0.75;},0);if(tam>3.4e6)throw new Error('Os anexos passam de 3 MB, limite do envio pelo Outlook. Reenvie com menos imagens.');
+  var tam=(o.anexos||[]).reduce(function(t,a){return t+a.b64.length*0.75;},0);if(tam>(c.smtpUrl?14e6:3.4e6))throw new Error('Os anexos passam do limite do envio ('+(c.smtpUrl?'14':'3')+' MB). Reenvie com menos imagens.');
+  if(c.smtpUrl){ // e-mail da Locaweb (SMTP) pelo Worker do Cloudflare; a senha fica só no Worker
+    var rs;try{rs=await fetch(c.smtpUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({para:c.para,cc:c.cc||'',assunto:o.assunto,html:o.html,anexos:o.anexos||[]})});}
+    catch(e){throw new Error('Não consegui falar com o Worker de e-mail ('+e.message+'). Confira o endereço em Configurações.');}
+    var js=null;try{js=await rs.json();}catch(e){}
+    if(!js||!js.ok)throw new Error('E-mail não enviado: '+((js&&js.erro)||('Worker respondeu '+rs.status)));
+    return {para:c.para,de:js.de||''};
+  }
   var tk=await frtOutlookToken(o.interativo);
   var r=await fetch('https://graph.microsoft.com/v1.0/me/sendMail',{method:'POST',headers:{'Authorization':'Bearer '+tk.accessToken,'Content-Type':'application/json'},
     body:JSON.stringify({message:{subject:o.assunto,body:{contentType:'HTML',content:o.html},toRecipients:frtEmails(c.para),ccRecipients:frtEmails(c.cc),
@@ -5681,21 +5688,22 @@ function frtHtmlConfig(){
    '<div class="fin-f fin-c3"><label for="fcBol">Quando o documento for fatura/boleto, usar</label><select id="fcBol">'+frtOpts(L.formas,(FRT.fcfg||{}).formaBoleto,'Deixar em branco')+'</select></div></div>'+
    '<p class="fin-mu" style="margin:10px 0 0">CT-e não traz vencimento nem boleto: o frete fica na Conferência até você informar o vencimento (e a forma de pagamento, se não estiver no documento). Só depois disso dá para lançar.</p>'+
    '<div style="margin-top:10px"><button type="button" class="fin-btn sm pri" id="fcSalvar">Salvar pagamento dos fretes</button></div></div>'+
-   '<div class="fin-h">Envio à contabilidade (Outlook)</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">Depois de lançar no Bling, o app envia pelo <b>seu Outlook (rauldias@tendfer.com.br)</b> um e-mail para a contabilidade com o CT-e em PDF anexo e todos os dados no corpo. O e-mail fica nos seus Itens enviados. A imagem/PDF é apagada do app assim que o e-mail sai.</p>'+
+   '<div class="fin-h">Envio à contabilidade (e-mail)</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">Depois de lançar no Bling, o app envia <b>do seu e-mail rauldias@tendfer.com.br (Locaweb)</b> uma mensagem para a contabilidade com o documento em PDF anexo e todos os dados no corpo. Vale para fretes e despesas. A imagem/PDF é apagada do app assim que o e-mail sai.</p>'+
    '<div class="fin-g"><div class="fin-f fin-c3"><label for="emPara">E-mail da contabilidade</label><input class="fin-in" id="emPara" type="email" placeholder="fiscal@contabilidade.com.br" value="'+frtEsc(frtEmailCfg().para||'')+'"></div>'+
    '<div class="fin-f fin-c3"><label for="emCc">Cópia (opcional)</label><input class="fin-in" id="emCc" placeholder="separe por vírgula" value="'+frtEsc(frtEmailCfg().cc||'')+'"></div>'+
+   '<div class="fin-f fin-c6"><label for="emSmtp">Endereço do Worker de e-mail</label><input class="fin-in" id="emSmtp" placeholder="https://email-contabilidade.rauldias.workers.dev" value="'+frtEsc(frtEmailCfg().smtpUrl||'')+'"></div></div>'+
+   '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;font-weight:600"><input type="checkbox" id="emAuto"'+(frtEmailCfg().auto!==false?' checked':'')+'> Enviar sozinho logo depois de lançar no Bling</label>'+
+   '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="fin-btn sm pri" id="emSalvar">Salvar envio</button><button type="button" class="fin-btn sm" id="emTeste">Enviar e-mail de teste</button> <span id="emSt"></span></div>'+
+   '<details style="margin-top:12px"'+(frtEmailCfg().smtpUrl?'':' open')+'><summary class="fin-sw" style="cursor:pointer">Como criar o Worker de e-mail (uma vez só, uns 5 minutos)</summary><ol style="font-size:13.5px;line-height:1.55;margin:8px 0 0;padding-left:20px">'+
+   '<li>Entre em <a class="fin-sw" href="https://dash.cloudflare.com/" target="_blank" rel="noopener">dash.cloudflare.com</a> (a mesma conta do Worker da IA) → <b>Workers e Pages</b> → <b>Criar</b> → <b>Criar Worker</b>. Nome: <b>email-contabilidade</b> → <b>Implantar</b>.</li>'+
+   '<li>Clique em <b>Editar código</b>, apague tudo, cole o código do arquivo <a class="fin-sw" href="https://github.com/Rauldneto/mais-acessivel-app/blob/main/worker-email-contabilidade.js" target="_blank" rel="noopener">worker-email-contabilidade.js</a> (botão “Copy raw file” no GitHub) e clique em <b>Implantar</b>.</li>'+
+   '<li>Volte ao Worker → <b>Configurações → Variáveis e segredos → Adicionar</b>:<br><b>SMTP_USER</b> = rauldias@tendfer.com.br<br><b>SMTP_PASS</b> = a senha do seu e-mail (escolha o tipo <b>Segredo</b>)<br><b>DESTINOS</b> = '+frtEsc(frtEmailCfg().para||'e-mail da contabilidade')+'<br><b>COPIA_PARA_MIM</b> = sim (recebe uma cópia na sua caixa) → <b>Implantar</b>.</li>'+
+   '<li>Copie o endereço do Worker (algo como https://email-contabilidade.rauldias.workers.dev), cole no campo acima e clique em <b>Salvar envio → Enviar e-mail de teste</b>.</li></ol>'+
+   '<p class="fin-mu" style="margin:8px 0 0">Não tem custo. A senha fica só no Cloudflare (o app nunca vê). O Worker só manda para os endereços de DESTINOS — se trocar de contabilidade, atualize lá também.</p></details>'+
+   '<details style="margin-top:8px"><summary class="fin-mu" style="cursor:pointer">Outra opção: conta Microsoft 365 (Outlook corporativo da Microsoft)</summary><div class="fin-g" style="margin-top:8px">'+
    '<div class="fin-f fin-c3"><label for="emCli">ID do aplicativo (cliente)</label><input class="fin-in" id="emCli" placeholder="00000000-0000-0000-0000-000000000000" value="'+frtEsc(frtEmailCfg().clientId||'')+'"></div>'+
    '<div class="fin-f fin-c3"><label for="emTen">ID do diretório (locatário)</label><input class="fin-in" id="emTen" placeholder="00000000-0000-0000-0000-000000000000" value="'+frtEsc(frtEmailCfg().tenant||'')+'"></div></div>'+
-   '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;font-weight:600"><input type="checkbox" id="emAuto"'+(frtEmailCfg().auto!==false?' checked':'')+'> Enviar sozinho logo depois de lançar no Bling</label>'+
-   '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="fin-btn sm pri" id="emSalvar">Salvar envio</button><button type="button" class="fin-btn sm" id="emConectar">🔗 Conectar ao Outlook</button><button type="button" class="fin-btn sm" id="emTeste">Enviar e-mail de teste</button> <span id="emSt"></span></div>'+
-   '<details style="margin-top:12px"><summary class="fin-sw" style="cursor:pointer">Como pegar os dois IDs (uma vez só, uns 5 minutos)</summary><ol style="font-size:13.5px;line-height:1.55;margin:8px 0 0;padding-left:20px">'+
-   '<li>Entre em <a class="fin-sw" href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noopener">entra.microsoft.com → Registros de aplicativo</a> com rauldias@tendfer.com.br e clique em <b>Novo registro</b>.</li>'+
-   '<li>Nome: <b>Mais Acessível App</b>. Tipos de conta: <b>Somente contas deste diretório organizacional</b>.</li>'+
-   '<li>URI de redirecionamento: plataforma <b>Aplicativo de página única (SPA)</b> e o endereço <b>'+frtEsc(new URL('msal-retorno.html',location.href).href)+'</b>. Clique em Registrar.</li>'+
-   '<li>Na tela que abrir, copie <b>ID do aplicativo (cliente)</b> e <b>ID do diretório (locatário)</b> para os campos acima.</li>'+
-   '<li>Em <b>Permissões de API → Adicionar uma permissão → Microsoft Graph → Permissões delegadas</b>, marque <b>Mail.Send</b>. Se aparecer o botão <b>Conceder consentimento do administrador</b>, clique nele.</li>'+
-   '<li>Volte aqui: <b>Salvar envio → Conectar ao Outlook → Enviar e-mail de teste</b>.</li></ol>'+
-   '<p class="fin-mu" style="margin:8px 0 0">Não tem custo. O login vale para este computador; se a Microsoft pedir de novo (a cada tantos dias), o app avisa e você só clica em 📧 Enviar.</p></details></div>'+
+   '<div style="margin-top:8px"><button type="button" class="fin-btn sm" id="emConectar">🔗 Conectar ao Microsoft 365</button></div><p class="fin-mu" style="margin:6px 0 0">Só serve se o e-mail estiver na Microsoft. O seu (tendfer.com.br) está na Locaweb: use o Worker acima.</p></details></div>'+
    '<div class="fin-h">Listas do Bling</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">'+L.formas.length+' formas de pagamento, '+L.contas.length+' contas financeiras e '+L.categorias.filter(function(c){return !c.pai;}).length+' categorias'+(L.atualizadoEm?', atualizadas em '+new Date(L.atualizadoEm).toLocaleDateString('pt-BR'):'')+'.</p>'+
    '<button type="button" class="fin-btn sm" id="cListas">🔄 Atualizar do Bling</button> <span id="frtCfgSt"></span><p class="fin-mu" style="margin:8px 0 0">Use quando criar uma forma de pagamento ou conta nova no Bling. Precisa da extensão neste computador.</p></div>';
   return h;
@@ -5712,17 +5720,17 @@ function frtBindConfig(){
     try{await frtSalvarCfg();FRT.msg='Configurações salvas. Valem no celular e no computador.';FRT.msgTipo='ok';}catch(e){FRT.msg='Não consegui salvar: '+e.message;FRT.msgTipo='err';}frtDraw();};
   frtEl('cListas').onclick=frtAtualizarListas;
   frtEl('fcSalvar').onclick=async function(){var e={formaBoleto:frtEl('fcBol').value};try{await frtFb('fretesConfig',{method:'PUT',body:e});FRT.fcfg=e;FRT.msg='Pagamento dos fretes salvo.';FRT.msgTipo='ok';}catch(er){FRT.msg='Não consegui salvar: '+er.message;FRT.msgTipo='err';}frtDraw();};
-  function lerEm(){return {para:frtEl('emPara').value.trim(),cc:frtEl('emCc').value.trim(),clientId:frtEl('emCli').value.trim(),tenant:frtEl('emTen').value.trim(),auto:frtEl('emAuto').checked};}
+  function lerEm(){return {smtpUrl:frtEl('emSmtp').value.trim().replace(/\/+$/,''),para:frtEl('emPara').value.trim(),cc:frtEl('emCc').value.trim(),clientId:frtEl('emCli').value.trim(),tenant:frtEl('emTen').value.trim(),auto:frtEl('emAuto').checked};}
   var guid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,st=frtEl('emSt');
-  function valido(e){if(e.clientId&&!guid.test(e.clientId))return 'O ID do aplicativo tem o formato 00000000-0000-0000-0000-000000000000.';if(e.tenant&&!guid.test(e.tenant))return 'O ID do diretório tem o formato 00000000-0000-0000-0000-000000000000.';if(e.para&&!frtEmails(e.para).length)return 'E-mail da contabilidade inválido.';return '';}
+  function valido(e){if(e.clientId&&!guid.test(e.clientId))return 'O ID do aplicativo tem o formato 00000000-0000-0000-0000-000000000000.';if(e.tenant&&!guid.test(e.tenant))return 'O ID do diretório tem o formato 00000000-0000-0000-0000-000000000000.';if(e.para&&!frtEmails(e.para).length)return 'E-mail da contabilidade inválido.';if(e.smtpUrl&&!/^https:\/\/[^\s]+$/.test(e.smtpUrl))return 'O endereço do Worker começa com https://';return '';}
   frtEl('emSalvar').onclick=async function(){var e=lerEm(),v=valido(e);if(v){st.innerHTML='<span class="fin-chip err">'+frtEsc(v)+'</span>';return;}
     try{await frtFb('fretesEmail',{method:'PUT',body:e});FRT.email=e;FRT.msg='Envio à contabilidade salvo.';FRT.msgTipo='ok';}catch(er){FRT.msg='Não consegui salvar: '+er.message;FRT.msgTipo='err';}frtDraw();};
   frtEl('emConectar').onclick=async function(){var e=lerEm(),v=valido(e);if(v||!e.clientId){st.innerHTML='<span class="fin-chip err">'+frtEsc(v||'Preencha o ID do aplicativo e o ID do diretório.')+'</span>';return;}
     FRT.email=Object.assign({},FRT.email||{},e);st.innerHTML='<span class="fin-chip">Abrindo o login da Microsoft…</span>';
     try{var tk=await frtOutlookToken(true);await frtFb('fretesEmail',{method:'PUT',body:FRT.email}).catch(function(){});st.innerHTML='<span class="fin-chip ok">✓ Conectado como '+frtEsc(tk.account&&tk.account.username||'')+'</span>';}
     catch(er){st.innerHTML='<span class="fin-chip err">'+frtEsc(er.message)+'</span>';}};
-  frtEl('emTeste').onclick=async function(){FRT.email=Object.assign({},FRT.email||{},lerEm());st.innerHTML='<span class="fin-chip">Enviando teste pelo Outlook…</span>';
-    try{var j=await frtOutlookEnviar({assunto:'Mais Acessível - Teste do envio de fretes',html:'<p>Teste do app Mais Acessível.</p><p>A partir de agora os documentos de frete (CT-e) chegam por este e-mail, com o PDF anexo e os dados no corpo.</p>',anexos:[],interativo:true});
+  frtEl('emTeste').onclick=async function(){FRT.email=Object.assign({},FRT.email||{},lerEm());st.innerHTML='<span class="fin-chip">Enviando e-mail de teste…</span>';
+    try{var j=await frtOutlookEnviar({assunto:'Mais Acessível - Teste do envio de documentos',html:'<p>Teste do app Mais Acessível.</p><p>A partir de agora os documentos de frete (CT-e) e das despesas chegam por este e-mail, com o PDF anexo e os dados no corpo.</p>',anexos:[],interativo:true});
       st.innerHTML='<span class="fin-chip ok">✓ Teste enviado de '+frtEsc(j.de)+' para '+frtEsc(j.para)+'</span>';}catch(er){st.innerHTML='<span class="fin-chip err">'+frtEsc(er.message)+'</span>';}};
   if(frtEmailCfg().clientId)frtMsal().then(function(app){var c=frtOutlookConta(app);if(c&&frtEl('emSt')&&!frtEl('emSt').innerHTML)frtEl('emSt').innerHTML='<span class="fin-chip ok">Outlook conectado: '+frtEsc(c.username)+'</span>';}).catch(function(){});
 }
