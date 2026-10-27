@@ -7559,7 +7559,7 @@ function cqEstiloV(){
   '.vg-c p,.vg-c li{font-size:13px;color:#44403c;line-height:1.55}.vg-c ul{margin:6px 0 0;padding-left:18px}'+
   '.vg-cad{display:flex;gap:0;margin-top:6px}.vg-cad div{flex:1;border-top:3px solid #f59e0b;padding:8px 6px 0;font-size:12px;color:#44403c}.vg-cad b{display:block;font-size:13px;color:#1c1917}'+
   '@media(max-width:900px){.vc-det,.vg{grid-template-columns:1fr}.vtop-r{grid-template-columns:30px 1fr 1fr}.vtop-r>:nth-child(4),.vtop-r>:nth-child(5){display:none}.vc-bar{width:110px}.vc-top{flex-wrap:wrap}}';
-  s.textContent+=CQ_TL_CSS+CQ_FONE_CSS;
+  s.textContent+=CQ_TL_CSS+CQ_FONE_CSS+CQ_TOP_CSS;
   document.head.appendChild(s);
 }
 
@@ -7974,14 +7974,50 @@ var CQ_TL_CSS='.vc-tl{margin:0 18px 10px 22px;border:1px solid #e7e5e4;border-ra
 
 // ── faixa "Cobrar agora" (as melhores oportunidades) ──
 function cqTopCobrar(F){
-  var L=F.filter(function(i){var a=cqAssum(i);return cqAberta(i)&&!(a&&!a.meu);}).map(function(i){return {i:i,p:cqPrior(i)};}).filter(function(o){return o.p.s>0;}).sort(function(a,b){return b.p.s-a.p.s;}).slice(0,5);
-  if(!L.length)return '';
-  var tot=L.reduce(function(s,o){return s+cqVal(o.i);},0);
-  return '<div class="vtop"><div class="vtop-h"><b>'+cqIc('flame',16)+' Cobrar agora — as '+L.length+' melhores oportunidades</b><span style="font-size:11.5px;color:#d6d3d1">'+cqBRL(tot)+' em jogo · ordem por valor × chance de fechar × urgência · clique para ir até a cotação</span></div>'+
-    L.map(function(o,k){var ch=o.p.ch,c=ch>=65?'#4ade80':ch>=40?'#fbbf24':'#f87171';
-      return '<div class="vtop-r cqIrPara" data-id="'+cqEsc(o.i.id)+'"><span class="vtop-n">'+(k+1)+'</span><span class="vtop-c">'+cqEsc(o.i.cliente)+'<div class="vtop-s">Nº '+cqEsc(o.i.numero)+' · '+cqEsc(o.i.vendedor||'')+'</div></span>'+
-        '<span style="font-weight:900;font-variant-numeric:tabular-nums">'+cqBRL(cqVal(o.i))+'</span><span style="color:'+c+';font-weight:800">'+ch+'% de chance</span><span class="vtop-s">'+cqEsc(o.p.mot.slice(0,2).join(' · ')||'boa chance de fechar')+'</span></div>';}).join('')+'</div>';
+  var gest=typeof lcGestor!=='function'||lcGestor();
+  var base=F.filter(function(i){var a=cqAssum(i);return cqAberta(i)&&!(a&&!a.meu);});
+  var temMeu=base.some(rtEhMeu),modo=CQ.topModo||(gest||!temMeu?'todos':'meus');
+  if(modo==='meus')base=base.filter(rtEhMeu);
+  // agrupa por cliente (dono das cotações): o mesmo cliente aparece uma vez só
+  var G={};base.forEach(function(i){var p=cqPrior(i);if(p.s<=0)return;var k=cqContato(i),g=G[k]||(G[k]={k:k,cots:[],s:0,v:0,esp:0,ch:0,mot:{}});
+    g.cots.push(i);g.s+=p.s;g.v+=cqVal(i);g.esp+=p.esp;g.ch=Math.max(g.ch,p.ch);p.mot.forEach(function(m){g.mot[m]=1;});});
+  var L=Object.keys(G).map(function(k){return G[k];}).sort(function(a,b){return b.s-a.s;}).slice(0,CQ.topMais?10:5);
+  var bt=function(id,l){var on=modo===id;return '<button class="cqTopModo" data-m="'+id+'" style="border:1px solid '+(on?'#1c1917':'#e7e5e4')+';background:'+(on?'#1c1917':'#fff')+';color:'+(on?'#fff':'#44403c')+';border-radius:999px;padding:4px 12px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit">'+l+'</button>';};
+  var x='<div class="ctop"><div class="ctop-h"><div><div class="ctop-t">'+cqIc('flame',18)+' Quem cobrar agora</div>'+
+    '<div class="ctop-s">Clientes com maior <b>valor esperado</b> (valor × chance de fechar) e mais urgência. Comece pelo 1º.</div></div>'+
+    '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+(temMeu?bt('meus','👤 Meus clientes'):'')+bt('todos','👥 Todos')+'</div></div>';
+  if(!L.length)return x+'<div style="padding:14px 4px;color:#78716c;font-size:13px">✅ Nada urgente '+(modo==='meus'?'nos seus clientes':'')+' agora.</div></div>';
+  var URG=/atrasad|esperando|hoje/;
+  x+='<div class="ctop-g">'+L.map(function(g,k){
+    var i=g.cots[0],mot=Object.keys(g.mot),urg=mot.filter(function(m){return URG.test(m);})[0],c=g.ch>=65?'#16a34a':g.ch>=40?'#d97706':'#dc2626';
+    var tag=urg?'<span class="ctop-tag r">'+cqEsc(urg)+'</span>':mot.indexOf('nunca foi cobrada')!==-1?'<span class="ctop-tag o">nunca foi cobrada</span>':mot.filter(function(m){return /sem cobrança/.test(m);})[0]?'<span class="ctop-tag o">'+cqEsc(mot.filter(function(m){return /sem cobrança/.test(m);})[0])+'</span>':'<span class="ctop-tag g">'+(g.ch>=65?'alta chance':'retomar contato')+'</span>';
+    var outros=mot.filter(function(m){return m!==urg&&!(tag.indexOf(m)!==-1);}).slice(0,2);
+    var f=cqFones(i)[0];
+    return '<div class="ctop-c'+(k===0?' um':'')+'"><div class="ctop-ch"><span class="ctop-n">'+(k+1)+'º</span>'+tag+'</div>'+
+      '<div class="ctop-cli" title="'+cqEsc(i.cliente)+'">'+cqEsc(i.cliente)+'</div>'+
+      '<div class="ctop-sub">'+(g.cots.length>1?g.cots.length+' cotações: '+g.cots.map(function(c){return 'Nº '+cqEsc(c.numero);}).join(', '):'Nº '+cqEsc(i.numero))+' · '+cqEsc((i.vendedor||'').split(' ')[0])+'</div>'+
+      '<div class="ctop-v">'+cqBRL(g.v)+'</div>'+
+      '<div class="ctop-bar"><i style="width:'+g.ch+'%;background:'+c+'"></i></div>'+
+      '<div class="ctop-pc"><b style="color:'+c+'">'+g.ch+'% de chance</b> · esperado '+cqBRL(g.esp).replace(/,\d\d$/,'')+'</div>'+
+      (outros.length?'<div class="ctop-why">'+outros.map(function(m){return '• '+cqEsc(m);}).join('<br>')+'</div>':'<div class="ctop-why"></div>')+
+      '<div class="ctop-ac">'+(f?'<a class="vb sm grn cqLigar" href="'+cqEsc(cqFoneHref(f.d))+'" data-id="'+cqEsc(i.id)+'" data-t="'+cqEsc(cqFoneFmt(f.d))+'" title="Ligar pelo MicroSIP: '+cqEsc(cqFoneFmt(f.d))+'">'+cqIc('phone',13)+' Ligar</a>':'')+
+      '<button class="vb sm cqIrPara" data-id="'+cqEsc(i.id)+'">Ver cotação '+cqIc('right',12)+'</button></div></div>';}).join('')+'</div>';
+  var tot=L.reduce(function(s,g){return s+g.v;},0);
+  x+='<div class="ctop-f"><span>'+L.length+' cliente(s) · <b>'+cqBRL(tot)+'</b> em jogo</span><button class="cqTopMais" style="border:none;background:none;color:#b45309;font-weight:800;cursor:pointer;font-family:inherit;font-size:12px">'+(CQ.topMais?'mostrar só 5':'mostrar 10')+'</button></div>';
+  return x+'</div>';
 }
+var CQ_TOP_CSS='.ctop{background:#fff;border:1px solid #e7e5e4;border-top:4px solid #f59e0b;border-radius:14px;padding:14px 16px 10px;margin-bottom:14px;box-shadow:0 1px 3px rgba(28,25,23,.06)}'+
+  '.ctop-h{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px}.ctop-t{font-size:16px;font-weight:900;color:#1c1917;display:flex;gap:6px;align-items:center}.ctop-s{font-size:12px;color:#78716c;margin-top:2px}'+
+  '.ctop-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}'+
+  '.ctop-c{border:1px solid #e7e5e4;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;background:#fcfcfb;transition:box-shadow .15s,border-color .15s}.ctop-c:hover{border-color:#d6d3d1;box-shadow:0 4px 12px rgba(28,25,23,.08)}'+
+  '.ctop-c.um{border-color:#f59e0b;background:#fffbeb}'+
+  '.ctop-ch{display:flex;justify-content:space-between;align-items:center;gap:6px}.ctop-n{font-weight:900;font-size:13px;color:#fff;background:#1c1917;border-radius:7px;padding:2px 8px}.ctop-c.um .ctop-n{background:#d97706}'+
+  '.ctop-tag{font-size:10.5px;font-weight:800;border-radius:999px;padding:2px 8px;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}.ctop-tag.r{background:#fee2e2;color:#b91c1c}.ctop-tag.o{background:#ffedd5;color:#c2410c}.ctop-tag.g{background:#dcfce7;color:#15803d}'+
+  '.ctop-cli{font-size:14px;font-weight:900;color:#1c1917;line-height:1.2;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ctop-sub{font-size:11px;color:#78716c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
+  '.ctop-v{font-size:19px;font-weight:900;color:#1c1917;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:4px}'+
+  '.ctop-bar{height:6px;border-radius:4px;background:#f0efed;overflow:hidden}.ctop-bar i{display:block;height:100%;border-radius:4px}.ctop-pc{font-size:11.5px;color:#57534e}'+
+  '.ctop-why{font-size:11px;color:#78716c;min-height:14px;line-height:1.4}.ctop-ac{display:flex;gap:6px;margin-top:6px}.ctop-ac .vb{flex:1;justify-content:center}'+
+  '.ctop-f{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#57534e;margin-top:10px;padding-top:8px;border-top:1px solid #f0efed}';
 
 // ── 📘 GUIA DE COBRANÇA E NEGOCIAÇÃO ──
 function cqGuiaDraw(root){
@@ -8109,6 +8145,8 @@ function cqBindComum(root,verOk){
   root.querySelectorAll('.cqDicaFechar').forEach(function(b){b.onclick=function(){CQ.dicaAberta[b.getAttribute('data-id')]=false;cqDraw();};});
   root.querySelectorAll('.cqDicaNova').forEach(function(b){b.onclick=function(){var it=item(b.getAttribute('data-id'));if(it)cqGerarDica(it);};});
   root.querySelectorAll('.cqCopiaTxt').forEach(function(b){b.onclick=function(){cqCopiar(b.getAttribute('data-t'),b);};});
+  root.querySelectorAll('.cqTopModo').forEach(function(b){b.onclick=function(){CQ.topModo=b.getAttribute('data-m');cqDraw();};});
+  root.querySelectorAll('.cqTopMais').forEach(function(b){b.onclick=function(){CQ.topMais=!CQ.topMais;cqDraw();};});
   root.querySelectorAll('.cqIrPara').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-id');CQ.foco=k;if(!document.getElementById('vc-'+k))CQ.limite=999;cqDraw();setTimeout(function(){var e=document.getElementById('vc-'+k);if(e)e.scrollIntoView({behavior:'smooth',block:'center'});},60);setTimeout(function(){if(CQ.foco===k){CQ.foco='';var e=document.getElementById('vc-'+k);if(e)e.classList.remove('vc-foco');}},4000);};});
 }
 
