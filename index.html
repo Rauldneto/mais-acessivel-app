@@ -12644,17 +12644,43 @@ async function cotGerarPdfBlob(snap,codigo){
   for(var i=0;i<cod.length;i+=125){if(y>288){doc.addPage();y=14;}y+=2.6;doc.text(cod.slice(i,i+125),M,y);}
   return doc.output('blob');
 }
-async function cotGravarPdf(dir,nome,blob){var fh=await dir.getFileHandle(nome,{create:true});var w=await fh.createWritable();await w.write(blob);await w.close();}
+function cotNomeArquivo(num){return 'Cotação Nº '+String(num).replace(/[\\\/:*?"<>|]/g,'-').trim()+'.pdf';} // mesmo padrão que já existe na pasta
+async function cotTemCodigo(file){try{var b=new Uint8Array(await file.arrayBuffer()),s='';for(var i=0;i<b.length;i+=32768)s+=String.fromCharCode.apply(null,b.subarray(i,i+32768));return /RECUP:MA[CU]1/.test(s);}catch(e){return false;}}
+// Grava o PDF. Se já existe um PDF com esse nome do formato antigo (sem código de recuperação), guarda uma cópia
+// "(versão anterior)" antes de substituir, para nunca perder o único registro daquela cotação.
+async function cotGravarPdf(dir,nome,blob){
+  var extra='';
+  try{
+    var ex=await dir.getFileHandle(nome),fx=await ex.getFile();
+    if(!(await cotTemCodigo(fx))){
+      var nb=nome.replace(/\.pdf$/i,' (versão anterior).pdf');
+      var bh=await dir.getFileHandle(nb,{create:true}),bw=await bh.createWritable();await bw.write(fx);await bw.close();
+      extra=nb;
+    }
+  }catch(e){} // não existia: nada a proteger
+  var fh=await dir.getFileHandle(nome,{create:true});var w=await fh.createWritable();await w.write(blob);await w.close();
+  return extra;
+}
+var COT_LIMPEZA_NEGADA=false;
 async function cotLimparAntigos(dir,dias){
-  var lim=Date.now()-dias*864e5,n=0,nomes=[];
+  if(COT_LIMPEZA_NEGADA)return 0;
+  var lim=Date.now()-dias*864e5,cand=[];
   for await (var par of dir.entries()){
     var nome=par[0],ent=par[1];
     if(!ent||ent.kind!=='file')continue;
-    var m=String(nome).match(/^Frete_.+_(\d{4})-(\d{2})-(\d{2})_\d{4}\.pdf$/);
-    if(!m)continue;
-    if(new Date(+m[1],+m[2]-1,+m[3]).getTime()<lim)nomes.push(nome);
+    if(!/^Cota[çc][ãa]o N[ºo°] .*\.pdf$/i.test(String(nome).normalize('NFC')))continue; // só os PDFs de cotação do app
+    try{var f=await ent.getFile();if(f.lastModified<lim)cand.push([nome,f.lastModified]);}catch(e){}
   }
-  for(var i=0;i<nomes.length;i++){try{await dir.removeEntry(nomes[i]);n++;}catch(e){}}
+  if(!cand.length)return 0;
+  var ok=false;try{ok=!!(await cotIdbGet('limpeza60'));}catch(e){}
+  if(!ok){
+    cand.sort(function(a,b){return a[1]-b[1];});
+    var antigo=new Date(cand[0][1]).toLocaleDateString('pt-BR');
+    if(!confirm('Há '+cand.length+' PDF(s) de cotação com mais de '+dias+' dias na pasta "'+dir.name+'" (o mais antigo é de '+antigo+').\n\nApagar agora e, daqui para frente, apagar sozinho a cada salvamento?\n(No Google Drive eles vão para a lixeira.)')){COT_LIMPEZA_NEGADA=true;return 0;}
+    try{await cotIdbSet('limpeza60',Date.now());}catch(e){}
+  }
+  var n=0;
+  for(var i=0;i<cand.length;i++){try{await dir.removeEntry(cand[i][0]);n++;}catch(e){}}
   return n;
 }
 function cotBaixarBlob(blob,nome){var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nome;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},4000);}
@@ -12666,11 +12692,11 @@ async function salvarEGerarPdf(){
   try{
     var dir=await cotPastaObter(false); // 2) pasta (pede só na 1ª vez / quando o Chrome pedir)
     var snap=cotSnapshot(),codigo=await cotCodificar(snap),blob=await cotGerarPdfBlob(snap,codigo);
-    var d=new Date(),p2=function(n){return String(n).padStart(2,'0');};
-    var nome='Frete_'+String(num).replace(/[^\w-]/g,'_')+'_'+d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())+'_'+p2(d.getHours())+p2(d.getMinutes())+'.pdf';
+    var nome=cotNomeArquivo(num);
     if(dir){
-      await cotGravarPdf(dir,nome,blob);
+      var ant=await cotGravarPdf(dir,nome,blob);
       msg+='\nPDF gravado na pasta "'+dir.name+'": '+nome;
+      if(ant)msg+='\nJá existia um PDF antigo com esse nome (sem código de recuperação): guardei uma cópia como "'+ant+'".';
       try{var n=await cotLimparAntigos(dir,COT_PDF_DIAS);if(n)msg+='\n'+n+' PDF(s) com mais de '+COT_PDF_DIAS+' dias foram apagados da pasta.';}catch(e){}
     }else{
       cotBaixarBlob(blob,nome);
@@ -12684,6 +12710,18 @@ async function cotEscolherPasta(){
   alert(h?('Pasta dos PDFs: "'+h.name+'". A partir de agora, ao salvar, o PDF vai para ela.'):'Nenhuma pasta escolhida.');
 }
 
+async function cotAbrirImportacao(inputFallback){ // abre o seletor já dentro da pasta FRETE APP (Chrome/Edge); senão, o seletor comum
+  try{
+    if(typeof window.showOpenFilePicker==='function'){
+      var h=null;try{h=await cotIdbGet('pastaFrete');}catch(e){}
+      var o={types:[{description:'PDF de cotação',accept:{'application/pdf':['.pdf']}}],multiple:false};
+      if(h)o.startIn=h;
+      var fh=await window.showOpenFilePicker(o);
+      importarCotacaoPDF(await fh[0].getFile());return;
+    }
+  }catch(e){if(e&&e.name==='AbortError')return;}
+  inputFallback.click();
+}
 async function importarCotacaoPDF(file){
   if(!file) return;
   if(STATE.form&&STATE.form.numeroCotacao&&!confirm('Importar este PDF vai substituir a cotação que está na tela (Nº '+STATE.form.numeroCotacao+'). Continuar?')) return;
@@ -12789,7 +12827,7 @@ function renderNav(){
   bImp.title='Recarrega uma cotação a partir do PDF impresso por este app';
   var fImp=document.createElement('input');fImp.type='file';fImp.accept='.pdf,application/pdf';fImp.style.display='none';
   fImp.onchange=function(){var f=fImp.files&&fImp.files[0];fImp.value='';importarCotacaoPDF(f);};
-  bImp.onclick=function(){fImp.click();};
+  bImp.onclick=function(){cotAbrirImportacao(fImp);};
   actions.appendChild(bNova);
   actions.appendChild(bSalv);
   actions.appendChild(bPasta);
