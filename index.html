@@ -13180,6 +13180,7 @@ function abrirLancarFinanceiro(c,onSaved){
    '<div style="font-weight:700;margin:8px 0 4px">Transportadora escolhida (3 menores valores)</div>'+candHtml+
    '<label style="'+L+'">Fornecedor *</label><input id="finFornecedor" style="'+I+'" list="finFornList">'+
    '<datalist id="finFornList">'+FIN_TRANSP_BLING.map(function(b){return '<option value="'+esc(b[0])+'">';}).join('')+'</datalist>'+
+   '<div id="finBlingMsg" style="margin-top:6px;font-size:12px"></div>'+
    '<div id="finCadWarn" style="display:none;margin-top:6px;border:1px solid #fde68a;background:#fffbeb;border-radius:6px;padding:9px"></div>'+
    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">'+
    '<div><label style="'+L+'">Valor *</label><input id="finValor" style="'+I+'" inputmode="decimal"></div>'+
@@ -13217,21 +13218,68 @@ function abrirLancarFinanceiro(c,onSaved){
   function aplicaVencedor(){
     var r=box.querySelector('input[name=finWin]:checked');
     if(r){var t=top3[parseInt(r.value,10)]; if(t){$('finFornecedor').value=t.nome; $('finValor').value=String(parseFloat(t.valor)).replace('.',',');}}
-    checaCad();
+    buscarBling();
   }
-  function checaCad(){
+  // ── Procura a transportadora no Bling (pela extensão) ou oferece cadastrar ──
+  var blingMatch=null, blingNone=false, blingBuscou=false, _seqB=0, _tmB=null, candPend=false, buscandoB=false;
+  function docCad(){var e=box.querySelector('[data-cad=cnpj]');return String(e&&e.value||'').replace(/\D/g,'');}
+  function setMsg(h){$('finBlingMsg').innerHTML=h;}
+  function chip(t,cor,bg){return '<span style="display:inline-block;border-radius:6px;padding:4px 9px;background:'+bg+';color:'+cor+';font-weight:600">'+t+'</span>';}
+  function mostraCad(v){
+    $('finCadWarn').style.display=v?'block':'none';
+    var cn=box.querySelector('[data-cad=nome]'); if(cn&&!cn.value) cn.value=$('finFornecedor').value.trim();
+  }
+  function checaCad(){ // sem extensão: usa a lista conhecida do app
     var nome=$('finFornecedor').value.trim();
-    $('finCadWarn').style.display=(nome&&!finNoBling(nome,(box.querySelector('[data-cad=cnpj]')||{}).value))?'block':'none';
-    var cn=box.querySelector('[data-cad=nome]'); if(cn&&!cn.value) cn.value=nome;
+    if(!nome){setMsg('');mostraCad(false);return;}
+    var ja=finNoBling(nome,docCad());
+    if(ja){setMsg(chip('✅ Já cadastrada no Bling: '+esc(ja[0]),'#166534','#dcfce7'));mostraCad(false);}
+    else{setMsg(chip('Não achei nesta lista do app. O Bling é consultado de novo ao lançar; se não existir, será cadastrada com os dados abaixo.','#92400e','#fef3c7'));mostraCad(true);}
   }
+  function buscarBling(){
+    var nome=$('finFornecedor').value.trim();
+    blingMatch=null; blingNone=false; blingBuscou=false; candPend=false; buscandoB=false;
+    if(!nome&&docCad().length!==14){setMsg('');mostraCad(false);return;}
+    if(typeof frtExtOk!=='function'||!frtExtOk()){checaCad();return;}
+    var seq=++_seqB; buscandoB=true;
+    setMsg(chip('🔍 Procurando no Bling…','#1e40af','#dbeafe'));mostraCad(false);
+    var f0={fornecedor:{nome:nome,doc:docCad(),docParcial:''}};
+    frtAcharFornecedor(f0).then(function(a){
+      if(seq!==_seqB) return;
+      blingBuscou=true; buscandoB=false;
+      if(a.match){
+        blingMatch=a.match;
+        setMsg(chip('✅ Encontrada no Bling: '+esc(a.match.nome)+(a.match.doc?' · '+esc(a.match.doc):''),'#166534','#dcfce7'));mostraCad(false);return;
+      }
+      if(a.cand&&a.cand.length){
+        var lista=a.cand.slice(0,6); candPend=true;
+        setMsg('<div style="border:1px solid #bfdbfe;background:#eff6ff;border-radius:6px;padding:8px"><div style="font-weight:700;margin-bottom:4px">Achei cadastros parecidos no Bling. É algum deles?</div>'+
+          lista.map(function(c,i){return '<label style="display:flex;gap:6px;align-items:center;padding:3px 0;cursor:pointer"><input type="radio" name="finCand" value="'+i+'"> '+esc(c.nome)+(c.doc?' <span style="color:#666">· '+esc(c.doc)+'</span>':'')+'</label>';}).join('')+
+          '<label style="display:flex;gap:6px;align-items:center;padding:3px 0;cursor:pointer"><input type="radio" name="finCand" value="novo"> Nenhum destes: cadastrar nova transportadora</label></div>');
+        box.querySelectorAll('input[name=finCand]').forEach(function(r){r.addEventListener('change',function(){
+          candPend=false;
+          if(this.value==='novo'){blingMatch=null;blingNone=true;mostraCad(true);}
+          else{blingMatch=lista[parseInt(this.value,10)];blingNone=false;mostraCad(false);}
+        });});
+        return;
+      }
+      blingNone=true;
+      setMsg(chip('Não existe no Bling. Preencha o CNPJ abaixo: ela será cadastrada ao lançar.','#92400e','#fef3c7'));mostraCad(true);
+    }).catch(function(e){
+      if(seq!==_seqB) return;
+      buscandoB=false; checaCad();
+      var n=$('finBlingMsg');n.innerHTML+='<div style="color:#92400e;margin-top:4px">Não consegui consultar o Bling agora ('+esc(e.message)+').</div>';
+    });
+  }
+  function buscarBlingSoon(){clearTimeout(_tmB);_tmB=setTimeout(buscarBling,800);}
   function atualizaHist(){ if(!histEditado) $('finHist').value=histAuto(); }
-  $('finFornecedor').addEventListener('input',checaCad);
+  $('finFornecedor').addEventListener('input',buscarBlingSoon);
   $('finFrete').addEventListener('change',function(){$('finFobWarn').style.display=this.value==='FOB'?'block':'none';atualizaHist();});
   ['finNF','finObs','finDesp'].forEach(function(id){$(id).addEventListener('input',atualizaHist);$(id).addEventListener('change',atualizaHist);});
   $('finHist').addEventListener('input',function(){histEditado=true;});
   $('finRegen').onclick=function(){histEditado=false;$('finHist').value=histAuto();};
   box.querySelectorAll('input[name=finWin]').forEach(function(r){r.addEventListener('change',function(){aplicaVencedor();atualizaHist();});});
-  if(prev.fornecedor){$('finFornecedor').value=prev.fornecedor;$('finValor').value=prev.valor||'';checaCad();}
+  if(prev.fornecedor){$('finFornecedor').value=prev.fornecedor;$('finValor').value=prev.valor||'';buscarBling();}
   else if(top3.length){aplicaVencedor();}
   if($('finFrete').value==='FOB') $('finFobWarn').style.display='block';
   function cadEl(k){return box.querySelector('[data-cad='+k+']');}
@@ -13259,9 +13307,10 @@ function abrirLancarFinanceiro(c,onSaved){
         set('email',String(j.email||'').toLowerCase()); set('fone',tel);
         var ativa=(j.situacao_cadastral===2||/ativa/i.test(j.descricao_situacao_cadastral||''));
         var ja=FIN_TRANSP_BLING.filter(function(b){return b[1]===d;})[0];
-        if(ja){ $('finFornecedor').value=ja[0]; msg('✅ Esta transportadora já está cadastrada no Bling ('+ja[0]+').','#166534'); checaCad(); return; }
+        if(ja){ $('finFornecedor').value=ja[0]; msg('✅ Esta transportadora já está cadastrada no Bling ('+ja[0]+').','#166534'); buscarBling(); return; }
         msg(ativa?'✅ Dados preenchidos. Confira antes de salvar.':'⚠ Dados preenchidos, mas a situação cadastral NÃO está ativa ('+(j.descricao_situacao_cadastral||'verifique')+').',ativa?'#166534':'#b45309');
         var fn=$('finFornecedor'); if(!fn.value.trim()&&j.razao_social) fn.value=j.razao_social;
+        buscarBlingSoon();
       })
       .catch(function(e){ if(String(e&&e.message)==='404'){_buscando=false;msg('CNPJ não encontrado na Receita.','#b91c1c');} else tenta(i+1); });
     }
@@ -13281,7 +13330,7 @@ function abrirLancarFinanceiro(c,onSaved){
       categoria:$('finCat').value,documento:$('finNF').value.trim(),juros:$('finJuros').value.trim(),multa:$('finMulta').value.trim(),ocorrencia:'Única'
     };
     var r=box.querySelector('input[name=finWin]:checked'); d.vencedor=r?parseInt(r.value,10):null;
-    var existeBling=finNoBling(d.fornecedor,(box.querySelector('[data-cad=cnpj]')||{}).value); d.fornecedorBling=existeBling?{nome:existeBling[0],cnpj:existeBling[1]}:null;
+    var existeBling=blingMatch?[blingMatch.nome,String(blingMatch.doc||'').replace(/\D/g,'')]:(blingNone?null:finNoBling(d.fornecedor,(box.querySelector('[data-cad=cnpj]')||{}).value)); d.fornecedorBling=existeBling?{nome:existeBling[0],cnpj:existeBling[1],id:blingMatch?blingMatch.id:undefined}:null;
     var cadObj={}; box.querySelectorAll('[data-cad]').forEach(function(el){cadObj[el.getAttribute('data-cad')]=el.value.trim();});
     if(!existeBling) d.cadastro=cadObj;
     function numBR(v){v=String(v||'').trim();if(v.indexOf(',')>=0)v=v.replace(/\./g,'').replace(',','.');return parseFloat(v);}
@@ -13293,6 +13342,8 @@ function abrirLancarFinanceiro(c,onSaved){
     if(!d.nf) erros.push('Nº NF');
     if(!d.historico) erros.push('Histórico'); if(!d.forma) erros.push('Forma de pagamento negociada');
     if(!d.categoria) erros.push('Categoria');
+    if(buscandoB) erros.push('Aguarde a busca no Bling terminar');
+    if(candPend) erros.push('Escolha o cadastro parecido do Bling ou "cadastrar nova transportadora"');
     if(!existeBling){ if(!cadObj.cnpj) erros.push('Cadastro: CNPJ'); }
     if(erros.length){var e=$('finErr'); e.style.display='block'; e.textContent='Preencha: '+erros.join(', '); return;}
     var agora=Date.now();
@@ -13308,6 +13359,7 @@ function abrirLancarFinanceiro(c,onSaved){
       valor:valorNum,emissao:d.emissao,competencia:d.competencia||d.emissao,vencimento:d.vencimento,numeroDocumento:d.nf,historico:d.historico,
       formaId:d.forma,contaId:contaId,categoria:catId,parcelas:1,condicaoNegociada:d.condicao,obs:obsDoc,
       freteTipo:d.frete,cotacaoDestino:(c.destCity||'')+'/'+(c.destUF||''),tipoDoc:'',itens:[],incertos:[],leituraErro:null};
+    if(blingMatch) dados.contato={id:String(blingMatch.id),nome:blingMatch.nome,doc:String(blingMatch.doc||'').replace(/\D/g,'')};
     if(!existeBling&&cadObj.cnpj) dados.cadastroApp=cadObj;
     btn.disabled=true; btn.textContent='Enviando...';
     function erroSalvar(t){var e=$('finErr'); e.style.display='block'; e.textContent=t; btn.disabled=false; btn.textContent='Salvar como pendente';}
