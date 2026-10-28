@@ -12334,9 +12334,10 @@ function renderApp(){
   return wrap;
 }
 
-function salvarCotacao(){
+function salvarCotacao(opts){
+  opts=opts||{};
   var num=STATE.form.numeroCotacao||'';
-  if(!num){alert('Informe o Nº da Cotação antes de salvar!'); return;}
+  if(!num){alert('Informe o Nº da Cotação antes de salvar!'); return false;}
   var nova={
     id:num,
     destCity:STATE.form.cidadeDest||'—',
@@ -12368,11 +12369,12 @@ function salvarCotacao(){
   var idx=SAVED.findIndex(function(s){return s.id===num;});
   if(idx>=0){SAVED[idx]=nova;} else {SAVED.unshift(nova);}
   persistSaved(num);
-  alert('Cotação Nº '+num+' salva com sucesso!');
+  if(!opts.silencioso) alert('Cotação Nº '+num+' salva com sucesso!');
   STATE._lastSavedCotacao=nova;
   // Atualiza botão imprimir no header
   var btnPrint=document.getElementById('btnImprimirHdr');
   if(btnPrint){btnPrint.style.display='inline-block';}
+  return true;
   if(false){
     // Gera HTML para impressão
     var resumoTxt=calcResumo();
@@ -12561,6 +12563,127 @@ async function cotParseLegado(itens){
   });
   return {v:1,legado:true,form:f,prods:prods,rows:rows};
 }
+// ── SALVAR + PDF NA PASTA (Google Drive) ───────────────────────────────────────────
+// Um botão só: salva a cotação (como sempre) e grava o PDF completo na pasta escolhida (FRETE APP).
+// O navegador só escreve em pasta que a pessoa escolheu: na 1ª vez pede a pasta, depois lembra.
+// PDFs gerados por este app com mais de 60 dias são apagados da pasta (só os que têm o nome Frete_<nº>_<data>_<hora>.pdf).
+var COT_PDF_DIAS=60;
+function cotIdb(){return new Promise(function(res,rej){var r=indexedDB.open('maisacessivel_fs',1);r.onupgradeneeded=function(){r.result.createObjectStore('h');};r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error);};});}
+async function cotIdbGet(k){var db=await cotIdb();return new Promise(function(res,rej){var t=db.transaction('h').objectStore('h').get(k);t.onsuccess=function(){res(t.result);};t.onerror=function(){rej(t.error);};});}
+async function cotIdbSet(k,v){var db=await cotIdb();return new Promise(function(res,rej){var tx=db.transaction('h','readwrite');tx.objectStore('h').put(v,k);tx.oncomplete=function(){res();};tx.onerror=function(){rej(tx.error);};});}
+async function cotPastaObter(escolher){
+  if(typeof window.showDirectoryPicker!=='function') return null;
+  var h=null;
+  try{h=await cotIdbGet('pastaFrete');}catch(e){}
+  if(h&&!escolher){
+    try{
+      var q=await h.queryPermission({mode:'readwrite'});
+      if(q!=='granted') q=await h.requestPermission({mode:'readwrite'});
+      if(q==='granted') return h;
+    }catch(e){}
+  }
+  try{h=await window.showDirectoryPicker({id:'frete-app',mode:'readwrite'});}catch(e){return null;}
+  if(String(h.name||'').toUpperCase()!=='FRETE APP'&&!confirm('A pasta escolhida chama-se "'+h.name+'", e não "FRETE APP". Gravar os PDFs nela mesmo assim?')) return null;
+  try{await cotIdbSet('pastaFrete',h);}catch(e){}
+  return h;
+}
+function cotScript(src,glob){return (glob&&window[glob])?Promise.resolve():new Promise(function(res,rej){var el=document.createElement('script');el.src=src;el.onload=res;el.onerror=function(){rej(new Error('Não consegui carregar '+src));};document.head.appendChild(el);});}
+async function cotCarregarJsPdf(){
+  if(!(window.jspdf&&window.jspdf.jsPDF)) await cotScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  var d=new window.jspdf.jsPDF();
+  if(typeof d.autoTable!=='function') await cotScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+}
+function cotL1(s){return String(s==null?'':s).replace(/[–—]/g,'-').replace(/→/g,'->').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[^\x00-\xFF]/g,'?');}
+function cotDadosLinhas(snap){
+  var f=snap.form||{},dt=new Date().toLocaleString('pt-BR');
+  var pagador=(f.frete==='FOB')?(f.cnpjDest||'—'):(f.cnpjRem||'—');
+  var conhecidos=['cnpjRem','cepOrig','cidadeOrig','ufOrig','endRem','cnpjDest','cepDest','cidadeDest','ufDest','endDest','valorNF','pesoTotal','nfEmitida','frete','numeroCotacao','solicitante','embalagem','horario','fechaAlmoco'];
+  var linhas=[
+    ['Nº da cotação',f.numeroCotacao],['Solicitante',f.solicitante],['Gerado em',dt+(STATE.usuarioLogado?' por '+STATE.usuarioLogado:'')],
+    ['Frete (CIF/FOB)',f.frete||'CIF'],['Pagador do frete (CNPJ)',pagador],
+    ['Remetente - CNPJ',f.cnpjRem],['Remetente - Cidade/UF',(f.cidadeOrig||'')+(f.ufOrig?' - '+f.ufOrig:'')],['Remetente - CEP',f.cepOrig],['Remetente - Endereço',f.endRem],
+    ['Destinatário - CNPJ',f.cnpjDest],['Destinatário - Cidade/UF',(f.cidadeDest||'')+(f.ufDest?' - '+f.ufDest:'')],['Destinatário - CEP',f.cepDest],['Destinatário - Endereço',f.endDest],
+    ['NF emitida',f.nfEmitida],['Valor da nota fiscal',fmtBRL(f.valorNF)],['Peso total',(f.pesoTotal||0)+' kg'],
+    ['Embalagem',f.embalagem],['Horário de recebimento',f.horario],['Fecha para almoço',f.fechaAlmoco]
+  ];
+  Object.keys(f).forEach(function(k){if(conhecidos.indexOf(k)<0&&f[k]!==''&&f[k]!=null&&typeof f[k]!=='object')linhas.push([k,f[k]]);});
+  return linhas.map(function(l){return [l[0],(l[1]===''||l[1]==null)?'-':l[1]];});
+}
+async function cotGerarPdfBlob(snap,codigo){
+  await cotCarregarJsPdf();
+  var doc=new window.jspdf.jsPDF({unit:'mm',format:'a4'}),W=210,M=12,f=snap.form||{};
+  function t(s){return cotL1(s);}
+  doc.setFont('helvetica','bold');doc.setFontSize(14);doc.setTextColor(217,119,6);
+  doc.text(t('MAIS ACESSÍVEL — Sistema de Cotação de Frete'),M,16);
+  doc.setFontSize(11);doc.setTextColor(30,30,30);doc.text(t('Cotação Nº '+(f.numeroCotacao||'')),M,23);
+  var y=27;
+  function secao(titulo){if(y>270){doc.addPage();y=14;}doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(68,68,68);doc.text(t(titulo),M,y);y+=2;}
+  secao('Dados da cotação');
+  doc.autoTable({startY:y,margin:{left:M,right:M},body:cotDadosLinhas(snap).map(function(l){return [t(l[0]),t(l[1])];}),theme:'grid',styles:{fontSize:8,cellPadding:1.3,textColor:[30,30,30],lineColor:[225,225,225]},columnStyles:{0:{fontStyle:'bold',cellWidth:55,fillColor:[243,243,241]}}});
+  y=doc.lastAutoTable.finalY+7;
+  secao('Resumo');
+  doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(30,30,30);
+  calcResumo().split('\n').forEach(function(l){doc.splitTextToSize(t(l),W-2*M).forEach(function(p){if(y>285){doc.addPage();y=14;}y+=4.4;doc.text(p,M,y);});});
+  y+=5;
+  secao('Produtos');
+  var prods=(snap.prods||[]).filter(function(p){return (p.nome&&String(p.nome).trim()!=='')||(parseFloat(p.vol)>0)||(p.dim&&String(p.dim).trim()!=='')||(parseFloat(p.cabe)>0);});
+  doc.autoTable({startY:y,margin:{left:M,right:M},head:[['Produto','Vol.','Dimensão (C x L x A)','Un/Vol']],body:prods.length?prods.map(function(p){return [t(p.nome),t(p.vol),t(p.dim),t(p.cabe)];}):[['-','','','']],theme:'grid',headStyles:{fillColor:[243,243,241],textColor:[40,40,40]},styles:{fontSize:8,cellPadding:1.3,lineColor:[225,225,225]}});
+  y=doc.lastAutoTable.finalY+7;
+  secao('Transportadoras');
+  var rows=snap.rows||[];
+  doc.autoTable({startY:y,margin:{left:M,right:M},head:[['Transportadora','UF','Telefone','Nº cotação','Prazo','Valor','Outros','Créd. %','Lucro %','Valor a cobrar']],
+    body:rows.length?rows.map(function(r){var v=parseFloat(r.valor)||0,o=parseFloat(r.outros)||0,cr=parseFloat(r.credito)||0,l=parseFloat(r.lucro)||0,vc=(v+o)*(1+cr/100)*(1+l/100);
+      return [t(r.nome),t(r.uf),t(r.tel),t(r.cotacao),(r.prazo!==''&&r.prazo!=null)?t(r.prazo)+' d.u.':'',v?t(fmtBRL(v)):'',o?t(fmtBRL(o)):'',cr||'',l||'',v?t(fmtBRL(vc)):''];}):[['-','','','','','','','','','']],
+    theme:'grid',headStyles:{fillColor:[243,243,241],textColor:[40,40,40]},styles:{fontSize:7,cellPadding:1.1,lineColor:[225,225,225]}});
+  y=doc.lastAutoTable.finalY+7;
+  secao('Código de recuperação');
+  doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(120,120,120);
+  y+=3;doc.text(t('Não apague este código. Para recarregar esta cotação no app use o botão "Importar PDF" em Cotação Frete e escolha este PDF.'),M,y);y+=3;
+  doc.setFont('courier','normal');doc.setFontSize(6);
+  var cod='<<RECUP:'+codigo+':RECUP>>';
+  for(var i=0;i<cod.length;i+=125){if(y>288){doc.addPage();y=14;}y+=2.6;doc.text(cod.slice(i,i+125),M,y);}
+  return doc.output('blob');
+}
+async function cotGravarPdf(dir,nome,blob){var fh=await dir.getFileHandle(nome,{create:true});var w=await fh.createWritable();await w.write(blob);await w.close();}
+async function cotLimparAntigos(dir,dias){
+  var lim=Date.now()-dias*864e5,n=0,nomes=[];
+  for await (var par of dir.entries()){
+    var nome=par[0],ent=par[1];
+    if(!ent||ent.kind!=='file')continue;
+    var m=String(nome).match(/^Frete_.+_(\d{4})-(\d{2})-(\d{2})_\d{4}\.pdf$/);
+    if(!m)continue;
+    if(new Date(+m[1],+m[2]-1,+m[3]).getTime()<lim)nomes.push(nome);
+  }
+  for(var i=0;i<nomes.length;i++){try{await dir.removeEntry(nomes[i]);n++;}catch(e){}}
+  return n;
+}
+function cotBaixarBlob(blob,nome){var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nome;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},4000);}
+async function salvarEGerarPdf(){
+  var num=STATE.form.numeroCotacao||'';
+  if(!num){alert('Informe o Nº da Cotação antes de salvar!');return;}
+  if(!salvarCotacao({silencioso:true}))return; // 1) salva a cotação primeiro: nada se perde se o PDF falhar
+  var msg='Cotação Nº '+num+' salva com sucesso!';
+  try{
+    var dir=await cotPastaObter(false); // 2) pasta (pede só na 1ª vez / quando o Chrome pedir)
+    var snap=cotSnapshot(),codigo=await cotCodificar(snap),blob=await cotGerarPdfBlob(snap,codigo);
+    var d=new Date(),p2=function(n){return String(n).padStart(2,'0');};
+    var nome='Frete_'+String(num).replace(/[^\w-]/g,'_')+'_'+d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())+'_'+p2(d.getHours())+p2(d.getMinutes())+'.pdf';
+    if(dir){
+      await cotGravarPdf(dir,nome,blob);
+      msg+='\nPDF gravado na pasta "'+dir.name+'": '+nome;
+      try{var n=await cotLimparAntigos(dir,COT_PDF_DIAS);if(n)msg+='\n'+n+' PDF(s) com mais de '+COT_PDF_DIAS+' dias foram apagados da pasta.';}catch(e){}
+    }else{
+      cotBaixarBlob(blob,nome);
+      msg+='\nNão há pasta escolhida (ou este navegador não permite): o PDF foi baixado como '+nome+'. Use o botão 📁 para escolher a pasta FRETE APP no Chrome.';
+    }
+  }catch(e){msg+='\nMas NÃO consegui gerar/gravar o PDF: '+e.message;}
+  alert(msg);
+}
+async function cotEscolherPasta(){
+  var h=await cotPastaObter(true);
+  alert(h?('Pasta dos PDFs: "'+h.name+'". A partir de agora, ao salvar, o PDF vai para ela.'):'Nenhuma pasta escolhida.');
+}
+
 async function importarCotacaoPDF(file){
   if(!file) return;
   if(STATE.form&&STATE.form.numeroCotacao&&!confirm('Importar este PDF vai substituir a cotação que está na tela (Nº '+STATE.form.numeroCotacao+'). Continuar?')) return;
@@ -12647,8 +12770,14 @@ function renderNav(){
   };
   var bSalv=document.createElement('button');
   bSalv.style.cssText='background:linear-gradient(135deg,#059669,#34d399);color:#fff;border:none;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit';
-  bSalv.textContent='💾 Salvar';
-  bSalv.onclick=function(){ salvarCotacao(); };
+  bSalv.textContent='💾 Salvar + PDF';
+  bSalv.title='Salva a cotação e grava o PDF completo na pasta FRETE APP';
+  bSalv.onclick=function(){ salvarEGerarPdf(); };
+  var bPasta=document.createElement('button');
+  bPasta.style.cssText='background:#fff;color:#047857;border:1.5px solid #6ee7b7;padding:4px 9px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit';
+  bPasta.textContent='📁';
+  bPasta.title='Escolher a pasta onde os PDFs são gravados (FRETE APP)';
+  bPasta.onclick=function(){ cotEscolherPasta(); };
   var bPrint=document.createElement('button');
   bPrint.id='btnImprimirHdr';
   bPrint.style.cssText='background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff;border:none;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit';
@@ -12663,7 +12792,7 @@ function renderNav(){
   bImp.onclick=function(){fImp.click();};
   actions.appendChild(bNova);
   actions.appendChild(bSalv);
-  actions.appendChild(bPrint);
+  actions.appendChild(bPasta);
   actions.appendChild(bImp);
   actions.appendChild(fImp);
   nav.appendChild(actions);
