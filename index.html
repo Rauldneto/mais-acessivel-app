@@ -12396,30 +12396,187 @@ function salvarCotacao(){
   }
 }
 
-function imprimirCotacao(){
-  // Usa dados atuais do STATE
-  var num=STATE.form.numeroCotacao||'';
-  if(!num){alert('Nenhuma cotação carregada para imprimir!'); return;}
-  var resumoTxt=calcResumo();
-  var transLines=STATE.manRows.filter(function(r){return parseFloat(r.valor)>0;}).map(function(r){
+// ── PDF COMPLETO + CÓDIGO DE RECUPERAÇÃO + IMPORTAR PDF ─────────────────────────
+// O PDF impresso leva TODAS as informações da cotação (inclusive linhas de transportadoras com qualquer dado
+// preenchido) e, no final, um "código de recuperação" em texto com a cotação inteira. O botão "📥 Importar PDF"
+// lê o PDF, acha o código e recarrega a cotação na tela. PDFs antigos (sem código) são lidos pelo texto (parcial).
+function cotEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function cotLinhasComInfo(){
+  return (STATE.manRows||[]).filter(function(r){
+    return (parseFloat(r.valor)>0) || (r.cotacao&&String(r.cotacao).trim()!=='') ||
+      (r.prazo&&String(r.prazo).trim()!=='') || (parseFloat(r.outros)>0) ||
+      (parseFloat(r.credito)>0) || (parseFloat(r.lucro)>0);
+  });
+}
+function cotSnapshot(){
+  return {v:1,app:'maisacessivel-cotacao',em:Date.now(),
+    form:JSON.parse(JSON.stringify(STATE.form||{})),
+    prods:JSON.parse(JSON.stringify(STATE.prods||[])),
+    rows:JSON.parse(JSON.stringify(cotLinhasComInfo()))};
+}
+function cotSoma(s){var a=1,b=0;for(var i=0;i<s.length;i++){a=(a+s.charCodeAt(i))%65521;b=(b+a)%65521;}return (b*65536+a).toString(16);}
+function cotB64(bytes){var s='';for(var i=0;i<bytes.length;i+=0x8000)s+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(s);}
+function cotB64Bytes(b64){var s=atob(b64),u=new Uint8Array(s.length);for(var i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u;}
+async function cotCodificar(obj){
+  var bytes=new TextEncoder().encode(JSON.stringify(obj)),pref='MAU1';
+  try{
+    if(typeof CompressionStream!=='undefined'){
+      var cs=new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+      bytes=new Uint8Array(await new Response(cs).arrayBuffer());pref='MAC1';
+    }
+  }catch(e){bytes=new TextEncoder().encode(JSON.stringify(obj));pref='MAU1';}
+  var b=cotB64(bytes);
+  return pref+'.'+b.length+'.'+cotSoma(b)+'.'+b;
+}
+async function cotDecodificar(cod){
+  var m=String(cod||'').match(/^(MAC1|MAU1)\.(\d+)\.([0-9a-f]+)\.([A-Za-z0-9+\/=]+)$/);
+  if(!m) throw new Error('O código de recuperação do PDF está incompleto.');
+  if(m[4].length!==parseInt(m[2],10)||cotSoma(m[4])!==m[3]) throw new Error('O código de recuperação do PDF veio com erro de leitura (use o PDF original, sem recortar páginas).');
+  var bytes=cotB64Bytes(m[4]);
+  if(m[1]==='MAC1'){
+    if(typeof DecompressionStream==='undefined') throw new Error('Este navegador não consegue abrir o código. Use o Chrome atualizado.');
+    var ds=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    bytes=new Uint8Array(await new Response(ds).arrayBuffer());
+  }
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+function cotHtmlImpressao(snap,codigo){
+  var f=snap.form||{},num=f.numeroCotacao||'';
+  var dt=new Date().toLocaleString('pt-BR');
+  var pagador=(f.frete==='FOB')?(f.cnpjDest||'—'):(f.cnpjRem||'—');
+  var conhecidos=['cnpjRem','cepOrig','cidadeOrig','ufOrig','endRem','cnpjDest','cepDest','cidadeDest','ufDest','endDest','valorNF','pesoTotal','nfEmitida','frete','numeroCotacao','solicitante','embalagem','horario','fechaAlmoco'];
+  function dado(k,v){return '<tr><th style="width:30%">'+cotEsc(k)+'</th><td>'+(v===''||v==null?'—':cotEsc(v))+'</td></tr>';}
+  var linhas=[
+    ['Nº da cotação',num],['Solicitante',f.solicitante],['Impressa em',dt],
+    ['Frete (CIF/FOB)',f.frete||'CIF'],['Pagador do frete (CNPJ)',pagador],
+    ['Remetente — CNPJ',f.cnpjRem],['Remetente — Cidade/UF',(f.cidadeOrig||'')+(f.ufOrig?' - '+f.ufOrig:'')],['Remetente — CEP',f.cepOrig],['Remetente — Endereço',f.endRem],
+    ['Destinatário — CNPJ',f.cnpjDest],['Destinatário — Cidade/UF',(f.cidadeDest||'')+(f.ufDest?' - '+f.ufDest:'')],['Destinatário — CEP',f.cepDest],['Destinatário — Endereço',f.endDest],
+    ['NF emitida',f.nfEmitida],['Valor da nota fiscal',fmtBRL(f.valorNF)],['Peso total',(f.pesoTotal||0)+' kg'],
+    ['Embalagem',f.embalagem],['Horário de recebimento',f.horario],['Fecha para almoço',f.fechaAlmoco]
+  ];
+  Object.keys(f).forEach(function(k){if(conhecidos.indexOf(k)<0&&f[k]!==''&&f[k]!=null&&typeof f[k]!=='object')linhas.push([k,f[k]]);});
+  var tDados='<table>'+linhas.map(function(l){return dado(l[0],l[1]);}).join('')+'</table>';
+  var prods=(snap.prods||[]).filter(function(p){return (p.nome&&String(p.nome).trim()!=='')||(parseFloat(p.vol)>0)||(p.dim&&String(p.dim).trim()!=='')||(parseFloat(p.cabe)>0);});
+  var tProd=prods.length?'<table><thead><tr><th>Produto</th><th>Vol.</th><th>Dimensão (C x L x A)</th><th>Un/Vol</th></tr></thead><tbody>'+prods.map(function(p){return '<tr><td>'+cotEsc(p.nome)+'</td><td style="text-align:center">'+cotEsc(p.vol)+'</td><td>'+cotEsc(p.dim)+'</td><td>'+cotEsc(p.cabe)+'</td></tr>';}).join('')+'</tbody></table>':'<p>—</p>';
+  var rows=snap.rows||[];
+  var tTr=rows.length?'<table><thead><tr><th>Transportadora</th><th>UF</th><th>Telefone</th><th>Nº cotação</th><th>Prazo</th><th>Valor</th><th>Outros</th><th>Crédito %</th><th>Lucro %</th><th>Valor a cobrar</th></tr></thead><tbody>'+rows.map(function(r){
     var v=parseFloat(r.valor)||0,o=parseFloat(r.outros)||0,cr=parseFloat(r.credito)||0,l=parseFloat(r.lucro)||0;
     var vc=(v+o)*(1+cr/100)*(1+l/100);
-    return '<tr><td>'+r.nome+'</td><td>'+r.tel+'</td><td>'+r.cotacao+'</td><td>'+r.prazo+' d.u.</td><td>'+fmtBRL(v)+'</td><td>'+fmtBRL(vc)+'</td></tr>';
-  }).join('');
-  var prodLines=STATE.prods.filter(function(p){return p.nome;}).map(function(p){
-    return '<tr><td>'+p.nome+'</td><td style="text-align:center">'+p.vol+'</td><td>'+p.dim+'</td></tr>';
-  }).join('');
-  var win=window.open('','_blank');
-  var dt=new Date().toLocaleString('pt-BR');
-  win.document.write('<html><head><title>Cotação Nº '+num+'</title><style>body{font-family:Arial,sans-serif;font-size:12px;padding:20px;color:#1a1a1a}h1{color:#d97706;font-size:18px;margin-bottom:4px}h2{font-size:13px;color:#444;border-bottom:1px solid #ddd;padding-bottom:4px;margin-top:16px}table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#f3f3f1;padding:6px 8px;text-align:left;font-size:11px;border-bottom:2px solid #ddd}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:11px}pre{background:#f9f9f7;padding:12px;border-radius:6px;font-size:11px;line-height:1.8;white-space:pre-wrap}.badge{background:#fff8eb;border:1px solid #fde68a;padding:2px 8px;border-radius:4px;font-size:11px;color:#92400e;font-weight:700}@media print{body{padding:10px}}</style></head><body>');
-  win.document.write('<h2 style="color:#d97706">MAIS ACESSÍVEL — Sistema de Cotação de Frete</h2>');
-  win.document.write('<span class="badge">Cotação Nº '+num+'</span> &nbsp; <span style="color:#888;font-size:11px">'+dt+'</span>');
-  win.document.write('<h2>📤 Resumo</h2><pre>'+resumoTxt+'</pre>');
-  win.document.write('<h2>📦 Produtos</h2><table><thead><tr><th>Produto</th><th>Vol.</th><th>Dimensão</th></tr></thead><tbody>'+prodLines+'</tbody></table>');
-  if(transLines) win.document.write('<h2>🚛 Transportadoras Cotadas</h2><table><thead><tr><th>Transportadora</th><th>Telefone</th><th>Cotação</th><th>Prazo</th><th>Valor</th><th>Valor Cobrar</th></tr></thead><tbody>'+transLines+'</tbody></table>');
-  win.document.write('</body></html>');
+    return '<tr><td>'+cotEsc(r.nome)+'</td><td>'+cotEsc(r.uf)+'</td><td>'+cotEsc(r.tel)+'</td><td>'+cotEsc(r.cotacao)+'</td><td>'+(r.prazo!==''&&r.prazo!=null?cotEsc(r.prazo)+' d.u.':'')+'</td><td>'+(v?fmtBRL(v):'')+'</td><td>'+(o?fmtBRL(o):'')+'</td><td>'+(cr||'')+'</td><td>'+(l||'')+'</td><td>'+(v?fmtBRL(vc):'')+'</td></tr>';
+  }).join('')+'</tbody></table>':'<p>—</p>';
+  var css='body{font-family:Arial,sans-serif;font-size:12px;padding:20px;color:#1a1a1a}h2{font-size:13px;color:#444;border-bottom:1px solid #ddd;padding-bottom:4px;margin-top:16px}table{width:100%;border-collapse:collapse;margin-top:8px}th{background:#f3f3f1;padding:5px 8px;text-align:left;font-size:11px;border-bottom:1px solid #ddd}td{padding:5px 8px;border-bottom:1px solid #eee;font-size:11px}pre{background:#f9f9f7;padding:12px;border-radius:6px;font-size:11px;line-height:1.8;white-space:pre-wrap}.badge{background:#fff8eb;border:1px solid #fde68a;padding:2px 8px;border-radius:4px;font-size:11px;color:#92400e;font-weight:700}.rec{font:7px/1.25 monospace;color:#777;word-break:break-all;margin-top:4px}@media print{body{padding:10px}}';
+  return '<html><head><meta charset="utf-8"><title>Cotação Nº '+cotEsc(num)+'</title><style>'+css+'</style></head><body>'+
+    '<h2 style="color:#d97706;margin-top:0">MAIS ACESSÍVEL — Sistema de Cotação de Frete</h2>'+
+    '<span class="badge">Cotação Nº '+cotEsc(num)+'</span> &nbsp; <span style="color:#888;font-size:11px">'+cotEsc(dt)+'</span>'+
+    '<h2>📋 Dados da cotação</h2>'+tDados+
+    '<h2>📤 Resumo</h2><pre>'+cotEsc(calcResumo())+'</pre>'+
+    '<h2>📦 Produtos</h2>'+tProd+
+    '<h2>🚛 Transportadoras</h2>'+tTr+
+    '<h2>🔐 Código de recuperação</h2><div style="font-size:10px;color:#888">Não apague este código. Para recarregar esta cotação no app, use o botão <b>📥 Importar PDF</b> em Cotação Frete e escolha este PDF.</div>'+
+    '<div class="rec">&lt;&lt;RECUP:'+codigo+':RECUP&gt;&gt;</div>'+
+    '</body></html>';
+}
+async function imprimirCotacao(){
+  var num=STATE.form.numeroCotacao||'';
+  if(!num){alert('Nenhuma cotação carregada para imprimir!'); return;}
+  var win=window.open('','_blank'); // abre já, dentro do clique (senão o navegador bloqueia)
+  if(!win){alert('O navegador bloqueou a janela de impressão. Libere pop-ups para este site e tente de novo.');return;}
+  win.document.write('<p style="font-family:Arial;padding:20px">Preparando o PDF…</p>');
+  var snap=cotSnapshot(),codigo='';
+  try{codigo=await cotCodificar(snap);}catch(e){codigo='';}
+  win.document.open();
+  win.document.write(cotHtmlImpressao(snap,codigo));
   win.document.close();
   setTimeout(function(){win.print();},500);
+}
+// ---- importar ----
+function cotAplicar(snap){
+  var tmp=Object.assign({},INIT,snap.form||{});
+  STATE.form=tmp;
+  STATE.prods=(snap.prods&&snap.prods.length)?snap.prods:[{nome:'',vol:0,dim:'',cabe:''}];
+  var uf=tmp.ufDest||'',base=uf?getManRows(uf):[],mapa={},usados={};
+  (snap.rows||[]).forEach(function(r){mapa[String(r.nome||'').toUpperCase()]=r;});
+  STATE.manRows=base.map(function(r){
+    var k=String(r.nome||'').toUpperCase(),s=mapa[k];
+    if(s){usados[k]=1;return Object.assign({},r,{cotacao:s.cotacao||'',prazo:s.prazo||'',valor:s.valor||'',outros:s.outros||'',credito:s.credito||'',lucro:s.lucro||''});}
+    return r;
+  });
+  (snap.rows||[]).forEach(function(r){var k=String(r.nome||'').toUpperCase();if(!usados[k])STATE.manRows.push(Object.assign({},r,{nr:STATE.manRows.length+1}));});
+  STATE.tab='cotacao';STATE.modulo='frete';render();
+}
+async function cotLerPdf(file){
+  if(typeof pdfjsLib==='undefined') throw new Error('A biblioteca de PDF não carregou. Atualize a página e tente de novo.');
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  var pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise,itens=[];
+  for(var p=1;p<=pdf.numPages;p++){
+    var pg=await pdf.getPage(p),tc=await pg.getTextContent();
+    tc.items.forEach(function(it){if(it.str!==undefined)itens.push({s:it.str,x:it.transform[4],y:it.transform[5],p:p});});
+  }
+  return itens;
+}
+function cotLinhas(itens){ // agrupa o texto em linhas (por página e altura) e separa as células
+  var L=[];
+  itens.forEach(function(it){
+    var a=L.filter(function(l){return l.p===it.p&&Math.abs(l.y-it.y)<2.5;})[0];
+    if(!a){a={p:it.p,y:it.y,c:[]};L.push(a);}
+    a.c.push(it);
+  });
+  L.sort(function(a,b){return a.p-b.p||b.y-a.y;});
+  return L.map(function(l){l.c.sort(function(a,b){return a.x-b.x;});return l.c.map(function(c){return c.s.trim();}).filter(Boolean);});
+}
+async function cotParseLegado(itens){
+  var linhas=cotLinhas(itens),txt=linhas.map(function(l){return l.join(' ');}).join('\n');
+  function pick(re){var m=txt.match(re);return m?m[1].trim():'';}
+  var num=pick(/\*\s*N[ºo°]\s*Cota[çc][ãa]o:\s*([^\n]+)/)||pick(/Cota[çc][ãa]o N[ºo°]\s*([0-9A-Za-z-]+)/);
+  if(!num||num==='—') return null;
+  var num2=function(v){v=String(v||'').replace(/[^\d.,]/g,'');if(v.indexOf(',')>=0)v=v.replace(/\./g,'').replace(',','.');return v;};
+  var cep=pick(/CEP de destino:\s*(\d{8})/);
+  var f={numeroCotacao:num,cnpjRem:pick(/CNPJ do remetente:\s*([\d.\/-]+)/)||INIT.cnpjRem,cnpjDest:pick(/CNPJ do destinat[áa]rio:\s*([\d.\/-]+)/),
+    frete:pick(/\*\s*Frete:\s*(CIF|FOB)/)||'CIF',cepDest:cep?cep.replace(/^(\d{5})(\d{3})$/,'$1-$2'):'',
+    valorNF:num2(pick(/Valor da nota fiscal:\s*R\$\s*([\d.,]+)/)),pesoTotal:num2(pick(/Peso total:\s*([\d.,]+)\s*kg/))};
+  var cd=txt.match(/Cidade de destino:\s*(.+?)\s*-\s*([A-Z]{2})\b/);
+  if(cd){f.cidadeDest=cd[1].trim();f.ufDest=cd[2];}
+  else if(cep){try{var r=await fetch('https://viacep.com.br/ws/'+cep+'/json/').then(function(x){return x.json();});if(r&&!r.erro){f.cidadeDest=r.localidade||'';f.ufDest=r.uf||'';f.endDest=[r.logradouro,r.bairro].filter(Boolean).join(', ');}}catch(e){}}
+  var prods=[],rows=[],secao='';
+  linhas.forEach(function(l){
+    var t=l.join(' ');
+    if(/Produtos/.test(t)&&l.length<=2){secao='p';return;}
+    if(/Transportadoras/.test(t)&&l.length<=3){secao='t';return;}
+    if(secao==='p'){
+      if(l.length>=3&&/^\d+$/.test(l[1])){prods.push({nome:l[0],vol:parseInt(l[1],10),dim:l[2],cabe:''});}
+      else{var mp=t.match(/^(.+?)\s+(\d+)\s+(\d+(?:[.,]\d+)?\s*x\s*.+)$/);if(mp&&!/^Produto\s+Vol/i.test(t))prods.push({nome:mp[1].trim(),vol:parseInt(mp[2],10),dim:mp[3].trim(),cabe:''});}
+    }
+    if(secao==='t'){
+      // a linha pode vir em células separadas ou colada; lê o fim (prazo + valor + valor a cobrar) e separa o resto
+      var mt=t.match(/^(.*?)\s*(\d+)\s*d\.u\.\s*R\$\s*([\d.,]+)\s*R\$\s*([\d.,]+)\s*$/);
+      if(mt){
+        var pre=mt[1].trim(),nome=l[0]&&pre.indexOf(l[0])===0?l[0]:pre,resto=pre.slice(nome.length).trim(),cot=resto;
+        var td=(typeof TRANS_DATA!=='undefined'?TRANS_DATA:[]).filter(function(x){return String(x.nome||'').toUpperCase()===String(nome).toUpperCase();})[0];
+        var tel=td&&td.tel?String(td.tel):'';
+        if(tel&&resto.indexOf(tel)===0)cot=resto.slice(tel.length).trim();
+        else{var mt2=resto.match(/^(\(\d{2}\)\s?\d[\d\s.-]*?\d|SITE)\s+(.*)$/);cot=mt2?mt2[2].trim():(tel?resto:'');}
+        rows.push({nome:nome,tel:tel,cotacao:cot,prazo:String(parseInt(mt[2],10)||''),valor:num2(mt[3]),outros:'',credito:'',lucro:''});
+      }
+    }
+  });
+  return {v:1,legado:true,form:f,prods:prods,rows:rows};
+}
+async function importarCotacaoPDF(file){
+  if(!file) return;
+  if(STATE.form&&STATE.form.numeroCotacao&&!confirm('Importar este PDF vai substituir a cotação que está na tela (Nº '+STATE.form.numeroCotacao+'). Continuar?')) return;
+  try{
+    var itens=await cotLerPdf(file);
+    var todo=itens.map(function(i){return i.s;}).join('').replace(/\s+/g,'');
+    var m=todo.match(/<<RECUP:([\s\S]*?):RECUP>>/),snap=null,parcial=false;
+    if(m){snap=await cotDecodificar(m[1]);}
+    else{snap=await cotParseLegado(itens);parcial=true;}
+    if(!snap||!snap.form){alert('Não encontrei uma cotação neste PDF. Ele precisa ser um PDF gerado pelo botão 🖨️ Imprimir do app.');return;}
+    cotAplicar(snap);
+    var nP=(snap.prods||[]).length,nT=(snap.rows||[]).length;
+    setTimeout(function(){alert(parcial
+      ?('PDF antigo lido pelo texto (importação parcial). Cotação Nº '+snap.form.numeroCotacao+': '+nP+' produto(s) e '+nT+' transportadora(s) com valor. CONFIRA os campos e clique em 💾 Salvar.')
+      :('Cotação Nº '+snap.form.numeroCotacao+' recarregada por completo: '+nP+' produto(s) e '+nT+' transportadora(s). Confira e clique em 💾 Salvar para guardar.'));},300);
+  }catch(e){alert('Não consegui importar o PDF: '+e.message);}
 }
 
 function renderHeader(){
@@ -12497,9 +12654,18 @@ function renderNav(){
   bPrint.style.cssText='background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff;border:none;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit';
   bPrint.textContent='🖨️ Imprimir';
   bPrint.onclick=function(){ imprimirCotacao(); };
+  var bImp=document.createElement('button');
+  bImp.style.cssText='background:#fff;color:#7c3aed;border:1.5px solid #a78bfa;padding:4px 12px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit';
+  bImp.textContent='📥 Importar PDF';
+  bImp.title='Recarrega uma cotação a partir do PDF impresso por este app';
+  var fImp=document.createElement('input');fImp.type='file';fImp.accept='.pdf,application/pdf';fImp.style.display='none';
+  fImp.onchange=function(){var f=fImp.files&&fImp.files[0];fImp.value='';importarCotacaoPDF(f);};
+  bImp.onclick=function(){fImp.click();};
   actions.appendChild(bNova);
   actions.appendChild(bSalv);
   actions.appendChild(bPrint);
+  actions.appendChild(bImp);
+  actions.appendChild(fImp);
   nav.appendChild(actions);
   return nav;
 }
