@@ -13151,7 +13151,7 @@ function finGerarHistorico(c,d){
   var partes=['Frete '+(d.frete||'CIF'),FIN_ORIGEM+' → '+(c.destCity||'—')+'/'+(c.destUF||'—')];
   if(d.nf) partes.push('NF '+d.nf);
   partes.push('Orçamento '+c.id);
-  if(d.despacho){var dt=new Date(d.despacho); if(!isNaN(dt)) partes.push('Despacho '+dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}));}
+  if(d.despacho){var mm=String(d.despacho).match(/^(\d{4})-(\d{2})-(\d{2})/); if(mm) partes.push('Coleta programada '+mm[3]+'/'+mm[2]+'/'+mm[1]); else {var dt=new Date(d.despacho); if(!isNaN(dt)) partes.push('Coleta programada '+dt.toLocaleDateString('pt-BR'));}}
   if(d.obs) partes.push(d.obs);
   return partes.join(' | ');
 }
@@ -13182,15 +13182,14 @@ function abrirLancarFinanceiro(c,onSaved){
    '<datalist id="finFornList">'+FIN_TRANSP_BLING.map(function(b){return '<option value="'+esc(b[0])+'">';}).join('')+'</datalist>'+
    '<div id="finBlingMsg" style="margin-top:6px;font-size:12px"></div>'+
    '<div id="finCadWarn" style="display:none;margin-top:6px;border:1px solid #fde68a;background:#fffbeb;border-radius:6px;padding:9px"></div>'+
-   '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">'+
+   '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">'+
    '<div><label style="'+L+'">Valor *</label><input id="finValor" style="'+I+'" inputmode="decimal"></div>'+
    '<div><label style="'+L+'">Emissão *</label><input id="finEmissao" type="date" style="'+I+'" value="'+esc(prev.emissao||finHoje())+'"></div>'+
-   '<div><label style="'+L+'">Competência *</label><input id="finCompet" type="date" style="'+I+'" value="'+esc(prev.competencia||finHoje())+'"></div>'+
-   '<div><label style="'+L+'">Vencimento *</label><input id="finVenc" type="date" style="'+I+'" value="'+esc(venc)+'"></div></div>'+
+   '<div><label style="'+L+'">Vencimento (opcional)</label><input id="finVenc" type="date" style="'+I+'" value="'+esc(venc)+'"></div></div>'+
    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">'+
-   '<div><label style="'+L+'">Frete (CIF/FOB) *</label><select id="finFrete" style="'+I+'"><option>CIF</option><option>FOB</option></select></div>'+
-   '<div><label style="'+L+'">Nº NF *</label><input id="finNF" style="'+I+'" value="'+esc(prev.nf||'')+'"></div>'+
-   '<div><label style="'+L+'">Despacho (data e hora)</label><input id="finDesp" type="datetime-local" style="'+I+'" value="'+esc(prev.despacho||'')+'"></div></div>'+
+   '<div><label style="'+L+'">Frete (vem da cotação)</label><input id="finFrete" readonly style="'+I+';background:#f3f3f1;color:#444"></div>'+
+   '<div><label style="'+L+'">Nº NF (opcional)</label><input id="finNF" style="'+I+'" value="'+esc(prev.nf||'')+'"></div>'+
+   '<div><label style="'+L+'">Coleta programada (data)</label><input id="finDesp" type="date" style="'+I+'" value="'+esc(String(prev.despacho||'').slice(0,10))+'"></div></div>'+
    '<div id="finFobWarn" style="display:none;margin-top:6px;border:1px solid #fca5a5;background:#fef2f2;border-radius:6px;padding:8px;font-size:12px;color:#991b1b">⚠ Frete FOB: normalmente o cliente paga a transportadora. Confirme que a empresa realmente pagará este frete.</div>'+
    '<div style="display:grid;grid-template-columns:1fr;gap:10px">'+
    '<div><label style="'+L+'">Observações</label><input id="finObs" style="'+I+'" value="'+esc(prev.obs||'')+'"></div></div>'+
@@ -13198,17 +13197,13 @@ function abrirLancarFinanceiro(c,onSaved){
    '<textarea id="finHist" maxlength="2000" rows="3" style="'+I+';margin-top:3px"></textarea>'+
    '<div style="margin-top:12px;border-top:1px solid #e8e8e6;padding-top:8px"><div style="font-weight:700;margin-bottom:2px">Pagamento</div>'+
    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
-   '<div><label style="'+L+'">Forma de pagamento negociada *</label><select id="finForma" style="'+I+'"><option value="">Selecione...</option>'+opts(FIN_FORMAS,prev.forma||'',true)+'</select></div>'+
-   '<div><label style="'+L+'">Prazo / condição negociada</label><input id="finCond" style="'+I+'" placeholder="Ex.: 28 dias, à vista no PIX" value="'+esc(prev.condicao||'')+'"></div>'+
-   '<div><label style="'+L+'">Conta financeira (portador) — o financeiro define</label><select id="finConta" style="'+I+'"><option value="">Selecione...</option>'+opts(FIN_CONTAS,prev.conta||'',true)+'</select></div>'+
-   '<div><label style="'+L+'">Categoria *</label><select id="finCat" style="'+I+'">'+opts(FIN_CATEGORIAS,prev.categoria||FIN_CATEGORIAS[0],false)+'</select></div>'+
-   '<div><label style="'+L+'">Juros %</label><input id="finJuros" style="'+I+'" value="'+esc(prev.juros||'')+'"></div>'+
-   '<div><label style="'+L+'">Multa %</label><input id="finMulta" style="'+I+'" value="'+esc(prev.multa||'')+'"></div></div></div>'+
+   '<div><label style="'+L+'">Forma de pagamento *</label><select id="finForma" style="'+I+'"><option value="">Selecione...</option>'+opts(FIN_FORMAS,prev.forma||'',true)+'</select></div>'+
+   '<div><label style="'+L+'">Categoria *</label><select id="finCat" style="'+I+'">'+opts(FIN_CATEGORIAS,prev.categoria||FIN_CATEGORIAS[0],false)+'</select></div></div></div>'+
    '<div id="finErr" style="display:none;margin-top:10px;border:1px solid #fca5a5;background:#fef2f2;color:#991b1b;border-radius:6px;padding:8px;font-size:12px"></div>'+
    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button id="finCancel" style="padding:8px 14px;border:1px solid #c8c8c4;background:#f3f3f1;border-radius:6px;cursor:pointer">Cancelar</button><button id="finSave" style="padding:8px 16px;border:none;background:#16a34a;color:#fff;border-radius:6px;font-weight:700;cursor:pointer">Salvar como pendente</button></div>';
   document.body.appendChild(ov);
   function $(id){return box.querySelector('#'+id);}
-  $('finFrete').value=prev.frete||c.frete||'CIF';
+  $('finFrete').value=c.frete||prev.frete||'CIF';
   var camposCad=[['cnpj','CNPJ *'],['nome','Nome (razão social) *'],['fantasia','Fantasia'],['ie','Inscrição estadual'],['cep','CEP *'],['uf','UF'],['endereco','Endereço'],['numero','Número'],['compl','Complemento'],['email','E-mail'],['celular','Celular'],['fone','Fone']];
   var cad=prev.cadastro||{};
   $('finCadWarn').innerHTML='<div style="font-weight:700;margin-bottom:4px">Adicionar cadastro no Bling — transportadora ainda não cadastrada</div><div style="font-size:11px;color:#666;margin-bottom:4px">Pessoa Jurídica · Contribuinte 9 - Não contribuinte · Tipo de contato: Transportador</div><div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><button id="finBuscaCnpj" type="button" style="padding:7px 12px;border:none;background:#2563eb;color:#fff;border-radius:6px;font-weight:700;cursor:pointer;font-size:12px">🔍 Buscar dados pelo CNPJ</button><span id="finCnpjMsg" style="font-size:12px;color:#555">Digite o CNPJ: os dados são preenchidos automaticamente.</span></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'+camposCad.map(function(k){return '<div><label style="'+L+'">'+k[1]+'</label><input data-cad="'+k[0]+'" style="'+I+'" value="'+esc(cad[k[0]]||'')+'"></div>';}).join('')+'</div>';
@@ -13323,12 +13318,12 @@ function abrirLancarFinanceiro(c,onSaved){
   $('finSave').onclick=function(){
     var btn=$('finSave');
     var d={
-      fornecedor:$('finFornecedor').value.trim(),valor:$('finValor').value.trim(),emissao:$('finEmissao').value,competencia:$('finCompet').value,vencimento:$('finVenc').value,
-      frete:$('finFrete').value,nf:$('finNF').value.trim(),despacho:$('finDesp').value,obs:$('finObs').value.trim(),condicao:$('finCond').value.trim(),
+      fornecedor:$('finFornecedor').value.trim(),valor:$('finValor').value.trim(),emissao:$('finEmissao').value,vencimento:$('finVenc').value,
+      frete:$('finFrete').value,nf:$('finNF').value.trim(),despacho:$('finDesp').value,obs:$('finObs').value.trim(),
       historico:$('finHist').value.trim(),forma:$('finForma').value,formaNome:$('finForma').selectedOptions[0]?$('finForma').selectedOptions[0].textContent:'',
-      conta:$('finConta').value,contaNome:$('finConta').selectedOptions[0]?$('finConta').selectedOptions[0].textContent:'',
-      categoria:$('finCat').value,documento:$('finNF').value.trim(),juros:$('finJuros').value.trim(),multa:$('finMulta').value.trim(),ocorrencia:'Única'
+      categoria:$('finCat').value,documento:$('finNF').value.trim(),ocorrencia:'Única'
     };
+    d.competencia=d.emissao;
     var r=box.querySelector('input[name=finWin]:checked'); d.vencedor=r?parseInt(r.value,10):null;
     var existeBling=blingMatch?[blingMatch.nome,String(blingMatch.doc||'').replace(/\D/g,'')]:(blingNone?null:finNoBling(d.fornecedor,(box.querySelector('[data-cad=cnpj]')||{}).value)); d.fornecedorBling=existeBling?{nome:existeBling[0],cnpj:existeBling[1],id:blingMatch?blingMatch.id:undefined}:null;
     var cadObj={}; box.querySelectorAll('[data-cad]').forEach(function(el){cadObj[el.getAttribute('data-cad')]=el.value.trim();});
@@ -13338,9 +13333,8 @@ function abrirLancarFinanceiro(c,onSaved){
     var erros=[];
     if(!d.fornecedor) erros.push('Fornecedor');
     if(!(valorNum>0)) erros.push('Valor');
-    if(!d.emissao) erros.push('Emissão'); if(!d.vencimento) erros.push('Vencimento');
-    if(!d.nf) erros.push('Nº NF');
-    if(!d.historico) erros.push('Histórico'); if(!d.forma) erros.push('Forma de pagamento negociada');
+    if(!d.emissao) erros.push('Emissão');
+    if(!d.historico) erros.push('Histórico'); if(!d.forma) erros.push('Forma de pagamento');
     if(!d.categoria) erros.push('Categoria');
     if(buscandoB) erros.push('Aguarde a busca no Bling terminar');
     if(candPend) erros.push('Escolha o cadastro parecido do Bling ou "cadastrar nova transportadora"');
@@ -13351,13 +13345,13 @@ function abrirLancarFinanceiro(c,onSaved){
     var url=FIREBASE_DB+'/financeiro/fretes/'+chave+'.json';
     var docCnpj=String((existeBling?existeBling[1]:cadObj.cnpj)||'').replace(/\D/g,'');
     var catId=/venda/i.test(d.categoria)?'14700094019':'14634451798';
-    var contaId=d.conta||'';
+    var contaId='';
     if(!contaId){try{contaId=(typeof frtContaSugerida==='function'&&d.forma)?(frtContaSugerida(d.forma)||''):'';}catch(_){contaId='';}}
-    var obsDoc=[d.condicao?('Condição negociada: '+d.condicao):'','Cotação Nº '+c.id+(c.solicitante?' · solicitante '+c.solicitante:''),d.obs].filter(Boolean).join(' | ');
+    var obsDoc=['Cotação Nº '+c.id+(c.solicitante?' · solicitante '+c.solicitante:''),d.obs].filter(Boolean).join(' | ');
     var dados={status:'pendente',origem:'cotacao',cotacaoId:String(c.id),atualizadoEm:agora,
       fornecedor:{nome:existeBling?existeBling[0]:d.fornecedor,doc:[11,14].indexOf(docCnpj.length)>=0?docCnpj:'',docParcial:''},
-      valor:valorNum,emissao:d.emissao,competencia:d.competencia||d.emissao,vencimento:d.vencimento,numeroDocumento:d.nf,historico:d.historico,
-      formaId:d.forma,contaId:contaId,categoria:catId,parcelas:1,condicaoNegociada:d.condicao,obs:obsDoc,
+      valor:valorNum,emissao:d.emissao,competencia:d.emissao,vencimento:d.vencimento||'',numeroDocumento:d.nf,historico:d.historico,
+      formaId:d.forma,contaId:contaId,categoria:catId,parcelas:1,coletaProgramada:d.despacho||'',obs:obsDoc,
       freteTipo:d.frete,cotacaoDestino:(c.destCity||'')+'/'+(c.destUF||''),tipoDoc:'',itens:[],incertos:[],leituraErro:null};
     if(blingMatch) dados.contato={id:String(blingMatch.id),nome:blingMatch.nome,doc:String(blingMatch.doc||'').replace(/\D/g,'')};
     if(!existeBling&&cadObj.cnpj) dados.cadastroApp=cadObj;
