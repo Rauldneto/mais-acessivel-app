@@ -3027,7 +3027,7 @@ function irParaModulo(id,sub){
   window.scrollTo(0,0);render();
 }
 function iniBRL(v){return 'R$ '+(Number(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function iniBRLc(v){v=Number(v)||0;if(v>=1e6)return 'R$ '+(v/1e6).toLocaleString('pt-BR',{maximumFractionDigits:1})+' mi';if(v>=1e4)return 'R$ '+(v/1e3).toLocaleString('pt-BR',{maximumFractionDigits:1})+' mil';return iniBRL(v);}
+function iniBRLc(v){v=Number(v)||0;if(v>=1e6)return 'R$ '+(v/1e6).toLocaleString('pt-BR',{maximumFractionDigits:1})+' mi';if(v>=1e3)return 'R$ '+Math.round(v/1e3).toLocaleString('pt-BR')+' mil';return 'R$ '+Math.round(v).toLocaleString('pt-BR');}
 function iniNome(u){u=String(u||'').trim();return u?u.charAt(0).toUpperCase()+u.slice(1):'';}
 function iniQuando(t){if(!t)return '';var d=new Date(t);if(isNaN(d))return '';var hj=new Date();var mesmo=d.toDateString()===hj.toDateString();
   return (mesmo?'hoje':d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}))+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
@@ -3140,7 +3140,7 @@ function iniCss(){
   '.ini *{box-sizing:border-box}'+
   '.ini-top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}'+
   '.ini-ola{font-size:26px;font-weight:800;letter-spacing:-.4px;line-height:1.15;margin:0}'+
-  '.ini-dt{font-size:13px;color:#8e8e93;margin-top:4px;text-transform:capitalize}'+
+  '.ini-dt{font-size:13px;color:#8e8e93;margin-top:4px}'+
   '.ini-atu{border:1px solid #d1d1d6;background:#fff;border-radius:10px;padding:8px 14px;font:600 13px inherit;font-family:inherit;color:#1c1c1e;cursor:pointer}'+
   '.ini-atu:hover{background:#f5f5f7}'+
   '.ini-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px;align-items:start}'+
@@ -3172,7 +3172,7 @@ function iniCss(){
   '.ini-li .t{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'+
   '.ini-li .s{color:#8e8e93;font-size:11.5px;margin-top:1px}'+
   '.ini-li .v{text-align:right;white-space:nowrap;color:#3a3a3c;font-size:12px}'+
-  '.ini-tb{width:100%;border-collapse:collapse;font-size:12.5px}'+
+  '.ini-tb{width:100%;border-collapse:collapse;font-size:12.5px;font-family:inherit}.ini-tb td,.ini-tb th{font-family:inherit!important;background:none}'+
   '.ini-tb th{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:#8e8e93;font-weight:700;text-align:right;padding:4px 4px 6px}'+
   '.ini-tb th:first-child,.ini-tb td:first-child{text-align:left}'+
   '.ini-tb td{padding:6px 4px;border-top:1px solid #f0f0f3;text-align:right}'+
@@ -3295,7 +3295,7 @@ function iniHtmlFin(){
         iniK(r.n,'a lançar no Bling',r.n?'dest':'ok',ir)+iniK(iniBRLc(r.valor),'valor a lançar','')+'</div>'+
         ((r.venc||r.semana)?'<div class="ini-chips">'+(r.venc?'<span class="ini-chip" style="background:#ffe5e7;color:#d70015">Vencidas<b>'+r.venc+'</b></span>':'')+(r.semana?'<span class="ini-chip" style="background:#fff4e0;color:#b25e00">Vencem em 7 dias<b>'+r.semana+'</b></span>':'')+'</div>':'')+'</div>';
     }
-    corpo='<div class="ini-sec2">'+bloco('Despesas',dp,'mod14',INI.erro.desp)+bloco('Fretes (CT-e)',fr,'mod16',INI.erro.frt)+'</div>';
+    corpo='<div>'+bloco('Despesas',dp,'mod14',INI.erro.desp)+bloco('Fretes (CT-e)',fr,'mod16',INI.erro.frt)+'</div>';
   }
   return iniCard('#0a7d6b','ti-cash','💸','Financeiro','Lançamentos pendentes · só administrador','','',corpo);
 }
@@ -3303,7 +3303,7 @@ function iniHtmlFin(){
 function iniDraw(){
   var root=document.getElementById('iniRoot');if(!root)return;
   var hr=new Date().getHours(),sau=hr<12?'Bom dia':(hr<18?'Boa tarde':'Boa noite');
-  var dt=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
+  var dt=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});dt=dt.charAt(0).toUpperCase()+dt.slice(1);
   var cards=[];
   if(iniPode('frete'))cards.push(iniHtmlFrete());
   if(iniPode('mod10'))cards.push(iniHtmlCotacoes());
