@@ -1,0 +1,54 @@
+name: Publicar extensão na Chrome Web Store
+
+# Roda sozinho quando o código da extensão muda na branch main,
+# ou manualmente pela aba "Actions" do GitHub.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'extensao-vendas/**'
+  workflow_dispatch:
+
+concurrency:
+  group: publicar-extensao
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    env:
+      EXTENSION_ID: ojhkakepmgbmhnfoabkmmjbpilmhhmpj
+      PUBLISHER_ID: 04a62301-daa3-4ee8-bdc1-a871836179ce
+      CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+      CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+      REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Conferir credenciais
+        id: cred
+        run: |
+          if [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ] || [ -z "$REFRESH_TOKEN" ]; then
+            echo "::warning::Credenciais da Chrome Web Store ainda não cadastradas nos segredos do repositório. Nada foi publicado."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mostrar versão
+        run: |
+          echo "Versão no manifest: $(node -p "require('./extensao-vendas/manifest.json').version")"
+
+      - name: Empacotar
+        run: |
+          cd extensao-vendas
+          zip -r ../extensao-vendas.zip . -x '.*' -x 'LEIA-ME.md'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extensao-vendas-zip
+          path: extensao-vendas.zip
+
+      - name: Enviar e publicar na loja
+        if: steps.cred.outputs.ok == 'true'
+        run: npx --yes chrome-webstore-upload-cli@4.0.2 --source extensao-vendas.zip
