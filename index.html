@@ -1138,7 +1138,7 @@ function renderAdmin(){
   var divAbas=document.createElement('div');
   divAbas.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap';
   divAbas.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso &agrave;s abas:</span>';
-  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod8',label:'Produtos'},{id:'mod9',label:'Clientes'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod10',label:'Cotações (conferência)'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'},{id:'ext',label:'🧩 Botão Extensão'}].forEach(function(ab){
+  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod8',label:'Produtos'},{id:'mod9',label:'Clientes'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod10',label:'Cotações (conferência)'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'},{id:'mod17',label:'💠 Financeiro › BLING'},{id:'ext',label:'🧩 Botão Extensão'}].forEach(function(ab){
     var lbl=document.createElement('label');
     lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
     var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=false;
@@ -3007,7 +3007,7 @@ function iniModulos(){
   var ids=todos;
   if(STATE.abasPermitidas&&STATE.abasPermitidas.length){
     var p=STATE.abasPermitidas.map(function(a){return a==='mod1'?'frete':a;});
-    ['frete','mod10','mod17'].forEach(function(x){if(p.indexOf(x)<0)p.push(x);});
+    ['frete','mod10'].forEach(function(x){if(p.indexOf(x)<0)p.push(x);});
     ids=todos.filter(function(id){return p.indexOf(id)>=0;});
   }
   var soAdmin=['mod11','mod12','mod13','mod14','mod15','mod16'];
@@ -3359,7 +3359,7 @@ function renderModuloNav(){
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
     var permitidas=STATE.abasPermitidas.map(function(a){return MAPA_IDS[a]||a;});
     // Frete e Cotações (check das cotações): todos os colaboradores veem sempre
-    ['frete','mod10','mod17'].forEach(function(x){if(permitidas.indexOf(x)<0)permitidas.push(x);});
+    ['frete','mod10'].forEach(function(x){if(permitidas.indexOf(x)<0)permitidas.push(x);});
     MODULOS=TODOS_MODULOS.filter(function(m){return permitidas.indexOf(m.id)>=0;});
     // Se modulo atual nao esta permitido, ir para o primeiro permitido
     if(MODULOS.length>0 && permitidas.indexOf(STATE.modulo)<0 && STATE.modulo!=='inicio'){
@@ -12591,7 +12591,7 @@ async function lcUpload(file){
   }
 }
 // ===================== MÓDULO BLING (mod17) — pedidos e notas a receber por PIX / link de crédito =====================
-// Tela com o mesmo visual do Bling (tema escuro). Todos os colaboradores veem.
+// Tela com o mesmo visual do Bling (tema escuro). Quem vê: admin + quem tiver 'mod17' marcado em Configurações › Acesso às abas.
 // Dados: Worker "bling" (worker-bling.js) que fala com a API oficial do Bling. Endereço em Firebase bling/config.workerUrl.
 // PIX: gerado na própria página (sem popup). A cobrança via Sicoob entra quando o Worker tiver o certificado (BLG.pixAtivo).
 var BLG={cfg:null,cfgCarregada:false,dados:null,carr:false,erro:null,ts:0,sel:null,demo:false,status:null,
