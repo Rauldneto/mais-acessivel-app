@@ -12836,7 +12836,7 @@ function blgDraw(){
       h+='<table class="blg-tb"><thead><tr><th style="width:26px"></th><th>Número</th><th>Data</th><th>Cliente</th><th class="r">A receber (R$)</th><th>Situação</th><th class="hm"></th><th style="width:28px"></th></tr></thead><tbody>';
       lista.forEach(function(x){
         var k=blgChave(x),pg=BLG.pix[k],parcial=x.parcial||(pg&&pg.pagoParcial);
-        var dt=blgData(x.data)+(x.prevista&&x.prevista!==x.data&&x.tipo==='pedido'?' (prevista até: '+blgData(x.prevista)+')':'');
+        var dt=blgData(x.data)+(blgData(x.prevista)&&x.prevista!==x.data&&x.tipo==='pedido'?' (prevista até: '+blgData(x.prevista)+')':'');
         h+='<tr data-k="'+blgEsc(k)+'" class="'+(BLG.sel===k?'on':'')+'"><td><span class="blg-ck"></span></td>'+
            '<td>'+(x.tipo==='nota'?'NF ':'')+blgEsc(x.numero)+'</td><td>'+dt+'</td><td title="'+blgEsc(x.cliente)+'">'+blgEsc(x.cliente)+'</td>'+
            '<td class="r">'+blgMoeda(x.aReceber)+(x.aReceber<x.total-0.009?'<div style="font-size:10px;color:#969696;margin-top:-2px">de '+blgMoeda(x.total)+'</div>':'')+'</td>'+
