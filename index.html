@@ -13355,8 +13355,8 @@ async function cotParseLegado(itens){
 // ── SALVAR + PDF NA PASTA (Google Drive) ───────────────────────────────────────────
 // Um botão só: salva a cotação (como sempre) e grava o PDF completo na pasta escolhida (FRETE APP).
 // O navegador só escreve em pasta que a pessoa escolheu: na 1ª vez pede a pasta, depois lembra.
-// PDFs gerados por este app com mais de 60 dias são apagados da pasta (só os que têm o nome Frete_<nº>_<data>_<hora>.pdf).
-var COT_PDF_DIAS=60;
+// PDFs 'Cotação Nº N.pdf' da pasta com mais de 90 dias (data de modificação) são apagados; os demais arquivos nunca são tocados.
+var COT_PDF_DIAS=90;
 function cotIdb(){return new Promise(function(res,rej){var r=indexedDB.open('maisacessivel_fs',1);r.onupgradeneeded=function(){r.result.createObjectStore('h');};r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error);};});}
 async function cotIdbGet(k){var db=await cotIdb();return new Promise(function(res,rej){var t=db.transaction('h').objectStore('h').get(k);t.onsuccess=function(){res(t.result);};t.onerror=function(){rej(t.error);};});}
 async function cotIdbSet(k,v){var db=await cotIdb();return new Promise(function(res,rej){var tx=db.transaction('h','readwrite');tx.objectStore('h').put(v,k);tx.oncomplete=function(){res();};tx.onerror=function(){rej(tx.error);};});}
