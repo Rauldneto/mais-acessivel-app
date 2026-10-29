@@ -1,5 +1,5 @@
 <!-- v5.4-1785154153 -->
-<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material | fin-sem-nro-documento | fin-sem-ocorrencia | energia-solar-mod11-renderEnergiaSolar | leilao-imoveis-mod12-renderLeilaoImoveis -->
+<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material | fin-sem-nro-documento | fin-sem-ocorrencia | energia-solar-mod11-renderEnergiaSolar | leilao-imoveis-mod12-renderLeilaoImoveis | bling-mod17-renderBling -->
 <!-- ANTES DE PUBLICAR QUALQUER MUDANCA NESTE ARQUIVO: busque a versao atual em producao via GitHub API,
      confirme que os marcadores acima (nomes de funcao) ainda existem, e aplique a mudanca por cima dela -
      NUNCA sobrescreva com uma copia local antiga. Um commit em 21/08/2026 (f0ebfff) reverteu por engano
@@ -3002,12 +3002,12 @@ function iniEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){re
 function iniAdmin(){return STATE.roleLogado==='admin';}
 // Mesma regra do menu (renderModuloNav): quais abas este usuário enxerga
 function iniModulos(){
-  var todos=['frete','mod10','mod2','mod7','mod8','mod9','mod3','mod4','mod11','mod12','mod13','mod14','mod16','mod5','mod15'];
+  var todos=['frete','mod10','mod2','mod7','mod8','mod9','mod3','mod4','mod11','mod12','mod13','mod14','mod16','mod17','mod5','mod15'];
   if(iniAdmin())return todos;
   var ids=todos;
   if(STATE.abasPermitidas&&STATE.abasPermitidas.length){
     var p=STATE.abasPermitidas.map(function(a){return a==='mod1'?'frete':a;});
-    ['frete','mod10'].forEach(function(x){if(p.indexOf(x)<0)p.push(x);});
+    ['frete','mod10','mod17'].forEach(function(x){if(p.indexOf(x)<0)p.push(x);});
     ids=todos.filter(function(id){return p.indexOf(id)>=0;});
   }
   var soAdmin=['mod11','mod12','mod13','mod14','mod15','mod16'];
@@ -3348,17 +3348,18 @@ function renderModuloNav(){
     {id:'mod13', icon:'💲', label:'Formação de preço'},
     {id:'mod14', icon:'💸', label:'Lançamento de despesas'},
     {id:'mod16', icon:'🚚', label:'Lançamento de frete'},
+    {id:'mod17', icon:'💠', label:'BLING'},
     {id:'mod5',  icon:'🧪', label:'Modelo em Teste'},
     {id:'mod15', icon:'📊', label:'Controle'}
   ];
   // Mapeamento id antigo -> novo
-  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13','mod14':'mod14','mod15':'mod15','mod16':'mod16'};
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13','mod14':'mod14','mod15':'mod15','mod16':'mod16','mod17':'mod17'};
   // Admin ve tudo; outros so veem abas permitidas
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
     var permitidas=STATE.abasPermitidas.map(function(a){return MAPA_IDS[a]||a;});
     // Frete e Cotações (check das cotações): todos os colaboradores veem sempre
-    ['frete','mod10'].forEach(function(x){if(permitidas.indexOf(x)<0)permitidas.push(x);});
+    ['frete','mod10','mod17'].forEach(function(x){if(permitidas.indexOf(x)<0)permitidas.push(x);});
     MODULOS=TODOS_MODULOS.filter(function(m){return permitidas.indexOf(m.id)>=0;});
     // Se modulo atual nao esta permitido, ir para o primeiro permitido
     if(MODULOS.length>0 && permitidas.indexOf(STATE.modulo)<0 && STATE.modulo!=='inicio'){
@@ -3376,11 +3377,11 @@ function renderModuloNav(){
     {n:'Vendas',i:'ti-shopping-bag',c:'#ff9500',ids:['frete','mod10','mod2','mod7','mod8','mod4','mod5']},
     {n:'Lead',i:'ti-target-arrow',c:'#007aff',ids:['mod9']},
     {n:'Compras',i:'ti-shopping-cart',c:'#34c759',ids:['mod13']},
-    {n:'Financeiro',i:'ti-cash',c:'#0a7d6b',ids:['mod14','mod16']},
+    {n:'Financeiro',i:'ti-cash',c:'#0a7d6b',ids:['mod17','mod14','mod16']},
     {n:'T.I.',i:'ti-cpu',c:'#5856d6',ids:['mod3','mod15']},
     {n:'Particular',i:'ti-home',c:'#af52de',ids:['mod12','mod11']}
   ];
-  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod13:'ti-currency-dollar',mod14:'ti-receipt-2',mod16:'ti-truck-delivery',mod15:'ti-gauge',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun'};
+  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod13:'ti-currency-dollar',mod14:'ti-receipt-2',mod16:'ti-truck-delivery',mod17:'ti-qrcode',mod15:'ti-gauge',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun'};
   if(!document.getElementById('navIosCss')){
     var lk=document.createElement('link');lk.rel='stylesheet';lk.href='https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css';lk.onload=function(){document.documentElement.classList.add('ti-ok');};document.head.appendChild(lk);
     var st=document.createElement('style');st.id='navIosCss';
@@ -3506,7 +3507,7 @@ var CTL_PRECOS=[
   {p:'claude-sonnet',in:3,out:15},
   {p:'claude-opus-4-5',in:5,out:25},{p:'claude-opus-4-6',in:5,out:25},{p:'claude-opus',in:15,out:75}
 ];
-var CTL_AREAS={frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod14:'Despesas (comprovantes)',mod16:'Lançamento de frete (CT-e)',mod15:'Controle'};
+var CTL_AREAS={frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod14:'Despesas (comprovantes)',mod16:'Lançamento de frete (CT-e)',mod17:'BLING (PIX e crédito)',mod15:'Controle'};
 var CTL={cfg:null,ia:null,carregando:false,erro:'',dolar:null,root:null};
 
 function ctlPreco(model){model=model||'';for(var k=0;k<CTL_PRECOS.length;k++){if(model.indexOf(CTL_PRECOS[k].p)===0)return CTL_PRECOS[k];}return {in:3,out:15};}
@@ -12589,6 +12590,396 @@ async function lcUpload(file){
     LC.busy=null;LC.res={erro:(e&&e.message)||String(e)};lcDraw();
   }
 }
+// ===================== MÓDULO BLING (mod17) — pedidos e notas a receber por PIX / link de crédito =====================
+// Tela com o mesmo visual do Bling (tema escuro). Todos os colaboradores veem.
+// Dados: Worker "bling" (worker-bling.js) que fala com a API oficial do Bling. Endereço em Firebase bling/config.workerUrl.
+// PIX: gerado na própria página (sem popup). A cobrança via Sicoob entra quando o Worker tiver o certificado (BLG.pixAtivo).
+var BLG={cfg:null,cfgCarregada:false,dados:null,carr:false,erro:null,ts:0,sel:null,demo:false,status:null,
+  f:{busca:'',tipo:'todos',forma:'todos',vendedor:''},pix:{},valorEdit:{},root:null,trocaFeita:false};
+function blgEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function blgMoeda(v){return Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function blgData(d){if(!d||d.indexOf('0000')===0)return '';var p=String(d).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+function blgAdmin(){return STATE.roleLogado==='admin';}
+function blgUrl(){return (BLG.cfg&&BLG.cfg.workerUrl||'').replace(/\/+$/,'');}
+
+function blgCarregarCfg(){
+  return fetch(FIREBASE_DB+'/bling/config.json').then(function(r){return r.json();}).then(function(c){BLG.cfg=c||{};BLG.cfgCarregada=true;})
+    .catch(function(){BLG.cfg={};BLG.cfgCarregada=true;});
+}
+function blgSalvarCfg(c){
+  return fetch(FIREBASE_DB+'/bling/config.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)}).then(function(r){return r.json();})
+    .then(function(){BLG.cfg=Object.assign({},BLG.cfg||{},c);});
+}
+function blgApi(caminho,opt){
+  opt=opt||{};
+  return fetch(blgUrl()+caminho,{method:opt.method||'GET',headers:opt.body?{'Content-Type':'application/json'}:undefined,body:opt.body?JSON.stringify(opt.body):undefined})
+    .then(function(r){return r.json().catch(function(){return {ok:false,erro:'Resposta inválida do Worker ('+r.status+')'};});});
+}
+
+// O Bling devolve o usuário para o app com ?code=...&state=wb... depois do "Autorizar": termina a conexão aqui.
+function blgRetornoOAuth(){
+  if(BLG.trocaFeita)return;
+  var q=new URLSearchParams(location.search);var code=q.get('code'),state=q.get('state')||'';
+  if(!code||state.indexOf('wb')!==0)return;
+  BLG.trocaFeita=true;
+  try{history.replaceState(null,'',location.pathname+'#bling');}catch(e){}
+  STATE.modulo='mod17';
+  blgCarregarCfg().then(function(){
+    if(!blgUrl()){BLG.erro='Endereço do Worker não configurado.';blgDraw();return;}
+    BLG.status={conectando:true};blgDraw();
+    return blgApi('/oauth/troca',{method:'POST',body:{code:code,state:state}}).then(function(r){
+      BLG.status=r&&r.ok?{conectado:true,empresa:r.empresa,recem:true}:{conectado:false,erro:(r&&r.erro)||'Falhou'};
+      if(r&&r.ok)blgCarregar(true);else blgDraw();
+    });
+  });
+}
+if((location.hash||'')==='#bling'){STATE.modulo='mod17';}
+(function(){try{var q=new URLSearchParams(location.search);if(q.get('code')&&(q.get('state')||'').indexOf('wb')===0)STATE.modulo='mod17';}catch(e){}})();
+
+function blgCarregar(forcar){
+  if(BLG.demo){BLG.dados=blgDemo();BLG.ts=Date.now();blgDraw();return;}
+  if(!blgUrl())return;
+  BLG.carr=true;BLG.erro=null;blgDraw();
+  blgApi('/abertos'+(forcar?'?forcar=1':'')).then(function(r){
+    BLG.carr=false;
+    if(!r||!r.ok){BLG.erro=(r&&r.erro)||'Não consegui ler o Bling.';blgDraw();return;}
+    BLG.dados=r.itens||[];BLG.ts=r.ts||Date.now();BLG.faltaram=r.faltaram||0;BLG.erro=null;
+    if(BLG.sel&&!BLG.dados.some(function(x){return blgChave(x)===BLG.sel;}))BLG.sel=null;
+    blgDraw();
+    if(BLG.faltaram)setTimeout(function(){if(STATE.modulo==='mod17')blgCarregar(true);},4000);
+  }).catch(function(e){BLG.carr=false;BLG.erro='Sem conexão com o Worker: '+(e&&e.message||e);blgDraw();});
+}
+function blgChave(x){return x.tipo+':'+x.id;}
+
+// Dados de exemplo (só para a prévia — nomes fictícios)
+function blgDemo(){
+  var h=new Date(),d=function(n){var x=new Date(h.getTime()-n*864e5);return x.toISOString().slice(0,10);};
+  return [
+    {tipo:'pedido',id:1,numero:'4321',data:d(0),prevista:d(-12),cliente:'CONSTRUTORA EXEMPLO ALFA LTDA',total:2695.76,aReceber:2695.76,formas:['pix'],formaNome:'PIX',vendedor:'Raul',situacao:'Em aberto'},
+    {tipo:'pedido',id:2,numero:'4320',data:d(0),prevista:d(0),cliente:'ENGENHARIA MODELO BETA LTDA',total:16120,aReceber:8060,formas:['pix'],formaNome:'PIX',vendedor:'Renata',situacao:'Em aberto',parcial:8060},
+    {tipo:'nota',id:3,numero:'003990',data:d(2),prevista:'',cliente:'INCORPORADORA FICTÍCIA GAMA S/A',total:9429,aReceber:9429,formas:['pix'],formaNome:'PIX',vendedor:'',situacao:'Em aberto',contas:[{id:31,valor:9429,venc:d(-5)}]},
+    {tipo:'pedido',id:4,numero:'4318',data:d(5),prevista:d(-1),cliente:'SERVIÇOS DEMONSTRAÇÃO DELTA EIRELI',total:13121.2,aReceber:13121.2,formas:['credito'],formaNome:'Cartão de crédito (link)',vendedor:'Luis',situacao:'Em aberto'},
+    {tipo:'nota',id:5,numero:'003987',data:d(6),prevista:'',cliente:'CONSÓRCIO TESTE ÔMEGA',total:8595.46,aReceber:4297.73,formas:['pix'],formaNome:'PIX',vendedor:'',situacao:'Em aberto',contas:[{id:51,valor:4297.73,venc:d(-3)}]},
+    {tipo:'pedido',id:6,numero:'4310',data:d(8),prevista:d(8),cliente:'JOÃO DA SILVA EXEMPLO',total:196.24,aReceber:196.24,formas:['pix'],formaNome:'PIX',vendedor:'Raul',situacao:'Em aberto'}
+  ];
+}
+
+function blgFiltrados(){
+  var f=BLG.f,b=(f.busca||'').toLowerCase().trim(),bd=b.replace(/\D/g,'');
+  return (BLG.dados||[]).filter(function(x){
+    if(f.tipo!=='todos'&&x.tipo!==f.tipo)return false;
+    if(f.forma!=='todos'&&(x.formas||[]).indexOf(f.forma)<0)return false;
+    if(f.vendedor&&(x.vendedor||'')!==f.vendedor)return false;
+    if(b){var alvo=(x.cliente+' '+x.numero).toLowerCase();if(alvo.indexOf(b)<0&&!(bd&&String(x.doc||'').indexOf(bd)>=0))return false;}
+    return true;
+  });
+}
+
+function blgCss(){
+  if(document.getElementById('blgCss'))return;
+  var lk=document.createElement('link');lk.rel='stylesheet';lk.href='https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap';document.head.appendChild(lk);
+  var st=document.createElement('style');st.id='blgCss';
+  st.textContent=
+  '.blg{--bg:#18191a;--card:#242526;--card2:#1f2021;--inp:#3a3b3c;--bd:#4b4c4e;--tx:#e4e6eb;--tx2:#969696;--vd:#34ad61;--vd2:#288f4e;--vdh:#2d9654;'+
+    'background:var(--bg);color:var(--tx);font-family:arial,helvetica,sans-serif;font-size:12px;margin:-18px -20px -18px;min-height:calc(100vh - 140px);display:flex;flex-direction:column}'+
+  '.blg *{box-sizing:border-box}'+
+  '.blg-top{display:flex;align-items:center;gap:12px;padding:14px 12px 10px 12px}'+
+  '.blg-bc{font-family:Inter,Roboto,Helvetica,sans-serif;font-size:24px;font-weight:700;color:var(--tx);display:flex;align-items:center;gap:4px;line-height:32px;white-space:nowrap}'+
+  '.blg-bc .dots{color:var(--tx);font-size:20px;margin-right:2px}'+
+  '.blg-sep{width:1px;height:26px;background:#555;margin:0 10px}'+
+  '.blg-loja{font-family:Inter,Roboto,Helvetica,sans-serif;font-size:16px;font-weight:700;color:var(--vd);display:flex;align-items:center;gap:6px;border-radius:8px;padding:0 6px}'+
+  '.blg-loja:after{content:"";border:5px solid transparent;border-top:6px solid var(--vd);margin-top:5px}'+
+  '.blg-top .blg-sp{flex:1}'+
+  '.blg-btn{height:32px;border-radius:8px;border:.9px solid var(--vd);background:var(--vd);color:#fff;font-family:Inter,arial,sans-serif;font-size:12px;font-weight:900;padding:0 15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px}'+
+  '.blg-btn:hover{background:var(--vdh)}'+
+  '.blg-btn[disabled]{background:#2f3b33;border-color:#3d4a41;color:#8a9a8f;cursor:not-allowed}'+
+  '.blg-btn.sec{background:var(--card);border-color:var(--bd);color:var(--vd);font-weight:700}'+
+  '.blg-btn.sec:hover{background:#2d2e30}'+
+  '.blg-top .blg-btn{width:200px}'+
+  '.blg-body{display:flex;flex:1;min-height:0;gap:0}'+
+  '.blg-fil{width:189px;flex-shrink:0;background:var(--card2);padding:0 0 20px 0;border-right:6px solid #2a2b2d}'+
+  '.blg-fil h3{font-family:Inter,Roboto,Helvetica,sans-serif;font-size:16px;font-weight:700;color:var(--tx);margin:0;padding:10px 12px 6px;display:flex;align-items:center;gap:6px;background:var(--card)}'+
+  '.blg-fil h3 .x{margin-left:auto;color:var(--vd);font-size:16px;cursor:pointer}'+
+  '.blg-fil label{display:block;color:var(--tx);font-size:12px;margin:10px 12px 5px}'+
+  '.blg-fil select,.blg-fil .blg-chips{width:calc(100% - 24px);margin:0 12px;height:32px;border-radius:8px;border:.9px solid var(--bd);background:var(--inp);color:#fff;font-size:12px;padding:0 10px;font-family:arial,sans-serif}'+
+  '.blg-chips{display:flex;align-items:center;gap:4px;padding:0 6px!important;flex-wrap:wrap;height:auto!important;min-height:32px}'+
+  '.blg-chip{background:#3a3b3c;border:.9px solid #9a9a9a;border-radius:4px;padding:2px 5px;color:var(--tx);font-size:12px;display:inline-flex;gap:5px;align-items:center}'+
+  '.blg-chip i{font-style:normal;color:#aaa;font-size:10px}'+
+  '.blg-mid{flex:1;min-width:0;padding:0 28px 30px 28px}'+
+  '.blg-bar{display:flex;gap:10px;align-items:center;margin:2px 0 8px}'+
+  '.blg-srch{position:relative;width:390px;max-width:100%}'+
+  '.blg-srch input{width:100%;height:32px;border-radius:8px;border:.9px solid var(--bd);background:var(--inp);color:#fff;font-size:12px;padding:3px 40px 3px 16px;outline:none;font-family:arial,sans-serif}'+
+  '.blg-srch input::placeholder{color:#a8a8a8}'+
+  '.blg-srch svg{position:absolute;right:12px;top:8px}'+
+  '.blg-date{height:32px;border-radius:8px;border:.9px solid var(--bd);background:var(--card);color:var(--vd2);font-size:12px;padding:1px 10px;display:inline-flex;align-items:center;gap:6px}'+
+  '.blg-ib{width:36px;height:32px;border-radius:8px;border:.9px solid var(--bd);background:var(--card);color:var(--vd);cursor:pointer;display:inline-flex;align-items:center;justify-content:center}'+
+  '.blg-ib.gray{color:#969696}'+
+  '.blg-ib:hover{background:#2d2e30}'+
+  '.blg-fsit{color:var(--tx);font-size:12px;margin:4px 0 6px 10px;display:flex;gap:6px;align-items:center}'+
+  '.blg-fsit a{color:var(--vd);cursor:pointer;font-weight:700;margin-left:8px}'+
+  '.blg-fsit .x{color:#4ea8ff;cursor:pointer}'+
+  '.blg-tools{display:flex;align-items:center;gap:10px;margin:0 0 4px 10px;height:22px}'+
+  '.blg-tools .sp{flex:1}'+
+  '.blg-ck{width:13px;height:13px;border:1px solid #8a8a8a;border-radius:2px;background:#3a3b3c;display:inline-block;vertical-align:middle}'+
+  '.blg-tb{width:100%;border-collapse:separate;border-spacing:0;font-size:11.5px;color:var(--tx)}'+
+  '.blg-tb th{font-weight:400;font-size:12px;color:var(--tx);text-align:left;padding:2px 0 6px 10px;background:var(--bg);white-space:nowrap}'+
+  '.blg-tb th,.blg-tb td{font-family:arial,helvetica,sans-serif!important;text-transform:none!important;letter-spacing:normal!important}.blg-tb th{border-bottom:0!important}'+
+  '.blg-tb td *{font-family:arial,helvetica,sans-serif}'+
+  '.blg-tb th.r,.blg-tb td.r{text-align:right;padding-right:8px}'+
+  '.blg-tb tbody tr{background:var(--card);cursor:pointer}'+
+  '.blg-tb tbody tr:hover{background:#2c2d2f}'+
+  '.blg-tb tbody tr.on{background:#22382b}'+
+  '.blg-tb td{color:#fff;font-size:12px;padding:2px 0 0 10px;height:41px;border-bottom:.9px solid var(--bd);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:330px}'+
+  '.blg-tb tbody tr:first-child td:first-child{border-top-left-radius:8px}.blg-tb tbody tr:first-child td:last-child{border-top-right-radius:8px}'+
+  '.blg-tb tbody tr:last-child td{border-bottom:none}.blg-tb tbody tr:last-child td:first-child{border-bottom-left-radius:8px}.blg-tb tbody tr:last-child td:last-child{border-bottom-right-radius:8px}'+
+  '.blg-sit{display:inline-flex;align-items:center;gap:7px}'+
+  '.blg-sit .clk{width:12px;height:12px;border:1.3px solid #6b6b6b;border-radius:50%;position:relative;display:inline-block}'+
+  '.blg-sit .clk:after{content:"";position:absolute;left:4.2px;top:1.5px;width:1.3px;height:4px;background:#6b6b6b;box-shadow:1.5px 3.2px 0 -0.1px #6b6b6b}'+
+  '.blg-bd{display:inline-block;background:#713f12;color:#fcf9eb;font-size:11px;font-weight:700;border-radius:9999px;padding:0 8px;line-height:16px}'+
+  '.blg-bd.parc{background:#1e3a8a;color:#dbeafe}'+
+  '.blg-bd.pago{background:#14532d;color:#dcfce7}'+
+  '.blg-tags{display:inline-flex;gap:4px;align-items:center}'+
+  '.blg-tg{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:2px;font-size:9px;font-weight:700;color:#fff;font-family:Arial,sans-serif}'+
+  '.blg-tg.p{background:#c62828}.blg-tg.e{background:#1e88e5}.blg-tg.n{background:#7b1fa2}'+
+  '.blg-pill{background:#7a7a7a;color:#fff;font-size:9px;border-radius:9999px;padding:1px 7px;line-height:13px}'+
+  '.blg-pill.pix{background:#0f766e}.blg-pill.cr{background:#6d28d9}'+
+  '.blg-kb{color:#fff;font-size:16px;font-weight:700;text-align:center;width:28px;letter-spacing:-1px}'+
+  '.blg-act{width:190px;flex-shrink:0;background:var(--card2);padding:12px 10px 20px 14px}'+
+  '.blg-act .it{display:flex;gap:10px;align-items:flex-start;color:var(--tx2);font-size:12px;line-height:15px;padding:7px 0;cursor:pointer;background:none;border:0;text-align:left;width:100%;font-family:arial,sans-serif}'+
+  '.blg-act .it:hover{color:#d4d4d4}'+
+  '.blg-act .it[disabled]{opacity:.45;cursor:not-allowed}'+
+  '.blg-act .it svg{flex-shrink:0;margin-top:1px}'+
+  '.blg-act .grp{color:var(--vd);font-size:12px;margin:14px 0 6px;display:flex;align-items:center;gap:8px}'+
+  '.blg-act .grp:before{content:"−";display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;background:var(--vd);color:#18191a;font-weight:900;border-radius:2px;font-size:11px}'+
+  '.blg-act .sub{color:var(--tx);font-weight:700;font-size:12px;margin:10px 0 6px 0}'+
+  '.blg-act .lk{display:block;color:var(--tx2);font-size:12px;padding:3px 0 6px 10px}'+
+  '.blg-vazio{background:var(--card);border-radius:8px;padding:28px;text-align:center;color:var(--tx2);font-size:13px}'+
+  '.blg-msg{background:var(--card);border:.9px solid var(--bd);border-radius:8px;padding:12px 14px;margin:0 0 10px;font-size:12.5px;color:var(--tx);line-height:1.5}'+
+  '.blg-msg.err{border-color:#7f1d1d;background:#2a1717;color:#fecaca}'+
+  '.blg-msg.ok{border-color:#14532d;background:#13261a;color:#bbf7d0}'+
+  '.blg-msg.demo{border-color:#854d0e;background:#2b2110;color:#fde68a}'+
+  '.blg-msg b{color:#fff}.blg-msg ol{margin:6px 0 0 18px;padding:0}.blg-msg li{margin:3px 0}'+
+  '.blg-msg code{background:#3a3b3c;border-radius:4px;padding:1px 5px;color:#fff}'+
+  '.blg-msg input{height:32px;border-radius:8px;border:.9px solid var(--bd);background:var(--inp);color:#fff;font-size:12px;padding:0 12px;width:100%;max-width:440px;margin:6px 8px 0 0}'+
+  '.blg-pix h4{font-family:Inter,Roboto,Helvetica,sans-serif;font-size:14px;font-weight:700;color:var(--tx);margin:0 0 2px}'+
+  '.blg-pix .cl{color:var(--tx2);font-size:11.5px;margin-bottom:10px;line-height:1.35;white-space:normal}'+
+  '.blg-pix .ln{display:flex;justify-content:space-between;font-size:12px;color:var(--tx);padding:4px 0;border-bottom:1px solid #2e2f31}'+
+  '.blg-pix .ln b{color:#fff}'+
+  '.blg-pix label{display:block;font-size:12px;color:var(--tx);margin:12px 0 5px}'+
+  '.blg-pix input{width:100%;height:32px;border-radius:8px;border:.9px solid var(--bd);background:var(--inp);color:#fff;font-size:13px;padding:0 10px;font-family:arial,sans-serif}'+
+  '.blg-pix .blg-btn{width:100%;margin-top:10px;white-space:nowrap}'+
+  '.blg-pix .qr{background:#fff;border-radius:8px;padding:8px;margin:12px 0 8px;display:flex;justify-content:center}'+
+  '.blg-pix .qr svg,.blg-pix .qr img{width:150px;height:150px}'+
+  '.blg-pix textarea{width:100%;height:62px;border-radius:8px;border:.9px solid var(--bd);background:var(--inp);color:#ddd;font-size:10.5px;padding:6px 8px;resize:none;font-family:monospace}'+
+  '.blg-pix .nota{font-size:11px;color:var(--tx2);margin-top:8px;line-height:1.4}'+
+  '.blg-pix .voltar{color:var(--vd);cursor:pointer;font-size:12px;margin-bottom:10px;display:inline-block}'+
+  '.blg-spin{display:inline-block;width:12px;height:12px;border:2px solid #3d3e40;border-top-color:var(--vd);border-radius:50%;animation:blgsp 1s linear infinite;vertical-align:middle}'+
+  '@keyframes blgsp{to{transform:rotate(360deg)}}'+
+  '.blg-rodape{color:var(--tx2);font-size:11px;margin:8px 0 0 10px}'+
+  '@media (max-width:1100px){.blg-fil{display:none}.blg-mid{padding:0 12px 20px}}'+
+  '@media (max-width:820px){.blg-body{flex-direction:column}.blg-act{width:auto}.blg-top .blg-btn{width:auto}.blg-srch{width:100%}.blg-date{display:none}.blg-tb .hm{display:none}.blg-bc{font-size:19px}}';
+  document.head.appendChild(st);
+}
+
+var BLG_IC={
+  busca:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34ad61" stroke-width="2.6"><circle cx="10.5" cy="10.5" r="7"/><path d="M16 16l5 5" stroke-linecap="round"/></svg>',
+  cal:'<svg width="12" height="13" viewBox="0 0 448 512" fill="#34ad61"><path d="M12 192h424c6.6 0 12 5.4 12 12v260c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V204c0-6.6 5.4-12 12-12zm436-44v-36c0-26.5-21.5-48-48-48h-48V12c0-6.6-5.4-12-12-12h-40c-6.6 0-12 5.4-12 12v52H160V12c0-6.6-5.4-12-12-12h-40c-6.6 0-12 5.4-12 12v52H48C21.5 64 0 85.5 0 112v36c0 6.6 5.4 12 12 12h424c6.6 0 12-5.4 12-12z"/></svg>',
+  imp:'<svg width="15" height="15" viewBox="0 0 512 512" fill="currentColor"><path d="M448 192V77.25c0-8.49-3.37-16.62-9.37-22.63L393.37 9.37c-6-6-14.14-9.37-22.63-9.37H96C78.33 0 64 14.33 64 32v160c-35.35 0-64 28.65-64 64v112c0 8.84 7.16 16 16 16h48v96c0 17.67 14.33 32 32 32h320c17.67 0 32-14.33 32-32v-96h48c8.84 0 16-7.16 16-16V256c0-35.35-28.65-64-64-64zm-64 256H128v-96h256v96zm0-224H128V64h192v48c0 8.84 7.16 16 16 16h48v96zm48 72c-13.25 0-24-10.75-24-24 0-13.26 10.75-24 24-24s24 10.74 24 24c0 13.25-10.75 24-24 24z"/></svg>',
+  rec:'<svg width="13" height="13" viewBox="0 0 512 512" fill="#34ad61"><path d="M440.65 12.57l4 82.77A247.16 247.16 0 0 0 255.83 8C134.73 8 33.91 94.92 12.29 209.82A12 12 0 0 0 24.09 224h49.05a12 12 0 0 0 11.67-9.26 175.91 175.91 0 0 1 317-56.94l-101.46-4.86a12 12 0 0 0-12.57 12v47.41a12 12 0 0 0 12 12H500a12 12 0 0 0 12-12V12a12 12 0 0 0-12-12h-47.37a12 12 0 0 0-11.98 12.57zM255.83 432a175.61 175.61 0 0 1-146-77.8l101.8 4.87a12 12 0 0 0 12.57-12v-47.4a12 12 0 0 0-12-12H12a12 12 0 0 0-12 12V500a12 12 0 0 0 12 12h47.35a12 12 0 0 0 12-12.6l-4.15-82.57A247.17 247.17 0 0 0 255.83 504c121.11 0 221.93-86.92 243.55-201.82a12 12 0 0 0-11.8-14.18h-49.05a12 12 0 0 0-11.67 9.26A175.86 175.86 0 0 1 255.83 432z"/></svg>',
+  lista:'<svg width="16" height="14" viewBox="0 0 512 448" fill="#34ad61"><rect x="0" y="16" width="64" height="64" rx="8"/><rect x="128" y="24" width="384" height="48" rx="8"/><rect x="0" y="192" width="64" height="64" rx="8"/><rect x="128" y="200" width="384" height="48" rx="8"/><rect x="0" y="368" width="64" height="64" rx="8"/><rect x="128" y="376" width="384" height="48" rx="8"/></svg>',
+  tog:'<svg width="16" height="14" viewBox="0 0 576 448" fill="#d4d4d4"><rect x="0" y="0" width="576" height="190" rx="95"/><circle cx="480" cy="95" r="70" fill="#18191a"/><rect x="0" y="258" width="576" height="190" rx="95"/><circle cx="96" cy="353" r="70" fill="#18191a"/></svg>',
+  pix:'<svg width="16" height="16" viewBox="0 0 512 512" fill="currentColor"><path d="M242.4 292.5c5.4-5.4 14.7-5.4 20.1 0l77.5 77.5c14.3 14.3 33.3 22.2 53.5 22.2h15.2l-97.8 97.8c-30.5 30.5-80 30.5-110.5 0l-98.2-98.2h9.4c20.2 0 39.2-7.9 53.5-22.2l77.3-77.1zm20.1-73.6c-6.4 5.5-14.6 5.5-20.1 0l-77.3-77.1c-14.3-14.3-33.3-22.2-53.5-22.2h-9.4l98.2-98.2c30.5-30.5 80-30.5 110.5 0l97.8 97.8h-15.2c-20.2 0-39.2 7.9-53.5 22.2l-77.5 77.5zm-149.9-79.1c13.9 0 26.7 5.6 36.7 15.5l77.3 77.3c7.2 7.2 16.7 10.8 26.2 10.8 9.5 0 19-3.6 26.2-10.8l77.5-77.5c9.9-9.8 23.5-15.5 37.4-15.5h37.9l58.7 58.7c30.5 30.5 30.5 80 0 110.5l-58.7 58.7h-37.9c-13.9 0-27.5-5.7-37.4-15.5l-77.5-77.5c-14-14-38.4-14-52.4 0l-77.3 77.2c-10 10-22.8 15.6-36.7 15.6H80.2l-58.3-58.4c-30.5-30.5-30.5-80 0-110.5l58.3-58.4h32.4z"/></svg>',
+  card:'<svg width="16" height="14" viewBox="0 0 576 512" fill="currentColor"><path d="M0 432c0 26.5 21.5 48 48 48h480c26.5 0 48-21.5 48-48V256H0v176zm192-68c0-6.6 5.4-12 12-12h136c6.6 0 12 5.4 12 12v40c0 6.6-5.4 12-12 12H204c-6.6 0-12-5.4-12-12v-40zm-128 0c0-6.6 5.4-12 12-12h72c6.6 0 12 5.4 12 12v40c0 6.6-5.4 12-12 12H76c-6.6 0-12-5.4-12-12v-40zM576 80v48H0V80c0-26.5 21.5-48 48-48h480c26.5 0 48 21.5 48 48z"/></svg>',
+  copiar:'<svg width="14" height="16" viewBox="0 0 448 512" fill="currentColor"><path d="M320 448v40c0 13.255-10.745 24-24 24H24c-13.255 0-24-10.745-24-24V120c0-13.255 10.745-24 24-24h72v296c0 30.879 25.121 56 56 56h168zm0-344V0H152c-13.255 0-24 10.745-24 24v368c0 13.255 10.745 24 24 24h272c13.255 0 24-10.745 24-24V128H344c-13.2 0-24-10.8-24-24zm120.971-31.029L375.029 7.029A24 24 0 0 0 358.059 0H352v96h96v-6.059a24 24 0 0 0-7.029-16.97z"/></svg>',
+  wpp:'<svg width="16" height="16" viewBox="0 0 448 512" fill="currentColor"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.2 0-65.7-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6z"/></svg>',
+  olho:'<svg width="16" height="14" viewBox="0 0 576 512" fill="currentColor"><path d="M572.52 241.4C518.29 135.59 410.93 64 288 64S57.68 135.64 3.48 241.41a32.35 32.35 0 0 0 0 29.19C57.71 376.41 165.07 448 288 448s230.32-71.64 284.52-177.41a32.35 32.35 0 0 0 0-29.19zM288 400a144 144 0 1 1 144-144 143.93 143.93 0 0 1-144 144zm0-240a95.31 95.31 0 0 0-25.31 3.79 47.85 47.85 0 0 1-66.9 66.9A95.78 95.78 0 1 0 288 160z"/></svg>'
+};
+
+function renderBling(){
+  blgCss();
+  var w=document.createElement('div');w.className='blg';w.id='blgRoot';BLG.root=w;
+  blgRetornoOAuth();
+  if(!BLG.cfgCarregada){blgCarregarCfg().then(function(){if(blgUrl()&&!BLG.dados&&!BLG.carr)blgCarregar(false);else blgDraw();});}
+  else if(blgUrl()&&!BLG.dados&&!BLG.carr&&!BLG.erro)blgCarregar(false);
+  blgDraw();
+  if(!BLG.poll)BLG.poll=setInterval(function(){if(STATE.modulo==='mod17'&&!document.hidden&&BLG.root&&document.body.contains(BLG.root)&&!BLG.demo)blgCarregar(false);},90000);
+  return w;
+}
+
+function blgDraw(){
+  var w=BLG.root;if(!w||!document.body.contains(w)){if(w&&!w.parentNode){}else return;}
+  var lista=blgFiltrados(),sel=BLG.sel&&(BLG.dados||[]).filter(function(x){return blgChave(x)===BLG.sel;})[0];
+  var vendedores=[];(BLG.dados||[]).forEach(function(x){if(x.vendedor&&vendedores.indexOf(x.vendedor)<0)vendedores.push(x.vendedor);});
+  var h='';
+  // cabeçalho (igual ao "… > Pedidos de venda | Todas as lojas  [+ Incluir pedido]")
+  h+='<div class="blg-top"><div class="blg-bc"><span class="dots">…</span>›&nbsp;A receber: PIX e crédito</div><div class="blg-sep"></div><div class="blg-loja">Pedidos e notas</div><div class="blg-sp"></div>'+
+     '<button class="blg-btn" data-a="pixSel"'+(sel?'':' disabled')+'>'+BLG_IC.pix+' Gerar PIX</button></div>';
+  h+='<div class="blg-body">';
+  // filtros (coluna esquerda)
+  h+='<aside class="blg-fil"><h3><svg width="12" height="12" viewBox="0 0 512 512" fill="#e4e6eb"><path d="M487.976 0H24.028C2.71 0-8.047 25.866 7.058 40.971L192 225.941V432c0 7.831 3.821 15.17 10.237 19.662l80 55.98C298.02 518.69 320 507.493 320 487.98V225.941l184.947-184.97C520.021 25.896 509.338 0 487.976 0z"/></svg> Filtrar<span class="x" data-a="limpar">✕</span></h3>'+
+     '<label>Situação</label><div class="blg-chips"><span class="blg-chip">Em aberto <i>✕</i></span></div>'+
+     '<label>Tipo</label><select data-f="tipo"><option value="todos">Pedidos e notas</option><option value="pedido"'+(BLG.f.tipo==='pedido'?' selected':'')+'>Só pedidos de venda</option><option value="nota"'+(BLG.f.tipo==='nota'?' selected':'')+'>Só notas fiscais</option></select>'+
+     '<label>Forma de pagamento</label><select data-f="forma"><option value="todos">PIX e link de crédito</option><option value="pix"'+(BLG.f.forma==='pix'?' selected':'')+'>PIX</option><option value="credito"'+(BLG.f.forma==='credito'?' selected':'')+'>Link de crédito</option></select>'+
+     '<label>Vendedor</label><select data-f="vendedor"><option value="">Todos</option>'+vendedores.map(function(v){return '<option'+(BLG.f.vendedor===v?' selected':'')+'>'+blgEsc(v)+'</option>';}).join('')+'</select>'+
+     '</aside>';
+  // centro
+  h+='<section class="blg-mid">';
+  h+='<div class="blg-bar"><div class="blg-srch"><input id="blgBusca" placeholder="Pesquisar por nome, CPF/CNPJ ou nº do pedido/nota" value="'+blgEsc(BLG.f.busca)+'">'+BLG_IC.busca+'</div>'+
+     '<span class="blg-date">'+BLG_IC.cal+' Situação: em aberto · '+(BLG.demo?'dados de exemplo':(BLG.ts?'atualizado '+new Date(BLG.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'—'))+'</span>'+
+     '<span style="flex:1"></span><button class="blg-ib" data-a="recarregar" title="Atualizar">'+BLG_IC.rec+'</button><button class="blg-ib gray" data-a="imprimir" title="Imprimir">'+BLG_IC.imp+'</button></div>';
+  h+='<div class="blg-fsit">Situação: Em aberto <span class="x">✕</span>'+(BLG.f.tipo!=='todos'||BLG.f.forma!=='todos'||BLG.f.vendedor||BLG.f.busca?'<a data-a="limpar">Limpar</a>':'')+'</div>';
+  h+=blgAvisos();
+  h+='<div class="blg-tools"><span class="blg-ck"></span>'+BLG_IC.rec+'<span class="sp"></span>'+BLG_IC.lista+BLG_IC.tog+'</div>';
+  if(BLG.dados){
+    if(!lista.length)h+='<div class="blg-vazio">'+(BLG.dados.length?'Nada encontrado com esses filtros.':'Nenhum pedido ou nota em aberto com PIX ou link de crédito. 🎉')+'</div>';
+    else{
+      h+='<table class="blg-tb"><thead><tr><th style="width:26px"></th><th>Número</th><th>Data</th><th>Cliente</th><th class="r">A receber (R$)</th><th>Situação</th><th class="hm"></th><th style="width:28px"></th></tr></thead><tbody>';
+      lista.forEach(function(x){
+        var k=blgChave(x),pg=BLG.pix[k],parcial=x.parcial||(pg&&pg.pagoParcial);
+        var dt=blgData(x.data)+(x.prevista&&x.prevista!==x.data&&x.tipo==='pedido'?' (prevista até: '+blgData(x.prevista)+')':'');
+        h+='<tr data-k="'+blgEsc(k)+'" class="'+(BLG.sel===k?'on':'')+'"><td><span class="blg-ck"></span></td>'+
+           '<td>'+(x.tipo==='nota'?'NF ':'')+blgEsc(x.numero)+'</td><td>'+dt+'</td><td title="'+blgEsc(x.cliente)+'">'+blgEsc(x.cliente)+'</td>'+
+           '<td class="r">'+blgMoeda(x.aReceber)+(x.aReceber<x.total-0.009?'<div style="font-size:10px;color:#969696;margin-top:-2px">de '+blgMoeda(x.total)+'</div>':'')+'</td>'+
+           '<td><span class="blg-sit"><span class="clk"></span><span class="blg-bd'+(parcial?' parc':'')+'">'+(parcial?'Parcialmente pago':'Em aberto')+'</span></span></td>'+
+           '<td class="hm"><span class="blg-tags">'+(x.tipo==='pedido'?'<span class="blg-tg p">P</span>':'<span class="blg-tg n">N</span>')+
+             (x.formas||[]).map(function(f){return f==='pix'?'<span class="blg-pill pix">PIX</span>':'<span class="blg-pill cr">Crédito</span>';}).join('')+
+             (pg&&pg.copia?'<span class="blg-pill">PIX gerado</span>':'')+(x.vendedor?'<span class="blg-pill">'+blgEsc(x.vendedor)+'</span>':'')+'</span></td>'+
+           '<td class="blg-kb">⋮</td></tr>';
+      });
+      h+='</tbody></table>';
+      var tot=lista.reduce(function(s,x){return s+Number(x.aReceber||0);},0);
+      h+='<div class="blg-rodape">'+lista.length+' registro'+(lista.length>1?'s':'')+' · total a receber R$ '+blgMoeda(tot)+(BLG.faltaram?' · <span class="blg-spin"></span> lendo mais '+BLG.faltaram+' pedido(s)…':'')+'</div>';
+    }
+  }else if(BLG.carr){h+='<div class="blg-vazio"><span class="blg-spin"></span>&nbsp; Lendo pedidos e notas no Bling…</div>';}
+  h+='</section>';
+  // coluna direita: ações ou painel do PIX
+  h+='<aside class="blg-act">'+(sel?blgPainelPix(sel):blgAcoes())+'</aside>';
+  h+='</div>';
+  w.innerHTML=h;
+  blgLigar(w);
+}
+
+function blgAvisos(){
+  var h='',adm=blgAdmin();
+  if(BLG.demo)h+='<div class="blg-msg demo">👀 <b>Prévia com dados de exemplo</b> (nomes fictícios). Nada aqui é real e nenhum PIX é cobrado. '+(blgUrl()?'<a data-a="sairDemo" style="color:#34ad61;cursor:pointer;font-weight:700">Voltar para os dados do Bling</a>':'')+'</div>';
+  if(BLG.status&&BLG.status.conectando)h+='<div class="blg-msg"><span class="blg-spin"></span>&nbsp; Conectando ao Bling…</div>';
+  if(BLG.status&&BLG.status.recem)h+='<div class="blg-msg ok">✅ Bling conectado'+(BLG.status.empresa?' — '+blgEsc(BLG.status.empresa):'')+'.</div>';
+  if(BLG.status&&BLG.status.erro)h+='<div class="blg-msg err">Não conectou: '+blgEsc(BLG.status.erro)+'</div>';
+  if(BLG.erro&&!BLG.demo){
+    var naoCon=/não conectado/i.test(BLG.erro);
+    h+='<div class="blg-msg err">'+blgEsc(BLG.erro)+(adm&&naoCon?' <button class="blg-btn" style="margin-left:8px;height:28px" data-a="conectar">Conectar ao Bling</button>':'')+'</div>';
+  }
+  if(!BLG.demo&&BLG.cfgCarregada&&!blgUrl()){
+    if(adm)h+='<div class="blg-msg"><b>Falta ligar esta aba ao Bling (uma vez só).</b><ol>'+
+      '<li>Na Cloudflare, crie o Worker <code>bling</code> e cole o código do arquivo <code>worker-bling.js</code> (está no GitHub do app).</li>'+
+      '<li>Em <b>Storage &amp; Databases → KV</b>, crie o namespace <code>bling</code>. No Worker: <b>Settings → Bindings → KV namespace</b>, nome <code>BLING_KV</code>.</li>'+
+      '<li>No Worker: <b>Settings → Variables and Secrets</b>: <code>BLING_CLIENT_ID</code> (Text) e <code>BLING_CLIENT_SECRET</code> (Secret), do app "JDFER Financeiro Sicoob" no Bling.</li>'+
+      '<li>Cole abaixo o endereço do Worker e clique em <b>Salvar</b>. Depois, <b>Conectar ao Bling</b>.</li></ol>'+
+      '<input id="blgWk" placeholder="https://bling.rauldias.workers.dev"><button class="blg-btn" data-a="salvarWk">Salvar</button> <button class="blg-btn sec" data-a="demo">Ver prévia com dados de exemplo</button></div>';
+    else h+='<div class="blg-msg">Esta aba ainda está sendo ligada ao Bling pelo administrador. Em breve os pedidos e notas aparecem aqui.</div>';
+  }
+  return h;
+}
+
+function blgAcoes(){
+  var it=function(a,ic,t,dis){return '<button class="it" data-a="'+a+'"'+(dis?' disabled':'')+'>'+ic+'<span>'+t+'</span></button>';};
+  return it('pixSel',BLG_IC.pix,'Gerar PIX do pedido/nota selecionado',!BLG.sel)+
+    it('credSel',BLG_IC.card,'Gerar link de crédito',true)+
+    it('abrirBling',BLG_IC.olho,'Abrir no Bling',!BLG.sel)+
+    it('imprimir',BLG_IC.imp,'Imprimir lista')+
+    '<div class="grp">Como funciona</div>'+
+    '<div class="sub">PIX</div><span class="lk">Clique numa linha e gere o QR Code e o “copia e cola” aqui mesmo.</span>'+
+    '<span class="lk">Pagou parte? O sistema baixa só o valor pago e o pedido fica como “Parcialmente pago”.</span>'+
+    '<div class="sub">Depois de pago</div><span class="lk">Situação do pedido, baixa no Bling e vínculo do pagamento à nota (ECONF) são feitos sozinhos.</span>'+
+    '<div class="sub">Link de crédito</div><span class="lk">Entra junto com a nova maquininha.</span>'+
+    (blgAdmin()&&blgUrl()?'<div class="grp">Administrador</div>'+it('conectar',BLG_IC.rec,'Reconectar ao Bling')+it('demo',BLG_IC.olho,BLG.demo?'Prévia ligada':'Ver prévia com dados de exemplo')+it('trocarWk',BLG_IC.copiar,'Trocar endereço do Worker'):'');
+}
+
+function blgPainelPix(x){
+  var k=blgChave(x),pg=BLG.pix[k]||{},val=BLG.valorEdit[k]!=null?BLG.valorEdit[k]:blgMoeda(x.aReceber);
+  var pixAtivo=!!(BLG.cfg&&BLG.cfg.pixAtivo)||BLG.demo;
+  var h='<div class="blg-pix"><span class="voltar" data-a="desmarcar">‹ Voltar às ações</span>'+
+    '<h4>'+(x.tipo==='nota'?'Nota fiscal ':'Pedido ')+blgEsc(x.numero)+'</h4><div class="cl">'+blgEsc(x.cliente)+'</div>'+
+    '<div class="ln"><span>Total</span><b>R$ '+blgMoeda(x.total)+'</b></div>'+
+    '<div class="ln"><span>A receber</span><b>R$ '+blgMoeda(x.aReceber)+'</b></div>'+
+    '<div class="ln"><span>Forma</span><b>'+blgEsc(x.formaNome||((x.formas||[]).indexOf('pix')>=0?'PIX':'Crédito'))+'</b></div>'+
+    (x.vendedor?'<div class="ln"><span>Vendedor</span><b>'+blgEsc(x.vendedor)+'</b></div>':'');
+  if(pg.copia){
+    h+='<div class="qr" id="blgQr"></div><label>PIX copia e cola</label><textarea readonly id="blgCopia">'+blgEsc(pg.copia)+'</textarea>'+
+       '<button class="blg-btn" data-a="copiar">'+BLG_IC.copiar+' Copiar código</button>'+
+       '<button class="blg-btn sec" data-a="wpp">'+BLG_IC.wpp+' Mandar no WhatsApp</button>'+
+       '<div class="nota">Valor: <b style="color:#fff">R$ '+blgMoeda(pg.valor)+'</b> · vale até '+blgEsc(pg.validade||'hoje 23:59')+'.<br>Quando o cliente pagar, esta linha muda sozinha.'+(BLG.demo?'<br><b style="color:#fde68a">Prévia: código de exemplo, não paga nada.</b>':'')+'</div>'+
+       '<button class="blg-btn sec" data-a="novoPix" style="margin-top:12px">Gerar outro valor</button>';
+  }else{
+    h+='<label for="blgValor">Valor do PIX (R$)</label><input id="blgValor" inputmode="decimal" value="'+blgEsc(val)+'">'+
+       '<div class="nota">Pode cobrar só uma parte (pagamento parcial).</div>'+
+       '<button class="blg-btn" data-a="gerarPix"'+(pixAtivo?'':' disabled')+'>'+BLG_IC.pix+' Gerar PIX</button>'+
+       '<button class="blg-btn sec" data-a="credSel" disabled>'+BLG_IC.card+' Link de crédito</button>'+
+       (pixAtivo?'':'<div class="nota">⏳ O PIX pelo Sicoob é ativado na próxima etapa (certificado no Worker). Por enquanto você já confere a lista.</div>')+
+       (pg.erro?'<div class="blg-msg err" style="margin-top:10px">'+blgEsc(pg.erro)+'</div>':'');
+  }
+  return h+'</div>';
+}
+
+function blgValorNum(s){s=String(s||'').trim().replace(/\s|R\$/g,'');if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');var n=Number(s);return isFinite(n)?Math.round(n*100)/100:NaN;}
+
+function blgQr(el,texto){
+  var go=function(){try{var q=qrcode(0,'M');q.addData(texto);q.make();el.innerHTML=q.createSvgTag({cellSize:4,margin:2});}catch(e){el.textContent='QR indisponível';}};
+  if(window.qrcode)return go();
+  var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';s.onload=go;document.head.appendChild(s);
+}
+
+function blgLigar(w){
+  var b=w.querySelector('#blgBusca');
+  if(b){b.oninput=function(){BLG.f.busca=b.value;var pos=b.selectionStart;blgDraw();var nb=BLG.root.querySelector('#blgBusca');if(nb){nb.focus();try{nb.setSelectionRange(pos,pos);}catch(e){}}};}
+  w.querySelectorAll('select[data-f]').forEach(function(s){s.onchange=function(){BLG.f[s.getAttribute('data-f')]=s.value;blgDraw();};});
+  w.querySelectorAll('tbody tr[data-k]').forEach(function(tr){tr.onclick=function(){var k=tr.getAttribute('data-k');BLG.sel=BLG.sel===k?null:k;blgDraw();};});
+  var vi=w.querySelector('#blgValor');if(vi)vi.oninput=function(){BLG.valorEdit[BLG.sel]=vi.value;};
+  var qr=w.querySelector('#blgQr');if(qr&&BLG.sel&&BLG.pix[BLG.sel])blgQr(qr,BLG.pix[BLG.sel].copia);
+  w.querySelectorAll('[data-a]').forEach(function(el){
+    if(el.tagName==='SPAN'&&el.classList.contains('x')&&el.closest('.blg-fsit'))return;
+    el.onclick=function(ev){ev.stopPropagation();blgAcao(el.getAttribute('data-a'));};
+  });
+}
+
+function blgSelecionado(){return BLG.sel&&(BLG.dados||[]).filter(function(x){return blgChave(x)===BLG.sel;})[0];}
+
+function blgAcao(a){
+  var x=blgSelecionado();
+  if(a==='limpar'){BLG.f={busca:'',tipo:'todos',forma:'todos',vendedor:''};blgDraw();return;}
+  if(a==='recarregar'){blgCarregar(true);return;}
+  if(a==='imprimir'){window.print();return;}
+  if(a==='desmarcar'){BLG.sel=null;blgDraw();return;}
+  if(a==='demo'){BLG.demo=true;BLG.sel=null;BLG.erro=null;blgCarregar();return;}
+  if(a==='sairDemo'){BLG.demo=false;BLG.dados=null;BLG.sel=null;BLG.pix={};blgCarregar(true);return;}
+  if(a==='trocarWk'){BLG.cfg.workerUrl='';blgDraw();return;}
+  if(a==='salvarWk'){
+    var v=(BLG.root.querySelector('#blgWk')||{}).value||'';v=v.trim().replace(/\/+$/,'');
+    if(!/^https:\/\/[a-z0-9.-]+\.workers\.dev$/i.test(v)&&!/^https:\/\//.test(v)){alert('Cole o endereço completo do Worker (começa com https://).');return;}
+    blgSalvarCfg({workerUrl:v}).then(function(){BLG.dados=null;BLG.erro=null;blgCarregar(true);});return;
+  }
+  if(a==='conectar'){
+    blgApi('/oauth/inicio').then(function(r){if(r&&r.ok&&r.url)location.href=r.url;else{BLG.erro=(r&&r.erro)||'Worker não respondeu.';blgDraw();}})
+      .catch(function(e){BLG.erro='Sem conexão com o Worker: '+(e&&e.message||e);blgDraw();});return;
+  }
+  if(a==='abrirBling'&&x){window.open(x.tipo==='nota'?'https://www.bling.com.br/notas.fiscais.php#edit/'+x.id:'https://www.bling.com.br/vendas.php#edit/'+x.id,'_blank');return;}
+  if(a==='pixSel'){if(!x)return;blgDraw();var i=BLG.root.querySelector('#blgValor');if(i){i.focus();i.select();}return;}
+  if(a==='novoPix'&&x){delete BLG.pix[BLG.sel];blgDraw();return;}
+  if(a==='copiar'){var t=BLG.root.querySelector('#blgCopia');if(t){t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand('copy');}var bt=BLG.root.querySelector('[data-a="copiar"]');if(bt){bt.innerHTML='✓ Copiado';setTimeout(function(){if(bt)bt.innerHTML=BLG_IC.copiar+' Copiar código';},1800);}}return;}
+  if(a==='wpp'&&x){var p=BLG.pix[BLG.sel];if(!p)return;var msg='Olá! Segue o PIX '+(x.tipo==='nota'?'da nota fiscal ':'do pedido ')+x.numero+' — Mais Acessível.\nValor: R$ '+blgMoeda(p.valor)+'\n\nPIX copia e cola:\n'+p.copia;window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');return;}
+  if(a==='gerarPix'&&x){
+    var val=blgValorNum(BLG.valorEdit[BLG.sel]!=null?BLG.valorEdit[BLG.sel]:x.aReceber);
+    if(!(val>0)){BLG.pix[BLG.sel]={erro:'Valor inválido.'};blgDraw();return;}
+    if(val>x.aReceber+0.009){BLG.pix[BLG.sel]={erro:'O valor passa do que falta receber (R$ '+blgMoeda(x.aReceber)+').'};blgDraw();return;}
+    if(BLG.demo){BLG.pix[BLG.sel]={valor:val,copia:'00020101021226870014br.gov.bcb.pix2565pix.exemplo.com.br/qr/v3/PREVIA-'+x.numero+'-SEM-VALOR-REAL5204000053039865802BR5915MAIS ACESSIVEL6007GOIANIA62070503***6304ABCD',validade:'hoje 23:59'};blgDraw();return;}
+    var k=BLG.sel;BLG.pix[k]={gerando:true};blgDraw();
+    blgApi('/pix',{method:'POST',body:{tipo:x.tipo,id:x.id,numero:x.numero,valor:val,usuario:STATE.usuarioLogado||''}}).then(function(r){
+      BLG.pix[k]=r&&r.ok?{valor:val,copia:r.copiaECola,validade:r.validade,txid:r.txid}:{erro:(r&&r.erro)||'Não gerou o PIX.'};blgDraw();
+    }).catch(function(e){BLG.pix[k]={erro:'Sem conexão: '+(e&&e.message||e)};blgDraw();});
+    return;
+  }
+}
+
 function renderApp(){
   // Chegou um pedido do Bling (bookmarklet/extensão): vai direto para a cotação de frete
   if(STATE.modulo==='inicio'&&window._blingImport){STATE.modulo='frete';STATE.tab='cotacao';}
@@ -12651,6 +13042,8 @@ function renderApp(){
     main.appendChild(renderControle());
   } else if(STATE.modulo==='mod16'&&STATE.roleLogado==='admin'){
     main.appendChild(renderFretes());
+  } else if(STATE.modulo==='mod17'){
+    main.appendChild(renderBling());
   }
   setTimeout(dspAvisoGlobal,1500);setTimeout(frtAvisoGlobal,1600);
   wrap.appendChild(main);
