@@ -12909,7 +12909,7 @@ function blgPainelPix(x){
     h+='<div class="qr" id="blgQr"></div><label>PIX copia e cola</label><textarea readonly id="blgCopia">'+blgEsc(pg.copia)+'</textarea>'+
        '<button class="blg-btn" data-a="copiar">'+BLG_IC.copiar+' Copiar código</button>'+
        '<button class="blg-btn sec" data-a="wpp">'+BLG_IC.wpp+' Mandar no WhatsApp</button>'+
-       '<div class="nota">Valor: <b style="color:#fff">R$ '+blgMoeda(pg.valor)+'</b> · vale até '+blgEsc(pg.validade||'hoje 23:59')+'.<br>Quando o cliente pagar, esta linha muda sozinha.'+(BLG.demo?'<br><b style="color:#fde68a">Prévia: código de exemplo, não paga nada.</b>':'')+'</div>'+
+       '<div class="nota">Valor: <b style="color:#fff">R$ '+blgMoeda(pg.valor)+'</b> · vale até '+blgEsc(pg.validade||'hoje 23:59')+'.<br>Confirmação automática do pagamento: em breve (por enquanto confira no Sicoob).'+(BLG.demo?'<br><b style="color:#fde68a">Prévia: código de exemplo, não paga nada.</b>':'')+'</div>'+
        '<button class="blg-btn sec" data-a="novoPix" style="margin-top:12px">Gerar outro valor</button>';
   }else{
     h+='<label for="blgValor">Valor do PIX (R$)</label><input id="blgValor" inputmode="decimal" value="'+blgEsc(val)+'">'+
