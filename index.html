@@ -12651,6 +12651,19 @@ function blgCarregar(forcar){
   }).catch(function(e){BLG.carr=false;BLG.erro='Sem conexão com o Worker: '+(e&&e.message||e);blgDraw();});
 }
 function blgChave(x){return x.tipo+':'+x.id;}
+function blgCarregarPag(){BLG.pagCarr=true;blgApi('/pagamentos').then(function(r){BLG.pagCarr=false;BLG.pag=r&&r.ok?r:{erro:(r&&r.erro)||'Falhou'};blgDraw();}).catch(function(e){BLG.pagCarr=false;BLG.pag={erro:String(e)};blgDraw();});}
+function blgTelaPag(){
+  var p=BLG.pag||{},h='<div class="blg-msg"><b>Pagamentos recebidos e ações no Bling</b> · modo: '+(p.modo==='real'?'<b style="color:#86efac">REAL</b> (executa no Bling)':'<b style="color:#fde68a">SIMULAÇÃO</b> (só anota o que faria; nada é alterado no Bling)')+
+    '<br>O servidor confere o Sicoob a cada 5 minutos. Última conferência: '+(p.ultimaVerificacao?new Date(p.ultimaVerificacao).toLocaleString('pt-BR'):'—')+
+    ' <button class="blg-btn" style="height:26px;margin-left:8px" data-a="verificarAgora">'+(BLG.pagCarr?'<span class="blg-spin"></span>':'Verificar agora')+'</button>'+(BLG.pagMsg?'<br>'+blgEsc(BLG.pagMsg):'')+'</div>';
+  if(p.erro)return h+'<div class="blg-msg err">'+blgEsc(p.erro)+'</div>';
+  var ac=p.acoes||[];
+  if(!ac.length)return h+'<div class="blg-vazio">Nenhum pagamento de PIX gerado pelo app ainda.</div>';
+  var nome={pix_pago:'💰 PIX pago',baixa:'✅ Baixa',situacao:'🏷️ Situação',sobra:'⚠️ Conferir',erro:'❌ Erro'};
+  h+='<table class="blg-tb"><thead><tr><th>Quando</th><th>Pedido/NF</th><th>Cliente</th><th>Ação</th><th>Detalhe</th></tr></thead><tbody>';
+  ac.forEach(function(a){h+='<tr style="cursor:default"><td>'+new Date(a.quando).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</td><td>'+(a.tipo==='nota'?'NF ':'')+blgEsc(a.numero||'')+'</td><td title="'+blgEsc(a.cliente||'')+'">'+blgEsc(a.cliente||'')+'</td><td>'+(nome[a.acao]||blgEsc(a.acao))+(a.modo==='simulacao'&&a.acao!=='pix_pago'?' <span class="blg-pill">simulação</span>':'')+'</td><td style="white-space:normal;max-width:520px">'+blgEsc(a.detalhe||'')+(a.resultado?' — '+blgEsc(a.resultado):'')+'</td></tr>';});
+  return h+'</tbody></table>';
+}
 
 // Dados de exemplo (só para a prévia — nomes fictícios)
 function blgDemo(){
@@ -12830,18 +12843,19 @@ function blgDraw(){
      '<span style="flex:1"></span><button class="blg-ib" data-a="recarregar" title="Atualizar">'+BLG_IC.rec+'</button><button class="blg-ib gray" data-a="imprimir" title="Imprimir">'+BLG_IC.imp+'</button></div>';
   h+='<div class="blg-fsit">Situação: Em aberto <span class="x">✕</span>'+(BLG.f.tipo!=='todos'||BLG.f.forma!=='todos'||BLG.f.vendedor||BLG.f.busca?'<a data-a="limpar">Limpar</a>':'')+'</div>';
   h+=blgAvisos();
+  if(BLG.view==='pag'){h+=blgTelaPag()+'</section><aside class="blg-act">'+blgAcoes()+'</aside></div>';w.innerHTML=h;blgLigar(w);return;}
   h+='<div class="blg-tools"><span class="blg-ck"></span>'+BLG_IC.rec+'<span class="sp"></span>'+BLG_IC.lista+BLG_IC.tog+'</div>';
   if(BLG.dados){
     if(!lista.length)h+='<div class="blg-vazio">'+(BLG.dados.length?'Nada encontrado com esses filtros.':'Nenhum pedido ou nota em aberto com PIX ou link de crédito. 🎉')+'</div>';
     else{
       h+='<table class="blg-tb"><thead><tr><th style="width:26px"></th><th>Número</th><th>Data</th><th>Cliente</th><th class="r">A receber (R$)</th><th>Situação</th><th class="hm"></th><th style="width:28px"></th></tr></thead><tbody>';
       lista.forEach(function(x){
-        var k=blgChave(x),pg=BLG.pix[k],parcial=x.parcial||(pg&&pg.pagoParcial);
+        var k=blgChave(x),pg=BLG.pix[k],pagoTot=x.pago>=x.aReceber-0.009&&x.pago>0,parcial=!pagoTot&&(x.parcial||x.pago>0);
         var dt=blgData(x.data)+(blgData(x.prevista)&&x.prevista!==x.data&&x.tipo==='pedido'?' (prevista até: '+blgData(x.prevista)+')':'');
         h+='<tr data-k="'+blgEsc(k)+'" class="'+(BLG.sel===k?'on':'')+'"><td><span class="blg-ck"></span></td>'+
            '<td>'+(x.tipo==='nota'?'NF ':'')+blgEsc(x.numero)+'</td><td>'+dt+'</td><td title="'+blgEsc(x.cliente)+'">'+blgEsc(x.cliente)+'</td>'+
            '<td class="r">'+blgMoeda(x.aReceber)+(x.aReceber<x.total-0.009?'<div style="font-size:10px;color:#969696;margin-top:-2px">de '+blgMoeda(x.total)+'</div>':'')+'</td>'+
-           '<td><span class="blg-sit"><span class="clk"></span><span class="blg-bd'+(parcial?' parc':'')+'">'+(parcial?'Parcialmente pago':'Em aberto')+'</span></span></td>'+
+           '<td><span class="blg-sit"><span class="clk"></span><span class="blg-bd'+(pagoTot?' pago':parcial?' parc':'')+'">'+(pagoTot?'Pago':parcial?'Parcialmente pago':'Em aberto')+'</span></span></td>'+
            '<td class="hm"><span class="blg-tags">'+(x.tipo==='pedido'?'<span class="blg-tg p">P</span>':'<span class="blg-tg n">N</span>')+
              (x.formas||[]).map(function(f){return f==='pix'?'<span class="blg-pill pix">PIX</span>':'<span class="blg-pill cr">Crédito</span>';}).join('')+
              (pg&&pg.copia?'<span class="blg-pill">PIX gerado</span>':'')+(x.vendedor?'<span class="blg-pill">'+blgEsc(x.vendedor)+'</span>':'')+'</span></td>'+
@@ -12893,18 +12907,19 @@ function blgAcoes(){
     '<span class="lk">Pagou parte? O sistema baixa só o valor pago e o pedido fica como “Parcialmente pago”.</span>'+
     '<div class="sub">Depois de pago</div><span class="lk">Situação do pedido, baixa no Bling e vínculo do pagamento à nota (ECONF) são feitos sozinhos.</span>'+
     '<div class="sub">Link de crédito</div><span class="lk">Entra junto com a nova maquininha.</span>'+
-    (blgAdmin()&&blgUrl()?'<div class="grp">Administrador</div>'+it('conectar',BLG_IC.rec,'Reconectar ao Bling')+it('demo',BLG_IC.olho,BLG.demo?'Prévia ligada':'Ver prévia com dados de exemplo')+it('trocarWk',BLG_IC.copiar,'Trocar endereço do Worker'):'');
+    (blgAdmin()&&blgUrl()?'<div class="grp">Administrador</div>'+it('verPagamentos',BLG_IC.pix,BLG.view==='pag'?'Voltar para a lista':'Pagamentos recebidos e ações')+it('conectar',BLG_IC.rec,'Reconectar ao Bling')+it('demo',BLG_IC.olho,BLG.demo?'Prévia ligada':'Ver prévia com dados de exemplo')+it('trocarWk',BLG_IC.copiar,'Trocar endereço do Worker'):'');
 }
 
 function blgPainelPix(x){
-  var k=blgChave(x),pg=BLG.pix[k]||{},val=BLG.valorEdit[k]!=null?BLG.valorEdit[k]:blgMoeda(x.aReceber);
+  var k=blgChave(x),pg=BLG.pix[k]||{},falta=Math.max(0,Number(x.aReceber||0)-Number(x.pago||0)),val=BLG.valorEdit[k]!=null?BLG.valorEdit[k]:blgMoeda(falta);
   var pixAtivo=!!BLG.pixAtivo||BLG.demo;
   var h='<div class="blg-pix"><span class="voltar" data-a="desmarcar">‹ Voltar às ações</span>'+
     '<h4>'+(x.tipo==='nota'?'Nota fiscal ':'Pedido ')+blgEsc(x.numero)+'</h4><div class="cl">'+blgEsc(x.cliente)+'</div>'+
     '<div class="ln"><span>Total</span><b>R$ '+blgMoeda(x.total)+'</b></div>'+
     '<div class="ln"><span>A receber</span><b>R$ '+blgMoeda(x.aReceber)+'</b></div>'+
     '<div class="ln"><span>Forma</span><b>'+blgEsc(x.formaNome||((x.formas||[]).indexOf('pix')>=0?'PIX':'Crédito'))+'</b></div>'+
-    (x.vendedor?'<div class="ln"><span>Vendedor</span><b>'+blgEsc(x.vendedor)+'</b></div>':'');
+    (x.vendedor?'<div class="ln"><span>Vendedor</span><b>'+blgEsc(x.vendedor)+'</b></div>':'')+
+    (x.pago?'<div class="ln"><span>Pago por PIX</span><b style="color:#86efac">R$ '+blgMoeda(x.pago)+'</b></div>'+(x.pagos||[]).map(function(p){return '<div class="ln" style="font-size:11px"><span>'+blgEsc(String(p.horario||'').slice(0,16).replace('T',' '))+'</span><span>R$ '+blgMoeda(p.valor)+'</span></div>';}).join(''):'');
   if(pg.copia){
     h+='<div class="qr" id="blgQr"></div><label>PIX copia e cola</label><textarea readonly id="blgCopia">'+blgEsc(pg.copia)+'</textarea>'+
        '<button class="blg-btn" data-a="copiar">'+BLG_IC.copiar+' Copiar código</button>'+
@@ -12948,6 +12963,8 @@ function blgSelecionado(){return BLG.sel&&(BLG.dados||[]).filter(function(x){ret
 function blgAcao(a){
   var x=blgSelecionado();
   if(a==='limpar'){BLG.f={busca:'',tipo:'todos',forma:'todos',vendedor:''};blgDraw();return;}
+  if(a==='verPagamentos'){BLG.view=BLG.view==='pag'?'':'pag';BLG.sel=null;if(BLG.view==='pag')blgCarregarPag();blgDraw();return;}
+  if(a==='verificarAgora'){BLG.pagCarr=true;blgDraw();blgApi('/pagamentos/verificar',{method:'POST',body:{}}).then(function(r){BLG.pagMsg=r&&r.ok?('Verificado: '+r.novos+' pagamento(s) novo(s) entre '+r.vistos+' PIX recebidos.'):('Erro: '+((r&&r.erro)||'?'));blgCarregarPag();if(r&&r.novos)blgCarregar(true);});return;}
   if(a==='recarregar'){blgCarregar(true);return;}
   if(a==='imprimir'){window.print();return;}
   if(a==='desmarcar'){BLG.sel=null;blgDraw();return;}
@@ -12969,12 +12986,12 @@ function blgAcao(a){
   if(a==='copiar'){var t=BLG.root.querySelector('#blgCopia');if(t){t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand('copy');}var bt=BLG.root.querySelector('[data-a="copiar"]');if(bt){bt.innerHTML='✓ Copiado';setTimeout(function(){if(bt)bt.innerHTML=BLG_IC.copiar+' Copiar código';},1800);}}return;}
   if(a==='wpp'&&x){var p=BLG.pix[BLG.sel];if(!p)return;var msg='Olá! Segue o PIX '+(x.tipo==='nota'?'da nota fiscal ':'do pedido ')+x.numero+' — Mais Acessível.\nValor: R$ '+blgMoeda(p.valor)+'\n\nPIX copia e cola:\n'+p.copia;window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');return;}
   if(a==='gerarPix'&&x){
-    var val=blgValorNum(BLG.valorEdit[BLG.sel]!=null?BLG.valorEdit[BLG.sel]:x.aReceber);
+    var falta=Math.max(0,Number(x.aReceber||0)-Number(x.pago||0));var val=blgValorNum(BLG.valorEdit[BLG.sel]!=null?BLG.valorEdit[BLG.sel]:falta);
     if(!(val>0)){BLG.pix[BLG.sel]={erro:'Valor inválido.'};blgDraw();return;}
-    if(val>x.aReceber+0.009){BLG.pix[BLG.sel]={erro:'O valor passa do que falta receber (R$ '+blgMoeda(x.aReceber)+').'};blgDraw();return;}
+    if(val>falta+0.009){BLG.pix[BLG.sel]={erro:'O valor passa do que falta receber (R$ '+blgMoeda(falta)+').'};blgDraw();return;}
     if(BLG.demo){BLG.pix[BLG.sel]={valor:val,copia:'00020101021226870014br.gov.bcb.pix2565pix.exemplo.com.br/qr/v3/PREVIA-'+x.numero+'-SEM-VALOR-REAL5204000053039865802BR5915MAIS ACESSIVEL6007GOIANIA62070503***6304ABCD',validade:'hoje 23:59'};blgDraw();return;}
     var k=BLG.sel;BLG.pix[k]={gerando:true};blgDraw();
-    blgApi('/pix',{method:'POST',body:{tipo:x.tipo,id:x.id,numero:x.numero,valor:val,cliente:x.cliente||'',doc:x.doc||'',usuario:STATE.usuarioLogado||''}}).then(function(r){
+    blgApi('/pix',{method:'POST',body:{tipo:x.tipo,id:x.id,numero:x.numero,valor:val,cliente:x.cliente||'',doc:x.doc||'',total:x.total||0,aReceber:x.aReceber||0,contas:x.contas||[],usuario:STATE.usuarioLogado||''}}).then(function(r){
       BLG.pix[k]=r&&r.ok?{valor:val,copia:r.copiaECola,validade:r.validade,txid:r.txid}:{erro:(r&&r.erro)||'Não gerou o PIX.'};blgDraw();
     }).catch(function(e){BLG.pix[k]={erro:'Sem conexão: '+(e&&e.message||e)};blgDraw();});
     return;

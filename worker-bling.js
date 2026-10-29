@@ -20,6 +20,10 @@
 //                             só com pagamento PIX ou cartão de crédito (link). Cache de 60 s.
 //   POST /pix {tipo,id,numero,valor,usuario,cliente,doc} → cria cobrança imediata no Sicoob e devolve o copia e cola
 //   GET  /pix/status?txid=  → situação da cobrança no Sicoob (ATIVA / CONCLUIDA ...)
+//   GET  /pagamentos         → PIX pagos e ações planejadas/feitas no Bling (para o administrador)
+//   POST /pagamentos/verificar → roda a verificação agora (a mesma do gatilho cron a cada 5 min)
+// Gatilho (Settings → Trigger Events → Cron): */5 * * * *
+// Modo: KV "modo" = "simulacao" (padrão: só anota o que faria) ou "real" (executa no Bling).
 
 const ORIGENS = ['https://rauldneto.github.io', 'http://localhost:8080', 'http://127.0.0.1:8080'];
 const API = 'https://api.bling.com.br/Api/v3';
@@ -31,6 +35,9 @@ const DIAS_PEDIDOS = 120;                 // pedidos em aberto criados nos últi
 const DIAS_CONTAS = 180;                  // contas a receber em aberto emitidas nos últimos N dias
 
 export default {
+  async scheduled(evento, env, ctx) {
+    ctx.waitUntil(verificarPagamentos(env).catch(e => logAcao(env, { acao: 'erro', detalhe: String(e.message || e) })));
+  },
   async fetch(req, env) {
     const origem = req.headers.get('Origin') || '';
     const okOrigem = ORIGENS.includes(origem);
@@ -87,6 +94,16 @@ export default {
       if (url.pathname === '/pix' && req.method === 'POST') {
         const b = await req.json();
         return resp(await gerarPix(env, b || {}));
+      }
+      if (url.pathname === '/pagamentos') {
+        const acoes = (await env.BLING_KV.get('acoes', 'json')) || [];
+        const modo = (await env.BLING_KV.get('modo')) || 'simulacao';
+        const ult = await env.BLING_KV.get('pix:ultimaVerificacao');
+        return resp({ ok: true, modo, ultimaVerificacao: ult ? Number(ult) : 0, acoes: acoes.slice(-100).reverse() });
+      }
+      if (url.pathname === '/pagamentos/verificar' && req.method === 'POST') {
+        const r = await verificarPagamentos(env);
+        return resp(Object.assign({ ok: true }, r));
       }
       if (url.pathname === '/pix/status') {
         const txid = (url.searchParams.get('txid') || '').replace(/[^A-Za-z0-9]/g, '');
@@ -246,6 +263,10 @@ async function listarAbertos(env) {
   }
   itens.push(...Object.values(porNota));
 
+  for (const it of itens) {
+    const pg = (await env.BLING_KV.get('pagosdoc:' + it.tipo + ':' + it.id, 'json')) || [];
+    if (pg.length) { it.pago = Math.round(pg.reduce((s, x) => s + Number(x.valor || 0), 0) * 100) / 100; it.pagos = pg; }
+  }
   itens.sort((a, b) => String(b.data).localeCompare(String(a.data)) || Number(b.numero) - Number(a.numero));
   return { itens, faltaram };
 }
@@ -305,7 +326,9 @@ async function gerarPix(env, b) {
   };
   if (nome && (doc.length === 11 || doc.length === 14)) corpo.devedor = doc.length === 14 ? { cnpj: doc, nome } : { cpf: doc, nome };
   const c = await sicoob(env, 'PUT', '/cob/' + txid, corpo);
+  const contas = Array.isArray(b.contas) ? b.contas.slice(0, 24).map(x => ({ id: x.id, valor: Number(x.valor || 0), venc: x.venc || '' })) : [];
   const reg = { txid, tipo: b.tipo, id: b.id, numero: b.numero || '', valor, cliente: nome, doc, usuario: String(b.usuario || '').slice(0, 60),
+    total: Number(b.total || 0), aReceber: Number(b.aReceber || 0), contas,
     criado: Date.now(), copia: c.brcode || '', status: c.status || 'ATIVA' };
   await env.BLING_KV.put('pix:' + txid, JSON.stringify(reg), { expirationTtl: 90 * 86400 });
   // lista por pedido/nota, para mostrar no app e conciliar pagamentos parciais
@@ -315,4 +338,93 @@ async function gerarPix(env, b) {
   await env.BLING_KV.put(k, JSON.stringify(lista.slice(-20)), { expirationTtl: 90 * 86400 });
   const ate = new Date(Date.now() + 86400e3 - 3 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');
   return { ok: true, txid, copiaECola: c.brcode || '', validade: ate.slice(8, 10) + '/' + ate.slice(5, 7) + ' ' + ate.slice(11) };
+}
+
+// ---------------- Pagamentos: confere PIX recebidos e planeja/executa as ações no Bling ----------------
+const PORTADOR_SICOOB = 14890739452;   // conta "Sicoob" no Bling
+
+async function logAcao(env, a) {
+  const lista = (await env.BLING_KV.get('acoes', 'json')) || [];
+  lista.push(Object.assign({ quando: Date.now() }, a));
+  await env.BLING_KV.put('acoes', JSON.stringify(lista.slice(-300)));
+}
+
+function isoSemMs(ms) { return new Date(ms).toISOString().replace(/\.\d+Z$/, 'Z'); }
+
+async function verificarPagamentos(env) {
+  if (!env.SICOOB_MTLS || !env.SICOOB_CLIENT_ID) return { novos: 0, aviso: 'PIX não ativado' };
+  const agora = Date.now();
+  const ult = Number((await env.BLING_KV.get('pix:ultimaVerificacao')) || (agora - 6 * 3600e3));
+  const inicio = isoSemMs(Math.max(ult - 15 * 60e3, agora - 4 * 86400e3));
+  const fim = isoSemMs(agora);
+  let pagina = 0, novos = 0, vistos = 0;
+  while (pagina < 10) {
+    const j = await sicoob(env, 'GET', '/pix?inicio=' + encodeURIComponent(inicio) + '&fim=' + encodeURIComponent(fim) + '&paginacao.paginaAtual=' + pagina + '&paginacao.itensPorPagina=100');
+    const lista = (j && j.pix) || [];
+    for (const p of lista) {
+      vistos++;
+      if (!p.txid || !p.endToEndId) continue;              // PIX direto na chave: tratado em outra etapa (CNPJ + valor)
+      const reg = await env.BLING_KV.get('pix:' + p.txid, 'json');
+      if (!reg) continue;                                    // não foi gerado pelo app
+      if (await env.BLING_KV.get('pago:' + p.endToEndId)) continue;
+      await env.BLING_KV.put('pago:' + p.endToEndId, p.txid, { expirationTtl: 180 * 86400 });
+      novos++;
+      const valor = Number(p.valor || 0);
+      reg.pagamentos = (reg.pagamentos || []).concat([{ e2e: p.endToEndId, valor, horario: p.horario }]);
+      reg.status = 'PAGO';
+      await env.BLING_KV.put('pix:' + p.txid, JSON.stringify(reg), { expirationTtl: 180 * 86400 });
+      const kd = 'pagosdoc:' + reg.tipo + ':' + reg.id;
+      const pd = (await env.BLING_KV.get(kd, 'json')) || [];
+      pd.push({ txid: p.txid, e2e: p.endToEndId, valor, horario: p.horario, pagador: (p.pagador && p.pagador.nome) || '' });
+      await env.BLING_KV.put(kd, JSON.stringify(pd), { expirationTtl: 365 * 86400 });
+      await planejarAcoes(env, reg, valor, p, pd);
+    }
+    const tp = j && j.parametros && j.parametros.paginacao && j.parametros.paginacao.quantidadeDePaginas;
+    pagina++;
+    if (!tp || pagina >= tp || lista.length < 100) break;
+  }
+  await env.BLING_KV.put('pix:ultimaVerificacao', String(agora));
+  if (novos) await env.BLING_KV.delete('cache:abertos');
+  return { novos, vistos, inicio, fim };
+}
+
+async function planejarAcoes(env, reg, valor, p, pagosDoc) {
+  const modo = (await env.BLING_KV.get('modo')) || 'simulacao';
+  const totalPago = Math.round(pagosDoc.reduce((s, x) => s + Number(x.valor || 0), 0) * 100) / 100;
+  const base = { modo, tipo: reg.tipo, id: reg.id, numero: reg.numero, cliente: reg.cliente, txid: reg.txid, valor, horario: p.horario, pagador: (p.pagador && p.pagador.nome) || '' };
+  const data = String(p.horario || new Date().toISOString()).slice(0, 10);
+  await logAcao(env, Object.assign({}, base, { acao: 'pix_pago', detalhe: 'PIX de R$ ' + valor.toFixed(2) + ' recebido' + (base.pagador ? ' de ' + base.pagador : '') }));
+  if (reg.tipo === 'nota') {
+    // reparte o valor pelas parcelas em aberto da nota, da mais antiga para a mais nova
+    let resto = valor;
+    const contas = (reg.contas || []).slice().sort((a, b) => String(a.venc).localeCompare(String(b.venc)));
+    for (const c of contas) {
+      if (resto <= 0.009) break;
+      const v = Math.min(resto, c.valor);
+      resto = Math.round((resto - v) * 100) / 100;
+      const acao = { acao: 'baixa', contaId: c.id, valorBaixa: Math.round(v * 100) / 100, data,
+        detalhe: 'Baixa de R$ ' + v.toFixed(2) + ' na parcela ' + (c.venc ? 'venc. ' + c.venc.split('-').reverse().join('/') : c.id) + ' (conta Sicoob)' + (v < c.valor - 0.009 ? ' — parcial' : '') };
+      if (modo === 'real') acao.resultado = await executarBaixa(env, c.id, v, data, reg).catch(e => 'ERRO: ' + (e.message || e));
+      await logAcao(env, Object.assign({}, base, acao));
+    }
+    if (resto > 0.009) await logAcao(env, Object.assign({}, base, { acao: 'sobra', detalhe: 'Sobrou R$ ' + resto.toFixed(2) + ' sem parcela em aberto para baixar — conferir.' }));
+  } else {
+    const alvo = reg.aReceber || reg.total || 0;
+    const sit = alvo && totalPago >= alvo - 0.009 ? 'Pago' : 'Parcialmente pago';
+    await logAcao(env, Object.assign({}, base, { acao: 'situacao', situacao: sit,
+      detalhe: 'Pedido ' + reg.numero + ' → situação "' + sit + '" (pago R$ ' + totalPago.toFixed(2) + (alvo ? ' de R$ ' + alvo.toFixed(2) : '') + '). O pagamento fica guardado para a baixa quando a nota for emitida.' }));
+  }
+}
+
+async function executarBaixa(env, contaId, valor, data, reg) {
+  // ativado só no modo "real", depois de conferido na simulação
+  const tok = await tokenValido(env);
+  const r = await fetch(API + '/contas/receber/' + contaId + '/baixar', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ data, usarDataVencimento: false, portador: { id: PORTADOR_SICOOB }, historico: 'PIX app Mais Acessível ' + reg.txid, valorRecebido: Math.round(valor * 100) / 100, juro: 0, desconto: 0, acrescimo: 0, taxa: 0 }),
+  });
+  const t = await r.text();
+  if (!r.ok) throw new Error('Bling ' + r.status + ': ' + t.slice(0, 200));
+  return 'ok';
 }
