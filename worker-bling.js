@@ -7,6 +7,10 @@
 //   Variables and Secrets:
 //     BLING_CLIENT_ID      = Client ID do app no Bling               (tipo Text)
 //     BLING_CLIENT_SECRET  = Client Secret do app no Bling           (tipo Secret)
+//   PIX pelo Sicoob (opcional; sem isso o botão Gerar PIX fica desligado):
+//     Bindings → Certificado mTLS:  SICOOB_MTLS  (certificado A1 da JDFER enviado pela API da Cloudflare)
+//     SICOOB_CLIENT_ID     = client_id do app no portal Sicoob        (tipo Text)
+//     PIX_CHAVE            = chave PIX que recebe as cobranças (CNPJ) (tipo Text)
 //
 // Rotas (todas só aceitam chamadas vindas do app https://rauldneto.github.io):
 //   GET  /status            → {ok, conectado, empresa?}
@@ -14,6 +18,8 @@
 //   POST /oauth/troca       {code, state} → guarda o acesso no KV
 //   GET  /abertos[?forcar=1]→ pedidos de venda "Em aberto" e notas com conta a receber em aberto,
 //                             só com pagamento PIX ou cartão de crédito (link). Cache de 60 s.
+//   POST /pix {tipo,id,numero,valor,usuario,cliente,doc} → cria cobrança imediata no Sicoob e devolve o copia e cola
+//   GET  /pix/status?txid=  → situação da cobrança no Sicoob (ATIVA / CONCLUIDA ...)
 
 const ORIGENS = ['https://rauldneto.github.io', 'http://localhost:8080', 'http://127.0.0.1:8080'];
 const API = 'https://api.bling.com.br/Api/v3';
@@ -45,11 +51,12 @@ export default {
     try {
       if (url.pathname === '/status') {
         const t = await env.BLING_KV.get('tokens', 'json');
-        if (!t) return resp({ ok: true, conectado: false });
+        const pixAtivo = !!(env.SICOOB_MTLS && env.SICOOB_CLIENT_ID && env.PIX_CHAVE);
+        if (!t) return resp({ ok: true, conectado: false, pixAtivo });
         try {
           const emp = await bling(env, '/empresas/me/dados-basicos');
-          return resp({ ok: true, conectado: true, empresa: emp && emp.data && emp.data.nome });
-        } catch (e) { return resp({ ok: true, conectado: false, erro: String(e.message || e) }); }
+          return resp({ ok: true, conectado: true, pixAtivo, empresa: emp && emp.data && emp.data.nome });
+        } catch (e) { return resp({ ok: true, conectado: false, pixAtivo, erro: String(e.message || e) }); }
       }
       if (url.pathname === '/oauth/inicio') {
         const state = 'wb' + crypto.randomUUID().replace(/-/g, '');
@@ -76,6 +83,16 @@ export default {
         const out = { ts: Date.now(), itens: dados.itens, faltaram: dados.faltaram };
         if (!dados.faltaram) await env.BLING_KV.put('cache:abertos', JSON.stringify(out), { expirationTtl: 600 });
         return resp(Object.assign({ ok: true }, out));
+      }
+      if (url.pathname === '/pix' && req.method === 'POST') {
+        const b = await req.json();
+        return resp(await gerarPix(env, b || {}));
+      }
+      if (url.pathname === '/pix/status') {
+        const txid = (url.searchParams.get('txid') || '').replace(/[^A-Za-z0-9]/g, '');
+        if (!txid) return resp({ ok: false, erro: 'Faltou txid' }, 400);
+        const c = await sicoob(env, 'GET', '/cob/' + txid);
+        return resp({ ok: true, status: c.status, pix: c.pix || [] });
       }
       return resp({ ok: false, erro: 'Rota inexistente' }, 404);
     } catch (e) {
@@ -231,4 +248,71 @@ async function listarAbertos(env) {
 
   itens.sort((a, b) => String(b.data).localeCompare(String(a.data)) || Number(b.numero) - Number(a.numero));
   return { itens, faltaram };
+}
+
+// ---------------- PIX pelo Sicoob (cobrança imediata) ----------------
+const SICOOB_TOKEN = 'https://auth.sicoob.com.br/auth/realms/cooperado/protocol/openid-connect/token';
+const SICOOB_PIX = 'https://api.sicoob.com.br/pix/api/v2';
+
+async function sicoobToken(env) {
+  const c = await env.BLING_KV.get('sicoob:token', 'json');
+  if (c && Date.now() < c.exp) return c.access;
+  const r = await env.SICOOB_MTLS.fetch(SICOOB_TOKEN, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=client_credentials&client_id=' + encodeURIComponent(env.SICOOB_CLIENT_ID) + '&scope=' + encodeURIComponent('cob.write cob.read pix.read'),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.access_token) throw new Error('Sicoob recusou o acesso (' + r.status + '): ' + (j.error_description || j.error || ''));
+  await env.BLING_KV.put('sicoob:token', JSON.stringify({ access: j.access_token, exp: Date.now() + (Number(j.expires_in || 300) - 30) * 1000 }), { expirationTtl: 3600 });
+  return j.access_token;
+}
+
+async function sicoob(env, metodo, caminho, corpo) {
+  if (!env.SICOOB_MTLS || !env.SICOOB_CLIENT_ID) throw new Error('PIX do Sicoob ainda não ativado no Worker.');
+  const tok = await sicoobToken(env);
+  const r = await env.SICOOB_MTLS.fetch(SICOOB_PIX + caminho, {
+    method: metodo,
+    headers: { Authorization: 'Bearer ' + tok, client_id: env.SICOOB_CLIENT_ID, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: corpo ? JSON.stringify(corpo) : undefined,
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error('Sicoob ' + r.status + ': ' + (j.detail || j.title || j.mensagem || JSON.stringify(j).slice(0, 200)));
+  return j;
+}
+
+function txidNovo(tipo, id) {
+  // 26 a 35 caracteres [A-Za-z0-9]: MA + P/N + id do Bling + sufixo aleatório
+  const base = 'MA' + (tipo === 'nota' ? 'N' : 'P') + String(id).replace(/\D/g, '');
+  const rnd = crypto.randomUUID().replace(/-/g, '').toUpperCase();
+  return (base + 'X' + rnd).slice(0, 35);
+}
+
+async function gerarPix(env, b) {
+  const valor = Math.round(Number(b.valor) * 100) / 100;
+  if (!(valor > 0) || valor > 1e7) return { ok: false, erro: 'Valor inválido.' };
+  if (!b.id || !b.tipo) return { ok: false, erro: 'Faltou o pedido/nota.' };
+  if (!env.PIX_CHAVE) return { ok: false, erro: 'Chave PIX não configurada no Worker.' };
+  const txid = txidNovo(b.tipo, b.id);
+  const doc = String(b.doc || '').replace(/\D/g, '');
+  const nome = String(b.cliente || '').slice(0, 200);
+  const corpo = {
+    calendario: { expiracao: 86400 },
+    valor: { original: valor.toFixed(2) },
+    chave: env.PIX_CHAVE,
+    solicitacaoPagador: ((b.tipo === 'nota' ? 'NF ' : 'Pedido ') + String(b.numero || '')).slice(0, 140),
+    infoAdicionais: [{ nome: b.tipo === 'nota' ? 'Nota fiscal' : 'Pedido', valor: String(b.numero || '').slice(0, 50) }],
+  };
+  if (nome && (doc.length === 11 || doc.length === 14)) corpo.devedor = doc.length === 14 ? { cnpj: doc, nome } : { cpf: doc, nome };
+  const c = await sicoob(env, 'PUT', '/cob/' + txid, corpo);
+  const reg = { txid, tipo: b.tipo, id: b.id, numero: b.numero || '', valor, cliente: nome, doc, usuario: String(b.usuario || '').slice(0, 60),
+    criado: Date.now(), copia: c.brcode || '', status: c.status || 'ATIVA' };
+  await env.BLING_KV.put('pix:' + txid, JSON.stringify(reg), { expirationTtl: 90 * 86400 });
+  // lista por pedido/nota, para mostrar no app e conciliar pagamentos parciais
+  const k = 'pixdoc:' + b.tipo + ':' + b.id;
+  const lista = (await env.BLING_KV.get(k, 'json')) || [];
+  lista.push({ txid, valor, criado: reg.criado });
+  await env.BLING_KV.put(k, JSON.stringify(lista.slice(-20)), { expirationTtl: 90 * 86400 });
+  const ate = new Date(Date.now() + 86400e3 - 3 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');
+  return { ok: true, txid, copiaECola: c.brcode || '', validade: ate.slice(8, 10) + '/' + ate.slice(5, 7) + ' ' + ate.slice(11) };
 }

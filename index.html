@@ -12639,6 +12639,7 @@ if((location.hash||'')==='#bling'){STATE.modulo='mod17';}
 function blgCarregar(forcar){
   if(BLG.demo){BLG.dados=blgDemo();BLG.ts=Date.now();blgDraw();return;}
   if(!blgUrl())return;
+  if(!BLG.stChecado){BLG.stChecado=true;blgApi('/status').then(function(r){if(r&&r.ok){BLG.pixAtivo=!!r.pixAtivo;if(BLG.sel)blgDraw();}}).catch(function(){});}
   BLG.carr=true;BLG.erro=null;blgDraw();
   blgApi('/abertos'+(forcar?'?forcar=1':'')).then(function(r){
     BLG.carr=false;
@@ -12897,7 +12898,7 @@ function blgAcoes(){
 
 function blgPainelPix(x){
   var k=blgChave(x),pg=BLG.pix[k]||{},val=BLG.valorEdit[k]!=null?BLG.valorEdit[k]:blgMoeda(x.aReceber);
-  var pixAtivo=!!(BLG.cfg&&BLG.cfg.pixAtivo)||BLG.demo;
+  var pixAtivo=!!BLG.pixAtivo||BLG.demo;
   var h='<div class="blg-pix"><span class="voltar" data-a="desmarcar">‹ Voltar às ações</span>'+
     '<h4>'+(x.tipo==='nota'?'Nota fiscal ':'Pedido ')+blgEsc(x.numero)+'</h4><div class="cl">'+blgEsc(x.cliente)+'</div>'+
     '<div class="ln"><span>Total</span><b>R$ '+blgMoeda(x.total)+'</b></div>'+
@@ -12913,7 +12914,7 @@ function blgPainelPix(x){
   }else{
     h+='<label for="blgValor">Valor do PIX (R$)</label><input id="blgValor" inputmode="decimal" value="'+blgEsc(val)+'">'+
        '<div class="nota">Pode cobrar só uma parte (pagamento parcial).</div>'+
-       '<button class="blg-btn" data-a="gerarPix"'+(pixAtivo?'':' disabled')+'>'+BLG_IC.pix+' Gerar PIX</button>'+
+       '<button class="blg-btn" data-a="gerarPix"'+(pixAtivo&&!pg.gerando?'':' disabled')+'>'+(pg.gerando?'<span class="blg-spin"></span> Gerando…':BLG_IC.pix+' Gerar PIX')+'</button>'+
        '<button class="blg-btn sec" data-a="credSel" disabled>'+BLG_IC.card+' Link de crédito</button>'+
        (pixAtivo?'':'<div class="nota">⏳ O PIX pelo Sicoob é ativado na próxima etapa (certificado no Worker). Por enquanto você já confere a lista.</div>')+
        (pg.erro?'<div class="blg-msg err" style="margin-top:10px">'+blgEsc(pg.erro)+'</div>':'');
@@ -12973,7 +12974,7 @@ function blgAcao(a){
     if(val>x.aReceber+0.009){BLG.pix[BLG.sel]={erro:'O valor passa do que falta receber (R$ '+blgMoeda(x.aReceber)+').'};blgDraw();return;}
     if(BLG.demo){BLG.pix[BLG.sel]={valor:val,copia:'00020101021226870014br.gov.bcb.pix2565pix.exemplo.com.br/qr/v3/PREVIA-'+x.numero+'-SEM-VALOR-REAL5204000053039865802BR5915MAIS ACESSIVEL6007GOIANIA62070503***6304ABCD',validade:'hoje 23:59'};blgDraw();return;}
     var k=BLG.sel;BLG.pix[k]={gerando:true};blgDraw();
-    blgApi('/pix',{method:'POST',body:{tipo:x.tipo,id:x.id,numero:x.numero,valor:val,usuario:STATE.usuarioLogado||''}}).then(function(r){
+    blgApi('/pix',{method:'POST',body:{tipo:x.tipo,id:x.id,numero:x.numero,valor:val,cliente:x.cliente||'',doc:x.doc||'',usuario:STATE.usuarioLogado||''}}).then(function(r){
       BLG.pix[k]=r&&r.ok?{valor:val,copia:r.copiaECola,validade:r.validade,txid:r.txid}:{erro:(r&&r.erro)||'Não gerou o PIX.'};blgDraw();
     }).catch(function(e){BLG.pix[k]={erro:'Sem conexão: '+(e&&e.message||e)};blgDraw();});
     return;
