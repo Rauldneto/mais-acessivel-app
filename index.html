@@ -214,7 +214,7 @@ pre{background:#f3f3f1;border:1px solid #e8e8e6;border-radius:7px;padding:12px;f
 // FB_API_KEY é a "Chave de API da Web" do projeto Firebase (Configurações do projeto).
 // Ela é pública por natureza; a proteção de verdade são as regras do banco.
 // Enquanto estiver vazia, o app funciona como antes (login antigo).
-var FB_API_KEY = '';
+var FB_API_KEY = 'AIzaSyA85rYIH4uqUBZQyx6A7TaSfCDQz_sebfQ';
 var FB_EMAIL_DOM = 'usuarios.maisacessivel.app';
 var FB_DB_URL = 'https://maisacessivel-1d0ad-default-rtdb.firebaseio.com';
 var FBA = (function(){
@@ -809,6 +809,8 @@ function fbDelete(key) {
 
 // Inicializa: busca dados do Firebase e mescla
 function fbInit() {
+  // Login seguro ativo e ninguém logado ainda: espera o login (sem token o banco fechado recusa tudo)
+  if(FBA.ativo() && !FBA.logado()){ window._fbInitPendente = true; return; }
   // Carrega cotacoes salvas do Firebase (compartilhado entre todos os usuarios)
   function carregarSaved(){
     return fetch(FIREBASE_DB + '/saved.json')
@@ -1068,6 +1070,7 @@ function renderLogin(){
   var btn=document.createElement('button'); btn.className='login-btn'; btn.textContent='Entrar'; body.appendChild(btn);
 
   function entrarNoApp(found){
+    if(window._fbInitPendente){ window._fbInitPendente=false; fbInit(); } // carrega os dados agora, já com o token
     STATE.auth=true;
     STATE.usuarioLogado=found.usuario;
     STATE.roleLogado=found.role;
