@@ -3928,12 +3928,12 @@ function dspExtBaixaOk(){return dspExtNum()>=2001002;}
 function dspBaixaPadrao(f){var m=(dspCfg().baixaPorForma)||{};if(f.formaId&&m[f.formaId]!==undefined)return !!m[f.formaId];return !dspEhCredito(f.formaId)&&!(f.parcelas>1);}
 function dspExtDupOk(){return dspExtNum()>=2000005;}
 function dspExtOk(){var v=dspExtVer();return !!v&&v.split('.').map(Number).reduce(function(a,n,i){return a+n*Math.pow(1000,2-i);},0)>=2000004;}
-function dspBling(op,dados){
+function dspBling(op,dados,tmo){
   return new Promise(function(res,rej){
     if(!dspExtOk()){rej(new Error('Para falar com o Bling, instale a extensão Mais Acessível — Vendas e Atendimento (botão 🧩 Extensão no topo) e abra o app neste computador.'));return;}
     var id='fin'+Date.now()+Math.random().toString(36).slice(2,7);
     DSP_PEND[id]={res:function(m){if(m.ok)res(m);else rej(new Error(m.erro==='SESSAO'?'Você não está logado no Bling neste computador. Abra o Bling, faça login e tente de novo.':(m.erro||'O Bling recusou a operação')));},
-      tm:setTimeout(function(){if(DSP_PEND[id]){delete DSP_PEND[id];rej(new Error('A extensão não respondeu. Recarregue o app e tente de novo.'));}},60000)};
+      tm:setTimeout(function(){if(DSP_PEND[id]){delete DSP_PEND[id];var e=new Error('A extensão não respondeu. Recarregue a aba do Bling (F5) e o app, e tente de novo.');e.timeout=true;rej(e);}},tmo||DSP.confTmo||60000)};
     window.postMessage({source:'ma-app',type:'finBling',reqId:id,op:op,dados:dados||{}},'*');
   });
 }
@@ -3947,6 +3947,7 @@ function dspCarregar(silencioso){
     if(DSP.cfg&&!DSP.cfg.contaPorForma)DSP.cfg.contaPorForma={};
     DSP.listas=(r[2]&&r[2].formas)?r[2]:null;DSP.carregado=true;
     if(!silencioso||!dspEditando())dspDraw();else dspDrawLista();
+    if(silencioso&&DSP_CONF.feita&&!DSP_CONF.rodando&&STATE.modulo==='mod14')dspConferirTudo(true); // chegou despesa nova (ex.: do celular): confere só ela
   }).catch(function(e){DSP.carregado=true;DSP.msg='Não consegui ler o Firebase: '+e.message;DSP.msgTipo='err';dspDraw();});
 }
 function dspEditando(){var a=document.activeElement;return !!(a&&DSP.root&&DSP.root.contains(a)&&/INPUT|TEXTAREA|SELECT/.test(a.tagName));}
@@ -4079,6 +4080,11 @@ function dspAbrir(id){DSP.sel=id;DSP.form=null;DSP.tela=DSP.tela==='captura'?'co
   setTimeout(function(){var el=dspEl('dspForm');if(el&&dspMobile())el.scrollIntoView({behavior:'smooth',block:'start'});},50);}
 function dspFormAtual(){
   if(DSP.form)return DSP.form;var d=DSP.desp[DSP.sel];if(!d)return null;
+  if(!DSP.mob&&!dspMobile()&&d.status==='pendente'&&!d.contato&&!d.fornChecado&&!DSP_CONF.rodando&&dspExtOk()){var kk=DSP.sel;setTimeout(function(){
+    DSP_CONF.rodando=true;DSP_CONF.erro='';DSP_CONF.total=1;DSP_CONF.feitos=0;
+    dspConferirUma(kk).catch(function(e){DSP_CONF.erro=e.message;}).then(function(){DSP_CONF.rodando=false;DSP_CONF.ts=Date.now();DSP_CONF.feita=true;
+      if(DSP.sel===kk&&DSP.form&&!DSP.form._editado){var dd=DSP.desp[kk];if(dd&&dd.contato)DSP.form.contato=dd.contato;if(dd&&dd.fornCand)DSP.form.fornCand=dd.fornCand;}
+      if(!dspEditando())dspDraw();else dspDrawLista();});},50);}
   DSP.form=JSON.parse(JSON.stringify(d));DSP.form.fornecedor=DSP.form.fornecedor||{nome:'',doc:''};
   if(!DSP.form.emissao)DSP.form.emissao=dspHoje();if(!DSP.form.competencia)DSP.form.competencia=DSP.form.emissao;
   if(!DSP.form.parcelas)DSP.form.parcelas=1;return DSP.form;
@@ -4347,21 +4353,29 @@ async function dspLancar(){
 var DSP_CONF={rodando:false,feita:false,feitos:0,total:0,ts:0};
 async function dspConferirUma(k){
   var d=DSP.desp[k];if(!d||d.status!=='pendente'||DSP.lendo[k])return;
-  var f=JSON.parse(JSON.stringify(d));
-  if(!f.contato&&f.fornecedor&&f.fornecedor.nome&&f.fornecedor.nome!==DSP_SEM_FORN){try{await dspResolverFornecedor(k,f,false);}catch(e){}}
-  if(f.valor>0){try{await dspChecarDupBling(k,Object.assign({},f,{vencimento:f.vencimento||f.emissao}));}catch(e){}}
+  var f=JSON.parse(JSON.stringify(d));DSP.confTmo=20000;
+  try{
+    if(!f.contato&&f.fornecedor&&f.fornecedor.nome&&f.fornecedor.nome!==DSP_SEM_FORN){try{await dspResolverFornecedor(k,f,false);}catch(e){if(e.timeout)throw e;}}
+    if(f.valor>0){try{await dspChecarDupBling(k,Object.assign({},f,{vencimento:f.vencimento||f.emissao}));}catch(e){if(e.timeout)throw e;}}
+  }finally{DSP.confTmo=0;}
   try{await dspFb('despesas/'+k,{method:'PATCH',body:{conferidoEm:Date.now(),fornChecado:Date.now()}});DSP.desp[k].conferidoEm=Date.now();DSP.desp[k].fornChecado=Date.now();}catch(e){}
 }
-async function dspConferirTudo(){
-  if(DSP_CONF.rodando||dspMobile()||!dspExtOk())return;
-  DSP_CONF.rodando=true;
-  var ks=Object.keys(DSP.desp).filter(function(k){var d=DSP.desp[k];return d&&d.status==='pendente'&&!DSP.lendo[k];});
-  DSP_CONF.total=ks.length;DSP_CONF.feitos=0;if(!dspEditando())dspDraw();
-  for(var i=0;i<ks.length;i++){await dspConferirUma(ks[i]);DSP_CONF.feitos++;if(!dspEditando())dspDraw();else dspDrawLista();}
+async function dspConferirTudo(soNovas,tent){
+  if(DSP_CONF.rodando||dspMobile())return;
+  if(!dspExtOk()){ // a extensão às vezes avisa que está instalada só alguns segundos depois de abrir o app
+    tent=(tent||0)+1;if(tent<=30&&STATE.modulo==='mod14')setTimeout(function(){dspConferirTudo(soNovas,tent);},1000);return;}
+  var ks=Object.keys(DSP.desp).filter(function(k){var d=DSP.desp[k];return d&&d.status==='pendente'&&!DSP.lendo[k]&&(!soNovas||!d.fornChecado);});
+  if(soNovas&&!ks.length)return;
+  DSP_CONF.rodando=true;DSP_CONF.erro='';
+  DSP_CONF.total=ks.length;DSP_CONF.feitos=0;if(!dspEditando())dspDraw();else dspDrawLista();
+  try{for(var i=0;i<ks.length;i++){await dspConferirUma(ks[i]);DSP_CONF.feitos++;if(!dspEditando())dspDraw();else dspDrawLista();}}
+  catch(e){DSP_CONF.erro=e.message||'A extensão não respondeu.';}
   DSP_CONF.rodando=false;DSP_CONF.feita=true;DSP_CONF.ts=Date.now();if(!dspEditando())dspDraw();else dspDrawLista();
 }
 function dspConfHtml(){
-  if(dspMobile()||!dspExtOk())return '';
+  if(dspMobile())return '';
+  if(!dspExtOk())return '<div class="fin-msg warn">⏳ Esperando a extensão do Bling responder neste computador… Se não mudar em alguns segundos, confira se a extensão está ligada e se o Bling está aberto e logado.</div>';
+  if(!DSP_CONF.rodando&&DSP_CONF.erro)return '<div class="fin-msg err" style="justify-content:space-between;align-items:center"><span>⚠️ Não consegui conferir no Bling: '+dspEsc(DSP_CONF.erro)+'</span><button type="button" class="fin-btn sm" id="dspConfNovo">🔄 Conferir de novo</button></div>';
   if(DSP_CONF.rodando)return '<div class="fin-msg info"><span>🔄 Conferindo no Bling: fornecedores e duplicidade ('+DSP_CONF.feitos+' de '+DSP_CONF.total+')…</span></div>';
   if(DSP_CONF.feita)return '<div class="fin-msg ok" style="justify-content:space-between;align-items:center"><span>✓ Conferido no Bling às '+new Date(DSP_CONF.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'.</span><button type="button" class="fin-btn sm" id="dspConfNovo">🔄 Conferir de novo</button></div>';
   return '';
