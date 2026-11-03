@@ -863,44 +863,48 @@ function fbInit() {
       }
     }).catch(function(){});
 
-  // Atualiza cotacoes a cada 30s para pegar novas de outros usuarios
-  setInterval(function(){
-    if(document.visibilityState==='visible') carregarSaved();
-  }, 15000);
+  // Cotações de outros usuários: antes baixava a lista inteira a cada 15 s (≈34 MB/hora por aba).
+  // Agora o banco avisa em tempo real quando alguém muda algo (só a mudança trafega) e aí baixa
+  // a lista uma vez. Rede de segurança: confere a cada 5 min com a aba visível.
+  (function(){
+    var t=null, primeiro=true;
+    function agendar(){ clearTimeout(t); t=setTimeout(carregarSaved,1500); }
+    try{
+      var es=new EventSource(FIREBASE_DB+'/saved.json');
+      es.addEventListener('put',function(){ if(primeiro){ primeiro=false; return; } agendar(); });
+      es.addEventListener('patch',agendar);
+    }catch(e){}
+    setInterval(function(){
+      if(document.visibilityState==='visible') carregarSaved();
+    }, 300000);
+  })();
 }
 
 
-// Auto-sync a cada 30 segundos — atualiza dados sem resetar formulário ativo
+// Auto-sync a cada 30 segundos — atualiza dados sem resetar formulário ativo.
+// ATENÇÃO: antes isto baixava o BANCO INTEIRO (/.json, ~50 MB) a cada 30 s em cada aba aberta,
+// até minimizada — era o que estourava o limite do Firebase (288 GB/semana). Agora só conta os
+// itens (shallow, poucos bytes) e baixa a lista apenas quando a quantidade mudou, com a aba visível.
+// As cotações salvas ("saved") já são atualizadas por carregarSaved().
 setInterval(function() {
-  fetch(FIREBASE_DB + '/.json')
-    .then(function(r){ return r.ok ? r.json() : null; })
-    .then(function(data) {
-      if(!data) return;
-      var mudou = false;
-      if(data.saved && Array.isArray(data.saved)) {
-        var fbIds = data.saved.map(function(s){return s.id;}).sort().join(',');
-        var lIds  = SAVED.map(function(s){return s.id;}).sort().join(',');
-        if(fbIds !== lIds) {
-          SAVED.length = 0; data.saved.forEach(function(s){SAVED.push(s);}); mudou = true;
-          try{localStorage.setItem('maisacessivel_saved',JSON.stringify(SAVED));}catch(e){}
-        }
-      }
-      if(data.trans && Array.isArray(data.trans) && data.trans.length !== TRANS_DATA.length) {
-        TRANS_DATA.length = 0; data.trans.forEach(function(t){TRANS_DATA.push(t);}); mudou = true;
-        try{localStorage.setItem('maisacessivel_trans',JSON.stringify(TRANS_DATA));}catch(e){}
-      }
-      if(data.emb && Array.isArray(data.emb) && data.emb.length !== EMBALAGENS.length) {
-        EMBALAGENS.length = 0; data.emb.forEach(function(e){EMBALAGENS.push(e);}); mudou = true;
-        try{localStorage.setItem('maisacessivel_emb',JSON.stringify(EMBALAGENS));}catch(e){}
-      }
-      if(mudou) {
-        var badge = document.getElementById('syncBadge');
-        if(badge){ badge.style.display='inline-block'; setTimeout(function(){badge.style.display='none';},3000); }
-        // Re-renderiza apenas se não estiver na aba de cotação (não interrompe digitação)
-        if(STATE.tab !== 'cotacao') render();
-      }
-    })
-    .catch(function(){});
+  if(document.visibilityState !== 'visible') return;
+  [['trans', TRANS_DATA, 'maisacessivel_trans'], ['emb', EMBALAGENS, 'maisacessivel_emb']].forEach(function(x){
+    fetch(FIREBASE_DB + '/' + x[0] + '.json?shallow=true')
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(k){
+        if(!k || typeof k !== 'object' || Object.keys(k).length === x[1].length) return;
+        return fetch(FIREBASE_DB + '/' + x[0] + '.json').then(function(r){ return r.ok ? r.json() : null; }).then(function(data){
+          if(!data || !Array.isArray(data) || data.length === x[1].length) return;
+          x[1].length = 0; data.forEach(function(e){ x[1].push(e); });
+          try{ localStorage.setItem(x[2], JSON.stringify(x[1])); }catch(e){}
+          var badge = document.getElementById('syncBadge');
+          if(badge){ badge.style.display='inline-block'; setTimeout(function(){badge.style.display='none';},3000); }
+          // Re-renderiza apenas se não estiver na aba de cotação (não interrompe digitação)
+          if(STATE.tab !== 'cotacao') render();
+        });
+      })
+      .catch(function(){});
+  });
 }, 30000);
 
 // ── Funções para salvar no localStorage + Firebase ──
@@ -3316,7 +3320,7 @@ function iniCalcFin(obj){
 function iniCarregar(forcar){
   function job(k,fn){
     if(INI.carr[k])return;
-    if(!forcar&&INI.ts[k]&&Date.now()-INI.ts[k]<60000)return;
+    if(!forcar&&INI.ts[k]&&Date.now()-INI.ts[k]<300000)return; // 5 min (era 1 min): economiza o limite do Firebase
     INI.carr[k]=1;iniDraw();
     Promise.resolve().then(fn).then(function(d){INI.dados[k]=d;INI.erro[k]='';},function(e){INI.erro[k]=(e&&e.message)||'falha ao carregar';})
       .then(function(){INI.carr[k]=0;INI.ts[k]=Date.now();iniDraw();});
