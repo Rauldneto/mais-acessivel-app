@@ -267,6 +267,15 @@ function montarBlocoWhatsApp(){
     var info=document.getElementById('waInfo');
     function mostrar(c){
       var rec=c.waUltima&&Date.now()-c.waUltima<30*60000;
+      // v2.1.7: computador sem WhatsApp mostra a sincronização do computador do WhatsApp (de onde vêm os avisos)
+      if(!(rec&&(c.waUltimaQtd||0)>0)){
+        fetch('https://maisacessivel-1d0ad-default-rtdb.firebaseio.com/waMeta.json').then(function(r){return r.json();}).then(function(m){
+          if(!m||!m.ts){info.textContent='Os avisos vêm do computador do WhatsApp (ainda não sincronizou).';return;}
+          var ok=Date.now()-m.ts<20*60000;
+          info.textContent=(ok?'✅ ':'⚠️ ')+'Avisos vindos do computador do WhatsApp · última sincronização '+new Date(m.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+' ('+(m.conversas||0)+' conversas)'+(ok?'':' — confira se ele está ligado com o WhatsApp Web aberto');
+        }).catch(function(){info.textContent='Os avisos vêm do computador do WhatsApp.';});
+        return;
+      }
       info.textContent=c.waUltima?(rec?'✅ ':'⚠️ ')+'Última: '+new Date(c.waUltima).toLocaleString('pt-BR')+' · '+(c.waUltimaQtd||0)+' conversas'+(rec?'':' — deixe o WhatsApp Web aberto e logado'):'Sincroniza sozinho sempre que o WhatsApp Web estiver aberto neste computador.';
     }
     chrome.storage.local.get(['waSync','waUltima','waUltimaQtd'],mostrar);

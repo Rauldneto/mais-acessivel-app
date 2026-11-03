@@ -98,18 +98,19 @@ function item(grupo, campo, status, msg) {
 
 // Regra do frete (tabela da diretoria). Qualquer combinação fora dela = erro.
 //  Cortesia               + CIF + frete = 0
-//  Mais Acessível         + CIF + frete > 0
+//  Transp. Mais Acessivel + CIF + frete > 0   (v2.1.6: o nome certo é "Transp. Mais Acessivel", escolhido na lista)
 //  Transportadora (coleta)+ CIF + frete > 0
 //  FOB - Retirada na loja + FOB + frete = 0
 //  Transportadora (coleta)+ FOB + frete = 0
 function regraFrete(transp, mod, frete) {
   var t = norm(transp);
   var nome = /cortesia/.test(t) ? 'cortesia' : /retir/.test(t) ? 'retirada' : /mais acessivel/.test(t) ? 'mais' : 'transp';
-  var rot = { cortesia: 'Cortesia', retirada: 'Retirada na loja', mais: 'Mais Acessível', transp: 'Transportadora' }[nome];
-  if (vazio(transp)) return { ok: false, msg: 'Informe o transportador: Cortesia, Mais Acessível, FOB - Retirada na loja ou a transportadora que vai coletar' };
+  var rot = { cortesia: 'Cortesia', retirada: 'Retirada na loja', mais: 'Transp. Mais Acessivel', transp: 'Transportadora' }[nome];
+  if (vazio(transp)) return { ok: false, msg: 'Informe o transportador: Cortesia, Transp. Mais Acessivel, FOB - Retirada na loja ou a transportadora que vai coletar' };
+  if (nome === 'mais' && !/^transp/.test(t)) return { ok: false, msg: 'Transportador "' + transp.trim() + '": use "Transp. Mais Acessivel" (escolha na lista ao digitar)' };
   if (mod !== 'R' && mod !== 'D') return { ok: false, msg: 'Frete por conta: use CIF ou FOB' };
   if (nome === 'transp' && !t.replace(/\b(cif|fob|frete|por conta|do|da|de)\b/g, '').replace(/[^a-z0-9]/g, ''))
-    return { ok: false, msg: 'Transportador "' + transp.trim() + '" não é um nome: informe a transportadora que vai coletar (ou Cortesia / Mais Acessível / FOB - Retirada na loja)' };
+    return { ok: false, msg: 'Transportador "' + transp.trim() + '" não é um nome: informe a transportadora que vai coletar (ou Cortesia / Transp. Mais Acessivel / FOB - Retirada na loja)' };
   var cif = mod === 'R', valor = frete > 0;
   if (nome === 'cortesia') {
     if (!cif) return { ok: false, msg: 'Cortesia: o frete deve ser CIF' };
@@ -120,7 +121,7 @@ function regraFrete(transp, mod, frete) {
   } else if (cif && !valor) {
     return { ok: false, msg: rot + ' com frete CIF: informe o valor do frete (maior que 0)' };
   } else if (!cif && nome === 'mais') {
-    return { ok: false, msg: 'Mais Acessível entregando: o frete deve ser CIF com valor' };
+    return { ok: false, msg: 'Transp. Mais Acessivel entregando: o frete deve ser CIF com valor' };
   } else if (!cif && valor) {
     return { ok: false, msg: 'Frete FOB: o valor do frete deve ser R$ 0,00 (o cliente paga a transportadora)' };
   }
@@ -229,23 +230,20 @@ async function checarProposta() {
       if (f.length) problemas.push('Parcela ' + (i + 1) + ': falta ' + f.join(', '));
     });
     // Forma de pagamento PIX: condição 0 ou PIX exige PIX - Venda
-    var formaErros = [], usaBlingConta = false, boletoErr = [];
+    // v2.1.5: boleto vem automático (sem regra); PIX só "PIX - Venda" ("Pix - Bling Conta" não é mais usado)
+    var formaErros = [], pixErr = [];
     forma.forEach(function(sel, i) {
       if (!sel || vazio(sel.value)) return; // já apontado acima
       var txtOrig = sel.options && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text.trim() : '';
-      if (boletoErrado(txtOrig)) boletoErr.push('Parcela ' + (i + 1) + ' está "' + txtOrig + '"');
       var txt = norm(txtOrig);
-      if (txt === REGRAS.formaPixExcecao) { usaBlingConta = true; return; }
+      if (/pix/.test(txt) && txt !== REGRAS.formaPix) { pixErr.push('Parcela ' + (i + 1) + ' está "' + txtOrig + '"'); return; }
       if (condPix && txt !== REGRAS.formaPix) formaErros.push('Parcela ' + (i + 1));
     });
-    if (boletoErr.length) r.push(item('Pagamento', 'Forma de pagamento (boleto)', 'erro', 'Boleto: a forma deve ser "BOLETO BLING-CONTA" (' + boletoErr.join(', ') + ')'));
+    if (pixErr.length) r.push(item('Pagamento', 'Forma de pagamento (PIX)', 'erro', 'PIX: use só "PIX - Venda" (' + pixErr.join(', ') + ')'));
     if (formaErros.length) {
       r.push(item('Pagamento', 'Forma de pagamento', 'erro',
         'Condição ' + (condicao === '0' ? '0 (à vista)' : 'PIX') + ': a forma deve ser "PIX - Venda" (' + formaErros.join(', ') + ')'));
-    } else if (usaBlingConta) {
-      r.push(item('Pagamento', 'Forma de pagamento', 'aviso',
-        '"Pix - Bling Conta" só pode ser usado se a diretoria estiver ausente'));
-    } else if (condPix) {
+    } else if (condPix && !pixErr.length) {
       r.push(item('Pagamento', 'Forma de pagamento', 'ok', 'PIX - Venda'));
     }
     r.push(problemas.length
@@ -407,7 +405,7 @@ function regrasApi(d) {
   var condPix = condicao === '0' || condicao.indexOf('pix') !== -1;
   if (!parc.length) erro('Parcelas', 'Nenhuma parcela gerada');
   else {
-    var probs = [], formaErr = [], blingConta = false, bolErr = [];
+    var probs = [], formaErr = [], pixErr = [];
     parc.forEach(function(p, i) {
       var falta = [];
       if (p.nroDias === null || p.nroDias === undefined || p.nroDias === '') falta.push('dias');
@@ -416,14 +414,12 @@ function regrasApi(d) {
       if (vazio(p.obs)) falta.push('observação');
       if (falta.length) probs.push('Parcela ' + (i + 1) + ': falta ' + falta.join(', '));
       var fnome = (p.formaPagamento && (p.formaPagamento.descricao || p.formaPagamento.nome)) || (FORMAS_NOME && FORMAS_NOME[fid]) || '';
-      if (fid && boletoErrado(fnome)) bolErr.push('Parcela ' + (i + 1) + ' está "' + fnome + '"');
-      if (fid == LOTE.formaPixBlingConta) blingConta = true;
+      if (fid && fid != LOTE.formaPixVenda && (fid == LOTE.formaPixBlingConta || /pix/i.test(fnome))) pixErr.push('Parcela ' + (i + 1) + ' está "' + (fnome || 'Pix - Bling Conta') + '"');
       else if (fid && condPix && fid != LOTE.formaPixVenda) formaErr.push('Parcela ' + (i + 1));
     });
     if (probs.length) erro('Parcelas', probs.join(' • '));
-    if (bolErr.length) erro('Forma de pagamento (boleto)', 'Boleto: a forma deve ser "BOLETO BLING-CONTA" (' + bolErr.join(', ') + ')');
+    if (pixErr.length) erro('Forma de pagamento (PIX)', 'PIX: use só "PIX - Venda" (' + pixErr.join(', ') + ')');
     if (formaErr.length) erro('Forma de pagamento', 'Condição 0/PIX: a forma deve ser "PIX - Venda" (' + formaErr.join(', ') + ')');
-    else if (blingConta) aviso('Forma de pagamento', '"Pix - Bling Conta" só se a diretoria estiver ausente');
   }
 
   if (!(parseInt(d.validade, 10) > 0)) erro('Validade', 'Informe a validade (padrão: ' + REGRAS.validadeDias + ' dias)');
@@ -456,7 +452,7 @@ async function auditarProposta(id) {
   var regras = regrasApi(d);
   return {
     id: id, numero: d.numero, data: d.data, situacao: d.situacao, total: d.total,
-    cliente: (d.contato && d.contato.nome) || '', vendedor: d.nomeVendedor || '',
+    cliente: (d.contato && d.contato.nome) || '', vendedor: d.nomeVendedor || '', ac: d.contatoAc || '',
     cidade: (d.contato && d.contato.cidade) || '', uf: (d.contato && d.contato.uf) || '',
     fone: d.contato ? [d.contato.celular, d.contato.fone].filter(function(x) { return x && String(x).replace(/\D/g, '').length >= 8; }).join(' / ') : '',
     itens: (d.itens || []).map(function(it) { return { codigo: it.codigo || '', descricao: it.descricao || (it.produto && it.produto.descricao) || '', qtd: it.quantidade, v: numX(it.valor) }; }),
@@ -563,6 +559,24 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     return true; // resposta assíncrona
   }
   if (request.action === 'ping') { sendResponse({ ok: true }); return true; }
+  if (request.action === 'docTitulos') {
+    (async function() {
+      var out = [];
+      for (var i = 0; i < (request.ids || []).length; i++) {
+        var h = request.ids[i];
+        try {
+          var x = await fetch('/doc.view.php?id=' + encodeURIComponent(h), { credentials: 'include' });
+          var t = await x.text(), tit = (t.match(/<title>([^<]*)<\/title>/i) || [])[1] || '';
+          var m = tit.match(/Proposta Comercial N\S*\s*(\d+)\s*(?:\(([^)]*)\))?/i);
+          if (m) out.push({ h: h, n: m[1], cli: (m[2] || '').trim() });
+          else if (/valida/i.test(tit)) { out.push({ h: h, sessao: false }); break; } // Bling deslogado: tenta depois
+          else out.push({ h: h, outro: tit.slice(0, 80) }); // link de outro documento (pedido, NF...)
+        } catch (e) {}
+      }
+      sendResponse({ ok: true, itens: out });
+    })();
+    return true;
+  }
   if (request.action === 'listarPropostas') {
     listarPropostas(request.filtro || {}).then(sendResponse)
       .catch(function(e) { sendResponse({ erro: e.message === 'SESSAO' ? 'SESSAO' : String(e.message || e) }); });

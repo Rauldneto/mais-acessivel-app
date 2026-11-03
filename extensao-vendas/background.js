@@ -145,7 +145,7 @@ function coletarWA() {
     var labels = {};
     C.Label.getModelsArray().forEach(function(l) { labels[l.id] = l.name; });
     var SIS = { notification_template: 1, e2e_notification: 1, gp2: 1, revoked: 1, ciphertext: 1, protocol: 1, notification: 1, call_log: 1 };
-    var out = [];
+    var out = [], docs = [], pdfs = [], vistoDoc = {};
     C.Chat.getModelsArray().forEach(function(c) {
       if (c.isGroup || !c.id || c.id.server === 'broadcast' || c.id.server === 'newsletter' || c.id.server === 'g.us') return;
       var ct = c.contact || C.Contact.get(c.id);
@@ -157,10 +157,19 @@ function coletarWA() {
         if (SIS[mm.type]) return;
         if (mm.id && mm.id.fromMe) { if (mm.t > un) un = mm.t; } else { if (mm.t > uc) uc = mm.t; }
       });
+      // v2.1.4: propostas do Bling enviadas na conversa (link doc.view ou PDF "Proposta 1234")
+      (c.msgs ? c.msgs.getModelsArray() : []).forEach(function(mm) {
+        var txt = String(mm.body && mm.type !== 'image' && mm.type !== 'document' ? mm.body : '') + ' ' + String(mm.caption || '') + ' ' + String(mm.matchedText || '');
+        var re = /bling\.com\.br\/doc\.view\.php\?id=([a-f0-9]{20,})/gi, x;
+        while ((x = re.exec(txt))) { var hh = x[1].toLowerCase(), kk = pn + hh; if (!vistoDoc[kk]) { vistoDoc[kk] = 1; docs.push({ p: String(pn).replace(/\D/g, ''), h: hh, t: mm.t || 0 }); } }
+        var fn = String(mm.filename || '');
+        var y = fn.match(/proposta[^0-9]{0,12}(\d{3,6})/i);
+        if (y) pdfs.push({ p: String(pn).replace(/\D/g, ''), n: y[1], t: mm.t || 0 });
+      });
       out.push({ p: String(pn).replace(/\D/g, ''), n: (ct && (ct.name || ct.verifiedName || ct.pushname)) || c.formattedTitle || '',
         e: (c.labels || []).map(function(id) { return labels[id] || String(id); }), uc: uc, un: un, t: c.t || 0, nl: c.unreadCount || 0 });
     });
-    return { ok: true, chats: out, labels: Object.keys(labels).map(function(k) { return labels[k]; }) };
+    return { ok: true, chats: out, docs: docs, pdfs: pdfs, labels: Object.keys(labels).map(function(k) { return labels[k]; }) };
   } catch (e) { return { ok: false, erro: String(e && e.message || e) }; }
 }
 
@@ -173,6 +182,7 @@ async function sincronizarWA(manual) {
   var res = await chrome.scripting.executeScript({ target: { tabId: abas[0].id }, world: 'MAIN', func: coletarWA });
   var r = res && res[0] && res[0].result;
   if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || 'Não consegui ler o WhatsApp Web (ele terminou de carregar?)' };
+  if (!r.chats.length) return { ok: false, erro: 'WhatsApp Web aberto mas sem conversas (não está logado ou ainda carregando)' }; // v2.1.7: não apaga a sincronização boa
   var dados = {};
   r.chats.forEach(function(c) { if (c.p) dados[c.p] = { n: c.n, e: c.e, uc: c.uc, un: c.un, t: c.t, nl: c.nl }; });
   var x = await fetch(FB + '/waChats.json', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados) });
@@ -180,8 +190,45 @@ async function sincronizarWA(manual) {
   var meta = { ts: Date.now(), conversas: r.chats.length, etiquetas: r.labels, maquina: cfg.waNome || '' };
   await fetch(FB + '/waMeta.json', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(meta) });
   await chrome.storage.local.set({ waUltima: meta.ts, waUltimaQtd: meta.conversas });
+  vincularPropostas(r.docs || [], r.pdfs || []).catch(function() {});
   recalcularCobrancas().catch(function() {});
   return { ok: true, conversas: meta.conversas };
+}
+
+// ====================== v2.1.4: CONVERSA ↔ COTAÇÃO PELA PROPOSTA ENVIADA ======================
+// O vendedor manda no WhatsApp o link bling.com.br/doc.view.php?id=... da proposta. Com o Bling logado, a página desse link
+// diz "Proposta Comercial N° 6913 (CLIENTE)". Lemos uma vez cada link e gravamos:
+//   waDocs/{id do link} = {n, cli, p, ts}       (cache: cada link é lido só uma vez)
+//   waDocLink/{telefone}/{nº proposta} = ts      (o app usa isto ANTES do telefone e do nome)
+var vincRodando = false;
+async function vincularPropostas(docs, pdfs) {
+  if (vincRodando) return; vincRodando = true; var ab = null;
+  try {
+    var link = {};
+    pdfs.forEach(function(d) { (link[d.p] = link[d.p] || {})[d.n] = Math.max((link[d.p][d.n] || 0), d.t * 1000); });
+    if (docs.length) {
+      var cache = (await fbJ('waDocs')) || {}, falta = [];
+      docs.forEach(function(d) { var c = cache[d.h]; if (c && c.n) (link[d.p] = link[d.p] || {})[c.n] = Math.max((link[d.p][c.n] || 0), d.t * 1000); else if (!c && falta.indexOf(d.h) === -1) falta.push(d.h); });
+      if (falta.length) {
+        ab = await obterAbaBling();
+        var r = await enviar(ab.id, { action: 'docTitulos', ids: falta.slice(0, 25) });
+        var novos = {};
+        ((r && r.itens) || []).forEach(function(x) {
+          if (x.sessao === false) return;
+          var d = docs.filter(function(z) { return z.h === x.h; })[0];
+          novos[x.h] = x.n ? { n: x.n, cli: x.cli || '', p: d ? d.p : '', ts: Date.now() } : { outro: x.outro || '?', ts: Date.now() };
+          if (x.n && d) docs.forEach(function(z) { if (z.h === x.h) (link[z.p] = link[z.p] || {})[x.n] = Math.max((link[z.p][x.n] || 0), z.t * 1000); });
+        });
+        if (Object.keys(novos).length) await fbW('waDocs', 'PATCH', novos);
+      }
+    }
+    var patch = {};
+    Object.keys(link).forEach(function(p) { Object.keys(link[p]).forEach(function(n) { patch[p + '/' + n] = link[p][n] || Date.now(); }); });
+    if (Object.keys(patch).length) await fbW('waDocLink', 'PATCH', patch);
+  } finally {
+    vincRodando = false;
+    if (ab && ab.criada) { try { chrome.tabs.remove(ab.id); } catch (e) {} }
+  }
 }
 
 // Cria o alarme só se ele ainda não existir. Recriar toda vez que a extensão "acorda" (a cada minuto) zerava o relógio
@@ -321,6 +368,7 @@ chrome.alarms.onAlarm.addListener(function(a) { if (a.name === 'waResumo') proce
 function coletarAlertasWA() {
   try {
     var C = window.require('WAWebCollections');
+    if (!C.Chat.getModelsArray().length) return { ok: false, erro: 'sem conversas' }; // v2.1.7: WhatsApp não logado não apaga os avisos do computador certo
     var agora = Date.now() / 1000, sem = [], agu = [];
     var labels = {}; C.Label.getModelsArray().forEach(function(l) { labels[l.id] = l.name; });
     var SIS = { notification_template: 1, e2e_notification: 1, gp2: 1, revoked: 1, ciphertext: 1, protocol: 1, notification: 1, call_log: 1 };
@@ -333,12 +381,15 @@ function coletarAlertasWA() {
       if (!pn) return;
       var p = String(pn).replace(/\D/g, ''), n = (ct && (ct.name || ct.verifiedName || ct.pushname)) || c.formattedTitle || '';
       var et = (c.labels || []).map(function(id) { return labels[id] || String(id); });
+      // v2.1.3: conversas que não são de cliente não geram aviso (fornecedor, currículo, arquivado, standby)
+      if (et.some(function(e) { return /fornecedor|curr[ií]cul|arquivad|stand ?by/i.test(e); })) return;
       var uc = 0, un = 0, ini = 0, meia0 = new Date(); meia0.setHours(0, 0, 0, 0); meia0 = meia0.getTime() / 1000;
       (c.msgs ? c.msgs.getModelsArray() : []).forEach(function(m) {
         if (SIS[m.type]) return;
         if (m.id && m.id.fromMe) { if (m.t > un) un = m.t; } else { if (m.t > uc) uc = m.t; if (m.t >= meia0 && (!ini || m.t < ini)) ini = m.t; }
       });
-      var semResp = uc >= meia0 && un < meia0, semEtq = !et.length;
+      // "sem etiqueta" só conta se houve mensagem de verdade nas últimas 24h (avisos automáticos do WhatsApp/Meta não contam)
+      var semResp = uc >= meia0 && un < meia0, semEtq = !et.length && agora - Math.max(uc, un) <= 86400;
       if (semResp || semEtq) sem.push({ p: p, n: n, t: c.t, e: et, ini: ini || uc, sr: semResp, se: semEtq });
       if (semResp) return; // ninguém respondeu hoje
       if (uc && uc > un && agora - uc >= 8 * 60 && agora - uc <= 86400) agu.push({ p: p, n: n, e: et, uc: uc });

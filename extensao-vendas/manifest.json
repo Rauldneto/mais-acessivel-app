@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mais Acessível — Vendas e Atendimento",
-  "version": "2.1.4",
+  "version": "2.1.8",
   "description": "Assistente de vendas da Mais Acessível: liga o app da empresa ao Bling e ao WhatsApp Web.",
   "permissions": [
     "activeTab",
