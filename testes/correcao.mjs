@@ -13,7 +13,7 @@ fs.mkdirSync('.correcao', { recursive: true });
 
 if (modo === 'travas') {
   const motivos = [];
-  const arquivos = sh('git status --porcelain --untracked-files=all').split('\n').filter(Boolean)
+  const arquivos = execSync('git status --porcelain --untracked-files=all', { encoding: 'utf8' }).split('\n').filter(Boolean)
     .map(l => l.slice(3).trim()).filter(f => !f.startsWith('.correcao/') && !f.startsWith('node_modules'));
   const outros = arquivos.filter(f => f !== 'index.html');
   if (outros.length) motivos.push('a correção mexeu em outros arquivos: ' + outros.join(', '));
