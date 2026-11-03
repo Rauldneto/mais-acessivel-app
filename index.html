@@ -262,9 +262,20 @@ var FBA = (function(){
   }
   function comToken(url, t){ return url + (url.indexOf('?') > -1 ? '&' : '?') + 'auth=' + encodeURIComponent(t); }
   function ehBanco(url){ return typeof url === 'string' && url.indexOf(FB_DB_URL) === 0; }
+  // Worker da IA (soft-limit-b3a1): exige o token do login para não gastarem os créditos da Anthropic
+  function ehIA(url){ return typeof url === 'string' && url.indexOf('https://soft-limit-b3a1.rauldias.workers.dev') === 0; }
+  function comCracha(init, t){ var o = Object.assign({}, init || {}); var h = new Headers(o.headers || {}); h.set('Authorization', 'Bearer ' + t); o.headers = h; return o; }
 
   // Todo fetch ao banco ganha o token automaticamente
   window.fetch = async function(input, init){
+    if(ativo() && st && ehIA(input)){
+      var ti = await token();
+      if(ti){
+        var ri = await _fetch(input, comCracha(init, ti));
+        if(ri.status === 401){ ti = await token(true); if(ti) ri = await _fetch(input, comCracha(init, ti)); }
+        return ri;
+      }
+    }
     if(ativo() && st && ehBanco(input)){
       var t = await token();
       if(t){

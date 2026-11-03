@@ -52,7 +52,19 @@
   }
   function comToken(url, t) { return url + (url.indexOf('?') > -1 ? '&' : '?') + 'auth=' + encodeURIComponent(t); }
 
+  // Worker da IA: exige o token do login para não gastarem os créditos da Anthropic
+  var IA = 'https://soft-limit-b3a1.rauldias.workers.dev';
+  function comCracha(init, t) { var o = Object.assign({}, init || {}); var h = new Headers(o.headers || {}); h.set('Authorization', 'Bearer ' + t); o.headers = h; return o; }
+
   g.fetch = async function (input, init) {
+    if (typeof input === 'string' && input.indexOf(IA) === 0) {
+      var ti = await token();
+      if (ti) {
+        var ri = await _fetch(input, comCracha(init, ti));
+        if (ri.status === 401) { ti = await token(true); if (ti) ri = await _fetch(input, comCracha(init, ti)); }
+        return ri;
+      }
+    }
     if (typeof input === 'string' && input.indexOf(FB) === 0) {
       var t = await token();
       if (t) {
