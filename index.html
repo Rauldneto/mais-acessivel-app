@@ -4160,8 +4160,8 @@ function dspCarregar(silencioso){
 }
 function dspEditando(){var a=document.activeElement;return !!(a&&DSP.root&&DSP.root.contains(a)&&/INPUT|TEXTAREA|SELECT/.test(a.tagName));}
 function dspSalvarCfg(){return dspFb('config',{method:'PUT',body:dspCfg()});}
-function dspLista(status){return Object.keys(DSP.desp).map(function(k){return Object.assign({id:k},DSP.desp[k]);}).filter(function(d){return status==='lancado'?d.status==='lancado':d.status!=='lancado';})
-  .sort(function(a,b){return status==='lancado'?(b.lancadoEm||0)-(a.lancadoEm||0):(b.criadoEm||0)-(a.criadoEm||0);});}
+function dspLista(status){return Object.keys(DSP.desp).map(function(k){return Object.assign({id:k},DSP.desp[k]);}).filter(function(d){return status==='lancado'?d.status==='lancado':status==='ignorado'?d.status==='ignorado':(d.status!=='lancado'&&d.status!=='ignorado');})
+  .sort(function(a,b){return status==='lancado'?(b.lancadoEm||0)-(a.lancadoEm||0):status==='ignorado'?(b.ignoradoEm||0)-(a.ignoradoEm||0):(b.criadoEm||0)-(a.criadoEm||0);});}
 
 // ---------- imagens ----------
 function dspJpeg(file,max){max=max||1600;return new Promise(function(res,rej){var u=URL.createObjectURL(file);var img=new Image();
@@ -4607,6 +4607,23 @@ async function dspResolvido(){
   try{await dspFb('despesas/'+DSP.sel,{method:'PATCH',body:upd});if(apaga)await dspFb('fotos/'+DSP.sel,{method:'DELETE'});}catch(e){}
   DSP.desp[DSP.sel]=Object.assign({},DSP.desp[DSP.sel],upd);DSP.msg='Marcado como resolvido.';DSP.msgTipo='ok';DSP.sel=null;DSP.form=null;if(DSP.mob)DSP.mtela='pend';dspDraw();
 }
+// Despesa que não vai para o Bling: sai da conferência mas fica guardada (dá para voltar)
+async function dspNaoLancar(){
+  if(!DSP.sel)return;var id=DSP.sel,d=DSP.desp[id];if(!d)return;
+  if(!confirm('Não lançar esta despesa no Bling?\n\nEla sai da conferência e fica em "Não lançadas" (aba Lançados), de onde dá para voltar se precisar.'))return;
+  var up={status:'ignorado',ignoradoEm:Date.now(),ignoradoPor:STATE.usuarioLogado||''};
+  try{await dspFb('despesas/'+id,{method:'PATCH',body:up});Object.assign(d,up);DSP.msg='Despesa marcada como “não lançar no Bling”. Ela está em Lançados › Não lançadas.';DSP.msgTipo='ok';}
+  catch(e){DSP.msg='Não consegui salvar: '+e.message;DSP.msgTipo='err';}
+  DSP.sel=null;DSP.form=null;DSP.revisao=null;if(DSP.mob)DSP.mtela='pend';dspDraw();
+}
+async function dspVoltarConferencia(id){var d=DSP.desp[id];if(!d)return;var up={status:'pendente',ignoradoEm:null,ignoradoPor:null};
+  try{await dspFb('despesas/'+id,{method:'PATCH',body:up});d.status='pendente';delete d.ignoradoEm;delete d.ignoradoPor;DSP.msg='Voltou para a conferência.';DSP.msgTipo='ok';}catch(e){DSP.msg='Não consegui: '+e.message;DSP.msgTipo='err';}dspDraw();}
+function dspHtmlIgnoradas(mob){var L=dspLista('ignorado').slice(0,40);if(!L.length)return '';
+  return '<div class="fin-h">🚫 Não lançadas no Bling ('+L.length+')</div>'+(mob?'':'<div class="fin-card" style="overflow-x:auto"><table class="fin-tbl"><tr><th>Marcada em</th><th>Fornecedor</th><th>Data</th><th style="text-align:right">Valor</th><th></th></tr>')+
+    L.map(function(d){var nm=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'—';var bt='<button type="button" class="fin-btn sm" data-volta="'+dspEsc(d.id)+'">↩ Voltar para conferência</button>';
+      return mob?'<div class="dm-card"><div class="l1"><span class="n">'+dspEsc(nm)+'</span><span class="v">'+(d.valor>0?'R$ '+dspMoney(d.valor):'—')+'</span></div><div class="m">'+dspBr(d.emissao)+' · não lançar no Bling</div><div class="c">'+bt+'</div></div>':
+      '<tr><td>'+new Date(d.ignoradoEm||Date.now()).toLocaleDateString('pt-BR')+'</td><td>'+dspEsc(nm)+'</td><td>'+dspBr(d.emissao)+'</td><td class="n">'+dspMoney(d.valor)+'</td><td>'+bt+'</td></tr>';}).join('')+(mob?'':'</table></div>');}
+function dspBindIgnoradas(){DSP.root.querySelectorAll('[data-volta]').forEach(function(b){b.onclick=function(ev){ev.stopPropagation();b.disabled=true;dspVoltarConferencia(b.getAttribute('data-volta'));};});}
 async function dspExcluir(){
   if(!DSP.sel)return;if(!confirm('Excluir esta despesa do app? (Nada é apagado no Bling.)'))return;
   var id=DSP.sel;try{await dspFb('despesas/'+id,{method:'DELETE'});await dspFb('fotos/'+id,{method:'DELETE'});}catch(e){}
@@ -4840,7 +4857,7 @@ function dspHtmlFormCard(f,mob,ext){
     '<div class="fin-f fin-c6"><label for="fHist">Histórico '+tag('historico')+'</label><textarea id="fHist" class="'+rd().trim()+'" rows="2" placeholder="Ex.: Combustível Strada · visita obra Jardim Goiás">'+dspEsc(f.historico||'')+'</textarea></div></div></div>'+
    ((f.itens&&f.itens.length)?'<div class="fin-sec"><p class="fin-st">Itens lidos <span class="fin-tag">para conferência</span></p><div style="overflow-x:auto"><table class="fin-tbl"><tr><th>Descrição</th><th style="text-align:right">Qtd</th><th style="text-align:right">Valor</th></tr>'+f.itens.map(function(i){return '<tr><td>'+dspEsc(i.descricao)+'</td><td class="n">'+dspEsc(i.quantidade||'')+'</td><td class="n">'+dspMoney(i.valor)+'</td></tr>';}).join('')+'</table></div></div>':'')+
    (mob?'</div>':(lan?'<div class="fin-act"><button type="button" class="fin-btn" id="fResolvido">Já resolvi no Bling</button><button type="button" class="fin-btn" id="fSalvar">Salvar</button><button type="button" class="fin-btn pri" id="fAtualizar"'+(ext?'':' disabled')+'>Atualizar no Bling</button></div>':
-   '<div class="fin-act"><button type="button" class="fin-btn dan" id="fExcluir">Excluir</button>'+(f.nFotos?'<button type="button" class="fin-btn" id="fReler">Ler de novo</button>':'')+
+   '<div class="fin-act"><button type="button" class="fin-btn dan" id="fExcluir">Excluir</button><button type="button" class="fin-btn" id="fNaoLancar" title="Não vai para o Bling: sai da conferência e fica guardada">🚫 Não lançar no Bling</button>'+(f.nFotos?'<button type="button" class="fin-btn" id="fReler">Ler de novo</button>':'')+
    '<button type="button" class="fin-btn" id="fSalvar">Salvar e terminar depois</button><button type="button" class="fin-btn pri" id="fRevisar">Revisar e lançar</button></div>'));
   if(DSP.revisao&&!mob){
     var catN=dspCatNome(f.categoria);
@@ -4880,7 +4897,7 @@ function dspBindConferencia(){
   var ca=dspEl('fCadAgora');if(ca)ca.onclick=dspCadastrarAgora;
   var sv=dspEl('fSalvar');if(sv)sv.onclick=async function(){sv.disabled=true;await dspSalvarForm(false);dspDraw();};
   var rv=dspEl('fRevisar');if(rv)rv.onclick=dspRevisar;
-  var ex=dspEl('fExcluir');if(ex)ex.onclick=dspExcluir;
+  var ex=dspEl('fExcluir');if(ex)ex.onclick=dspExcluir;var nl=dspEl('fNaoLancar');if(nl)nl.onclick=dspNaoLancar;
   var rl=dspEl('fReler');if(rl)rl.onclick=function(){DSP.form=null;dspLerDespesa(DSP.sel,null,DSP.desp[DSP.sel].obs);};
   var vt=dspEl('fVoltar');if(vt)vt.onclick=function(){DSP.revisao=null;dspDraw();};
   var la=dspEl('fLancar');if(la)la.onclick=dspLancar;
@@ -4891,12 +4908,13 @@ function dspBindConferencia(){
 // Lançados
 function dspHtmlLancados(){
   var L=dspLista('lancado').slice(0,50);
-  if(!L.length)return '<div class="fin-empty"><b>Nada lançado ainda</b>As despesas enviadas ao Bling ficam listadas aqui.</div>';
+  if(!L.length)return '<div class="fin-empty"><b>Nada lançado ainda</b>As despesas enviadas ao Bling ficam listadas aqui.</div>'+dspHtmlIgnoradas(false);
   var ne=dspEmailPronto()?L.filter(function(d){return !d.emailEm&&d.nFotos;}).length:0;
   return (ne?'<div class="fin-msg warn">📧 '+ne+(ne>1?' despesas lançadas ainda não foram enviadas':' despesa lançada ainda não foi enviada')+' à contabilidade. Use o botão 📧 Enviar na linha.</div>':'')+'<div class="fin-card" style="overflow-x:auto"><table class="fin-tbl"><tr><th>Lançado em</th><th>Fornecedor</th><th>Forma</th><th>Vencimento</th><th style="text-align:right">Valor</th><th>ID Bling</th><th>Pago</th><th>Contabilidade</th><th>Pendência</th></tr>'+
-    L.map(function(d){var p=dspLancadoPend(d);return '<tr'+(p?' data-lp="'+dspEsc(d.id)+'" style="cursor:pointer" title="Abrir para completar"':'')+'><td>'+new Date(d.lancadoEm).toLocaleDateString('pt-BR')+'</td><td>'+dspEsc((d.contato&&d.contato.nome)||'')+'</td><td>'+dspEsc(dspFormaNome(d.formaId))+'</td><td>'+dspBr(d.vencimento)+'</td><td class="n">'+dspMoney(d.valor)+'</td><td>'+dspEsc(d.blingId||'')+'</td><td>'+(d.baixadoEm?'<span class="fin-chip ok">pago '+dspBr(d.baixaData)+'</span>':(d.parcelas>1?'<span class="fin-mu">parcelado</span>':'<button type="button" class="fin-btn sm" data-bx="'+dspEsc(d.id)+'"'+(dspExtBaixaOk()?'':' disabled title="Atualize a extensão para 2.1.2"')+'>💲 Dar baixa</button>'))+'</td><td>'+dspEmailChip(d)+'</td><td>'+(p?'<span class="fin-chip warn">falta: '+dspEsc(d.pendencias.join(', '))+'</span> <button type="button" class="fin-btn sm">Completar</button>':'<span class="fin-chip ok">ok</span>')+'</td></tr>';}).join('')+'</table></div>';
+    L.map(function(d){var p=dspLancadoPend(d);return '<tr'+(p?' data-lp="'+dspEsc(d.id)+'" style="cursor:pointer" title="Abrir para completar"':'')+'><td>'+new Date(d.lancadoEm).toLocaleDateString('pt-BR')+'</td><td>'+dspEsc((d.contato&&d.contato.nome)||'')+'</td><td>'+dspEsc(dspFormaNome(d.formaId))+'</td><td>'+dspBr(d.vencimento)+'</td><td class="n">'+dspMoney(d.valor)+'</td><td>'+dspEsc(d.blingId||'')+'</td><td>'+(d.baixadoEm?'<span class="fin-chip ok">pago '+dspBr(d.baixaData)+'</span>':(d.parcelas>1?'<span class="fin-mu">parcelado</span>':'<button type="button" class="fin-btn sm" data-bx="'+dspEsc(d.id)+'"'+(dspExtBaixaOk()?'':' disabled title="Atualize a extensão para 2.1.2"')+'>💲 Dar baixa</button>'))+'</td><td>'+dspEmailChip(d)+'</td><td>'+(p?'<span class="fin-chip warn">falta: '+dspEsc(d.pendencias.join(', '))+'</span> <button type="button" class="fin-btn sm">Completar</button>':'<span class="fin-chip ok">ok</span>')+'</td></tr>';}).join('')+'</table></div>'+dspHtmlIgnoradas(false);
 }
 function dspBindLancados(){
+  dspBindIgnoradas();
   dspBindAnexar();
 
   DSP.root.querySelectorAll('[data-dem]').forEach(function(b){b.onclick=async function(ev){ev.stopPropagation();var id=b.getAttribute('data-dem');b.disabled=true;b.textContent='Enviando…';
@@ -4948,7 +4966,7 @@ function dspBindConfig(){
 // Aviso flutuante em outras telas: há despesas para conferir (só no computador, admin)
 function dspAvisoGlobal(){
   if(DSP.avisoVisto||STATE.roleLogado!=='admin'||dspMobile())return;DSP.avisoVisto=true;
-  dspFb('despesas').then(function(d){d=d||{};var n=Object.keys(d).filter(function(k){return d[k]&&(d[k].status!=='lancado'||(d[k].pendencias&&d[k].pendencias.length));}).length;
+  dspFb('despesas').then(function(d){d=d||{};var n=Object.keys(d).filter(function(k){return d[k]&&d[k].status!=='ignorado'&&(d[k].status!=='lancado'||(d[k].pendencias&&d[k].pendencias.length));}).length;
     if(!n||STATE.modulo==='mod14'||dspEl('dspAviso'))return;
     var b=document.createElement('button');b.id='dspAviso';b.type='button';b.textContent='🧾 '+n+(n>1?' despesas com pendência':' despesa com pendência');
     b.onclick=function(){b.remove();STATE.modulo='mod14';DSP.tela='conferencia';render();};
@@ -5035,11 +5053,11 @@ function dspDrawMob(){
   if(!DSP.carregado)h+='<div class="fin-card fin-mu">Carregando…</div>';
   else if(t==='enviar')h+=dspMobEnviar();
   else if(t==='pend')h+=dspMobLista(dspLista('pend'),'Nenhuma pendência','Tudo o que você enviar fica aqui até ser lançado no computador.');
-  else if(t==='lanc')h+=dspMobLista(dspLista('lancado').slice(0,40),'Nada lançado ainda','As despesas lançadas no Bling aparecem aqui.',true);
+  else if(t==='lanc')h+=dspMobLista(dspLista('lancado').slice(0,40),'Nada lançado ainda','As despesas lançadas no Bling aparecem aqui.',true)+dspHtmlIgnoradas(true);
   else h+=dspMobItem();
   h+='</div>';
   if(t==='enviar'&&DSP.fotosNovas.length)h+='<div class="dm-cta"><button type="button" id="dspEnviar"'+(DSP.enviando?' disabled':'')+'>'+(DSP.enviando?'Enviando…':'Enviar '+(DSP.fotosNovas.length>1?DSP.fotosNovas.length+' imagens':'para conferência'))+'</button></div>';
-  if(t==='item'&&DSP.form)h+=(DSP.desp[DSP.sel]&&DSP.desp[DSP.sel].status==='lancado')?'<div class="dm-cta dupla"><button type="button" class="sec" id="fResolvido" style="color:#166534;border-color:#bbf7d0">Já resolvi</button><button type="button" id="dmSalvar">Salvar</button></div>':'<div class="dm-cta dupla"><button type="button" class="sec" id="fExcluir">Excluir</button><button type="button" id="dmSalvar">Salvar</button></div>';
+  if(t==='item'&&DSP.form)h+=(DSP.desp[DSP.sel]&&DSP.desp[DSP.sel].status==='lancado')?'<div class="dm-cta dupla"><button type="button" class="sec" id="fResolvido" style="color:#166534;border-color:#bbf7d0">Já resolvi</button><button type="button" id="dmSalvar">Salvar</button></div>':'<div class="dm-cta dupla" style="grid-template-columns:auto auto 1fr"><button type="button" class="sec" id="fExcluir">Excluir</button><button type="button" class="sec" id="fNaoLancar">🚫 Não lançar</button><button type="button" id="dmSalvar">Salvar</button></div>';
   if(t!=='item')h+='<div class="dm-tab" role="tablist" aria-label="Telas do financeiro">'+[['enviar','📷','Enviar'],['pend','🧾','Pendentes'],['lanc','✅','Lançados']].map(function(x){return '<button type="button" data-m="'+x[0]+'" class="'+(t===x[0]?'on':'')+'"><span>'+x[1]+'</span>'+x[2]+(x[0]==='pend'&&n?'<i>'+n+'</i>':'')+'</button>';}).join('')+'</div>';
   h+='<div id="dspZoom" hidden></div>';
   DSP.root.innerHTML=h;
@@ -5056,7 +5074,7 @@ function dspDrawMob(){
     var vu=dspEl('dmVerUlt');if(vu)vu.onclick=function(){dspMobAbrir(DSP.ultimoEnvio);};
   }
   DSP.root.querySelectorAll('.dm-card[data-id]').forEach(function(b){b.onclick=function(){dspMobAbrir(b.dataset.id);};});
-  dspBindAnexar();
+  dspBindAnexar();dspBindIgnoradas();
   if(t==='item'&&DSP.form){dspBindConferencia();var sv=dspEl('dmSalvar');if(sv)sv.onclick=async function(){sv.disabled=true;sv.textContent='Salvando…';var ok=await dspSalvarForm(true);
     if(ok&&DSP.desp[DSP.sel]&&DSP.desp[DSP.sel].status==='lancado'){var pnd=dspPendencias(DSP.form);try{await dspFb('despesas/'+DSP.sel,{method:'PATCH',body:{precisaAtualizar:true,pendencias:pnd.length?pnd:['Atualizar no Bling']}});}catch(e){}DSP.desp[DSP.sel].precisaAtualizar=true;DSP.desp[DSP.sel].pendencias=pnd.length?pnd:['Atualizar no Bling'];}
     if(ok){DSP.msg='Salvo. O lançamento no Bling é feito na Conferência do computador.';DSP.msgTipo='ok';DSP.mtela='pend';DSP.sel=null;DSP.form=null;}dspDraw();window.scrollTo(0,0);};}
