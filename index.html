@@ -3723,7 +3723,7 @@ var RPP={root:null,fotos:[],enviando:false,msg:'',msgTipo:'',ok:null,lista:null,
   filtro:'abertos',origem:null,origemSub:null,poll:null,ultimoVisto:0,novos:0,gerandoPlano:false,reanalisando:false};
 var RPP_LOG=[];       // últimos erros técnicos do app (console, JavaScript, promessas)
 var RPP_TRILHA=[];    // últimas telas abertas
-var RPP_STATUS={novo:['⏳','Pendente','#2563eb'],analise:['🔎','Em análise','#d97706'],reaberto:['🔁','Reaberto','#dc2626'],resolvido:['✅','Resolvido','#16a34a'],nao_procede:['🚫','Não procede','#6b7280'],duplicado:['🔁','Repetido','#7c3aed']};
+var RPP_STATUS={novo:['⏳','Pendente','#2563eb'],analise:['🔎','Em análise','#d97706'],reaberto:['🔁','Reaberto','#dc2626'],corrigindo:['🤖','Corrigindo','#0891b2'],resolvido:['✅','Resolvido','#16a34a'],nao_procede:['🚫','Não procede','#6b7280'],duplicado:['🔁','Repetido','#7c3aed']};
 var RPP_TIPO={bug:'🐞 Erro do app',uso:'🎓 Erro de uso',externo:'🌐 Fora do app (Bling, internet...)',sugestao:'💡 Sugestão de melhoria',incerto:'❔ Indefinido'};
 var RPP_GRAV={alta:['🔴','Alta'],media:['🟡','Média'],baixa:['🟢','Baixa']};
 function rppEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -3778,7 +3778,7 @@ async function rppProximoNumero(){
 }
 async function rppCarregar(){
   if(RPP.carregando)return;RPP.carregando=true;RPP.erro='';
-  try{RPP.lista=await rppGetLista();rppContarNovos();}catch(e){RPP.erro='Não consegui ler os chamados: '+(e.message||e);}
+  try{RPP.lista=await rppGetLista();rppContarNovos();rppChecarAuto(RPP.lista);}catch(e){RPP.erro='Não consegui ler os chamados: '+(e.message||e);}
   RPP.carregando=false;rppDraw();
 }
 function rppContarNovos(){
@@ -3799,9 +3799,10 @@ function rppPrompt(c,anteriores){
   '\nNavegador/tela: '+(c.amb||'')+
   '\nPrints enviados: '+c.prints+'\n\n'+
   'CHAMADOS ANTERIORES (para achar repetição e aprender com o que já aconteceu):\n'+(hist||'(nenhum ainda)')+'\n\n'+
-  'Responda SOMENTE com um JSON:\n{\n "procede": "sim"|"nao"|"incerto",\n "tipo": "bug"|"uso"|"externo"|"sugestao"|"incerto",\n "gravidade": "alta"|"media"|"baixa",\n "resumo": string (1 linha, o problema em português simples),\n "print_mostra": string (descreva objetivamente o que aparece no print: tela, mensagens de erro, campos e valores visíveis relevantes; isto substitui a imagem, que não será guardada),\n "confere": string (o print confirma ou contradiz o que o colaborador escreveu? por quê),\n "causa": string (causa provável, o mais específico possível: tela, campo, regra, integração),\n "correcao": string (o que corrigir no app, em passos práticos para o desenvolvedor; se for erro de uso, o que orientar),\n "prevencao": string (como impedir que se repita: validação, aviso na tela, bloqueio, teste, treinamento),\n "treinamento": string (se for erro de uso: a orientação curta para o colaborador; senão ""),\n "repetido_de": number|null (número do chamado anterior igual, se houver),\n "confianca": number (0 a 100),\n "resolve_na_hora": boolean,\n "parecer_colaborador": string\n}\n'+
+  'Responda SOMENTE com um JSON:\n{\n "procede": "sim"|"nao"|"incerto",\n "tipo": "bug"|"uso"|"externo"|"sugestao"|"incerto",\n "gravidade": "alta"|"media"|"baixa",\n "resumo": string (1 linha, o problema em português simples),\n "print_mostra": string (descreva objetivamente o que aparece no print: tela, mensagens de erro, campos e valores visíveis relevantes; isto substitui a imagem, que não será guardada),\n "confere": string (o print confirma ou contradiz o que o colaborador escreveu? por quê),\n "causa": string (causa provável, o mais específico possível: tela, campo, regra, integração),\n "correcao": string (o que corrigir no app, em passos práticos para o desenvolvedor; se for erro de uso, o que orientar),\n "prevencao": string (como impedir que se repita: validação, aviso na tela, bloqueio, teste, treinamento),\n "treinamento": string (se for erro de uso: a orientação curta para o colaborador; senão ""),\n "repetido_de": number|null (número do chamado anterior igual, se houver),\n "confianca": number (0 a 100),\n "resolve_na_hora": boolean,\n "correcao_pequena": boolean,\n "parecer_colaborador": string\n}\n'+
   'RESOLVE_NA_HORA = true SOMENTE quando o problema se resolve sem mexer no código nem nos dados do app, só com uma orientação ao colaborador. Casos: erro de uso (fez o passo errado, campo preenchido errado, pulou etapa); app desatualizado no computador dele (resolve com o botão 🔄 Atualizar no topo); falha momentânea de internet ou do Bling/serviço externo (tentar de novo); extensão do Chrome desatualizada ou desligada. '+
   'Se o problema exige mudar o código do app, mudar uma regra, cadastro, preço, transportadora ou qualquer dado, ou se você tiver dúvida (confiança < 75), RESOLVE_NA_HORA = false (fica pendente para o administrador avaliar).\n'+
+  'CORRECAO_PEQUENA = true só se tipo=bug, procede=sim e a correção provável é pequena e localizada no código de UMA tela (poucas linhas, ex.: validação de campo, texto, botão que não responde, tela que não carrega), SEM mexer em cálculos de preço/frete/impostos/crédito, financeiro, PIX, Bling, login/permissões ou formato de dados salvos. Na dúvida, false.\n'+
   'PARECER_COLABORADOR: mensagem curta e educada para o colaborador, em português simples, sem termos técnicos e sem expor a causa técnica. Se resolve_na_hora: diga que foi resolvido e o passo exato que ele deve fazer agora (ex.: clicar em 🔄 Atualizar e refazer a cotação). Se não: diga que o problema foi confirmado (ou que precisa ser avaliado) e que o T.I. vai corrigir; se houver um jeito de contornar enquanto isso, diga qual.\n'+
   'gravidade: alta = impede vender/cotar/faturar ou mexe com dinheiro; media = atrapalha mas tem contorno; baixa = visual/incômodo.';
 }
@@ -3820,6 +3821,60 @@ async function rppAnalisar(c,fotos,anteriores){
 }
 
 // ---- Envio do chamado ----
+// ---- Correção automática (robô no GitHub: .github/workflows/corrigir-chamado.yml, disparado pelo Worker corrigir-chamado) ----
+// Firebase chamadosConfig = {autoUrl, autoLigado}. Resultado do robô: chamados-auto/<autoId>.json, publicado junto com o app.
+var RPP_AUTO_TELAS_FORA=['mod2','mod13','mod14','mod15','mod16','mod17']; // crédito e financeiro: nunca disparam sozinhos
+var RPP_AUTO_PARECER='Erro confirmado! A correção automática já está sendo aplicada. Em alguns minutos a resposta aparece aqui em Meus chamados.';
+async function rppCfg(forcar){
+  if(RPP.cfg&&!forcar)return RPP.cfg;
+  try{var r=await fetch(FIREBASE_DB+'/chamadosConfig.json');RPP.cfg=(r.ok&&await r.json())||{};}catch(e){RPP.cfg=RPP.cfg||{};}
+  return RPP.cfg;
+}
+function rppAutoPode(cfg){return !!(cfg&&cfg.autoUrl&&cfg.autoLigado!==false);}
+function rppAutoElegivel(c,cfg){
+  var i=c.ia||{};
+  return rppAutoPode(cfg)&&i.tipo==='bug'&&i.procede==='sim'&&i.correcao_pequena===true&&(i.confianca==null||i.confianca>=75)&&RPP_AUTO_TELAS_FORA.indexOf(c.tela)<0;
+}
+function rppRelatorioAuto(c){
+  // vai para o robô sem o nome do colaborador nem dados do computador dele
+  return rppRelatorioTexto(Object.assign({},c,{u:'colaborador',amb:'',parecer:'',nota:''}));
+}
+async function rppDispararAuto(c){
+  var cfg=await rppCfg();
+  var tent=(c.autoTentativas||0)+1,autoId=c.k+(tent>1?'_t'+tent:'');
+  var d={status:'corrigindo',autoId:autoId,autoTentativas:tent,autoInicio:Date.now(),parecer:RPP_AUTO_PARECER,autoMotivo:'',autoResumo:''};
+  try{
+    if(!rppAutoPode(cfg))throw new Error('correção automática desligada ou sem endereço do Worker');
+    var r=await fetch(cfg.autoUrl.replace(/\/+$/,'')+'/corrigir',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({chave:autoId,numero:c.n,relatorio:rppRelatorioAuto(Object.assign({},c,d))})});
+    var j=await r.json().catch(function(){return {};});
+    if(!r.ok||!j.ok)throw new Error(j.erro||('Worker respondeu '+r.status));
+    await rppPatch(c.k,d);Object.assign(c,d);return true;
+  }catch(e){
+    var f={status:c.status==='corrigindo'?'novo':c.status,autoMotivo:'Não consegui disparar a correção automática: '+(e.message||e),lido:false,ta:Date.now()};
+    if(c.status==='corrigindo')f.parecer='O erro foi confirmado e ficou pendente para o T.I. avaliar. Você acompanha a resposta aqui.';
+    try{await rppPatch(c.k,f);}catch(_e){}Object.assign(c,f);return false;
+  }
+}
+// Confere se o robô já respondeu os chamados "Corrigindo" (roda para quem abre a lista: admin e colaborador)
+async function rppChecarAuto(lista){
+  var agora=Date.now(),mudou=false;
+  var emAndamento=(lista||[]).filter(function(c){return c.status==='corrigindo'&&c.autoId;});
+  for(var i=0;i<emAndamento.length;i++){var c=emAndamento[i],d=null;
+    try{
+      var r=await fetch('chamados-auto/'+encodeURIComponent(c.autoId)+'.json?v='+agora,{cache:'no-store'});
+      if(r.ok){var x=await r.json();
+        d={status:x.ok?'resolvido':'novo',parecer:x.parecer||'',autoCorrigido:!!x.ok,autoResumo:x.resumo||'',autoMotivo:x.motivo||'',autoExecucao:x.execucao||'',lido:false,ta:agora};
+        if(x.ok)d.fim=agora;
+      }else if(agora-(c.autoInicio||agora)>45*60000){
+        d={status:'novo',autoMotivo:'O robô de correção não respondeu em 45 minutos (veja a aba Actions do GitHub).',parecer:'O erro foi confirmado e ficou pendente para o T.I. avaliar. Você acompanha a resposta aqui.',lido:false,ta:agora};
+      }
+    }catch(e){}
+    if(d){try{await rppPatch(c.k,d);Object.assign(c,d);mudou=true;}catch(e){}}
+  }
+  if(mudou){rppContarNovos();if(STATE.modulo==='mod18')rppDraw();}
+  return mudou;
+}
 async function rppEnviar(){
   if(RPP.enviando)return;
   var g=function(id){var e=document.getElementById(id);return e?e.value.trim():'';};
@@ -3837,12 +3892,14 @@ async function rppEnviar(){
     if(c.ia.parecer_colaborador)c.parecer=c.ia.parecer_colaborador;
     if(c.ia.resolve_na_hora===true&&c.ia.tipo!=='bug'&&(c.ia.confianca==null||c.ia.confianca>=75)){c.status='resolvido';c.autoResolvido=true;c.fim=c.t;}
   }catch(e){c.iaErro='Sem análise do print: '+(e.message||e);}
+  var auto=false;if(c.status!=='resolvido'&&c.ia){try{auto=rppAutoElegivel(c,await rppCfg(true));}catch(e){}}
   if(!c.parecer)c.parecer='Recebemos seu chamado. O T.I. vai avaliar e você acompanha a situação aqui em Meus chamados.';
   try{
     c.n=await rppProximoNumero();
     var r=await fetch(FIREBASE_DB+'/chamados.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)});
     if(!r.ok)throw new Error('Firebase respondeu '+r.status);
-    RPP.ok={n:c.n,resolvido:c.status==='resolvido',parecer:c.parecer};RPP.fotos=[];RPP.lista=null;
+    if(auto){var jr=await r.json().catch(function(){return null;});if(jr&&jr.name){c.k=jr.name;await rppDispararAuto(c);}}
+    RPP.ok={n:c.n,resolvido:c.status==='resolvido',corrigindo:c.status==='corrigindo',parecer:c.parecer};RPP.fotos=[];RPP.lista=null;
   }catch(e){RPP.msg='Não consegui registrar o chamado ('+(e.message||e)+'). Tente de novo.';RPP.msgTipo='err';}
   RPP.enviando=false;rppDraw();
 }
@@ -3862,13 +3919,20 @@ document.addEventListener('paste',function(e){
 });
 
 // ---- Avisos para o admin (em qualquer tela do app) ----
+function rppVigiarMeus(){
+  if(RPP.pollMeus)return;
+  RPP.pollMeus=setInterval(function(){
+    if(STATE.modulo!=='mod18'||RPP.aba!=='meus'||document.hidden||!RPP.lista)return;
+    if(RPP.lista.some(function(c){return c.status==='corrigindo';}))rppCarregar();
+  },60000);
+}
 function rppVigiar(){
   if(RPP.poll)return;
   try{RPP.ultimoVisto=Number(localStorage.getItem('rppUltimoVisto'))||0;}catch(e){}
   var checar=function(){
     if(!STATE.auth||!rppAdmin()||document.hidden)return;
     rppGetLista().then(function(l){
-      var antes=RPP.lista;RPP.lista=l;rppContarNovos();
+      var antes=RPP.lista;RPP.lista=l;rppContarNovos();rppChecarAuto(l);
       var novos=l.filter(function(c){return (c.ta||c.t||0)>RPP.ultimoVisto&&!c.lido;});
       if(novos.length){
         RPP.ultimoVisto=Math.max.apply(null,novos.map(function(c){return c.ta||c.t||0;}));
@@ -3884,7 +3948,7 @@ function rppAviso(novos){
   var c=novos[0];var g=c.ia&&RPP_GRAV[c.ia.gravidade]||['⚪',''];
   var el=document.getElementById('rppToast');if(el)el.remove();
   el=document.createElement('div');el.id='rppToast';el.className='rpp-toast';
-  el.innerHTML='<div class="rpp-toast-h">🛠️ '+(novos.length>1?novos.length+' chamados novos/reabertos':(c.status==='reaberto'?'Chamado #'+c.n+' reaberto':c.autoResolvido?'Chamado #'+c.n+' (⚡ resolvido na hora)':'Novo chamado #'+c.n))+'<button aria-label="Fechar">✕</button></div>'+
+  el.innerHTML='<div class="rpp-toast-h">🛠️ '+(novos.length>1?novos.length+' chamados novos/reabertos':(c.status==='reaberto'?'Chamado #'+c.n+' reaberto':c.autoCorrigido&&c.status==='resolvido'?'🤖 Chamado #'+c.n+' corrigido automaticamente':c.autoMotivo&&c.status==='novo'?'Chamado #'+c.n+' (correção automática não aplicada)':c.status==='corrigindo'?'Chamado #'+c.n+' (🤖 corrigindo)':c.autoResolvido?'Chamado #'+c.n+' (⚡ resolvido na hora)':'Novo chamado #'+c.n))+'<button aria-label="Fechar">✕</button></div>'+
     '<div class="rpp-toast-b">'+g[0]+' <b>'+rppEsc(c.u)+'</b> · '+rppEsc(c.telaNome)+'<br>'+rppEsc(((c.ia&&c.ia.resumo)||c.aconteceu||'').slice(0,140))+'</div>'+
     '<button class="rpp-toast-v">Ver chamado</button>';
   el.querySelector('.rpp-toast-h button').onclick=function(){el.remove();};
@@ -3935,6 +3999,8 @@ function rppRelatorioTexto(c){
   if(c.trilha&&c.trilha.length)L.push('\nTelas antes: '+c.trilha.map(rppNomeTela).join(' → '));
   L.push('Ambiente: '+(c.amb||'-'));
   if(c.iaErro)L.push('\n⚠️ '+c.iaErro);
+  if(c.autoResumo){L.push('');L.push('CORREÇÃO AUTOMÁTICA APLICADA');L.push(c.autoResumo);}
+  if(c.autoMotivo){L.push('');L.push('CORREÇÃO AUTOMÁTICA NÃO APLICADA');L.push(c.autoMotivo);}
   if(c.parecer){L.push('');L.push('PARECER PARA O COLABORADOR'+(c.autoResolvido?' (resolvido na hora pela IA)':''));L.push(c.parecer);}
   if(c.nota){L.push('');L.push('NOTA DO ADMIN');L.push(c.nota);}
   return L.join('\n');
@@ -4000,6 +4066,8 @@ function renderReportarProblema(){
   if(!rppAdmin()&&RPP.aba!=='novo'&&RPP.aba!=='meus')RPP.aba='novo';
   if(RPP.aba!=='novo'&&!RPP.lista&&!RPP.carregando)setTimeout(rppCarregar,0);
   if(RPP.aba==='aprendizado')rppCarregarPlano();
+  if(rppAdmin()&&!RPP.cfg)rppCfg().then(function(){rppDraw();});
+  rppVigiarMeus();
   rppDraw();
   return wrap;
 }
@@ -4021,7 +4089,7 @@ function rppDraw(){
   rppLigar(w);
 }
 function rppHtmlNovo(){
-  if(RPP.ok)return '<div class="rpp-card rpp-okbox"><div class="big">'+(RPP.ok.resolvido?'⚡':'✅')+'</div><h3>Chamado #'+RPP.ok.n+(RPP.ok.resolvido?' resolvido!':' recebido — pendente')+'</h3>'+
+  if(RPP.ok)return '<div class="rpp-card rpp-okbox"><div class="big">'+(RPP.ok.resolvido?'⚡':RPP.ok.corrigindo?'🤖':'✅')+'</div><h3>Chamado #'+RPP.ok.n+(RPP.ok.resolvido?' resolvido!':RPP.ok.corrigindo?' — corrigindo agora':' recebido — pendente')+'</h3>'+
     '<div class="rpp-parecer'+(RPP.ok.resolvido?' ok':'')+'"><b>Parecer do T.I.:</b><br>'+rppEsc(RPP.ok.parecer||'')+'</div>'+
     '<p style="color:#6b7280;margin:0 0 16px">'+(RPP.ok.resolvido?'Se o erro continuar, abra <b>Meus chamados</b> e clique em <b>🔁 Reabrir</b>.':'O T.I. já foi avisado. Você acompanha a situação em <b>Meus chamados</b>.')+'</p>'+
     '<button class="rpp-btn" data-a="outro">Reportar outro problema</button> <button class="rpp-btn sec" data-a="voltar">Voltar ao que eu estava fazendo</button></div>';
@@ -4072,7 +4140,7 @@ async function rppReabrir(k){
   try{await rppPatch(k,d);Object.assign(c,d);RPP.msg='';}catch(e){alert('Não consegui reabrir: '+(e.message||e));}
   rppDraw();
 }
-function rppAbertos(c){return c.status==='novo'||c.status==='analise'||c.status==='reaberto';}
+function rppAbertos(c){return c.status==='novo'||c.status==='analise'||c.status==='reaberto'||c.status==='corrigindo';}
 function rppHtmlChamados(){
   if(RPP.erro)return '<div class="rpp-msg err">'+rppEsc(RPP.erro)+'</div>';
   if(!RPP.lista)return '<div class="rpp-card">⏳ Carregando...</div>';
@@ -4101,9 +4169,11 @@ function rppHtmlDetalhe(c){
   if(i.resumo){
     h+='<div class="rpp-tags"><span class="rpp-tag">'+(RPP_TIPO[i.tipo]||'❔ '+rppEsc(i.tipo))+'</span>'+(g?'<span class="rpp-tag">'+g[0]+' Gravidade '+g[1]+'</span>':'')+
       '<span class="rpp-tag">'+(i.procede==='sim'?'✔️ Procede':i.procede==='nao'?'✖️ Não procede':'❔ Incerto')+'</span>'+(i.confianca!=null?'<span class="rpp-tag">Confiança '+rppEsc(i.confianca)+'%</span>':'')+
-      (c.repetidoDe?'<span class="rpp-tag" style="background:#ede9fe;color:#5b21b6">🔁 Igual ao #'+c.repetidoDe+'</span>':'')+(c.autoResolvido?'<span class="rpp-tag" style="background:#dcfce7;color:#166534">⚡ Resolvido na hora pela IA</span>':'')+'</div>'+
+      (c.repetidoDe?'<span class="rpp-tag" style="background:#ede9fe;color:#5b21b6">🔁 Igual ao #'+c.repetidoDe+'</span>':'')+(c.autoResolvido?'<span class="rpp-tag" style="background:#dcfce7;color:#166534">⚡ Resolvido na hora pela IA</span>':'')+(c.autoCorrigido?'<span class="rpp-tag" style="background:#cffafe;color:#155e75">🤖 Corrigido automaticamente</span>':'')+(c.ia&&c.ia.correcao_pequena?'<span class="rpp-tag">🔧 Correção pequena</span>':'')+'</div>'+
       '<div style="font-size:15px;font-weight:700;margin:8px 0">'+rppEsc(i.resumo)+'</div>';
   }
+  if(c.status==='corrigindo')h+='<div class="rpp-msg" style="background:#ecfeff;color:#155e75">🤖 O robô está corrigindo (tentativa '+(c.autoTentativas||1)+', desde '+rppData(c.autoInicio||c.t)+'). O resultado aparece aqui sozinho.</div>';
+  if(c.autoResumo||c.autoMotivo)h+=rppSec('🤖 Correção automática',(c.autoResumo?'O que mudou: '+c.autoResumo:'')+(c.autoMotivo?(c.autoResumo?'\n':'')+'Não aplicada: '+c.autoMotivo:'')+(c.autoExecucao?'\nDetalhes: '+c.autoExecucao:''));
   if(c.reaberturas&&c.reaberturas.length)h+=rppSec('🔁 Reaberto pelo colaborador',c.reaberturas.map(function(r){return rppData(r.t)+' — '+r.u+(r.obs?': '+r.obs:'');}).join('\n'));
   h+=rppSec('O que o colaborador disse','Estava fazendo: '+(c.fazendo||'-')+'\nAconteceu: '+(c.aconteceu||'-')+(c.esperado?'\nEsperava: '+c.esperado:''));
   h+=rppSec('📸 O que o print mostra',i.print_mostra)+rppSec('Print x relato',i.confere)+rppSec('🔍 Causa provável',i.causa)+
@@ -4118,10 +4188,22 @@ function rppHtmlDetalhe(c){
      '<button class="rpp-btn mini" data-a="salvar">💾 Salvar</button>'+
      '<button class="rpp-btn mini sec" data-a="copiar">📋 Copiar relatório</button>'+
      '<button class="rpp-btn mini sec" data-a="claude" title="Copia o relatório pronto para colar no chat do Claude e ele corrigir o código">🤖 Copiar para o Claude corrigir</button>'+
-     '<button class="rpp-btn mini sec" data-a="imprimir">🖨️ Imprimir</button></div>'+
+     '<button class="rpp-btn mini sec" data-a="imprimir">🖨️ Imprimir</button>'+
+     (rppAutoPode(RPP.cfg)&&['novo','analise','reaberto'].indexOf(c.status)>=0?'<button class="rpp-btn mini" data-a="autoCorrigir" style="background:#0891b2" title="Aprova e manda o robô corrigir este chamado (com as mesmas travas e testes)">🤖 Corrigir automaticamente</button>':'')+'</div>'+
      (RPP.msg?'<div class="rpp-msg '+RPP.msgTipo+'">'+rppEsc(RPP.msg)+'</div>':'')+
      '<p style="font-size:11.5px;color:#9ca3af;margin:10px 0 0">'+rppEsc(c.amb||'')+'</p></div>';
   return h;
+}
+function rppHtmlAuto(){
+  var cfg=RPP.cfg||{},l=RPP.lista||[];
+  var feitos=l.filter(function(c){return c.autoCorrigido;}).length,tent=l.filter(function(c){return c.autoTentativas;}).length;
+  return '<div class="rpp-card"><h3>🤖 Correção automática de bugs pequenos</h3>'+
+    '<p class="s">Quando a IA confirma um bug pequeno (fora de crédito e financeiro), um robô no GitHub corrige, testa todas as telas e só publica se tudo passar. O que não passar fica pendente para você. Você também pode aprovar pelo botão 🤖 em cada chamado.</p>'+
+    '<label>Endereço do Worker "corrigir-chamado"</label><input id="rppAutoUrl" type="url" placeholder="https://corrigir-chamado.rauldias.workers.dev" value="'+rppEsc(cfg.autoUrl||'')+'">'+
+    '<label style="display:flex;gap:8px;align-items:center;font-weight:600"><input id="rppAutoLig" type="checkbox" style="width:auto"'+(cfg.autoLigado!==false?' checked':'')+'> Disparar sozinho nos bugs pequenos (desmarcado: só quando você clicar 🤖)</label>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="rpp-btn mini" data-a="salvarAuto">💾 Salvar</button><button class="rpp-btn mini sec" data-a="testarAuto">🔌 Testar conexão</button></div>'+
+    (RPP.autoTeste?'<div class="rpp-msg '+(RPP.autoTeste.ok?'ok':'err')+'">'+rppEsc(RPP.autoTeste.txt)+'</div>':'')+
+    '<p class="s" style="margin:10px 0 0">'+(rppAutoPode(cfg)?'🟢 Ligada':'⚪ Desligada')+' · '+tent+' chamado(s) enviados ao robô · '+feitos+' corrigido(s) sozinho(s)</p></div>';
 }
 function rppHtmlAprendizado(){
   if(RPP.erro)return '<div class="rpp-msg err">'+rppEsc(RPP.erro)+'</div>';
@@ -4141,6 +4223,7 @@ function rppHtmlAprendizado(){
      (RPP.plano&&RPP.plano.texto?'<div class="rpp-sec"><h4>Gerado em '+rppData(RPP.plano.t)+' com '+(RPP.plano.qtd||'?')+' chamados</h4><div>'+rppEsc(RPP.plano.texto)+'</div></div>'+
        '<button class="rpp-btn mini sec" data-a="copiarPlano" style="margin-top:8px">📋 Copiar plano</button>':'')+
      (RPP.msg?'<div class="rpp-msg '+RPP.msgTipo+'">'+rppEsc(RPP.msg)+'</div>':'')+'</div>';
+  h+=rppHtmlAuto();
   return h;
 }
 function rppLigar(w){
@@ -4176,6 +4259,27 @@ function rppLigar(w){
     else if(a==='claude'&&c)rppCopiar('Corrija este erro do app mais-acessivel-app (repositório rauldneto/mais-acessivel-app, arquivo index.html). Confira a causa no código antes de mudar, corrija e me diga como evitar que se repita.\n\n'+rppRelatorioTexto(c),b);
     else if(a==='imprimir'&&c){var j=window.open('','_blank');if(j){j.document.write('<title>Chamado #'+c.n+'</title><pre style="white-space:pre-wrap;font:14px/1.5 -apple-system,Segoe UI,sans-serif;padding:24px">'+rppEsc(rppRelatorioTexto(c))+'</pre>');j.document.close();j.print();}}
     else if(a==='plano')rppGerarPlano();
+    else if(a==='autoCorrigir'&&c){
+      if(!confirm('Mandar o robô corrigir o chamado #'+c.n+'?\n\nEle só publica se a mudança for pequena e todas as telas passarem no teste. Se não, o chamado volta como pendente.'))return;
+      b.disabled=true;b.textContent='⏳ Enviando...';
+      rppDispararAuto(c).then(function(ok){RPP.msg=ok?'Enviado ao robô. O resultado aparece aqui em alguns minutos.':(c.autoMotivo||'Não consegui enviar.');RPP.msgTipo=ok?'ok':'err';rppDraw();});
+    }
+    else if(a==='salvarAuto'){
+      var u=w.querySelector('#rppAutoUrl').value.trim().replace(/\/+$/,''),lig=w.querySelector('#rppAutoLig').checked;
+      if(u&&!/^https:\/\/[^\s]+$/.test(u)){RPP.autoTeste={ok:false,txt:'O endereço precisa começar com https://'};return rppDraw();}
+      var cfg={autoUrl:u,autoLigado:lig};
+      fetch(FIREBASE_DB+'/chamadosConfig.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)})
+        .then(function(r){if(!r.ok)throw new Error('Firebase '+r.status);RPP.cfg=cfg;RPP.autoTeste={ok:true,txt:'Configuração salva.'};rppDraw();})
+        .catch(function(e){RPP.autoTeste={ok:false,txt:'Não salvou: '+(e.message||e)};rppDraw();});
+    }
+    else if(a==='testarAuto'){
+      var u2=(w.querySelector('#rppAutoUrl').value||'').trim().replace(/\/+$/,'');
+      if(!u2){RPP.autoTeste={ok:false,txt:'Cole o endereço do Worker primeiro.'};return rppDraw();}
+      RPP.autoTeste={ok:true,txt:'⏳ Testando...'};rppDraw();
+      fetch(u2+'/status').then(function(r){return r.json();}).then(function(j){
+        RPP.autoTeste=j&&j.ok&&j.configurado?{ok:true,txt:'🟢 Conectado ao Worker e ao GitHub ('+(j.repo||'')+'). Falta só conferir se o segredo ANTHROPIC_API_KEY está no GitHub.'}:{ok:false,txt:'O Worker respondeu, mas o GITHUB_TOKEN não está configurado nele.'};rppDraw();
+      }).catch(function(e){RPP.autoTeste={ok:false,txt:'Não consegui falar com o Worker: '+(e.message||e)};rppDraw();});
+    }
     else if(a==='copiarPlano'&&RPP.plano)rppCopiar(RPP.plano.texto,b);
   };});
 }

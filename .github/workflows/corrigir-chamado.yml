@@ -1,0 +1,164 @@
+name: Correção automática de chamado
+
+# Disparado pelo app (aba T.I. › Reportar Problema) através do Worker "corrigir-chamado",
+# quando a IA classifica um chamado como BUG PEQUENO, ou quando o admin clica em "🤖 Corrigir automaticamente".
+# Também dá para rodar à mão: aba Actions › Correção automática de chamado › Run workflow.
+#
+# Segurança (nada vai para o app sem passar por TODAS):
+#   1. Teste das telas ANTES (se o app já estiver quebrado, não tenta).
+#   2. Claude Code corrige com regras rígidas (só index.html, mudança mínima, áreas proibidas) e teto de gasto.
+#   3. Travas: só index.html alterado, no máximo LIMITE_LINHAS linhas, JavaScript sem erro de sintaxe.
+#   4. Teste das telas DEPOIS. Falhou qualquer coisa → descarta a mudança e o chamado fica pendente para o admin.
+#   5. No máximo LIMITE_DIA correções automáticas por dia.
+# O resultado vai para chamados-auto/<chave>.json, que o app lê para responder ao colaborador.
+#
+# Segredo necessário (Settings › Secrets and variables › Actions): ANTHROPIC_API_KEY
+
+on:
+  repository_dispatch:
+    types: [corrigir-chamado]
+  workflow_dispatch:
+    inputs:
+      chave:
+        description: 'Chave do chamado no Firebase (ex.: -Nx...)'
+        required: true
+      numero:
+        description: 'Número do chamado'
+        required: true
+      relatorio:
+        description: 'Relatório do chamado (copie do painel Chamados)'
+        required: true
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: corrigir-chamado
+  cancel-in-progress: false
+
+jobs:
+  corrigir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CHAVE: ${{ github.event.client_payload.chave || inputs.chave }}
+      NUMERO: ${{ github.event.client_payload.numero || inputs.numero }}
+      RELATORIO: ${{ github.event.client_payload.relatorio || inputs.relatorio }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      LIMITE_LINHAS: '40'
+      LIMITE_DIA: '10'
+      GASTO_MAX_USD: '2'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 100
+
+      - name: Conferir pedido
+        id: pedido
+        run: |
+          if ! [[ "$CHAVE" =~ ^-?[A-Za-z0-9_-]{5,40}$ ]] || ! [[ "$NUMERO" =~ ^[0-9]{1,6}$ ]]; then
+            echo "::error::Pedido inválido (chave ou número)."; exit 1
+          fi
+          if [ -f "chamados-auto/$CHAVE.json" ]; then
+            echo "::notice::Chamado #$NUMERO já teve correção automática. Nada a fazer."; echo "repetido=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          FALHA=""
+          if [ -z "$ANTHROPIC_API_KEY" ]; then FALHA="segredo ANTHROPIC_API_KEY não cadastrado no GitHub"; fi
+          HOJE=$(TZ=America/Sao_Paulo date +%Y-%m-%d)
+          QTD=$(git log --since="$HOJE 00:00 -0300" --grep="^Correção automática do chamado" --oneline | wc -l)
+          if [ "$QTD" -ge "$LIMITE_DIA" ]; then FALHA="limite de $LIMITE_DIA correções automáticas por dia atingido"; fi
+          echo "falha=$FALHA" >> "$GITHUB_OUTPUT"
+          echo "repetido=false" >> "$GITHUB_OUTPUT"
+          git config user.name "Correção automática"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - uses: actions/setup-node@v4
+        if: steps.pedido.outputs.repetido != 'true' && steps.pedido.outputs.falha == ''
+        with:
+          node-version: '22'
+
+      - name: Instalar navegador de teste
+        if: steps.pedido.outputs.repetido != 'true' && steps.pedido.outputs.falha == ''
+        run: |
+          npm i --no-save --no-package-lock playwright@1 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Teste das telas ANTES
+        id: antes
+        if: steps.pedido.outputs.repetido != 'true' && steps.pedido.outputs.falha == ''
+        continue-on-error: true
+        run: node testes/smoke.mjs
+
+      - name: Claude Code corrige
+        id: claude
+        if: steps.pedido.outputs.repetido != 'true' && steps.pedido.outputs.falha == '' && steps.antes.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          mkdir -p .correcao
+          { cat testes/correcao-prompt.md; echo; printf '%s\n' "$RELATORIO"; } > .correcao/pedido.md
+          npx -y @anthropic-ai/claude-code@2 -p "$(cat .correcao/pedido.md)" \
+            --model sonnet \
+            --allowedTools "Read" "Grep" "Glob" "Edit" "Write" \
+            --permission-mode acceptEdits \
+            --max-budget-usd "$GASTO_MAX_USD" \
+            --output-format json > .correcao/claude.json 2> .correcao/claude.err || true
+          node -e "try{const j=require('./.correcao/claude.json');console.log('Custo US$',j.total_cost_usd||j.cost_usd||'?','| turnos',j.num_turns||'?')}catch(e){console.log('sem resumo do Claude')}"
+          git checkout -- testes .github 2>/dev/null || true
+
+      - name: Travas da mudança
+        id: travas
+        if: steps.claude.outcome == 'success'
+        run: node testes/correcao.mjs travas
+
+      - name: Teste das telas DEPOIS
+        id: depois
+        if: steps.travas.outputs.ok == 'true'
+        continue-on-error: true
+        run: node testes/smoke.mjs
+
+      - name: Decidir e gravar resultado
+        id: res
+        if: steps.pedido.outputs.repetido != 'true'
+        env:
+          ETAPA_FALHOU: ${{ steps.pedido.outputs.falha || (steps.antes.outcome == 'failure' && 'o teste das telas já falhava antes da correção; nada foi mudado') || (steps.claude.outcome != 'success' && steps.antes.outcome == 'success' && 'a IA de correção não conseguiu rodar') || '' }}
+          TESTE_DEPOIS: ${{ steps.depois.outcome == 'success' && 'ok' || 'falhou' }}
+        run: node testes/correcao.mjs resultado
+
+      - name: Publicar
+        if: steps.pedido.outputs.repetido != 'true'
+        env:
+          OK: ${{ steps.res.outputs.ok }}
+        run: |
+          if [ "$OK" != "true" ]; then git checkout -- index.html 2>/dev/null || true; fi
+          git add "chamados-auto/$CHAVE.json"
+          if [ "$OK" = "true" ]; then
+            git add index.html
+            RESUMO=$(node -p "require('./chamados-auto/$CHAVE.json').resumo.split('\n')[0].slice(0,120)")
+            git commit -q -m "Correção automática do chamado #$NUMERO: $RESUMO"
+          else
+            git commit -q -m "Chamado #$NUMERO: correção automática não aplicada (pendente para o admin)"
+          fi
+          for i in 1 2 3 4; do
+            git pull -q --rebase origin main && git push -q origin HEAD:main && break
+            sleep $((i*5))
+          done
+          git log -1 --oneline
+
+      - name: Pedir atualização do site
+        if: steps.res.outputs.ok == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" >/dev/null && echo "Site em atualização."
+
+      - name: Guardar registro da correção
+        if: always() && steps.pedido.outputs.repetido != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: correcao-chamado-${{ env.NUMERO }}
+          path: |
+            .correcao/
+            !.correcao/pedido.md
+          retention-days: 30
