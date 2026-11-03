@@ -8,6 +8,13 @@
     try {
       var ss = JSON.parse(localStorage.getItem('maisacessivel_session') || 'null');
       chrome.storage.local.set({ appUsuario: (ss && ss.usuario) || '', appRole: (ss && ss.role) || '' });
+      // crachá do login seguro: a extensão usa para acessar o banco (fb-auth.js)
+      var fa = JSON.parse(localStorage.getItem('maisacessivel_fbauth') || 'null');
+      if (fa && fa.refreshToken && fa.k) {
+        chrome.storage.local.set({ fbAuth: { uid: fa.uid, k: fa.k, refreshToken: fa.refreshToken, idToken: fa.idToken, exp: fa.exp } });
+      } else if (!ss) {
+        chrome.storage.local.remove('fbAuth'); // saiu do app: a extensão também perde o acesso
+      }
     } catch (e) {}
   }
   salvarUsuarioApp();

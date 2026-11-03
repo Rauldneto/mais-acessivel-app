@@ -207,6 +207,130 @@ pre{background:#f3f3f1;border:1px solid #e8e8e6;border-radius:7px;padding:12px;f
 
 <script>
 // ══════════════════════════════════════════
+//  LOGIN SEGURO — Firebase Authentication
+// ══════════════════════════════════════════
+// Cada acesso ao banco leva o "crachá" (token) do usuário logado. Quando as regras do
+// banco forem fechadas, quem não tiver crachá não lê nem grava nada.
+// FB_API_KEY é a "Chave de API da Web" do projeto Firebase (Configurações do projeto).
+// Ela é pública por natureza; a proteção de verdade são as regras do banco.
+// Enquanto estiver vazia, o app funciona como antes (login antigo).
+var FB_API_KEY = '';
+var FB_EMAIL_DOM = 'usuarios.maisacessivel.app';
+var FB_DB_URL = 'https://maisacessivel-1d0ad-default-rtdb.firebaseio.com';
+var FBA = (function(){
+  var K = 'maisacessivel_fbauth', st = null, renovando = null, aoExpirar = null;
+  try { st = JSON.parse(localStorage.getItem(K) || 'null'); } catch(e){}
+  var _fetch = window.fetch.bind(window);
+  function salvar(){ try { if(st) localStorage.setItem(K, JSON.stringify(st)); else localStorage.removeItem(K); } catch(e){} }
+  function ativo(){ return !!FB_API_KEY; }
+  function slug(u){ return String(u||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9_-]/g,'_') || 'x'; }
+  function emailPadrao(u){ return slug(u) + '@' + FB_EMAIL_DOM; }
+  async function idt(op, corpo){
+    var r = await _fetch('https://identitytoolkit.googleapis.com/v1/accounts:' + op + '?key=' + FB_API_KEY,
+      { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(corpo) });
+    var j = await r.json().catch(function(){ return {}; });
+    if(!r.ok){ var m = (j.error && j.error.message) || ('HTTP ' + r.status); var e = new Error(m); e.code = m.split(' ')[0]; throw e; }
+    return j;
+  }
+  function guardar(j){
+    st = { uid: j.localId || j.user_id, email: j.email || (st && st.email) || '',
+           idToken: j.idToken || j.id_token, refreshToken: j.refreshToken || j.refresh_token,
+           exp: Date.now() + (parseInt(j.expiresIn || j.expires_in, 10) || 3600) * 1000,
+           k: FB_API_KEY }; // k: a extensão do Chrome usa para renovar o próprio token
+    salvar(); return st;
+  }
+  function renovar(){
+    if(!st || !st.refreshToken) return Promise.resolve(null);
+    if(renovando) return renovando;
+    renovando = (async function(){
+      try {
+        var r = await _fetch('https://securetoken.googleapis.com/v1/token?key=' + FB_API_KEY,
+          { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+            body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(st.refreshToken) });
+        var j = await r.json().catch(function(){ return {}; });
+        if(!r.ok){ if(r.status === 400){ st = null; salvar(); if(aoExpirar) aoExpirar(); } return null; }
+        return guardar(j);
+      } catch(e){ return null; } // sem internet: tenta de novo depois
+      finally { renovando = null; }
+    })();
+    return renovando;
+  }
+  async function token(forcar){
+    if(!ativo() || !st) return null;
+    if(forcar || Date.now() > st.exp - 120000) await renovar();
+    return st && st.idToken;
+  }
+  function comToken(url, t){ return url + (url.indexOf('?') > -1 ? '&' : '?') + 'auth=' + encodeURIComponent(t); }
+  function ehBanco(url){ return typeof url === 'string' && url.indexOf(FB_DB_URL) === 0; }
+
+  // Todo fetch ao banco ganha o token automaticamente
+  window.fetch = async function(input, init){
+    if(ativo() && st && ehBanco(input)){
+      var t = await token();
+      if(t){
+        var r = await _fetch(comToken(input, t), init);
+        if(r.status === 401){ t = await token(true); if(t) r = await _fetch(comToken(input, t), init); }
+        return r;
+      }
+    }
+    return _fetch(input, init);
+  };
+
+  // Tempo real (EventSource): liga com token e religa sozinho quando o token vence
+  var _ES = window.EventSource;
+  if(_ES){
+    var FbES = function(url){
+      var self = this, ls = {}, es = null, fechado = false;
+      self.url = url; self.readyState = 0; self.onopen = null; self.onmessage = null; self.onerror = null;
+      self.addEventListener = function(tp, f){ (ls[tp] = ls[tp] || []).push(f); if(es) es.addEventListener(tp, f); };
+      self.removeEventListener = function(tp, f){ if(ls[tp]) ls[tp] = ls[tp].filter(function(x){ return x !== f; }); if(es) es.removeEventListener(tp, f); };
+      self.close = function(){ fechado = true; self.readyState = 2; if(es) es.close(); };
+      function ligar(){
+        if(fechado) return;
+        token().then(function(t){
+          if(fechado) return;
+          es = new _ES(t ? comToken(url, t) : url);
+          Object.keys(ls).forEach(function(k){ ls[k].forEach(function(f){ es.addEventListener(k, f); }); });
+          es.onopen = function(e){ self.readyState = 1; if(self.onopen) self.onopen(e); };
+          es.onmessage = function(e){ if(self.onmessage) self.onmessage(e); };
+          es.onerror = function(e){ self.readyState = es.readyState; if(self.onerror) self.onerror(e); if(es.readyState === 2 && !fechado) setTimeout(function(){ religar(false); }, 5000); };
+          es.addEventListener('auth_revoked', function(){ religar(true); });
+          es.addEventListener('cancel', function(){ religar(true); });
+        });
+      }
+      function religar(forcar){ if(es) es.close(); es = null; if(fechado) return; (forcar ? token(true) : Promise.resolve()).then(ligar); }
+      ligar();
+    };
+    window.EventSource = function(url, cfg){ return (ativo() && st && ehBanco(url)) ? new FbES(url) : new _ES(url, cfg); };
+    window.EventSource.CONNECTING = 0; window.EventSource.OPEN = 1; window.EventSource.CLOSED = 2;
+  }
+  // renova o token a cada 40 min mesmo sem uso (mantém tempo real e extensão funcionando)
+  setInterval(function(){ if(ativo() && st) renovar(); }, 40 * 60000);
+
+  return {
+    ativo: ativo, slug: slug, emailPadrao: emailPadrao, token: token,
+    logado: function(){ return !!(ativo() && st && st.refreshToken); },
+    uid: function(){ return st && st.uid; },
+    sessao: function(){ return st; },
+    aoExpirar: function(f){ aoExpirar = f; },
+    entrar: async function(email, senha){ return guardar(await idt('signInWithPassword', { email: email, password: senha, returnSecureToken: true })); },
+    // criarConta: guardarSessao=true só na migração do próprio usuário; o admin criando outra pessoa NÃO troca de sessão
+    criarConta: async function(email, senha, guardarSessao){ var j = await idt('signUp', { email: email, password: senha, returnSecureToken: true }); if(guardarSessao) guardar(j); return j.localId; },
+    trocarMinhaSenha: async function(nova){ var t = await token(true); if(!t) throw new Error('Sessão expirada. Entre de novo.'); return guardar(await idt('update', { idToken: t, password: nova, returnSecureToken: true })); },
+    sair: function(){ st = null; salvar(); },
+    erroAmigavel: function(e){
+      var c = e && e.code || '';
+      if(c === 'WEAK_PASSWORD') return 'A senha precisa ter pelo menos 6 caracteres.';
+      if(c === 'TOO_MANY_ATTEMPTS_TRY_LATER') return 'Muitas tentativas. Espere alguns minutos e tente de novo.';
+      if(c === 'USER_DISABLED') return 'Usuário bloqueado.';
+      if(c === 'OPERATION_NOT_ALLOWED') return 'Login por e-mail/senha não está ativado no Firebase.';
+      if(c === 'EMAIL_NOT_FOUND' || c === 'INVALID_PASSWORD' || c === 'INVALID_LOGIN_CREDENTIALS' || c === 'INVALID_EMAIL') return 'Usuário ou senha incorretos.';
+      return 'Erro no login: ' + ((e && e.message) || e);
+    }
+  };
+})();
+
+// ══════════════════════════════════════════
 //  DADOS
 // ══════════════════════════════════════════
 // ══ MULTI-USER AUTH ══
@@ -253,9 +377,42 @@ async function fbSaveUser(id,data){
   });
 }
 
-async function fbDeleteUser(id){
+async function fbDeleteUser(id,u){
   if(window.fbInvalidarUsersCache) window.fbInvalidarUsersCache();
+  if(u&&u.uid) await fbAclDel(u.uid);
+  if(u&&u.usuario) await fbLoginEmailSet(u.usuario,null);
   await fetch(FIREBASE_DB+'/'+FIREBASE_USERS_PATH+'/'+id+'.json',{method:'DELETE'});
+}
+
+// Lista "acl": quem pode acessar o banco (uid -> 'admin' | 'user'). Com as regras fechadas, só admin grava aqui.
+async function fbAclSet(uid,role){
+  if(!uid) return;
+  await fetch(FIREBASE_DB+'/acl/'+uid+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(role==='admin'?'admin':'user')});
+}
+async function fbAclDel(uid){ if(uid) await fetch(FIREBASE_DB+'/acl/'+uid+'.json',{method:'DELETE'}); }
+// "loginEmail": usuário -> e-mail interno de login (único dado que se lê sem estar logado)
+async function fbLoginEmailSet(usuario,email){
+  var url=FIREBASE_DB+'/loginEmail/'+FBA.slug(usuario)+'.json';
+  if(email) await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(email)});
+  else await fetch(url,{method:'DELETE'});
+}
+// Cria (ou recria, quando o admin redefine a senha) a conta segura de um usuário
+async function fbCriarContaUsuario(id,u,senha){
+  var email=FBA.emailPadrao(u.usuario);
+  if(u.uid||u.email) email=FBA.slug(u.usuario)+'.'+Date.now().toString(36)+'@'+FB_EMAIL_DOM; // redefinição: conta nova
+  var uid;
+  try{ uid=await FBA.criarConta(email,senha,false); }
+  catch(e){ // e-mail já usado por uma conta antiga (usuário excluído e recriado): usa um e-mail novo
+    if(e.code!=='EMAIL_EXISTS') throw e;
+    email=FBA.slug(u.usuario)+'.'+Date.now().toString(36)+'@'+FB_EMAIL_DOM;
+    uid=await FBA.criarConta(email,senha,false);
+  }
+  if(u.uid) await fbAclDel(u.uid);
+  var novo=Object.assign({},u,{uid:uid,email:email}); delete novo.senha;
+  if(novo.ativo!==false) await fbAclSet(uid,novo.role);
+  await fbSaveUser(id,novo);
+  await fbLoginEmailSet(u.usuario,email);
+  return novo;
 }
 
 async function fbLogAccess(usuario){
@@ -422,16 +579,7 @@ async function fbGetAnaliseMaisRecente(cnpj){
 
 // Inicializa admin padrão se não existir
 async function fbInitAdmin(){
-  var users=await fbGetUsers();
-  if(!users||!Object.values(users).find(u=>u.usuario===ADMIN_USER)){
-    await fbSaveUser('admin_raul',{
-      nome:'Raul Neto',
-      usuario:'raul',
-      senha:hashSimple('maisacessivel2025'),
-      role:'admin',
-      ativo:true
-    });
-  }
+  // Desativado por segurança: recriava o admin com uma senha padrão escrita no código.
 }
 
 
@@ -844,6 +992,9 @@ var STATE={
 (function(){
   try{
     var sess = JSON.parse(localStorage.getItem('maisacessivel_session')||'null');
+    // Login novo ativo: sessão antiga (sem token) não vale mais — pede login de novo
+    if(sess && FBA.ativo() && !FBA.logado()){ localStorage.removeItem('maisacessivel_session'); sess=null; }
+    FBA.aoExpirar(function(){ if(!STATE.auth) return; STATE.auth=false; try{localStorage.removeItem('maisacessivel_session');}catch(_e){} render(); });
     if(sess && sess.usuario && sess.role){
       STATE.auth = true;
       STATE.usuarioLogado = sess.usuario;
@@ -912,35 +1063,76 @@ function renderLogin(){
 
   var btn=document.createElement('button'); btn.className='login-btn'; btn.textContent='Entrar'; body.appendChild(btn);
 
+  function entrarNoApp(found){
+    STATE.auth=true;
+    STATE.usuarioLogado=found.usuario;
+    STATE.roleLogado=found.role;
+    STATE.abasPermitidas=found.abas||null;
+    STATE.modulo='inicio';
+    localStorage.setItem('maisacessivel_session',JSON.stringify({usuario:found.usuario,role:found.role,abas:found.abas||null}));
+    fbLogAccess(found.usuario);
+    var bStr=sessionStorage.getItem('_blingPendente');
+    if(bStr){window._blingImport=JSON.parse(bStr);sessionStorage.removeItem('_blingPendente');}
+    render();
+  }
+  function pedirSenhaNova(motivo){
+    var n=prompt(motivo+'\n\nDigite uma senha NOVA (mínimo 6 caracteres):');
+    if(n===null) return null;
+    if(n.length<6){alert('A senha precisa ter pelo menos 6 caracteres.');return pedirSenhaNova(motivo);}
+    var c=prompt('Repita a senha nova:');
+    if(c!==n){alert('As senhas não conferem.');return pedirSenhaNova(motivo);}
+    return n;
+  }
+  function falhou(msg){err.textContent=msg;btn.textContent='Entrar';btn.disabled=false;}
+
+  // Login antigo (só enquanto FB_API_KEY estiver vazia)
+  async function tryLoginAntigo(u,s){
+    var users=await fbGetUsers();
+    var found=null;
+    if(users){Object.values(users).forEach(function(usr){if(usr.usuario===u && usr.senha===hashSimple(s) && usr.ativo) found=usr;});}
+    if(found) entrarNoApp(found); else falhou('Usuário ou senha incorretos.');
+  }
+
   async function tryLogin(){
     var u=inpU.value.trim().toLowerCase();
     var s=inpS.value;
     if(!u||!s){err.textContent='Informe usuário e senha.';return;}
-    btn.textContent='Verificando...'; btn.disabled=true;
+    btn.textContent='Verificando...'; btn.disabled=true; err.textContent='';
     try{
-      var users=await fbGetUsers();
-      var found=null;
-      if(users){
-        Object.values(users).forEach(function(usr){
-          if(usr.usuario===u && usr.senha===hashSimple(s) && usr.ativo) found=usr;
-        });
+      if(!FBA.ativo()) return await tryLoginAntigo(u,s);
+      var email=await fetch(FIREBASE_DB+'/loginEmail/'+FBA.slug(u)+'.json').then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
+      email=email||FBA.emailPadrao(u);
+      try{
+        await FBA.entrar(email,s);
+      }catch(e){
+        if(['EMAIL_NOT_FOUND','INVALID_PASSWORD','INVALID_LOGIN_CREDENTIALS'].indexOf(e.code)<0) return falhou(FBA.erroAmigavel(e));
+        // ── Migração: primeira vez entrando no login novo ──
+        // Confere com a senha antiga; se bater, cria a conta segura com a mesma senha.
+        var users=await fbGetUsers(), id=null, rec=null;
+        if(users) Object.keys(users).forEach(function(k){var x=users[k];if(x&&x.usuario===u&&x.senha&&!x.uid&&x.senha===hashSimple(s)){id=k;rec=x;}});
+        if(!rec) return falhou('Usuário ou senha incorretos.');
+        if(!rec.ativo) return falhou('Usuário desativado. Fale com o administrador.');
+        var senhaNova=s;
+        if(s==='maisacessivel2025') senhaNova=pedirSenhaNova('Sua senha é a senha padrão do sistema, que é conhecida. Por segurança, escolha outra.');
+        else if(s.length<6) senhaNova=pedirSenhaNova('O login ficou mais seguro e agora a senha precisa ter pelo menos 6 caracteres.');
+        if(!senhaNova) return falhou('Login cancelado.');
+        btn.textContent='Protegendo sua conta...';
+        try{ await FBA.criarConta(email,senhaNova,true); }
+        catch(e2){ return falhou(e2.code==='EMAIL_EXISTS'?'Usuário ou senha incorretos.':FBA.erroAmigavel(e2)); }
+        await fbAclSet(FBA.uid(),rec.role);
+        var novo=Object.assign({},rec,{uid:FBA.uid(),email:email}); delete novo.senha;
+        await fbSaveUser(id,novo);
+        await fbLoginEmailSet(u,email);
+        if(senhaNova!==s) alert('✅ Senha nova salva. Use ela a partir de agora.');
       }
-      if(found){
-        STATE.auth=true;
-        STATE.usuarioLogado=found.usuario;
-        STATE.roleLogado=found.role;
-        STATE.abasPermitidas=found.abas||null;
-        STATE.modulo='inicio';
-        localStorage.setItem('maisacessivel_session',JSON.stringify({usuario:found.usuario,role:found.role,abas:found.abas||null}));
-        fbLogAccess(found.usuario);
-        var bStr=sessionStorage.getItem('_blingPendente');
-        if(bStr){window._blingImport=JSON.parse(bStr);sessionStorage.removeItem('_blingPendente');}
-        render();
-      } else {
-        err.textContent='Usuário ou senha incorretos.';
-        btn.textContent='Entrar'; btn.disabled=false;
-      }
-    }catch(e){err.textContent='Erro ao conectar. Tente novamente.';btn.textContent='Entrar';btn.disabled=false;}
+      // Logado: busca o cadastro (permissões, abas) já com o token
+      if(window.fbInvalidarUsersCache) window.fbInvalidarUsersCache();
+      var lista=await fbGetUsers(), found=null;
+      if(lista) Object.values(lista).forEach(function(x){if(x&&x.uid&&x.uid===FBA.uid())found=x;});
+      if(!found){FBA.sair();return falhou('Cadastro não encontrado. Fale com o administrador.');}
+      if(!found.ativo){FBA.sair();return falhou('Usuário desativado. Fale com o administrador.');}
+      entrarNoApp(found);
+    }catch(e){falhou('Erro ao conectar. Tente novamente.');}
   }
 
   btn.addEventListener('click', tryLogin);
@@ -1217,7 +1409,7 @@ function renderAdmin(){
       var id=e[0],u=e[1];
       var tr=document.createElement('tr');
       tr.style.borderBottom='1px solid #eee';
-      tr.innerHTML='<td style="padding:8px">'+u.nome+'</td><td style="padding:8px;text-align:center">'+u.usuario+'</td><td style="padding:8px;text-align:center"><span style="padding:3px 8px;border-radius:10px;background:'+(u.role==='admin'?'#e74c3c':'#3498db')+';color:#fff;font-size:11px">'+(u.role==='admin'?'Admin':'Operador')+'</span></td><td style="padding:8px;text-align:center"><span style="color:'+(u.ativo?'#27ae60':'#999')+'">'+(u.ativo?'✅ Ativo':'❌ Inativo')+'</span></td><td style="padding:8px;text-align:center"></td>';
+      tr.innerHTML='<td style="padding:8px">'+u.nome+'</td><td style="padding:8px;text-align:center">'+u.usuario+'</td><td style="padding:8px;text-align:center"><span style="padding:3px 8px;border-radius:10px;background:'+(u.role==='admin'?'#e74c3c':'#3498db')+';color:#fff;font-size:11px">'+(u.role==='admin'?'Admin':'Operador')+'</span></td><td style="padding:8px;text-align:center"><span style="color:'+(u.ativo?'#27ae60':'#999')+'">'+(u.ativo?'✅ Ativo':'❌ Inativo')+'</span>'+(u.uid?' <span title="Já usa o login seguro">🔒</span>':(FBA.ativo()?' <span style="color:#e67e22;font-size:11px" title="Ainda não entrou no app depois da mudança do login">⚠️ falta migrar</span>':''))+'</td><td style="padding:8px;text-align:center"></td>';
       var tdAcoes=tr.querySelector('td:last-child');
       var btnEdit=document.createElement('button');
       btnEdit.textContent='Editar';
@@ -1230,6 +1422,7 @@ function renderAdmin(){
         btnToggle.style.cssText='padding:3px 8px;font-size:11px;border:none;border-radius:4px;cursor:pointer;margin-right:4px;background:'+(u.ativo?'#e74c3c':'#27ae60')+';color:#fff';
         btnToggle.onclick=async function(){
           await fbSaveUser(id,Object.assign({},u,{ativo:!u.ativo}));
+          if(u.uid){ if(u.ativo) await fbAclDel(u.uid); else await fbAclSet(u.uid,u.role); }
           loadUsers();
         };
         var btnDel=document.createElement('button');
@@ -1237,7 +1430,7 @@ function renderAdmin(){
         btnDel.style.cssText='padding:3px 8px;font-size:11px;border:none;border-radius:4px;cursor:pointer;background:#999;color:#fff';
         btnDel.onclick=async function(){
           if(confirm('Excluir usuário '+u.nome+'?')){
-            await fbDeleteUser(id);
+            await fbDeleteUser(id,u);
             loadUsers();
           }
         };
@@ -1327,11 +1520,18 @@ function renderAdmin(){
       var updated=Object.assign({},editandoUser);
       updated.nome=novoNome;
       updated.role=selRole.value;
-      if(novaSenha) updated.senha=hashSimple(novaSenha);
       var abasEdit=[];
       divAbas.querySelectorAll('input[name=abaAcesso]:checked').forEach(function(cb){abasEdit.push(cb.value);});
       updated.abas=abasEdit.length>0?abasEdit:['mod1'];
-      await fbSaveUser(editandoId,updated);
+      if(FBA.ativo()&&novaSenha){
+        if(novaSenha.length<6){msgU.style.color='red';msgU.textContent='A senha precisa ter pelo menos 6 caracteres.';return;}
+        try{ updated=await fbCriarContaUsuario(editandoId,updated,novaSenha); }
+        catch(e){msgU.style.color='red';msgU.textContent=FBA.erroAmigavel(e);return;}
+      } else {
+        if(novaSenha) updated.senha=hashSimple(novaSenha);
+        await fbSaveUser(editandoId,updated);
+        if(updated.uid&&updated.ativo) await fbAclSet(updated.uid,updated.role);
+      }
       msgU.style.color='green';msgU.textContent='✅ '+novoNome+' atualizado com sucesso!';
       cancelarEdicao();
       setTimeout(function(){loadUsers();msgU.textContent='';},1200);
@@ -1346,7 +1546,15 @@ function renderAdmin(){
     }
     var id='u_'+Date.now();
     var abasSel=[];if(typeof divAbas!=='undefined'){divAbas.querySelectorAll('input[name=abaAcesso]:checked').forEach(function(cb){abasSel.push(cb.value);});}
-    await fbSaveUser(id,{nome:n,usuario:u,senha:hashSimple(s),role:selRole.value,ativo:true,abas:abasSel.length>0?abasSel:['mod1','mod2','mod7','mod8','mod9','mod3','mod4']});
+    var novoU={nome:n,usuario:u,role:selRole.value,ativo:true,abas:abasSel.length>0?abasSel:['mod1','mod2','mod7','mod8','mod9','mod3','mod4']};
+    if(FBA.ativo()){
+      if(s.length<6){msgU.style.color='red';msgU.textContent='A senha precisa ter pelo menos 6 caracteres.';return;}
+      try{ await fbCriarContaUsuario(id,novoU,s); }
+      catch(e){msgU.style.color='red';msgU.textContent=(e.code==='EMAIL_EXISTS'?'Já existe uma conta com esse usuário.':FBA.erroAmigavel(e));return;}
+    } else {
+      novoU.senha=hashSimple(s);
+      await fbSaveUser(id,novoU);
+    }
     msgU.style.color='green';msgU.textContent='✅ Usuário '+n+' criado!';
     iNome.value='';iUser.value='';iSenha.value='';
     loadUsers();
@@ -13607,10 +13815,18 @@ function renderHeader(){
       ${(STATE.roleLogado==='admin'||(STATE.abasPermitidas&&STATE.abasPermitidas.indexOf('ext')>=0)) ? '<button class="btn-out" id="btnExtensao" style="border-color:#fdba74;color:#c2410c">🧩 Extensão</button>' : ''}
       <button class="btn-out" id="btnAtualizar" title="Baixa a versão mais nova do app (limpa o cache)" style="border-color:#86efac;color:#15803d">🔄 Atualizar</button>
       ${STATE.roleLogado==='admin' ? '<button class="btn-out" id="btnConfig" style="border-color:#fde68a;color:#92400e">⚙️ Configurações</button>' : ''}
+      ${FBA.logado() ? '<button class="btn-out" id="btnMinhaSenha" title="Trocar minha senha">🔑 Senha</button>' : ''}
       <button class="btn-out" id="btnSair">🔒 Sair</button>
     </div>`;
   var _logo=el.querySelector('img');if(_logo){_logo.style.cursor='pointer';_logo.title='Ir para o Início';_logo.onclick=function(){irParaModulo('inicio');};}
-  el.querySelector('#btnSair').onclick=function(){STATE.auth=false;try{localStorage.removeItem('maisacessivel_session');}catch(e){}render();};
+  el.querySelector('#btnSair').onclick=function(){STATE.auth=false;FBA.sair();try{localStorage.removeItem('maisacessivel_session');}catch(e){}render();};
+  var btnMS=el.querySelector('#btnMinhaSenha');
+  if(btnMS) btnMS.onclick=async function(){
+    var n=prompt('Digite sua senha NOVA (mínimo 6 caracteres):'); if(n===null) return;
+    if(n.length<6){alert('A senha precisa ter pelo menos 6 caracteres.');return;}
+    if(prompt('Repita a senha nova:')!==n){alert('As senhas não conferem.');return;}
+    try{await FBA.trocarMinhaSenha(n);alert('✅ Senha trocada.');}catch(e){alert(FBA.erroAmigavel(e));}
+  };
   var btnCfg=el.querySelector('#btnConfig');
   if(btnCfg) btnCfg.onclick=function(){STATE.showConfigPanel=true;render();};
   var btnExt=el.querySelector('#btnExtensao');

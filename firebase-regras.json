@@ -1,0 +1,51 @@
+{
+  "rules": {
+    ".read": "auth != null && root.child('acl/' + auth.uid).exists()",
+
+    "$no": {
+      ".write": "auth != null && root.child('acl/' + auth.uid).exists()"
+    },
+
+    "acl": {
+      ".write": "auth != null && root.child('acl/' + auth.uid).val() === 'admin'"
+    },
+
+    "usuarios": {
+      ".write": "auth != null && root.child('acl/' + auth.uid).val() === 'admin'"
+    },
+
+    "loginEmail": {
+      "$u": { ".read": true },
+      ".write": "auth != null && root.child('acl/' + auth.uid).val() === 'admin'"
+    },
+
+    "financeiro": {
+      ".write": "auth != null && root.child('acl/' + auth.uid).exists()",
+      "emailLidos": {
+        "$t": {
+          ".read": true,
+          ".write": true,
+          ".validate": "newData.hasChildren(['primeiro', 'ultimo', 'vezes']) && newData.child('vezes').isNumber()"
+        }
+      }
+    },
+
+    "clientesLicitacao": {
+      ".write": "auth != null && root.child('acl/' + auth.uid).exists()",
+      "blingFila": {
+        ".read": true,
+        "$id": {
+          "ok": { ".write": "data.parent().exists()", ".validate": "newData.isBoolean()" }
+        }
+      },
+      "empresas": {
+        "$k": {
+          "bling": {
+            ".write": "root.child('clientesLicitacao/empresas/' + $k).exists()",
+            ".validate": "newData.hasChildren(['id', 'em'])"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,3 +1,5 @@
+importScripts('fb-auth.js'); // todo acesso ao banco leva o token do usuário logado no app
+
 // Service worker: faz a ponte entre o app (aba Cotações) e o Bling para a
 // conferência em lote. O app fala com app-bridge.js, que abre uma porta
 // "auditoria" aqui; daqui as consultas são feitas DENTRO de uma aba do Bling
