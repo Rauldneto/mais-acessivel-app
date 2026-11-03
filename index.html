@@ -4009,8 +4009,11 @@ function rppHtmlNovo(){
   if(RPP.ok)return '<div class="rpp-card rpp-okbox"><div class="big">✅</div><h3>Chamado #'+RPP.ok.n+' recebido!</h3>'+
     '<p style="color:#6b7280;margin:0 0 16px">O T.I. já foi avisado e vai analisar. Você acompanha a situação em <b>Meus chamados</b>.</p>'+
     '<button class="rpp-btn" data-a="outro">Reportar outro problema</button> <button class="rpp-btn sec" data-a="voltar">Voltar ao que eu estava fazendo</button></div>';
-  var telas=['frete','mod10','mod2','mod4','mod8','mod9','mod7','mod3','mod17','mod14','mod16','mod13','mod15','mod5','inicio','ext','outro'];
-  try{if(typeof iniModulos==='function'&&!rppAdmin()){var pode=iniModulos();telas=telas.filter(function(t){return pode.indexOf(t)>=0||['inicio','ext','outro'].indexOf(t)>=0;});}}catch(e){}
+  // Só as abas que este colaborador enxerga no menu (mesma regra do menu), mais o Início e a extensão (se liberada)
+  var telas=['inicio','frete','mod10','mod2','mod4','mod8','mod9','mod7','mod3','mod17','mod14','mod16','mod13','mod15','mod5','mod11','mod12'];
+  var pode=telas;try{if(typeof iniModulos==='function')pode=iniModulos();}catch(e){}
+  telas=telas.filter(function(t){return t==='inicio'||pode.indexOf(t)>=0;});
+  if(rppAdmin()||(STATE.abasPermitidas&&STATE.abasPermitidas.indexOf('ext')>=0))telas.push('ext');
   var orig=RPP.origem||RPP_TRILHA[RPP_TRILHA.length-1];var sel=orig&&telas.indexOf(orig)>=0?orig:'';
   var ant=function(id){var e=document.getElementById(id);return e?rppEsc(e.value):'';};
   var h='<div class="rpp-card"><h3>🛠️ Reportar um problema no app</h3><p class="s">Deu erro? Mande o print e conte o que aconteceu. O T.I. recebe na hora.</p>'+
