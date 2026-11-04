@@ -6626,7 +6626,7 @@ async function frtAtualizarBling(){
   }catch(e){FRT.msg='Não atualizei no Bling: '+e.message;FRT.msgTipo='err';frtDraw();}
 }
 async function frtResolvido(){
-  if(!FRT.sel)return;var upd={pendencias:[],precisaAtualizar:false,resolvidoEm:Date.now(),atualizadoEm:Date.now()};
+  if(!FRT.sel)return;var upd={pendencias:[],precisaAtualizar:false,alteracao:null,resolvidoEm:Date.now(),atualizadoEm:Date.now()};
   try{await frtFb('fretes/'+FRT.sel,{method:'PATCH',body:upd});}catch(e){}
   FRT.desp[FRT.sel]=Object.assign({},FRT.desp[FRT.sel],upd);await frtApagarFotosSePuder(FRT.sel);FRT.msg='Marcado como resolvido.';FRT.msgTipo='ok';FRT.sel=null;FRT.form=null;if(FRT.mob)FRT.mtela='pend';frtDraw();
 }
@@ -6773,7 +6773,8 @@ function frtBindCaptura(){
 }
 function frtChips(d){
   var lendo=d.status==='lendo'||FRT.lendo[d.id];if(lendo)return '<span class="fin-chip">⏳ lendo</span>';
-  var h='';if(d.status==='lancado'){h+='<span class="fin-chip ok">✓ Lançado no Bling</span>';(d.pendencias||[]).forEach(function(x){h+='<span class="fin-chip warn">falta: '+frtEsc(x)+'</span>';});return h;}
+  var h='';if(d.aVista)h+='<span class="fin-chip ok" title="O colaborador informou que o pagamento é à vista">💵 À vista</span>';
+  if(d.status==='lancado'){h+='<span class="fin-chip ok">✓ Lançado no Bling</span>';(d.pendencias||[]).forEach(function(x){h+='<span class="fin-chip warn">falta: '+frtEsc(x)+'</span>';});return h;}
   if(d.leituraErro)h+='<span class="fin-chip err">leitura falhou</span>';
   if(d.autoErro)h+='<span class="fin-chip err" title="'+frtEsc(d.autoErro.msg||'')+'">não lançou: '+frtEsc(String(d.autoErro.msg||'').slice(0,60))+'</span>';
   if(!(d.valor>0))h+='<span class="fin-chip err">sem valor</span>';if(!d.vencimento)h+='<span class="fin-chip err">informar vencimento</span>';if(!(d.nFotos>0))h+='<span class="fin-chip err">sem imagem</span>';
@@ -6836,7 +6837,7 @@ function frtHtmlFormCard(f,mob,ext){
   function rd(k){return f.incertos&&!f._toq?' fin-read':'';}
   var vs=frtVencSugerido(f.emissao,f.formaId);
   var lan=FRT.desp[FRT.sel].status==='lancado';var pnd=lan?(FRT.desp[FRT.sel].pendencias||[]):[];
-  var h='<div class="fin-card">'+(lan?'<div class="fin-msg '+(pnd.length?'warn':'ok')+'" style="display:block"><b>✓ Já lançado no Bling'+(f.blingId?' (ID '+frtEsc(f.blingId)+')':'')+'.</b>'+(pnd.length?' Ainda falta: <b>'+frtEsc(pnd.join(', '))+'</b>. Complete aqui e clique em <b>Atualizar no Bling</b>, ou corrija direto no Bling e clique em <b>Já resolvi</b>.':'')+'</div>':'')+(lendo||lan?'':frtDupHtml(FRT.sel,false)+frtCruzHtml(FRT.sel))+
+  var h='<div class="fin-card">'+(FRT.desp[FRT.sel].aVista?'<div class="fin-msg info" style="display:block"><b>💵 O colaborador informou: pagamento à vista.</b> Defina a forma de pagamento.</div>':'')+(lan&&FRT.desp[FRT.sel].alteracao&&FRT.desp[FRT.sel].precisaAtualizar?'<div class="fin-msg warn" style="display:block"><b>⚠ '+frtEsc(FRT.desp[FRT.sel].alteracao.por||'Colaborador')+' pediu alteração neste frete já lançado:</b><br>'+(FRT.desp[FRT.sel].alteracao.mudancas||[]).map(frtEsc).join('<br>')+'<br><span style="font-size:11px">Nada foi mudado nos dados nem no Bling. Corrija e clique em <b>Atualizar no Bling</b>, ou em <b>Já resolvi</b>.</span></div>':'')+(lan?'<div class="fin-msg '+(pnd.length?'warn':'ok')+'" style="display:block"><b>✓ Já lançado no Bling'+(f.blingId?' (ID '+frtEsc(f.blingId)+')':'')+'.</b>'+(pnd.length?' Ainda falta: <b>'+frtEsc(pnd.join(', '))+'</b>. Complete aqui e clique em <b>Atualizar no Bling</b>, ou corrija direto no Bling e clique em <b>Já resolvi</b>.':'')+'</div>':'')+(lendo||lan?'':frtDupHtml(FRT.sel,false)+frtCruzHtml(FRT.sel))+
    (lendo?'<div class="fin-msg info">⏳ A IA está lendo este documento. Os campos se preenchem sozinhos em alguns segundos.</div>':'')+
    (f.leituraErro?'<div class="fin-msg warn">'+frtEsc(f.leituraErro)+'</div>':'')+
    (f.obs?'<div class="fin-msg info">Observação de quem enviou: '+frtEsc(f.obs)+'</div>':'')+
@@ -15403,7 +15404,7 @@ function abrirLancarFinanceiro(c,onSaved){
    '<textarea id="finHist" maxlength="2000" rows="3" style="'+I+';margin-top:3px"></textarea>'+
    '<div style="margin-top:12px;border-top:1px solid #e8e8e6;padding-top:8px"><div style="font-weight:700;margin-bottom:2px">Pagamento</div>'+
    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
-   '<div><label style="'+L+'">Forma de pagamento *</label><select id="finForma" style="'+I+'"><option value="">Selecione...</option>'+opts(FIN_FORMAS,prev.forma||'',true)+'</select></div>'+
+   '<div><label style="'+L+'">Forma de pagamento</label><label style="display:flex;align-items:center;gap:8px;border:1px solid #c8c8c4;border-radius:6px;padding:8px 10px;cursor:pointer;background:#fafaf8"><input type="checkbox" id="finAvista" style="width:18px;height:18px"'+(prev.aVista?' checked':'')+'> <span><b>💵 Pagamento à vista</b><br><span style="font-size:11px;color:#777">Marque só se foi negociado à vista. Se não, deixe em branco: o financeiro define a forma.</span></span></label></div>'+
    '<div><label style="'+L+'">Categoria *</label><select id="finCat" style="'+I+'">'+opts(FIN_CATEGORIAS,prev.categoria||FIN_CATEGORIAS[0],false)+'</select></div></div></div>'+
    '<div id="finErr" style="display:none;margin-top:10px;border:1px solid #fca5a5;background:#fef2f2;color:#991b1b;border-radius:6px;padding:8px;font-size:12px"></div>'+
    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button id="finCancel" style="padding:8px 14px;border:1px solid #c8c8c4;background:#f3f3f1;border-radius:6px;cursor:pointer">Cancelar</button><button id="finSave" style="padding:8px 16px;border:none;background:#16a34a;color:#fff;border-radius:6px;font-weight:700;cursor:pointer">Salvar como pendente</button></div>';
@@ -15526,7 +15527,7 @@ function abrirLancarFinanceiro(c,onSaved){
     var d={
       fornecedor:$('finFornecedor').value.trim(),valor:$('finValor').value.trim(),emissao:$('finEmissao').value,vencimento:$('finVenc').value,
       frete:$('finFrete').value,nf:$('finNF').value.trim(),despacho:$('finDesp').value,obs:$('finObs').value.trim(),
-      historico:$('finHist').value.trim(),forma:$('finForma').value,formaNome:$('finForma').selectedOptions[0]?$('finForma').selectedOptions[0].textContent:'',
+      historico:$('finHist').value.trim(),aVista:!!$('finAvista').checked,forma:'',formaNome:'',
       categoria:$('finCat').value,documento:$('finNF').value.trim(),ocorrencia:'Única'
     };
     d.competencia=d.emissao;
@@ -15540,7 +15541,7 @@ function abrirLancarFinanceiro(c,onSaved){
     if(!d.fornecedor) erros.push('Fornecedor');
     if(!(valorNum>0)) erros.push('Valor');
     if(!d.emissao) erros.push('Emissão');
-    if(!d.historico) erros.push('Histórico'); if(!d.forma) erros.push('Forma de pagamento');
+    if(!d.historico) erros.push('Histórico');
     if(!d.categoria) erros.push('Categoria');
     if(buscandoB) erros.push('Aguarde a busca no Bling terminar');
     if(candPend) erros.push('Escolha o cadastro parecido do Bling ou "cadastrar nova transportadora"');
@@ -15553,14 +15554,15 @@ function abrirLancarFinanceiro(c,onSaved){
     var catId=/venda/i.test(d.categoria)?'14700094019':'14634451798';
     var contaId='';
     if(!contaId){try{contaId=(typeof frtContaSugerida==='function'&&d.forma)?(frtContaSugerida(d.forma)||''):'';}catch(_){contaId='';}}
-    var tipoFrete=(catId==='14700094019')?'Frete de Venda':'Frete de Compra';
+    var tipoFrete=((catId==='14700094019')?'Frete de Venda':'Frete de Compra')+(d.aVista?' · PAGAMENTO À VISTA':'');
     function montaObs(nomeCli){return ['Cotação Nº '+c.id+' · Cliente: '+(nomeCli||c.cnpjDest||'não informado')+' · '+tipoFrete+(c.solicitante?' · solicitante '+c.solicitante:''),d.obs].filter(Boolean).join(' | ');}
     var obsDoc=montaObs('');
     var dados={status:'pendente',origem:'cotacao',cotacaoId:String(c.id),atualizadoEm:agora,
       fornecedor:{nome:existeBling?existeBling[0]:d.fornecedor,doc:[11,14].indexOf(docCnpj.length)>=0?docCnpj:'',docParcial:''},
       valor:valorNum,emissao:d.emissao,competencia:d.emissao,vencimento:d.vencimento||'',numeroDocumento:d.nf,historico:d.historico,
-      formaId:d.forma,contaId:contaId,categoria:catId,parcelas:1,coletaProgramada:d.despacho||'',obs:obsDoc,
+      aVista:!!d.aVista,categoria:catId,parcelas:1,coletaProgramada:d.despacho||'',obs:obsDoc,
       freteTipo:d.frete,cotacaoDestino:(c.destCity||'')+'/'+(c.destUF||''),tipoDoc:'',itens:[],incertos:[],leituraErro:null};
+    if(d.forma){dados.formaId=d.forma;dados.contaId=contaId;} // sem forma informada: não mexe no que o financeiro já tenha escolhido
     if(blingMatch) dados.contato={id:String(blingMatch.id),nome:blingMatch.nome,doc:String(blingMatch.doc||'').replace(/\D/g,'')};
     if(!existeBling&&cadObj.cnpj) dados.cadastroApp=cadObj;
     btn.disabled=true; btn.textContent='Enviando...';
@@ -15573,11 +15575,26 @@ function abrirLancarFinanceiro(c,onSaved){
       return com('https://brasilapi.com.br/api/cnpj/v1/'+dc).catch(function(){return com('https://minhareceita.org/'+dc);}).catch(function(){return '';});
     }
     nomeClienteDaCotacao().then(function(nm){dados.obs=montaObs(nm||'');}).then(function(){return fetch(url,{cache:'no-store'});}).then(function(x){return x.ok?x.json():Promise.reject(new Error('HTTP '+x.status));}).then(function(ex){
-      if(ex&&ex.status==='lancado'){erroSalvar('Este frete já foi lançado no Bling pelo financeiro. Não dá para alterar por aqui.');return null;}
+      if(ex&&ex.status==='lancado'){
+        // já lançado no Bling: NÃO mexe nos dados lançados; registra o pedido de alteração e avisa o financeiro (aba Lançados)
+        var rot={valor:'Valor',emissao:'Emissão',vencimento:'Vencimento',nf:'NF',despacho:'Coleta',obs:'Observações',fornecedor:'Transportadora',categoria:'Categoria',aVista:'À vista'};
+        var difs=[];Object.keys(rot).forEach(function(k){var a=String(prev[k]==null?'':prev[k]),b2=String(d[k]==null?'':d[k]);if(k==='aVista'){a=prev[k]?'sim':'não';b2=d[k]?'sim':'não';}if(a!==b2)difs.push(rot[k]+': '+(a||'—')+' → '+(b2||'—'));});
+        if(!difs.length){erroSalvar('Este frete já foi lançado no Bling e você não mudou nada. Altere o que precisa e envie de novo.');return null;}
+        var por=(typeof STATE!=='undefined'&&STATE.usuarioLogado)||'colaborador';
+        var pend=(ex.pendencias||[]).filter(function(x){return !/^Colaborador /.test(x);});
+        pend.push('Colaborador '+por+' pediu alteração — '+difs.join('; '));
+        return fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({precisaAtualizar:true,pendencias:pend,alteracao:{em:agora,por:por,mudancas:difs,dados:dados},atualizadoEm:agora})}).then(function(x){if(!x.ok)throw new Error('HTTP '+x.status);return 'alteracao';});
+      }
       var corpo=ex?dados:Object.assign({criadoEm:agora,criadoPor:(typeof STATE!=='undefined'&&STATE.usuarioLogado)||'',nFotos:0},dados);
       return fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(corpo)}).then(function(x){if(!x.ok)throw new Error('HTTP '+x.status);return true;});
     }).then(function(ok){
       if(!ok) return;
+      if(ok==='alteracao'){
+        c.financeiro=Object.assign({},c.financeiro||{},{status:'lancado',dados:d,atualizadoEm:agora,freteDocId:chave,alteracaoEnviadaEm:agora});c._savedAt=agora;
+        var al=SAVED.find(function(s){return s&&String(s.id)===String(c.id);});if(al&&al!==c){al.financeiro=c.financeiro;al._savedAt=agora;}
+        persistSaved(c.id);fechar();alert('Este frete já tinha sido lançado no Bling. Os dados lançados não foram mexidos: avisei o financeiro que você pediu alteração.');
+        if(typeof onSaved==='function') onSaved();return;
+      }
       var fin={status:'pendente',dados:d,criadoEm:(c.financeiro&&c.financeiro.criadoEm)||agora,atualizadoEm:agora,blingId:(c.financeiro&&c.financeiro.blingId)||null,freteDocId:chave};
       c.financeiro=fin;
       c._savedAt=agora;
@@ -15675,7 +15692,7 @@ function renderSalvas(){
         }
       };
       var btnFin=document.createElement('button');
-      btnFin.textContent=c.financeiro&&c.financeiro.status?'💲 Financeiro':'💲 Lançar financeiro';
+      btnFin.textContent=!(c.financeiro&&c.financeiro.status)?'💲 Lançar financeiro':(c.financeiro.status==='pendente'?'✏️ Editar e reenviar':(c.financeiro.status==='lancado'?'⚠ Pedir alteração':'💲 Financeiro'));
       btnFin.style.cssText='background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-weight:600';
       btnFin.onclick=function(e){
         e.stopPropagation();
