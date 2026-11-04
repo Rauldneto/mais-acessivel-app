@@ -15553,7 +15553,9 @@ function abrirLancarFinanceiro(c,onSaved){
     var catId=/venda/i.test(d.categoria)?'14700094019':'14634451798';
     var contaId='';
     if(!contaId){try{contaId=(typeof frtContaSugerida==='function'&&d.forma)?(frtContaSugerida(d.forma)||''):'';}catch(_){contaId='';}}
-    var obsDoc=['Cotação Nº '+c.id+(c.solicitante?' · solicitante '+c.solicitante:''),d.obs].filter(Boolean).join(' | ');
+    var tipoFrete=(catId==='14700094019')?'Frete de Venda':'Frete de Compra';
+    function montaObs(nomeCli){return ['Cotação Nº '+c.id+' · Cliente: '+(nomeCli||c.cnpjDest||'não informado')+' · '+tipoFrete+(c.solicitante?' · solicitante '+c.solicitante:''),d.obs].filter(Boolean).join(' | ');}
+    var obsDoc=montaObs('');
     var dados={status:'pendente',origem:'cotacao',cotacaoId:String(c.id),atualizadoEm:agora,
       fornecedor:{nome:existeBling?existeBling[0]:d.fornecedor,doc:[11,14].indexOf(docCnpj.length)>=0?docCnpj:'',docParcial:''},
       valor:valorNum,emissao:d.emissao,competencia:d.emissao,vencimento:d.vencimento||'',numeroDocumento:d.nf,historico:d.historico,
@@ -15563,7 +15565,14 @@ function abrirLancarFinanceiro(c,onSaved){
     if(!existeBling&&cadObj.cnpj) dados.cadastroApp=cadObj;
     btn.disabled=true; btn.textContent='Enviando...';
     function erroSalvar(t){var e=$('finErr'); e.style.display='block'; e.textContent=t; btn.disabled=false; btn.textContent='Salvar como pendente';}
-    fetch(url,{cache:'no-store'}).then(function(x){return x.ok?x.json():Promise.reject(new Error('HTTP '+x.status));}).then(function(ex){
+    // nome do cliente (destinatário) pelo CNPJ da cotação; se a consulta falhar, usa o próprio CNPJ — nunca trava o envio
+    function nomeClienteDaCotacao(){
+      var dc=String(c.cnpjDest||'').replace(/\D/g,'');
+      if(dc.length!==14) return Promise.resolve('');
+      function com(u){return Promise.race([fetch(u).then(function(r){if(!r.ok)throw 0;return r.json();}),new Promise(function(_,rj){setTimeout(function(){rj(0);},6000);})]).then(function(j){return String(j.razao_social||j.nome_fantasia||'').trim();});}
+      return com('https://brasilapi.com.br/api/cnpj/v1/'+dc).catch(function(){return com('https://minhareceita.org/'+dc);}).catch(function(){return '';});
+    }
+    nomeClienteDaCotacao().then(function(nm){dados.obs=montaObs(nm||'');}).then(function(){return fetch(url,{cache:'no-store'});}).then(function(x){return x.ok?x.json():Promise.reject(new Error('HTTP '+x.status));}).then(function(ex){
       if(ex&&ex.status==='lancado'){erroSalvar('Este frete já foi lançado no Bling pelo financeiro. Não dá para alterar por aqui.');return null;}
       var corpo=ex?dados:Object.assign({criadoEm:agora,criadoPor:(typeof STATE!=='undefined'&&STATE.usuarioLogado)||'',nFotos:0},dados);
       return fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(corpo)}).then(function(x){if(!x.ok)throw new Error('HTTP '+x.status);return true;});
