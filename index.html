@@ -3848,12 +3848,14 @@ function rppAutoElegivel(c,cfg){
 }
 function rppRelatorioAuto(c){
   // vai para o robô sem o nome do colaborador nem dados do computador dele
-  return rppRelatorioTexto(Object.assign({},c,{u:'colaborador',amb:'',parecer:'',nota:''}));
+  var t=rppRelatorioTexto(Object.assign({},c,{u:'colaborador',amb:'',parecer:'',nota:''}));
+  if(c.autoPlano)t+='\n\nPLANO COMBINADO COM O ADMINISTRADOR (siga exatamente; ele já investigou o código com você):\n'+c.autoPlano;
+  return t;
 }
-async function rppDispararAuto(c){
+async function rppDispararAuto(c,plano){
   var cfg=await rppCfg();
   var tent=(c.autoTentativas||0)+1,autoId=c.k+(tent>1?'_t'+tent:'');
-  var d={status:'corrigindo',autoId:autoId,autoTentativas:tent,autoInicio:Date.now(),parecer:RPP_AUTO_PARECER,autoMotivo:'',autoResumo:''};
+  var d={status:'corrigindo',autoId:autoId,autoTentativas:tent,autoInicio:Date.now(),parecer:RPP_AUTO_PARECER,autoMotivo:'',autoResumo:'',autoPlano:plano?String(plano).slice(0,6000):''};
   try{
     if(!rppAutoPode(cfg))throw new Error('correção automática desligada ou sem endereço do Worker');
     var r=await fetch(cfg.autoUrl.replace(/\/+$/,'')+'/corrigir',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -3867,6 +3869,116 @@ async function rppDispararAuto(c){
     try{await rppPatch(c.k,f);}catch(_e){}Object.assign(c,f);return false;
   }
 }
+// ---- Conversa dentro do chamado (só o admin): discute o problema com a IA, que lê o código do app, e manda aplicar ----
+// Firebase chamados/{k}/conversa = [{r:'u'|'a', t, txt, u?, plano?}]  (só o texto; as consultas ao código não são guardadas)
+var RPP_CHAT={k:null,enviando:false,etapa:'',erro:'',rascunho:{}};
+var RPP_CODIGO=null; // linhas do index.html publicado (a IA consulta pelas ferramentas)
+async function rppCodigo(){
+  if(RPP_CODIGO)return RPP_CODIGO;
+  var t=await (window._ctlFetch||fetch)('index.html?c='+Date.now(),{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('não consegui ler o código ('+r.status+')');return r.text();});
+  RPP_CODIGO=t.split('\n');return RPP_CODIGO;
+}
+var RPP_FERRAMENTAS=[
+  {name:'buscar_codigo',description:'Procura um texto (sem diferenciar maiúsculas) no código do app (index.html, um arquivo só com mais de 20 mil linhas). Devolve até 25 linhas que contêm o texto, com o número da linha. Use nomes de funções, textos que aparecem na tela, mensagens de erro, ids de elementos.',
+   input_schema:{type:'object',properties:{texto:{type:'string',description:'texto a procurar (mínimo 3 caracteres)'}},required:['texto']}},
+  {name:'ler_trecho',description:'Lê um trecho do código do app a partir de uma linha (no máximo 120 linhas por vez).',
+   input_schema:{type:'object',properties:{linha:{type:'integer',description:'linha inicial (1 = primeira)'},quantidade:{type:'integer',description:'quantas linhas (máx. 120)'}},required:['linha']}}
+];
+async function rppFerramenta(nome,inp){
+  var L=await rppCodigo();var corta=function(s,n){s=String(s);return s.length>n?s.slice(0,n)+' …[linha cortada, '+s.length+' caracteres]':s;};
+  if(nome==='buscar_codigo'){
+    var q=String(inp&&inp.texto||'').toLowerCase();if(q.length<3)return 'Use pelo menos 3 caracteres.';
+    var out=[];for(var i=0;i<L.length&&out.length<25;i++){if(L[i].toLowerCase().indexOf(q)>=0)out.push((i+1)+': '+corta(L[i].trim(),260));}
+    var tot=0;if(out.length>=25)for(var j=0;j<L.length;j++){if(L[j].toLowerCase().indexOf(q)>=0)tot++;}
+    return out.length?out.join('\n')+(tot>25?'\n… e mais '+(tot-25)+' linhas (refine a busca).':''):'Nada encontrado para "'+q+'".';
+  }
+  if(nome==='ler_trecho'){
+    var a=Math.max(1,parseInt(inp&&inp.linha,10)||1),n=Math.min(120,Math.max(1,parseInt(inp&&inp.quantidade,10)||60));
+    return L.slice(a-1,a-1+n).map(function(s,x){return (a+x)+': '+corta(s,400);}).join('\n')||'Fora do arquivo (ele tem '+L.length+' linhas).';
+  }
+  return 'Ferramenta desconhecida.';
+}
+function rppChatSistema(c){
+  return 'Você é o desenvolvedor responsável pelo app interno da Mais Acessível (revenda de materiais de construção em Goiânia) e está conversando com o Raul, dono da empresa e administrador do app, DENTRO de um chamado de erro aberto por um colaborador. '+
+  'Objetivo: entender o problema, achar a causa no código e combinar com o Raul a melhor solução — e então ela é aplicada pelo robô de correção.\n\n'+
+  'O app é uma página única (index.html: HTML + JavaScript puro, sem framework, hospedada no GitHub Pages), dados no Firebase Realtime Database, Workers da Cloudflare e integração com o ERP Bling. '+
+  'Você PODE e DEVE consultar o código real com as ferramentas buscar_codigo e ler_trecho antes de afirmar qualquer coisa sobre ele. Não invente nomes de funções.\n\n'+
+  'Como conversar: português do Brasil, informal e direto, respostas curtas e práticas (o Raul prefere passo a passo e soluções práticas). Explique a causa em linguagem simples e, quando ajudar, cite a função e a linha. '+
+  'Se houver mais de um caminho, mostre as opções com prós e contras e recomende uma. Pergunte quando faltar informação. Não fique repetindo o relatório.\n\n'+
+  'Aplicação: quando vocês tiverem combinado uma solução concreta, termine a sua resposta com um bloco exatamente assim:\n<<PLANO>>\n(instruções técnicas e objetivas para o robô de correção: arquivo index.html, função(ões), o que mudar exatamente e o que NÃO mexer)\n<</PLANO>>\n'+
+  'O Raul verá um botão para aplicar. O robô só publica mudanças de até 40 linhas, só no index.html, e se todas as telas continuarem abrindo no teste automático; ele não mexe em cálculos de preço/frete/impostos/crédito, financeiro, PIX, Bling, login/permissões nem no formato dos dados salvos. '+
+  'Se a solução precisar de algo fora desses limites, NÃO gere o bloco: diga que precisa ser feita com o Claude (Raul cola o relatório no chat do Claude Code) e escreva o passo a passo.\n'+
+  'Erro de uso (não é bug)? Diga, e sugira o parecer para o colaborador e o que mudar na tela para evitar a confusão.\n\n'+
+  'CHAMADO:\n'+rppRelatorioTexto(c);
+}
+function rppChatMd(s){
+  var e=rppEsc(s);
+  e=e.replace(/```[a-z]*\n?([\s\S]*?)```/g,function(m,x){return '<pre class="rpp-pre">'+x.replace(/\n$/,'')+'</pre>';});
+  e=e.replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>');
+  return e.replace(/\n/g,'<br>').replace(/(<pre class="rpp-pre">[\s\S]*?<\/pre>)/g,function(m){return m.replace(/<br>/g,'\n');});
+}
+function rppChatSeparar(txt){
+  var m=String(txt||'').match(/<<PLANO>>([\s\S]*?)<<\/PLANO>>/);
+  return {txt:String(txt||'').replace(/<<PLANO>>[\s\S]*?(<<\/PLANO>>|$)/,'').trim(),plano:m?m[1].trim():''};
+}
+async function rppChatEnviar(c,texto){
+  if(RPP_CHAT.enviando)return;texto=String(texto||'').trim();if(!texto)return;
+  var conversa=(c.conversa||[]).slice();
+  conversa.push({r:'u',t:Date.now(),u:rppUsuario(),txt:texto.slice(0,4000)});
+  rppChatSync(c,conversa);RPP_CHAT.enviando=true;RPP_CHAT.erro='';RPP_CHAT.etapa='Pensando...';RPP_CHAT.rascunho[c.k]='';rppDraw();
+  try{
+    var msgs=conversa.slice(-30).map(function(m){return {role:m.r==='u'?'user':'assistant',content:(m.r==='a'&&m.plano)?m.txt+'\n<<PLANO>>\n'+m.plano+'\n<</PLANO>>':m.txt};});
+    while(msgs.length&&msgs[0].role!=='user')msgs.shift();
+    var resp='',voltas=0;
+    while(true){
+      var r=await fetch(DSP_IA_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:3000,system:rppChatSistema(c),tools:RPP_FERRAMENTAS,messages:msgs})});
+      var j=await r.json();
+      if(j&&j.error){var em=j.error.message||j.error.type||'erro';if(/credit balance/i.test(em))em='acabou o crédito da API da Anthropic';throw new Error(em);}
+      var cont=j.content||[];
+      resp+=cont.filter(function(x){return x.type==='text';}).map(function(x){return x.text;}).join('');
+      var usos=cont.filter(function(x){return x.type==='tool_use';});
+      if(j.stop_reason!=='tool_use'||!usos.length||++voltas>10)break;
+      msgs.push({role:'assistant',content:cont});
+      var res=[];
+      for(var i=0;i<usos.length;i++){
+        var u=usos[i];RPP_CHAT.etapa=(u.name==='buscar_codigo'?'🔎 Procurando no código: "'+String(u.input&&u.input.texto||'').slice(0,40)+'"':'📖 Lendo o código (linha '+(u.input&&u.input.linha)+')');rppDraw();
+        var saida;try{saida=await rppFerramenta(u.name,u.input||{});}catch(e){saida='Erro: '+(e.message||e);}
+        res.push({type:'tool_result',tool_use_id:u.id,content:saida});
+      }
+      msgs.push({role:'user',content:res});
+      if(resp&&!/\n$/.test(resp))resp+='\n\n';
+    }
+    var sp=rppChatSeparar(resp);
+    conversa.push({r:'a',t:Date.now(),txt:(sp.txt||'(sem resposta)').slice(0,12000),plano:sp.plano?sp.plano.slice(0,6000):''});
+  }catch(e){RPP_CHAT.erro='A IA não respondeu: '+(e.message||e);}
+  rppChatSync(c,conversa);
+  try{await rppPatch(c.k,{conversa:conversa});}catch(e){RPP_CHAT.erro=(RPP_CHAT.erro?RPP_CHAT.erro+' · ':'')+'não salvou a conversa: '+(e.message||e);}
+  RPP_CHAT.enviando=false;RPP_CHAT.etapa='';rppDraw();
+}
+function rppChatSync(c,conversa){
+  c.conversa=conversa;var cur=(RPP.lista||[]).filter(function(x){return x.k===c.k;})[0];if(cur&&cur!==c)cur.conversa=conversa;
+}
+function rppHtmlChat(c){
+  var conv=c.conversa||[],ocupado=RPP_CHAT.enviando;
+  var ultPlano=-1;conv.forEach(function(m,i){if(m.r==='a'&&m.plano)ultPlano=i;});
+  var h='<div class="rpp-chat"><div class="rpp-chat-h">💬 Conversa sobre o chamado <small>a IA lê o código do app para investigar com você</small></div><div class="rpp-chat-b" id="rppChatB">';
+  if(!conv.length)h+='<div class="rpp-chat-vazio">Pergunte o que quiser sobre este erro. Ex.: <i>"qual a causa exata no código?"</i>, <i>"tem como resolver sem mexer no cálculo?"</i>, <i>"isso é erro de uso?"</i>'+
+    '<div style="margin-top:8px"><button class="rpp-btn mini sec" data-chatq="Investigue no código a causa exata deste erro e me diga, em poucas linhas, o que você encontrou e como sugere resolver.">🔎 Investigar a causa no código</button></div></div>';
+  conv.forEach(function(m,i){
+    h+='<div class="rpp-msgc '+(m.r==='u'?'eu':'ia')+'"><div class="rpp-bal">'+rppChatMd(m.txt||'')+
+      (m.plano?'<div class="rpp-plano"><div class="rpp-plano-h">🛠️ Plano de correção combinado</div><pre class="rpp-pre">'+rppEsc(m.plano)+'</pre>'+
+        (i===ultPlano?(rppAutoPode(RPP.cfg)?(c.status==='corrigindo'?'<div class="s">🤖 O robô está aplicando...</div>':'<button class="rpp-btn mini" data-chatplano="'+i+'" style="background:#0891b2">🤖 Aplicar esta solução</button> '):'<div class="s">Correção automática desligada (configure em Aprendizado).</div>')+
+        '<button class="rpp-btn mini sec" data-chatcopiar="'+i+'">📋 Copiar para o Claude</button>':'')+'</div>':'')+
+      '</div><div class="rpp-hora">'+(m.r==='u'?rppEsc(m.u||'você'):'IA')+' · '+rppData(m.t)+'</div></div>';
+  });
+  if(ocupado)h+='<div class="rpp-msgc ia"><div class="rpp-bal rpp-pensando">⏳ '+rppEsc(RPP_CHAT.etapa||'Pensando...')+'</div></div>';
+  h+='</div>';
+  if(RPP_CHAT.erro)h+='<div class="rpp-msg err" style="margin:8px 10px 0">'+rppEsc(RPP_CHAT.erro)+'</div>';
+  h+='<div class="rpp-chat-f"><textarea id="rppChatTxt" rows="2" placeholder="Escreva aqui... (Enter envia, Shift+Enter quebra linha)"'+(ocupado?' disabled':'')+'>'+rppEsc(RPP_CHAT.rascunho[c.k]||'')+'</textarea>'+
+    '<button class="rpp-btn" data-a="chatEnviar"'+(ocupado?' disabled':'')+'>Enviar</button></div></div>';
+  return h;
+}
+
 // Confere se o robô já respondeu os chamados "Corrigindo" (roda para quem abre a lista: admin e colaborador)
 async function rppChecarAuto(lista){
   var agora=Date.now(),mudou=false;
@@ -4048,6 +4160,18 @@ function rppCss(){
   '.rpp-msg{margin-top:10px;padding:9px 12px;border-radius:9px;font-size:13px;font-weight:600}'+
   '.rpp-msg.err{background:#fee2e2;color:#991b1b}.rpp-msg.warn{background:#fef3c7;color:#92400e}.rpp-msg.ok{background:#dcfce7;color:#166534}'+
   '.rpp-parecer{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.45;margin:10px auto 14px;max-width:620px;text-align:left}.rpp-parecer.ok{background:#f0fdf4;border-color:#bbf7d0;color:#14532d}'+
+  '.rpp-chat{margin-top:16px;border:1.5px solid #c7d2fe;border-radius:14px;overflow:hidden;background:#fafaff}'+
+  '.rpp-chat-h{padding:10px 14px;font-weight:800;font-size:14px;background:#eef2ff;color:#3730a3;border-bottom:1px solid #e0e7ff}.rpp-chat-h small{font-weight:500;color:#6366f1;margin-left:6px}'+
+  '.rpp-chat-b{max-height:460px;overflow-y:auto;padding:12px 10px;display:flex;flex-direction:column;gap:10px}'+
+  '.rpp-chat-vazio{color:#6b7280;font-size:13px;padding:6px 4px}'+
+  '.rpp-msgc{display:flex;flex-direction:column;max-width:88%}.rpp-msgc.eu{align-self:flex-end;align-items:flex-end}.rpp-msgc.ia{align-self:flex-start}'+
+  '.rpp-bal{padding:9px 12px;border-radius:14px;font-size:13.5px;line-height:1.5;word-wrap:break-word;overflow-wrap:anywhere}'+
+  '.rpp-msgc.eu .rpp-bal{background:#5856d6;color:#fff;border-bottom-right-radius:4px}.rpp-msgc.ia .rpp-bal{background:#fff;border:1px solid #e5e7eb;border-bottom-left-radius:4px}'+
+  '.rpp-bal code{background:rgba(0,0,0,.07);padding:1px 4px;border-radius:4px;font-size:12px}.rpp-msgc.eu .rpp-bal code{background:rgba(255,255,255,.2)}'+
+  '.rpp-pre{white-space:pre-wrap;background:#1e1e2e;color:#e5e7eb;border-radius:8px;padding:8px 10px;font:12px/1.45 ui-monospace,monospace;margin:6px 0;max-height:260px;overflow:auto}'+
+  '.rpp-hora{font-size:10.5px;color:#9ca3af;margin:3px 4px 0}.rpp-pensando{color:#6b7280;font-style:italic}'+
+  '.rpp-plano{margin-top:8px;border:1.5px solid #67e8f9;background:#ecfeff;border-radius:10px;padding:8px}.rpp-plano-h{font-weight:800;color:#155e75;font-size:12.5px}.rpp-plano .s{font-size:12px;color:#155e75}'+
+  '.rpp-chat-f{display:flex;gap:8px;padding:10px;border-top:1px solid #e0e7ff;background:#fff;align-items:flex-end}.rpp-chat-f textarea{min-height:44px;flex:1;resize:vertical}'+
   '.rpp-okbox{text-align:center;padding:28px 16px}.rpp-okbox .big{font-size:44px}.rpp-okbox h3{font-size:20px;margin:6px 0}'+
   '.rpp-st{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:800;padding:3px 9px;border-radius:20px;color:#fff;white-space:nowrap}'+
   '.rpp-li{display:flex;gap:12px;align-items:flex-start;padding:11px 12px;border:1px solid #e5e7eb;border-radius:11px;margin-bottom:7px;cursor:pointer;background:#fff}'+
@@ -4192,6 +4316,7 @@ function rppHtmlDetalhe(c){
   if(c.logs&&c.logs.length)h+=rppSec('Erros técnicos capturados',c.logs.map(function(l){return new Date(l.t).toLocaleTimeString('pt-BR')+' ['+l.k+(l.tl?' em '+rppNomeTela(l.tl):'')+(l.x?' x'+l.x:'')+'] '+l.m;}).join('\n'),'rpp-logs');
   else h+=rppSec('Erros técnicos capturados','Nenhum erro técnico registrado pelo app antes do chamado.');
   if(c.trilha&&c.trilha.length)h+=rppSec('Telas abertas antes',c.trilha.map(rppNomeTela).join(' → '));
+  h+=rppHtmlChat(c);
   h+='<label>Situação</label><select id="rppStatus">'+Object.keys(RPP_STATUS).map(function(s){return '<option value="'+s+'"'+(c.status===s?' selected':'')+'>'+RPP_STATUS[s][0]+' '+RPP_STATUS[s][1]+'</option>';}).join('')+'</select>'+
      '<label>Parecer para o colaborador <span style="font-weight:500;color:#6b7280">(é o que ele vê)</span></label><textarea id="rppParecer">'+rppEsc(c.parecer||'')+'</textarea>'+
      '<label>Sua anotação interna (o que foi feito, versão corrigida...)</label><textarea id="rppNota">'+rppEsc(c.nota||'')+'</textarea>'+
@@ -4237,7 +4362,31 @@ function rppHtmlAprendizado(){
   h+=rppHtmlAuto();
   return h;
 }
+function rppLigarChat(w){
+  var c=RPP.lista&&RPP.lista.filter(function(x){return x.k===RPP.sel;})[0];if(!c)return;
+  var b=w.querySelector('#rppChatB');if(b)b.scrollTop=b.scrollHeight;
+  var ta=w.querySelector('#rppChatTxt');
+  var enviar=function(t){rppChatEnviar(c,t);};
+  if(ta){
+    ta.oninput=function(){RPP_CHAT.rascunho[c.k]=ta.value;};
+    ta.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();enviar(ta.value);}};
+    if(RPP_CHAT.foco){RPP_CHAT.foco=false;ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}
+  }
+  w.querySelectorAll('[data-chatq]').forEach(function(x){x.onclick=function(){enviar(x.getAttribute('data-chatq'));};});
+  w.querySelectorAll('[data-chatcopiar]').forEach(function(x){x.onclick=function(){var m=(c.conversa||[])[+x.getAttribute('data-chatcopiar')];
+    rppCopiar('Corrija este erro do app mais-acessivel-app (repositório Rauldneto/mais-acessivel-app, arquivo index.html) seguindo o plano combinado abaixo. Confira no código antes de mudar.\n\nPLANO:\n'+(m&&m.plano||'')+'\n\n'+rppRelatorioTexto(c),x);};});
+  w.querySelectorAll('[data-chatplano]').forEach(function(x){x.onclick=function(){
+    var m=(c.conversa||[])[+x.getAttribute('data-chatplano')];if(!m||!m.plano)return;
+    if(!confirm('Mandar o robô aplicar o plano combinado no chamado #'+c.n+'?\n\nEle só publica se a mudança for pequena (até 40 linhas) e todas as telas passarem no teste. Se não, o chamado volta como pendente com o motivo.'))return;
+    x.disabled=true;x.textContent='⏳ Enviando...';
+    rppDispararAuto(c,m.plano).then(function(ok){
+      var conv=(c.conversa||[]).concat([{r:'a',t:Date.now(),txt:ok?'🤖 Plano enviado ao robô. O resultado aparece aqui no chamado em alguns minutos (situação Corrigindo → Resolvido, ou volta pendente com o motivo).':('⚠️ Não consegui enviar ao robô: '+(c.autoMotivo||'erro'))}]);
+      rppChatSync(c,conv);rppPatch(c.k,{conversa:conv}).catch(function(){});rppDraw();
+    });
+  };});
+}
 function rppLigar(w){
+  if(RPP.aba==='chamados')rppLigarChat(w);
   w.querySelectorAll('[data-aba]').forEach(function(b){b.onclick=function(){RPP.aba=b.getAttribute('data-aba');RPP.msg='';if(RPP.aba!=='novo'&&!RPP.lista)rppCarregar();if(RPP.aba==='aprendizado')rppCarregarPlano();rppDraw();};});
   w.querySelectorAll('[data-f]').forEach(function(b){b.onclick=function(){RPP.filtro=b.getAttribute('data-f');RPP.sel=null;rppDraw();};});
   w.querySelectorAll('[data-reabrir]').forEach(function(b){b.onclick=function(){rppReabrir(b.getAttribute('data-reabrir'));};});
@@ -4270,6 +4419,7 @@ function rppLigar(w){
     else if(a==='claude'&&c)rppCopiar('Corrija este erro do app mais-acessivel-app (repositório rauldneto/mais-acessivel-app, arquivo index.html). Confira a causa no código antes de mudar, corrija e me diga como evitar que se repita.\n\n'+rppRelatorioTexto(c),b);
     else if(a==='imprimir'&&c){var j=window.open('','_blank');if(j){j.document.write('<title>Chamado #'+c.n+'</title><pre style="white-space:pre-wrap;font:14px/1.5 -apple-system,Segoe UI,sans-serif;padding:24px">'+rppEsc(rppRelatorioTexto(c))+'</pre>');j.document.close();j.print();}}
     else if(a==='plano')rppGerarPlano();
+    else if(a==='chatEnviar'&&c){var tx=w.querySelector('#rppChatTxt');RPP_CHAT.foco=true;rppChatEnviar(c,tx?tx.value:'');}
     else if(a==='autoCorrigir'&&c){
       if(!confirm('Mandar o robô corrigir o chamado #'+c.n+'?\n\nEle só publica se a mudança for pequena e todas as telas passarem no teste. Se não, o chamado volta como pendente.'))return;
       b.disabled=true;b.textContent='⏳ Enviando...';

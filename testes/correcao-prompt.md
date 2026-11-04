@@ -23,6 +23,9 @@ Sua tarefa: corrigir esse bug, e SÓ ele, sem mudar o comportamento de nenhum ou
    Se corrigiu, o parecer deve dizer que foi corrigido e pedir para clicar em 🔄 Atualizar no topo do app e tentar de novo.
    Se não corrigiu, o parecer deve dizer que o erro foi confirmado e que o T.I. vai avaliar.
 
+Se o chamado trouxer um "PLANO COMBINADO COM O ADMINISTRADOR", siga esse plano (ele foi discutido com o dono do app),
+mas continue obedecendo as regras acima: se o plano exigir algo proibido ou grande demais, não corrija e explique no motivo.
+
 Depois que você terminar, um teste automático abre todas as telas do app; se qualquer tela quebrar,
 ou se a mudança passar de 40 linhas ou tocar outro arquivo, sua correção é DESCARTADA. Então seja cirúrgico.
 
