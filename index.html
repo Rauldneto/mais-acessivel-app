@@ -13835,7 +13835,8 @@ function ccBuscar(numero,doBling){
     }).then(function(r){
       CC.carr=false;
       if(!r||!r.ok){var e=(r&&r.erro)||'Falhou';if(/Rota inexistente/.test(e))e='O Worker do Bling ainda não tem a busca de pedido de compra. Atualize o código do Worker na Cloudflare (arquivo worker-bling.js).';
-        else if(/403|insufficient|escopo|scope/i.test(e))e='O app do Bling não tem permissão para Pedidos de compra. Marque esse escopo no aplicativo do Bling e reconecte em Financeiro › BLING. ('+e+')';
+        else if(/refresh token|invalid_grant|recusou o acesso/i.test(e))e='A conexão com o Bling expirou. Vá em Financeiro › BLING › Reconectar ao Bling, clique em Autorizar e tente de novo.';
+        else if(/403|insufficient|higher privileges|escopo|scope/i.test(e))e='O app do Bling não tem permissão para Pedidos de compra. Marque esse escopo no aplicativo do Bling e reconecte em Financeiro › BLING. ('+e+')';
         CC.erro=e;ccDraw();return;}
       var novo=ccDoPedido(r.pedido);
       if(doBling&&CC.cot&&CC.cot.numero===novo.numero){ // mantém os outros fornecedores, troca itens e o fornecedor do pedido
