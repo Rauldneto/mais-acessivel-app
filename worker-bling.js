@@ -739,7 +739,12 @@ async function econfPendentes(env) {
           const cache = await env.BLING_KV.get('nfdados:' + nfId); if (!cache) chamadas++;
           const nf = await nfDados(env, nfId);
           item.nf = nf;
-          item.status = nf.chave.length === 44 ? 'pronto' : 'nf_sem_chave';
+          // Bling: 5 Autorizada, 6 Emitida DANFE, 7 Registrada. Outras (1 pendente, 2 cancelada, 4 rejeitada, 9 denegada...) não recebem ECONF
+          const sitNF = Number(nf.situacao);
+          const SIT_NOME = { 1: 'pendente', 2: 'cancelada', 3: 'aguardando recibo', 4: 'rejeitada', 8: 'aguardando protocolo', 9: 'denegada', 10: 'em consulta', 11: 'bloqueada' };
+          if (nf.chave.length !== 44) item.status = 'nf_sem_chave';
+          else if (![5, 6, 7].includes(sitNF)) { item.status = 'nf_nao_autorizada'; item.erro = 'NF ' + nf.numero + ' está ' + (SIT_NOME[sitNF] || ('situação ' + sitNF)) + ' no Bling'; await env.BLING_KV.delete('nfdados:' + nfId); if (tipo === 'pedido') await env.BLING_KV.delete('pednf:' + id); }
+          else item.status = 'pronto';
           item.momento = nf.emissao && dia < nf.emissao ? 'anterior' : 'posterior';
           item.nSeq = Number((await env.BLING_KV.get('econfseq:' + nf.chave)) || 0) + 1;
         } catch (e) { item.status = 'erro'; item.erro = String(e.message || e); }
