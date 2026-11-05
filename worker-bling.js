@@ -40,7 +40,7 @@ const DIAS_CONTAS = 180;                  // contas a receber em aberto emitidas
 
 export default {
   async scheduled(evento, env, ctx) {
-    ctx.waitUntil(verificarPagamentos(env).catch(e => logAcao(env, { acao: 'erro', detalhe: String(e.message || e) })));
+    ctx.waitUntil(verificarPagamentos(env).then(() => registrarErro(env, null)).catch(e => registrarErro(env, String(e.message || e))));
   },
   async fetch(req, env) {
     const origem = req.headers.get('Origin') || '';
@@ -100,7 +100,8 @@ export default {
         return resp(await gerarPix(env, b || {}));
       }
       if (url.pathname === '/pagamentos') {
-        const acoes = (await env.BLING_KV.get('acoes', 'json')) || [];
+        let acoes = (await env.BLING_KV.get('acoes', 'json')) || [];
+        if (acoes.some(x => x.acao === 'erro')) { acoes = acoes.filter(x => x.acao !== 'erro'); await env.BLING_KV.put('acoes', JSON.stringify(acoes)); }
         const modo = (await env.BLING_KV.get('modo')) || 'simulacao';
         const ult = await env.BLING_KV.get('pix:ultimaVerificacao');
         return resp({ ok: true, modo, ultimaVerificacao: ult ? Number(ult) : 0, acoes: acoes.slice(-100).reverse() });
@@ -119,6 +120,29 @@ export default {
           tot.novos += r.novos; tot.vistos += r.vistos; tot.pendentes += r.pendentes || 0;
         }
         return resp(Object.assign({ ok: true, dias }, tot));
+      }
+      if (url.pathname === '/erros') {
+        return resp(Object.assign({ ok: true }, (await env.BLING_KV.get('erros', 'json')) || {}));
+      }
+      if (url.pathname === '/diag/sicoob') {
+        const n = Math.min(Number(url.searchParams.get('n') || 5), 10), out = [];
+        for (let i = 0; i < n; i++) {
+          const t0 = Date.now();
+          try {
+            const r = await pedirTokenSicoob(env);
+            const tx = await r.text();
+            out.push({ status: r.status, ms: Date.now() - t0, server: r.headers.get('server'), tipo: r.headers.get('content-type'), corpo: r.ok ? '(token ok)' : tx.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300) });
+          } catch (e) { out.push({ erro: String(e.message || e), ms: Date.now() - t0 }); }
+          await new Promise(x => setTimeout(x, 1500));
+        }
+        return resp({ ok: true, testes: out });
+      }
+      if (url.pathname === '/econf/pendentes') {
+        return resp(Object.assign({ ok: true }, await econfPendentes(env)));
+      }
+      if (url.pathname === '/econf/registrar' && req.method === 'POST') {
+        const b = await req.json();
+        return resp(await econfRegistrar(env, b || {}));
       }
       if (url.pathname === '/pendentes') {
         const ids = (await env.BLING_KV.get('pendentes', 'json')) || [];
@@ -328,16 +352,29 @@ async function listarAbertos(env) {
 const SICOOB_TOKEN = 'https://auth.sicoob.com.br/auth/realms/cooperado/protocol/openid-connect/token';
 const SICOOB_PIX = 'https://api.sicoob.com.br/pix/api/v2';
 
+function pedirTokenSicoob(env) {
+  return env.SICOOB_MTLS.fetch(SICOOB_TOKEN, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+    body: 'grant_type=client_credentials&client_id=' + encodeURIComponent(env.SICOOB_CLIENT_ID) + '&scope=' + encodeURIComponent('cob.write cob.read pix.read'),
+  });
+}
+
 async function sicoobToken(env) {
   const c = await env.BLING_KV.get('sicoob:token', 'json');
   if (c && Date.now() < c.exp) return c.access;
-  const r = await env.SICOOB_MTLS.fetch(SICOOB_TOKEN, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'grant_type=client_credentials&client_id=' + encodeURIComponent(env.SICOOB_CLIENT_ID) + '&scope=' + encodeURIComponent('cob.write cob.read pix.read'),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j.access_token) throw new Error('Sicoob recusou o acesso (' + r.status + '): ' + (j.error_description || j.error || ''));
+  let r, txt = '', j = {};
+  for (let t = 0; t < 2; t++) {
+    r = await pedirTokenSicoob(env);
+    txt = await r.text();
+    try { j = JSON.parse(txt); } catch (e) { j = {}; }
+    if (r.ok && j.access_token) break;
+    if (t === 0) await new Promise(x => setTimeout(x, 2500));
+  }
+  if (!r.ok || !j.access_token) {
+    const info = 'status ' + r.status + ' · servidor ' + (r.headers.get('server') || '?') + ' · ' + (j.error_description || j.error || txt.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160));
+    throw new Error('Sicoob recusou o acesso (' + r.status + '): ' + info);
+  }
   await env.BLING_KV.put('sicoob:token', JSON.stringify({ access: j.access_token, exp: Date.now() + (Number(j.expires_in || 300) - 30) * 1000 }), { expirationTtl: 3600 });
   return j.access_token;
 }
@@ -395,6 +432,14 @@ async function gerarPix(env, b) {
 
 // ---------------- Pagamentos: confere PIX recebidos e planeja/executa as ações no Bling ----------------
 const PORTADOR_SICOOB = 14890739452;   // conta "Sicoob" no Bling
+
+async function registrarErro(env, msg) {
+  const e = (await env.BLING_KV.get('erros', 'json')) || { total: 0, seguidos: 0, ultimos: [] };
+  if (!msg) { if (e.seguidos) { e.seguidos = 0; e.ultimoOk = Date.now(); await env.BLING_KV.put('erros', JSON.stringify(e)); } else if (!e.ultimoOk || Date.now() - e.ultimoOk > 3600e3) { e.ultimoOk = Date.now(); await env.BLING_KV.put('erros', JSON.stringify(e)); } return; }
+  e.total++; e.seguidos++; e.ultimo = Date.now();
+  e.ultimos = [{ quando: Date.now(), msg: msg.slice(0, 300) }].concat(e.ultimos || []).slice(0, 40);
+  await env.BLING_KV.put('erros', JSON.stringify(e));
+}
 
 async function logAcao(env, a) {
   const lista = (await env.BLING_KV.get('acoes', 'json')) || [];
@@ -644,4 +689,76 @@ async function pedidoCompra(env, numero) {
         forma: formas[pa.formaPagamento && pa.formaPagamento.id] || '' })),
     },
   };
+}
+
+// ---------------- ECONF (evento 110750): PIX vinculados a NF-e já emitidas ----------------
+// O servidor só monta a lista e guarda os protocolos; a assinatura e o envio à SVRS são feitos
+// pelo programa ENVIAR-ECONF no computador (certificado A1 instalado no Windows).
+const CNPJ_SICOOB_IF = '02038232000164';   // Banco Cooperativo Sicoob S.A. (participante PIX)
+
+async function nfDados(env, nfId) {
+  const ck = 'nfdados:' + nfId;
+  const c = await env.BLING_KV.get(ck, 'json');
+  if (c && c.chave && Date.now() - c.ts < 7 * 86400e3) return c;
+  const d = (await bling(env, '/nfe/' + nfId)).data || {};
+  const out = { ts: Date.now(), id: nfId, numero: String(d.numero || ''), chave: String(d.chaveAcesso || '').replace(/\D/g, ''), situacao: d.situacao, emissao: String(d.dataEmissao || '').slice(0, 10) };
+  if (out.chave.length === 44) await env.BLING_KV.put(ck, JSON.stringify(out), { expirationTtl: 30 * 86400 });
+  return out;
+}
+
+async function nfDoPedido(env, pedId) {
+  const ck = 'pednf:' + pedId;
+  const c = await env.BLING_KV.get(ck);
+  if (c) return c;
+  const d = (await bling(env, '/pedidos/vendas/' + pedId)).data || {};
+  const nf = d.notaFiscal && d.notaFiscal.id;
+  if (nf) await env.BLING_KV.put(ck, String(nf), { expirationTtl: 90 * 86400 });
+  return nf || null;
+}
+
+async function econfPendentes(env) {
+  const out = [];
+  let cursor, chamadas = 0, faltaram = 0;
+  do {
+    const l = await env.BLING_KV.list({ prefix: 'pagosdoc:', cursor });
+    for (const k of l.keys) {
+      const [, tipo, id] = k.name.split(':');
+      const lista = (await env.BLING_KV.get(k.name, 'json')) || [];
+      for (const p of lista) {
+        if (!p.e2e) continue;
+        const reg = (await env.BLING_KV.get('econf:' + p.e2e, 'json')) || null;
+        if (reg && reg.ok) continue;
+        const dia = diaLocal(p.horario);
+        const item = { e2e: p.e2e, valor: Number(p.valor || 0), dia, horario: p.horario, pagador: p.pagador || '', tipo, docId: id, tPag: p.txid ? '17' : '20',
+          ultimaTentativa: reg };
+        try {
+          let nfId = tipo === 'nota' ? id : null;
+          if (tipo === 'pedido') { if (chamadas > 35) { faltaram++; continue; } chamadas++; nfId = await nfDoPedido(env, id); }
+          if (!nfId) { item.status = 'aguardando_nf'; out.push(item); continue; }
+          if (chamadas > 35) { faltaram++; continue; }
+          const cache = await env.BLING_KV.get('nfdados:' + nfId); if (!cache) chamadas++;
+          const nf = await nfDados(env, nfId);
+          item.nf = nf;
+          item.status = nf.chave.length === 44 ? 'pronto' : 'nf_sem_chave';
+          item.momento = nf.emissao && dia < nf.emissao ? 'anterior' : 'posterior';
+          item.nSeq = Number((await env.BLING_KV.get('econfseq:' + nf.chave)) || 0) + 1;
+        } catch (e) { item.status = 'erro'; item.erro = String(e.message || e); }
+        out.push(item);
+      }
+    }
+    cursor = l.list_complete ? null : l.cursor;
+  } while (cursor);
+  out.sort((a, b) => String(a.dia).localeCompare(String(b.dia)));
+  return { cnpj: '35017646000166', uf: 'GO', cnpjIF: CNPJ_SICOOB_IF, itens: out, faltaram };
+}
+
+async function econfRegistrar(env, b) {
+  if (!b.e2e || !b.chave) return { ok: false, erro: 'Faltou e2e/chave' };
+  const reg = { quando: Date.now(), chave: b.chave, nSeq: b.nSeq, ambiente: b.ambiente, cStat: String(b.cStat || ''), xMotivo: String(b.xMotivo || '').slice(0, 300), nProt: b.nProt || '' };
+  // 135 = evento registrado e vinculado; 136 = registrado sem vínculo; 573 = duplicidade (já existe)
+  reg.ok = b.ambiente === 'producao' && ['135', '136', '573'].includes(reg.cStat);
+  await env.BLING_KV.put('econf:' + b.e2e, JSON.stringify(reg), { expirationTtl: 5 * 365 * 86400 });
+  if (b.ambiente === 'producao' && ['135', '136'].includes(reg.cStat)) await env.BLING_KV.put('econfseq:' + b.chave, String(b.nSeq || 1), { expirationTtl: 5 * 365 * 86400 });
+  if (b.ambiente === 'producao') await logAcao(env, { acao: 'econf', modo: 'real', detalhe: 'ECONF da chave ' + b.chave.slice(25, 34) + ' (R$ ' + Number(b.valor || 0).toFixed(2) + '): ' + reg.cStat + ' ' + reg.xMotivo + (reg.nProt ? ' · protocolo ' + reg.nProt : '') });
+  return { ok: true, registrado: reg.ok };
 }
