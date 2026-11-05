@@ -128,25 +128,25 @@ foreach ($p in $prontos) {
     $doc.LoadXml($xmlEv)
     $doc = Assinar $doc $id
     $lote = (Get-Date -Format 'yyyyMMddHHmmss') + (Get-Random -Minimum 0 -Maximum 9)
-    $env = "<envEvento xmlns=""$NS"" versao=""1.00""><idLote>$lote</idLote>" + $doc.DocumentElement.OuterXml + '</envEvento>'
+    $envXml = "<envEvento xmlns=""$NS"" versao=""1.00""><idLote>$lote</idLote>" + $doc.DocumentElement.OuterXml + '</envEvento>'
     Write-Host ''
     Write-Host ("Enviando NF {0} - R$ {1} ..." -f $p.nf.numero, $vPag)
-    try { $resp = Enviar $env } catch { Write-Host "  Falhou a conexao: $($_.Exception.Message)" -ForegroundColor Red; $falhas++; continue }
+    try { $resp = Enviar $envXml } catch { Write-Host "  Falhou a conexao: $($_.Exception.Message)" -ForegroundColor Red; $falhas++; continue }
     $cStat = ''; $xMotivo = ''; $nProt = ''
     try {
         [xml]$rx = $resp
-        $ns = New-Object System.Xml.XmlNamespaceManager($rx.NameTable); $ns.AddNamespace('n', $NS)
-        $ie = $rx.SelectSingleNode('//n:retEvento/n:infEvento', $ns)
-        if (-not $ie) { $ie = $rx.SelectSingleNode('//n:retEnvEvento', $ns) }
-        $cStat = $ie.SelectSingleNode('n:cStat', $ns).InnerText
-        $xMotivo = $ie.SelectSingleNode('n:xMotivo', $ns).InnerText
-        $np = $ie.SelectSingleNode('n:nProt', $ns); if ($np) { $nProt = $np.InnerText }
+        $mgr = New-Object System.Xml.XmlNamespaceManager($rx.NameTable); $mgr.AddNamespace('n', $NS)
+        $ie = $rx.SelectSingleNode('//n:retEvento/n:infEvento', $mgr)
+        if (-not $ie) { $ie = $rx.SelectSingleNode('//n:retEnvEvento', $mgr) }
+        $cStat = $ie.SelectSingleNode('n:cStat', $mgr).InnerText
+        $xMotivo = $ie.SelectSingleNode('n:xMotivo', $mgr).InnerText
+        $np = $ie.SelectSingleNode('n:nProt', $mgr); if ($np) { $nProt = $np.InnerText }
     } catch { $limpo = ($resp -replace '<[^>]+>', ' ' -replace '\s+', ' ').Trim(); $xMotivo = 'Resposta inesperada: ' + $limpo.Substring(0, [Math]::Min(200, $limpo.Length)) }
     $cor = if ($cStat -in '135', '136') { 'Green' } elseif ($cStat -eq '573') { 'Yellow' } else { 'Red' }
     Write-Host "  Sefaz: $cStat - $xMotivo $(if ($nProt) { "(protocolo $nProt)" })" -ForegroundColor $cor
     # guarda o XML enviado e a resposta (arquivo fiscal)
     $nome = "{0}_{1}_NF{2}_seq{3}_{4}" -f (Get-Date -Format 'yyyyMMdd-HHmmss'), $ambiente, $p.nf.numero, $seq, $cStat
-    Set-Content -Path (Join-Path $saida "$nome-envio.xml") -Value $env -Encoding UTF8
+    Set-Content -Path (Join-Path $saida "$nome-envio.xml") -Value $envXml -Encoding UTF8
     Set-Content -Path (Join-Path $saida "$nome-retorno.xml") -Value $resp -Encoding UTF8
     if ($cStat -in '135', '136', '573') { $enviados++ } else { $falhas++ }
     try {
