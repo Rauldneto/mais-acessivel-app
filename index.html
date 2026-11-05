@@ -13762,7 +13762,8 @@ function rdsImprimir(){
 // com outros fornecedores: preço por item, desconto, IPI, ST, crédito de ICMS, frete, forma/prazo de pagamento e entrega.
 // Vencedor sugerido: menor custo final; empate (diferença até R$ 0,01) → menor prazo de entrega.
 // O usuário pode escolher outro vencedor (pede o motivo). Tudo fica no Firebase em cotacoesCompra/{numero do pedido}.
-var CC={num:'',cot:null,carr:false,erro:'',aviso:'',root:null,salvando:false,salvoEm:0,lista:null,_t:null};
+// Cotação do fornecedor em PDF/foto/Excel: lida pela IA e ligada aos itens (ver "Carregar cotação do fornecedor" abaixo).
+var CC={num:'',cot:null,imp:null,carr:false,erro:'',aviso:'',root:null,salvando:false,salvoEm:0,lista:null,_t:null};
 var CC_FORMAS=['Boleto','PIX','Transferência','Cartão de crédito','Dinheiro','Outra'];
 var CC_MAX_FORN=6;
 function ccEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -13776,7 +13777,7 @@ function ccEl(id){return CC.root?CC.root.querySelector('#'+id):null;}
 function ccFornVazio(nome,nItens){return {nome:nome||'',fixo:false,precos:Array(nItens).fill(''),desconto:'',ipi:'',st:'',credIcms:'',frete:'',formaPag:'',prazoPag:'',entrega:'',obs:''};}
 // Monta a cotação nova a partir do pedido que veio do Bling
 function ccDoPedido(p){
-  var itens=(p.itens||[]).map(function(i){return {cod:i.codigo||'',desc:i.descricao||'',un:i.unidade||'',q:Number(i.quantidade)||0};});
+  var itens=(p.itens||[]).map(function(i){return {cod:i.codigo||'',desc:i.descricao||'',un:i.unidade||'',q:Number(i.quantidade)||0,pid:i.produtoId||'',codFornPedido:i.codigoFornecedor||''};});
   var ipiPct=p.totalProdutos>0?Math.round(p.totalIPI/p.totalProdutos*1e6)/1e4:0;
   var dias=(p.parcelas||[]).map(function(x){return x.dias;}).filter(function(x){return x!=null;});
   var entrega='';if(p.dataPrevista&&p.data){var d=Math.round((new Date(p.dataPrevista)-new Date(p.data))/864e5);if(d>=0)entrega=d;}
@@ -13823,7 +13824,7 @@ function ccNormalizar(c){
 function ccBuscar(numero,doBling){
   numero=String(numero||'').replace(/\D/g,'');
   if(!numero){CC.erro='Digite o número do pedido de compra.';ccDraw();return;}
-  CC.num=numero;CC.carr=true;CC.erro='';CC.aviso='';ccDraw();
+  CC.num=numero;CC.carr=true;CC.erro='';CC.aviso='';CC.imp=null;ccDraw();
   var salvo=doBling?Promise.resolve(null):fetch(FIREBASE_DB+'/cotacoesCompra/'+numero+'.json').then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
   salvo.then(function(s){
     if(s&&s.itens){CC.cot=ccNormalizar(s);CC.carr=false;CC.aviso='Cotação já salva deste pedido aberta. Use "Atualizar do Bling" para puxar o pedido de novo.';ccDraw();return;}
@@ -13943,9 +13944,11 @@ function ccDraw(){
     '<div><b>Total no Bling</b>'+ccMoeda(c.totalPedido)+'</div><div><b>Itens</b>'+c.itens.length+'</div>'+
     '<span style="flex:1"></span>'+
     '<button type="button" class="cc-btn sm" data-a="bling">🔄 Atualizar do Bling</button>'+
+    '<button type="button" class="cc-btn sm pri" data-a="carregar" data-j="novo">📎 Carregar cotação de fornecedor</button>'+
     (c.forn.length<CC_MAX_FORN?'<button type="button" class="cc-btn sm" data-a="add">➕ Fornecedor</button>':'')+
     '<button type="button" class="cc-btn sm" data-a="copiar">📋 Copiar resumo</button>'+
-  '</div>';
+  '</div>'+
+  '<input type="file" id="ccFile" multiple accept=".pdf,.xlsx,.xls,.csv,.ods,image/*" style="display:none">'+ccDrawImp();
   // menor preço por item (entre quem cotou)
   var menor=c.itens.map(function(it,i){var vs=c.forn.map(function(f){return ccNum(f.precos[i]);}).filter(function(v){return v>0;});return vs.length>1?Math.min.apply(null,vs):-1;});
   var cls=function(j){return 'col'+(j===venc?' win':'');};
@@ -13954,7 +13957,8 @@ function ccDraw(){
     t+='<th class="'+cls(j)+'">'+(f.fixo
       ?'<div style="text-align:left;font-weight:700">'+ccEsc(f.nome)+'</div><div class="cc-mu" style="text-align:left">do pedido'+(f.doc?' · '+ccEsc(f.doc):'')+'</div>'
       :'<input class="txt" data-j="'+j+'" data-k="nome" placeholder="Nome do fornecedor" value="'+ccEsc(f.nome)+'" style="font-weight:700">'+
-       '<div style="text-align:left;margin-top:3px"><button type="button" class="cc-btn sm dan" data-a="rem" data-j="'+j+'" title="Remover fornecedor">✕ remover</button></div>')+
+       '<div style="text-align:left;margin-top:3px;display:flex;gap:4px;flex-wrap:wrap"><button type="button" class="cc-btn sm" data-a="carregar" data-j="'+j+'" title="Ler PDF, foto ou Excel da cotação deste fornecedor">📎 Carregar</button><button type="button" class="cc-btn sm dan" data-a="rem" data-j="'+j+'" title="Remover fornecedor">✕</button></div>'+
+       ((f.arquivos||[]).length?'<div class="cc-mu" style="text-align:left;margin-top:3px;font-weight:400;text-transform:none" title="'+ccEsc(f.arquivos.map(function(a){return a.nome;}).join(', '))+'">📄 '+ccEsc(f.arquivos[f.arquivos.length-1].nome).slice(0,28)+'</div>':''))+
       '<div style="text-align:left;margin-top:4px">'+(j===venc?'<span class="cc-tag ok">🏆 vencedor</span>':(calc[j].completo&&(f.nome||'').trim()?'<button type="button" class="cc-btn sm" data-a="venc" data-j="'+j+'">Escolher</button>':'<span class="cc-tag warn">'+(calc[j].faltam?'faltam '+calc[j].faltam+' preço(s)':'sem nome')+'</span>'))+'</div></th>';
   });
   t+='</tr></thead><tbody><tr class="sec"><td colspan="'+(c.forn.length+1)+'">Preço unitário (R$)</td></tr>';
@@ -14013,6 +14017,8 @@ function ccDraw(){
 }
 function ccLigar(el){
   var c=CC.cot;if(!c)return;
+  ccLigarImp(el);
+  var fi=el.querySelector('#ccFile');if(fi)fi.onchange=function(){var fs=[].slice.call(fi.files||[]);if(fs.length)ccImportar(CC.impAlvo,fs);};
   el.querySelectorAll('input[data-j],select[data-j]').forEach(function(inp){
     inp.addEventListener('change',function(){
       var f=c.forn[+inp.dataset.j];if(!f)return;
@@ -14033,6 +14039,7 @@ function ccLigar(el){
       e.preventDefault();var a=b.dataset.a,j=+b.dataset.j;
       if(a==='add'){if(c.forn.length>=CC_MAX_FORN)return;c.forn.push(ccFornVazio('',c.itens.length));ccDraw();ccSalvar();setTimeout(function(){var x=CC.root.querySelectorAll('#ccCorpo input[data-k="nome"]');if(x.length)x[x.length-1].focus();},30);}
       else if(a==='rem'){var f=c.forn[j];if(!f||f.fixo)return;if((f.nome||f.precos.some(function(v){return v!=='';}))&&!confirm('Remover '+(f.nome||'este fornecedor')+' da cotação?'))return;
+        if(CC.imp&&CC.imp.j===j)CC.imp=null;else if(CC.imp&&CC.imp.j>j)CC.imp.j--;
         c.forn.splice(j,1);if(c.vencedor){if(c.vencedor.i===j)c.vencedor=null;else if(c.vencedor.i>j)c.vencedor.i--;}ccDraw();ccSalvar();}
       else if(a==='venc'){var rk=ccRanking(c),auto=rk.length?rk[0].i:-1,motivo='';
         if(j!==auto){motivo=prompt('Este fornecedor não é o de menor custo. Qual o motivo da escolha? (ex.: prazo de entrega, prazo de pagamento, qualidade)','');if(motivo===null)return;}
@@ -14040,8 +14047,199 @@ function ccLigar(el){
       else if(a==='auto'){c.vencedor=null;ccDraw();ccSalvar();}
       else if(a==='bling'){if(confirm('Puxar o pedido de novo do Bling? Os itens e o fornecedor do pedido serão atualizados; os outros fornecedores ficam.'))ccBuscar(c.numero,true);}
       else if(a==='copiar')ccCopiar();
+      else if(a==='carregar'){if(CC.imp&&CC.imp.status==='lendo')return;CC.impAlvo=b.dataset.j==='novo'?null:j;var fi=CC.root.querySelector('#ccFile');if(fi){fi.value='';fi.click();}}
     };
   });
+}
+// ---- Carregar cotação do fornecedor (PDF, foto, print ou Excel) ----
+// 1) De-para salvo por fornecedor (cotacoesCompraDePara/{CNPJ ou nome}/{código ou descrição dele}) → nosso item. Confirmado uma vez, bate sozinho.
+// 2) Códigos que cada fornecedor usa no cadastro do Bling (Worker /produtos-fornecedores) vão como pista para a IA.
+// 3) IA lê o arquivo e liga cada linha a um item do pedido pela descrição (medida, material, cor), convertendo unidade.
+// Nada entra na tabela sem passar pela tela de conferência.
+var CC_IA_URL='https://soft-limit-b3a1.rauldias.workers.dev';
+function ccNorm(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();}
+function ccChave(s){return ccNorm(s).replace(/[.#$\[\]\/]/g,' ').replace(/\s+/g,'_').slice(0,90)||'_';}
+function ccDig(s){return String(s||'').replace(/\D/g,'');}
+function ccFornChave(nome,doc){var d=ccDig(doc);return d.length>=11?d:ccChave(nome);}
+function ccLinhaChave(l){return l.codigo&&String(l.codigo).trim()?'c_'+ccChave(l.codigo):'d_'+ccChave(l.descricao);}
+function ccItemChave(it){return it.cod?'c_'+ccChave(it.cod):'d_'+ccChave(it.desc);}
+function ccB64(file){return new Promise(function(ok,no){var r=new FileReader();r.onload=function(){ok(String(r.result).split(',')[1]);};r.onerror=function(){no(new Error('Não consegui abrir '+file.name));};r.readAsDataURL(file);});}
+async function ccArquivosParaIA(files){
+  var partes=[],nomes=[],imgs=0;
+  for(var k=0;k<files.length;k++){var f=files[k];nomes.push(f.name||'arquivo');
+    if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){
+      if(f.size>20*1024*1024)throw new Error('O PDF "'+f.name+'" passa de 20 MB. Mande um arquivo menor ou um print.');
+      partes.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:await ccB64(f)}});}
+    else if(/\.(xlsx|xls|csv|ods)$/i.test(f.name)||/sheet|excel|csv/.test(f.type)){
+      await lcXlsx();var wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
+      var txt=wb.SheetNames.slice(0,4).map(function(n){return '### Planilha "'+n+'"\n'+XLSX.utils.sheet_to_csv(wb.Sheets[n],{FS:';',blankrows:false});}).join('\n\n');
+      partes.push({type:'text',text:'Arquivo "'+f.name+'" (planilha convertida em texto, colunas separadas por ;):\n'+txt.slice(0,60000)});}
+    else if(/^image\//.test(f.type)||/\.(jpe?g|png|webp|heic|gif)$/i.test(f.name)){
+      if(++imgs>6)continue;
+      partes.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:await dspJpeg(f,2000)}});}
+    else throw new Error('Formato não aceito: "'+f.name+'". Use PDF, foto/print ou Excel.');
+  }
+  if(!partes.length)throw new Error('Nenhum arquivo para ler.');
+  return {partes:partes,nomes:nomes};
+}
+function ccPromptIA(c){
+  var itens=c.itens.map(function(it,i){
+    var cods=(it.codsForn||[]).map(function(x){return x.codigo;}).filter(Boolean);
+    return i+' | '+(it.cod||'-')+' | '+it.desc+' | '+it.un+' | qtd '+it.q+(cods.length?' | códigos usados por fornecedores: '+cods.join(', '):'');}).join('\n');
+  return 'Você vai ler a cotação/orçamento de um FORNECEDOR enviada para uma revenda de materiais de construção e acessibilidade (piso tátil, sinalização, barras de apoio etc.). Pode ser PDF, foto, print de WhatsApp ou planilha.\n\n'+
+  'ITENS DO NOSSO PEDIDO DE COMPRA (índice | nosso código | descrição | unidade | quantidade | pistas):\n'+itens+'\n\n'+
+  'Tarefa: extrair cada linha de produto da cotação do fornecedor e dizer a qual item do nosso pedido ela corresponde. O fornecedor costuma usar outro nome (ex.: "ladrilho podotátil alerta 25x25 PVC cz" = "piso tátil alerta PVC 25x25 cinza"). Compare tipo de produto, medida, material, cor, espessura e aplicação, não só o nome. Se o código do fornecedor estiver nas pistas do item, é ele.\n'+
+  'Responda SOMENTE com um JSON neste formato:\n'+
+  '{"fornecedor_nome":string,"fornecedor_cnpj":string,"numero_orcamento":string,"validade":string,"forma_pagamento":string,"prazo_pagamento":string,"prazo_entrega_dias":number|null,'+
+  '"frete_valor":number|null,"frete_tipo":"CIF"|"FOB"|"","desconto_valor":number|null,"ipi_percentual":number|null,"st_percentual":number|null,"precos_incluem_ipi":boolean,"observacoes":string,'+
+  '"linhas":[{"codigo":string,"descricao":string,"unidade":string,"quantidade":number|null,"preco_unitario":number,"ipi_percentual":number|null,'+
+  '"item":number|null,"confianca":"alta"|"media"|"baixa","equivalente":boolean,"fator":number,"motivo":string}]}\n'+
+  'Regras:\n'+
+  '- preco_unitario: o preço por unidade DO FORNECEDOR, como está no documento (sem somar frete). Se só houver o total da linha, divida pela quantidade.\n'+
+  '- item: índice do nosso item correspondente, ou null se não corresponde a nenhum. Nunca force: na dúvida use confianca "baixa".\n'+
+  '- equivalente: true quando é um produto parecido mas não idêntico (outra marca, outra espessura, outra cor, outro material). Nesse caso confianca no máximo "media".\n'+
+  '- fator: quantas unidades do NOSSO item cabem em 1 unidade do fornecedor. Ex.: fornecedor vende caixa com 12 e nós compramos unidade → 12. Piso 25x25 vendido por m² e nós em unidade → 16. Mesma unidade → 1.\n'+
+  '- motivo: até 12 palavras explicando a ligação (ex.: "mesma medida 25x25, PVC, cinza; marca diferente").\n'+
+  '- precos_incluem_ipi: true só se o documento disser que o preço já tem IPI.\n'+
+  '- forma_pagamento: boleto, PIX, transferência, cartão etc. prazo_pagamento como no documento (ex.: "28/56 dias", "à vista"). prazo_entrega_dias em dias corridos (ex.: "15 dias úteis" ≈ 21).\n'+
+  '- frete_valor: valor em R$ do frete se informado; CIF sem valor → 0. Campos que não aparecem: null ou "".\n'+
+  '- Valores em número com ponto decimal (6.9, não "6,90").';
+}
+async function ccChamarIA(content){
+  var r=await fetch(CC_IA_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:8000,messages:[{role:'user',content:content}]})});
+  var j=await r.json().catch(function(){return null;});
+  if(!r.ok&&!(j&&j.error))throw new Error('IA respondeu '+r.status);
+  if(j&&j.error){var em=(j.error.message||j.error.type||String(j.error));if(/credit balance/i.test(em))throw new Error('Acabou o crédito da API da Anthropic (console.anthropic.com → Plans & Billing)');throw new Error('IA: '+em);}
+  var t=(j.content||[]).filter(function(x){return x.type==='text';}).map(function(x){return x.text;}).join('').replace(/```json|```/g,'').trim();
+  var a=t.indexOf('{'),b=t.lastIndexOf('}');if(a<0||b<a)throw new Error('A IA não conseguiu ler a cotação. Tente outro arquivo ou um print mais nítido.');
+  return JSON.parse(t.slice(a,b+1));
+}
+function ccCodsForn(c){ // pistas do Bling (uma vez por cotação; guarda nos itens)
+  var falta=c.itens.filter(function(it){return it.pid&&!it.codsForn;});
+  if(!falta.length||!blgUrl())return Promise.resolve();
+  return blgApi('/produtos-fornecedores?ids='+falta.map(function(it){return it.pid;}).join(',')).then(function(r){
+    if(r&&r.ok&&r.produtos)falta.forEach(function(it){it.codsForn=(r.produtos[it.pid]||[]).slice(0,8);});
+  }).catch(function(){});
+}
+function ccDePara(fk){return fetch(FIREBASE_DB+'/cotacoesCompraDePara/'+encodeURIComponent(fk)+'.json').then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});}
+async function ccImportar(j,files){
+  var c=CC.cot;if(!c||!files||!files.length)return;
+  if(j==null){var vazia=-1;c.forn.forEach(function(f,k){if(vazia<0&&!f.fixo&&!(f.nome||'').trim()&&!f.precos.some(function(v){return v!=='';}))vazia=k;});
+    if(vazia<0){if(c.forn.length>=CC_MAX_FORN){CC.erro='Já tem '+CC_MAX_FORN+' fornecedores. Remova um para carregar outro.';ccDraw();return;}c.forn.push(ccFornVazio('',c.itens.length));vazia=c.forn.length-1;}
+    j=vazia;}
+  var f=c.forn[j];
+  CC.imp={j:j,status:'lendo',nomes:[].map.call(files,function(x){return x.name;}),erro:''};CC.erro='';CC.aviso='';ccDraw();
+  try{
+    if(typeof BLG!=='undefined'&&!BLG.cfgCarregada)await blgCarregarCfg();
+    await ccCodsForn(c);
+    var arq=await ccArquivosParaIA(files);
+    var r=await ccChamarIA([{type:'text',text:ccPromptIA(c)}].concat(arq.partes));
+    var nome=(f.nome||'').trim()||r.fornecedor_nome||'',doc=ccDig(r.fornecedor_cnpj)||f.doc||'';
+    var fk=ccFornChave(nome,doc),dp=(await ccDePara(fk))||{};
+    var porChave={};c.itens.forEach(function(it,i){porChave[ccItemChave(it)]=i;});
+    var linhas=(Array.isArray(r.linhas)?r.linhas:[]).filter(function(l){return l&&(l.descricao||l.codigo);}).map(function(l){
+      var o={codigo:String(l.codigo||''),descricao:String(l.descricao||''),unidade:String(l.unidade||''),quantidade:l.quantidade==null?null:ccNum(l.quantidade),
+        preco:ccNum(l.preco_unitario),ipi:l.ipi_percentual==null?null:ccNum(l.ipi_percentual),item:(l.item!=null&&c.itens[l.item])?Number(l.item):null,
+        conf:l.confianca==='alta'?'alta':l.confianca==='media'?'media':'baixa',equiv:!!l.equivalente,fator:ccNum(l.fator)>0?ccNum(l.fator):1,motivo:String(l.motivo||''),origem:'ia',ok:false};
+      var d=dp[ccLinhaChave(o)];
+      if(d&&porChave[d.item]!=null){o.item=porChave[d.item];o.fator=ccNum(d.fator)>0?ccNum(d.fator):1;o.origem='depara';o.conf='alta';o.equiv=!!d.equiv;o.motivo='já confirmado antes'+(d.por?' por '+d.por:'');}
+      o.ok=o.origem==='depara'||(o.item!=null&&o.conf==='alta'&&!o.equiv&&o.fator===1);
+      return o;});
+    CC.imp={j:j,status:'conf',nomes:arq.nomes,fk:fk,salvarDP:true,
+      cab:{nome:nome,doc:doc,orc:r.numero_orcamento||'',validade:r.validade||'',formaPag:ccFormaIA(r.forma_pagamento),prazoPag:r.prazo_pagamento||'',entrega:r.prazo_entrega_dias==null?'':ccNum(r.prazo_entrega_dias),
+        frete:r.frete_valor==null?(r.frete_tipo==='CIF'?0:''):ccNum(r.frete_valor),freteTipo:r.frete_tipo||'',desconto:r.desconto_valor==null?'':ccNum(r.desconto_valor),
+        ipi:r.ipi_percentual==null?'':ccNum(r.ipi_percentual),st:r.st_percentual==null?'':ccNum(r.st_percentual),comIpi:!!r.precos_incluem_ipi,obs:r.observacoes||''},
+      linhas:linhas};
+    if(!linhas.length){CC.imp.status='erro';CC.imp.erro='Não encontrei produtos com preço nesse arquivo. Confira se é a cotação certa ou mande um print mais nítido.';}
+  }catch(e){CC.imp={j:j,status:'erro',nomes:CC.imp.nomes,erro:String(e&&e.message||e)};}
+  ccDraw();
+  var p=ccEl('ccImp');if(p&&p.scrollIntoView)p.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function ccFormaIA(s){var n=ccNorm(s);if(!n)return '';if(/pix/.test(n))return 'PIX';if(/boleto/.test(n))return 'Boleto';if(/transf|ted|doc\b|deposito/.test(n))return 'Transferência';if(/cartao|credito/.test(n))return 'Cartão de crédito';if(/dinheiro|especie/.test(n))return 'Dinheiro';return String(s).slice(0,40);}
+// preço por unidade do NOSSO item, sem IPI
+function ccPrecoConv(l,cab){var p=l.preco/(l.fator||1);if(cab.comIpi){var ipi=l.ipi!=null?l.ipi:ccNum(cab.ipi);if(ipi>0)p=p/(1+ipi/100);}return Math.round(p*10000)/10000;}
+function ccDrawImp(){
+  var I=CC.imp,c=CC.cot;if(!I||!c)return '';
+  var f=c.forn[I.j]||{};
+  var h='<div class="cc-card" id="ccImp" style="border:2px solid #34c759">';
+  h+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"><b style="font-size:15px">📎 Cotação do fornecedor'+(f.nome?' — '+ccEsc(f.nome):'')+'</b><span class="cc-mu">'+ccEsc((I.nomes||[]).join(', '))+'</span><span style="flex:1"></span>'+
+    '<button type="button" class="cc-btn sm" data-ia="cancelar">✕ Fechar</button></div>';
+  if(I.status==='lendo')return h+'<div>⏳ Lendo o arquivo e ligando os produtos aos itens do pedido… (uns 20 a 40 segundos)</div></div>';
+  if(I.status==='erro')return h+'<div class="cc-msg err" style="margin:0">⚠️ '+ccEsc(I.erro)+'</div></div>';
+  var k=I.cab,opt=function(sel){return '<option value="">— não usar —</option>'+c.itens.map(function(it,i){return '<option value="'+i+'"'+(sel===i?' selected':'')+'>'+ccEsc((it.cod?it.cod+' · ':'')+it.desc)+'</option>';}).join('');};
+  var inp=function(key,lab,w,ph){return '<label style="display:flex;flex-direction:column;gap:2px;font-size:11px;font-weight:700;color:#57534e;text-transform:uppercase">'+lab+
+    '<input class="cc-inp" data-cab="'+key+'" value="'+ccEsc(k[key]===''||k[key]==null?'':(typeof k[key]==='number'?ccIn(k[key],key==='entrega'?0:undefined):k[key]))+'" placeholder="'+(ph||'')+'" style="width:'+(w||140)+'px;font-size:13px;padding:5px 8px"></label>';};
+  h+='<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px">'+
+    inp('nome','Fornecedor',220)+inp('doc','CNPJ',150)+inp('formaPag','Forma de pagamento',150)+inp('prazoPag','Prazo de pagamento',130)+inp('entrega','Entrega (dias)',90)+
+    inp('frete','Frete (R$)'+(k.freteTipo?' · '+k.freteTipo:''),100)+inp('desconto','Desconto (R$)',100)+inp('ipi','IPI geral (%)',90)+inp('st','ST (%)',80)+'</div>';
+  h+='<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-bottom:8px"><input type="checkbox" data-cab="comIpi"'+(k.comIpi?' checked':'')+'> Os preços da cotação já incluem IPI (o app tira o IPI do preço)</label>';
+  if(k.validade||k.orc||k.obs)h+='<div class="cc-mu" style="margin-bottom:8px">'+[k.orc?'Orçamento '+ccEsc(k.orc):'',k.validade?'Validade: '+ccEsc(k.validade):'',k.obs?ccEsc(k.obs):''].filter(Boolean).join(' · ')+'</div>';
+  var usados={};I.linhas.forEach(function(l){if(l.item!=null)usados[l.item]=(usados[l.item]||0)+1;});
+  h+='<div class="cc-scroll"><table class="cc-t"><thead><tr><th>Na cotação do fornecedor</th><th style="text-align:left;min-width:260px">Nosso item</th><th>Fator</th><th>Preço dele</th><th>Preço p/ nossa un.</th><th style="text-align:left;min-width:150px">Situação</th></tr></thead><tbody>';
+  I.linhas.forEach(function(l,n){
+    var st,cor;
+    if(l.item==null){st='🔴 sem item';cor='#fef2f2';}
+    else if(l.ok){st='🟢 '+(l.origem==='depara'?'já confirmado':'certo');cor='#ecfdf3';}
+    else{st='🟡 conferir';cor='#fffbeb';}
+    var dup=l.item!=null&&usados[l.item]>1;
+    h+='<tr style="background:'+cor+'"><td style="background:'+cor+'"><div style="font-weight:600">'+ccEsc(l.descricao)+'</div><div class="cc-mu">'+(l.codigo?'cód. '+ccEsc(l.codigo)+' · ':'')+(l.quantidade!=null?ccIn(l.quantidade,0)+' ':'')+ccEsc(l.unidade)+'</div></td>'+
+      '<td style="text-align:left"><select data-ln="'+n+'" data-lk="item" style="text-align:left">'+opt(l.item)+'</select>'+
+        '<div class="cc-mu" style="margin-top:3px;text-align:left">'+(l.equiv?'<b style="color:#92400e">produto equivalente, não idêntico</b> · ':'')+(dup?'<b style="color:#b91c1c">item repetido</b> · ':'')+ccEsc(l.motivo)+'</div></td>'+
+      '<td><input data-ln="'+n+'" data-lk="fator" value="'+ccIn(l.fator,0)+'" style="width:70px" title="Quantas unidades nossas cabem em 1 unidade dele"></td>'+
+      '<td>'+ccMoeda(l.preco)+(l.unidade?'<div class="cc-mu">por '+ccEsc(l.unidade)+'</div>':'')+'</td>'+
+      '<td><b>'+(l.item!=null?ccMoeda(ccPrecoConv(l,k)):'—')+'</b>'+(l.item!=null&&(l.fator!==1||k.comIpi)?'<div class="cc-mu">'+ccMoeda(l.preco)+(l.fator!==1?' ÷ '+ccIn(l.fator,0):'')+(k.comIpi?' sem IPI':'')+'</div>':'')+(l.item!=null?'<div class="cc-mu">por '+ccEsc(c.itens[l.item].un)+'</div>':'')+'</td>'+
+      '<td style="text-align:left">'+st+(l.item!=null&&!l.ok?'<div><label style="font-size:12px;display:flex;gap:4px;align-items:center;margin-top:3px"><input type="checkbox" data-ln="'+n+'" data-lk="ok" style="width:auto"> conferi</label></div>':'')+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  var semPreco=c.itens.map(function(it,i){return usados[i]?null:it.desc;}).filter(Boolean);
+  if(semPreco.length)h+='<div class="cc-msg inf" style="margin:10px 0 0">Itens do pedido que não apareceram nesta cotação (ficam sem preço): <b>'+ccEsc(semPreco.join('; '))+'</b></div>';
+  var pend=I.linhas.filter(function(l){return l.item!=null&&!l.ok;}).length;
+  h+='<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px">'+
+    '<label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" data-cab="salvarDP"'+(I.salvarDP?' checked':'')+'> Lembrar estas ligações para este fornecedor</label><span style="flex:1"></span>'+
+    (pend?'<span class="cc-tag warn">'+pend+' para conferir</span>':'<span class="cc-tag ok">tudo conferido</span>')+
+    '<button type="button" class="cc-btn pri" data-ia="aplicar">✅ Aplicar na coluna</button></div></div>';
+  return h;
+}
+function ccLigarImp(el){
+  var I=CC.imp;if(!I)return;
+  el.querySelectorAll('[data-ia]').forEach(function(b){b.onclick=function(){if(b.dataset.ia==='cancelar'){CC.imp=null;ccDraw();}else if(b.dataset.ia==='aplicar')ccAplicarImp();};});
+  if(I.status!=='conf')return;
+  el.querySelectorAll('[data-cab]').forEach(function(x){x.addEventListener('change',function(){var key=x.dataset.cab;
+    if(key==='salvarDP'){I.salvarDP=x.checked;return;}
+    if(key==='comIpi'){I.cab.comIpi=x.checked;ccDraw();return;}
+    I.cab[key]=['frete','desconto','ipi','st','entrega'].indexOf(key)>=0?(x.value.trim()===''?'':ccNum(x.value)):x.value;if(key==='ipi')ccDraw();});});
+  el.querySelectorAll('[data-ln]').forEach(function(x){x.addEventListener('change',function(){var l=I.linhas[+x.dataset.ln];if(!l)return;
+    if(x.dataset.lk==='item'){l.item=x.value===''?null:+x.value;l.origem='manual';l.ok=l.item!=null;l.equiv=false;l.motivo=l.item!=null?'escolhido por você':'';}
+    else if(x.dataset.lk==='fator'){l.fator=ccNum(x.value)>0?ccNum(x.value):1;}
+    else if(x.dataset.lk==='ok'){l.ok=x.checked;}
+    ccDraw();});});
+}
+function ccAplicarImp(){
+  var I=CC.imp,c=CC.cot;if(!I||!c||I.status!=='conf')return;
+  var pend=I.linhas.filter(function(l){return l.item!=null&&!l.ok;}).length;
+  if(pend&&!confirm(pend+' ligação(ões) ainda estão para conferir (amarelo). Aplicar assim mesmo?'))return;
+  var usados={},dupl=[];I.linhas.forEach(function(l){if(l.item==null)return;if(usados[l.item]!=null)dupl.push(c.itens[l.item].desc);else usados[l.item]=l;});
+  if(dupl.length&&!confirm('Mais de uma linha ligada ao mesmo item ('+dupl.join('; ')+'). Vou usar a primeira de cada. Continuar?'))return;
+  var f=c.forn[I.j];if(!f){CC.imp=null;ccDraw();return;}
+  var k=I.cab;
+  if(!f.fixo&&(k.nome||'').trim())f.nome=k.nome.trim();
+  if(k.doc)f.doc=ccDig(k.doc);
+  var base=0,ipiV=0,temIpiLinha=false;
+  f.precos=c.itens.map(function(it,i){var l=usados[i];if(!l)return '';var p=ccPrecoConv(l,k);base+=p*it.q;if(l.ipi!=null){temIpiLinha=true;ipiV+=p*it.q*l.ipi/100;}else ipiV+=p*it.q*ccNum(k.ipi)/100;return p;});
+  f.ipi=temIpiLinha&&base>0?Math.round(ipiV/base*1e6)/1e4:(k.ipi===''?f.ipi:k.ipi);
+  ['st','frete','desconto','entrega'].forEach(function(x){if(k[x]!==''&&k[x]!=null)f[x]=k[x];});
+  if(k.formaPag)f.formaPag=k.formaPag;if(k.prazoPag)f.prazoPag=k.prazoPag;
+  var obs=[k.orc?'Orç. '+k.orc:'',k.validade?'validade '+k.validade:'',k.obs].filter(Boolean).join(' · ');if(obs)f.obs=obs.slice(0,200);
+  f.arquivos=(f.arquivos||[]).concat((I.nomes||[]).map(function(n){return {nome:n,em:Date.now()};})).slice(-6);
+  if(c.vencedor&&!c.vencedor.manual)c.vencedor=null;
+  if(I.salvarDP){
+    var fk=ccFornChave(f.nome,f.doc),dp={},por=STATE.usuarioLogado||'';
+    I.linhas.forEach(function(l){if(l.item==null||!l.ok)return;dp[ccLinhaChave(l)]={item:ccItemChave(c.itens[l.item]),desc:c.itens[l.item].desc,fator:l.fator,equiv:!!l.equiv,dele:l.descricao.slice(0,120),por:por,em:Date.now()};});
+    if(Object.keys(dp).length)fetch(FIREBASE_DB+'/cotacoesCompraDePara/'+encodeURIComponent(fk)+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(dp)}).catch(function(){});
+  }
+  var n=Object.keys(usados).length;
+  CC.imp=null;CC.aviso='Cotação de '+(f.nome||'fornecedor')+' aplicada: '+n+' de '+c.itens.length+' itens com preço. Confira a coluna.';
+  ccDraw();ccSalvar();
 }
 function ccCopiar(){
   var c=CC.cot;if(!c)return;var rk=ccRanking(c),venc=c.vencedor?c.vencedor.i:(rk.length?rk[0].i:-1);

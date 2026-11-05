@@ -24,6 +24,8 @@
 //   POST /pagamentos/verificar → roda a verificação agora (a mesma do gatilho cron a cada 5 min)
 //   GET  /pedido-compra?numero=N → pedido de compra pelo número (itens, fornecedor, frete, impostos, parcelas)
 //                             para a aba Compras › Cotação compra. Precisa do escopo "Pedidos de compra" no app do Bling.
+//   GET  /produtos-fornecedores?ids=1,2,3 → códigos que cada fornecedor usa para esses produtos (cadastro do Bling),
+//                             usados como pista para ligar a cotação do fornecedor aos itens do pedido. Cache de 1 dia.
 // Gatilho (Settings → Trigger Events → Cron): */5 * * * *
 // Modo: KV "modo" = "simulacao" (padrão: só anota o que faria) ou "real" (executa no Bling).
 
@@ -138,6 +140,23 @@ export default {
         const numero = String(url.searchParams.get('numero') || '').replace(/\D/g, '');
         if (!numero) return resp({ ok: false, erro: 'Informe o número do pedido de compra' }, 400);
         return resp(await pedidoCompra(env, numero));
+      }
+      if (url.pathname === '/produtos-fornecedores') {
+        const ids = String(url.searchParams.get('ids') || '').split(',').map(x => x.replace(/\D/g, '')).filter(Boolean).slice(0, 60);
+        if (!ids.length) return resp({ ok: false, erro: 'Faltou ids' }, 400);
+        const out = {};
+        for (const id of ids) {
+          const c = await env.BLING_KV.get('pf:' + id, 'json');
+          if (c) { out[id] = c; continue; }
+          try {
+            const j = await bling(env, '/produtos/fornecedores?idProduto=' + id + '&limite=100');
+            const l = ((j && j.data) || []).filter(x => x.fornecedor && x.fornecedor.id && (x.codigo || x.descricao))
+              .map(x => ({ fornecedorId: x.fornecedor.id, codigo: x.codigo || '', descricao: x.descricao || '' }));
+            out[id] = l;
+            await env.BLING_KV.put('pf:' + id, JSON.stringify(l), { expirationTtl: 86400 });
+          } catch (e) { out[id] = []; }
+        }
+        return resp({ ok: true, produtos: out });
       }
       if (url.pathname === '/pix/status') {
         const txid = (url.searchParams.get('txid') || '').replace(/[^A-Za-z0-9]/g, '');
@@ -616,7 +635,7 @@ async function pedidoCompra(env, numero) {
       id: pc.id, numero: pc.numero, data: pc.data, dataPrevista: pc.dataPrevista || '',
       fornecedor: forn,
       itens: (pc.itens || []).map(i => ({
-        produtoId: i.produto && i.produto.id, codigo: (i.produto && i.produto.codigo) || '', descricao: i.descricao || '',
+        produtoId: i.produto && i.produto.id, codigo: (i.produto && i.produto.codigo) || '', descricao: i.descricao || '', codigoFornecedor: i.codigoFornecedor || '',
         unidade: i.unidade || '', quantidade: Number(i.quantidade || 0), valor: Number(i.valor || 0), aliquotaIPI: Number(i.aliquotaIPI || 0),
       })),
       totalProdutos: Number(pc.totalProdutos || 0), total: Number(pc.total || 0),
