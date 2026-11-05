@@ -588,27 +588,25 @@ async function executarContasPedido(env, reg, valor, data) {
 }
 
 // ---------------- pedido de compra (aba Compras › Cotação compra) ----------------
-// A API do Bling não filtra pedido de compra pelo número: procura por janelas de data (recentes primeiro)
-// e guarda número → id no KV para as próximas buscas.
+// A API do Bling não filtra pedido de compra pelo número (e o filtro de data dela não é confiável):
+// varre a lista inteira (poucas páginas) e guarda o mapa número → id no KV. Só varre de novo quando o número não está no mapa.
 async function acharPedidoCompra(env, numero) {
-  const kv = await env.BLING_KV.get('pc:num:' + numero);
-  if (kv) return Number(kv);
-  const janelas = [[0, 60], [60, 365], [365, 1460]];
-  for (const [ini, fim] of janelas) {
-    for (let p = 1; p <= 25; p++) {
-      const j = await bling(env, '/pedidos/compras?limite=100&pagina=' + p + '&dataInicial=' + diasAtras(fim) + (ini ? '&dataFinal=' + diasAtras(ini) : ''));
-      const d = (j && j.data) || [];
-      const x = d.find(o => String(o.numero) === numero);
-      if (x) { await env.BLING_KV.put('pc:num:' + numero, String(x.id), { expirationTtl: 365 * 86400 }); return x.id; }
-      if (d.length < 100) break;
-    }
+  const mapa = (await env.BLING_KV.get('pc:mapa', 'json')) || {};
+  if (mapa[numero]) return mapa[numero];
+  const novo = {};
+  for (let p = 1; p <= 80; p++) {
+    const j = await bling(env, '/pedidos/compras?limite=100&pagina=' + p);
+    const d = (j && j.data) || [];
+    for (const o of d) if (o && o.numero != null) novo[String(o.numero)] = o.id;
+    if (d.length < 100) break;
   }
-  return null;
+  await env.BLING_KV.put('pc:mapa', JSON.stringify(novo), { expirationTtl: 30 * 86400 });
+  return novo[numero] || null;
 }
 
 async function pedidoCompra(env, numero) {
   const id = await acharPedidoCompra(env, numero);
-  if (!id) return { ok: false, erro: 'Pedido de compra nº ' + numero + ' não encontrado no Bling (procurei nos últimos 4 anos).' };
+  if (!id) return { ok: false, erro: 'Pedido de compra nº ' + numero + ' não encontrado no Bling.' };
   const pc = ((await bling(env, '/pedidos/compras/' + id)) || {}).data || {};
   let forn = { id: pc.fornecedor && pc.fornecedor.id, nome: '', doc: '', uf: '' };
   if (forn.id) {
