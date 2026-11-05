@@ -27,6 +27,7 @@
 //   GET  /produtos-fornecedores?ids=1,2,3 → códigos que cada fornecedor usa para esses produtos (cadastro do Bling),
 //                             usados como pista para ligar a cotação do fornecedor aos itens do pedido. Cache de 1 dia.
 //   GET  /boletos, POST /boletos/verificar|vincular|ignorar|simular|simular/passo → boletos Sicoob liquidados (ver o fim do arquivo)
+//   ECONF: GET /econf/pendentes|painel|diag|xml?k=, POST /econf/enviar|auto|certificado|registrar → evento de conciliação à Sefaz
 // Gatilho (Settings → Trigger Events → Cron): */5 * * * *  (PIX a cada 5 min; boletos a cada 30 min)
 // Modo: KV "modo" = "simulacao" (padrão: só anota o que faria) ou "real" (executa no Bling).
 
@@ -41,6 +42,8 @@ const DIAS_CONTAS = 180;                  // contas a receber em aberto emitidas
 
 export default {
   async scheduled(evento, env, ctx) {
+    // 13h e 18h: a rodada é do ECONF automático (envio à Sefaz); nas outras, conferência de PIX e boletos
+    if (await econfAgendado(env).catch(e => { registrarErro(env, 'ECONF automático: ' + String(e.message || e)); return false; })) return;
     ctx.waitUntil(verificarPagamentos(env).then(() => registrarErro(env, null)).catch(e => registrarErro(env, String(e.message || e)))
       .then(() => verificarBoletos(env)).catch(e => registrarErro(env, 'Boletos: ' + String(e.message || e))));
   },
@@ -158,6 +161,32 @@ export default {
       }
       if (url.pathname === '/econf/pendentes') {
         return resp(Object.assign({ ok: true }, await econfPendentes(env)));
+      }
+      if (url.pathname === '/econf/certificado' && req.method === 'POST') return resp(await econfGuardarCertificado(env, await req.json().catch(() => null)));
+      if (url.pathname === '/econf/painel') return resp(Object.assign({ ok: true }, await econfPainel(env)));
+      if (url.pathname === '/econf/enviar' && req.method === 'POST') {
+        const b = (await req.json().catch(() => ({}))) || {};
+        return resp(await econfEnviar(env, { ambiente: b.ambiente, origem: 'manual (app)', usuario: String(b.usuario || '').slice(0, 60), maxChamadas: 25, maxEnvios: 15 }));
+      }
+      if (url.pathname === '/econf/auto' && req.method === 'POST') {
+        const b = (await req.json().catch(() => ({}))) || {};
+        await env.BLING_KV.put('econf:auto', b.ligado ? 'ligado' : 'desligado');
+        await logAcao(env, { acao: 'econf', modo: 'real', detalhe: 'ECONF automático ' + (b.ligado ? 'LIGADO' : 'DESLIGADO') + (b.usuario ? ' por ' + String(b.usuario).slice(0, 60) : '') });
+        return resp({ ok: true, auto: !!b.ligado });
+      }
+      if (url.pathname === '/econf/xml') {
+        const k = url.searchParams.get('k') || '';
+        if (!k.startsWith('econfxml:')) return resp({ ok: false, erro: 'Chave inválida' }, 400);
+        return resp(Object.assign({ ok: true }, (await env.BLING_KV.get(k, 'json')) || { erro: 'Não encontrado' }));
+      }
+      if (url.pathname === '/econf/diag') {
+        const out = {};
+        for (const amb of ['teste', 'producao']) {
+          try { const r = await env.SICOOB_MTLS.fetch(ECONF_URL[amb] + '?wsdl'); out[amb] = { status: r.status, inicio: (await r.text()).slice(0, 80) }; }
+          catch (e) { out[amb] = { erro: String(e.message || e) }; }
+        }
+        try { const a1 = await econfCarregarA1(env); out.certificado = a1 ? { ok: true, validade: a1.validade } : { ok: false }; } catch (e) { out.certificado = { erro: String(e.message || e) }; }
+        return resp({ ok: true, diag: out });
       }
       if (url.pathname === '/econf/registrar' && req.method === 'POST') {
         const b = await req.json();
@@ -767,7 +796,8 @@ async function nfDoPedido(env, pedId) {
   return nf || null;
 }
 
-async function econfPendentes(env) {
+async function econfPendentes(env, maxChamadas) {
+  const LIM = maxChamadas || 35;
   const out = [];
   let cursor, chamadas = 0, faltaram = 0;
   do {
@@ -784,9 +814,9 @@ async function econfPendentes(env) {
           ultimaTentativa: reg };
         try {
           let nfId = tipo === 'nota' ? id : null;
-          if (tipo === 'pedido') { if (chamadas > 35) { faltaram++; continue; } chamadas++; nfId = await nfDoPedido(env, id); }
+          if (tipo === 'pedido') { if (chamadas >= LIM) { faltaram++; continue; } chamadas++; nfId = await nfDoPedido(env, id); }
           if (!nfId) { item.status = 'aguardando_nf'; out.push(item); continue; }
-          if (chamadas > 35) { faltaram++; continue; }
+          if (chamadas >= LIM) { faltaram++; continue; }
           const cache = await env.BLING_KV.get('nfdados:' + nfId); if (!cache) chamadas++;
           const nf = await nfDados(env, nfId);
           item.nf = nf;
@@ -1269,4 +1299,198 @@ async function boletosPainel(env) {
   const st = (await env.BLING_KV.get('bol:estado', 'json')) || { jobs: {} };
   const modo = (await env.BLING_KV.get('modo')) || 'simulacao';
   return { ok: true, modo, ultimo: st.ultimo || 0, dias: Object.values(st.jobs || {}).map(j => ({ dia: j.dia, etapa: j.etapa, msg: j.msg || '' })), pendentes, acoes };
+}
+
+// ======================================================================================================
+// ---------------- ECONF automático: o servidor assina e envia o evento à Sefaz (SVRS) ----------------
+// O certificado A1 é guardado uma vez pelo script CONFIGURAR-ECONF-AUTOMATICO (no PC do Raul): a chave privada
+// fica no KV CRIPTOGRAFADA (AES-GCM) com uma chave derivada de um segredo do Worker (BLING_CLIENT_SECRET) —
+// quem lê o KV não consegue usar o certificado. A conexão com a Sefaz usa o mesmo certificado do binding SICOOB_MTLS.
+// Rodadas automáticas: 13h e 18h (horário de Brasília), em produção, só itens "pronto" de /econf/pendentes.
+const ECONF_URL = { producao: 'https://nfe.svrs.rs.gov.br/ws/recepcaoevento/recepcaoevento4.asmx', teste: 'https://nfe-homologacao.svrs.rs.gov.br/ws/recepcaoevento/recepcaoevento4.asmx' };
+const ECONF_WSDL = 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4';
+const ECONF_NS = 'http://www.portalfiscal.inf.br/nfe';
+const ECONF_DS = 'http://www.w3.org/2000/09/xmldsig#';
+const ECONF_C14N = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
+const ECONF_HORAS = [13, 18];
+const ECONF_SETUP_HASH = 'c01677557bd0bf979d52c8382407c8731637f628c9dcdd10b52082c508c4a2d8'; // sha256 do código do script de configuração
+const ECONF_CNPJ = '35017646000166', ECONF_UF = 'GO';
+
+const b64de = (s) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const b64em = (buf) => { let s = ''; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+const pemsDer = (pem, tipo) => [...String(pem || '').matchAll(new RegExp('-----BEGIN ' + tipo + '-----([\\s\\S]*?)-----END ' + tipo + '-----', 'g'))].map(m => b64de(m[1].replace(/\s+/g, '')));
+function derLen(n) { if (n < 128) return [n]; const b = []; while (n > 0) { b.unshift(n & 255); n >>= 8; } return [0x80 + b.length, ...b]; }
+function derTLV(tag, conteudo) { return Uint8Array.from([tag, ...derLen(conteudo.length), ...conteudo]); }
+// RSA PKCS#1 → PKCS#8 (WebCrypto só importa PKCS#8)
+function pkcs1para8(p1) {
+  const alg = Uint8Array.from([0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00]);
+  return derTLV(0x30, [0x02, 0x01, 0x00, ...alg, ...derTLV(0x04, p1)]);
+}
+// leitura mínima de DER: devolve os filhos de um SEQUENCE
+function derFilhos(u, ini, fim) {
+  const out = []; let i = ini;
+  while (i < fim) {
+    const tag = u[i]; let len = u[i + 1], h = 2;
+    if (len & 0x80) { const nb = len & 0x7f; len = 0; for (let k = 0; k < nb; k++) len = len * 256 + u[i + 2 + k]; h = 2 + nb; }
+    out.push({ tag, ini: i, cIni: i + h, fim: i + h + len }); i = i + h + len;
+  }
+  return out;
+}
+// certificado X.509 → { spki (DER), validade (Date), subjectTexto }
+function lerCertificado(der) {
+  const cert = derFilhos(der, 0, der.length)[0];
+  const tbs = derFilhos(der, cert.cIni, cert.fim)[0];
+  let f = derFilhos(der, tbs.cIni, tbs.fim); if (f[0].tag === 0xa0) f = f.slice(1);
+  const validade = derFilhos(der, f[3].cIni, f[3].fim)[1];
+  const t = new TextDecoder().decode(der.subarray(validade.cIni, validade.fim));
+  const ano = validade.tag === 0x17 ? 2000 + Number(t.slice(0, 2)) : Number(t.slice(0, 4)), r = validade.tag === 0x17 ? t.slice(2) : t.slice(4);
+  const vence = new Date(Date.UTC(ano, Number(r.slice(0, 2)) - 1, Number(r.slice(2, 4)), Number(r.slice(4, 6)), Number(r.slice(6, 8)), Number(r.slice(8, 10) || 0)));
+  const subj = Array.from(der.subarray(f[4].cIni, f[4].fim), c => (c >= 32 && c < 127) ? String.fromCharCode(c) : '|').join('').replace(/\|+/g, ' | ');
+  return { spki: der.slice(f[5].ini, f[5].fim), validade: vence, subject: subj };
+}
+async function econfKek(env) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.BLING_CLIENT_SECRET), 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: new TextEncoder().encode('econf-a1-jdfer'), info: new TextEncoder().encode('chave-certificado') },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function sha256hex(s) { return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map(b => b.toString(16).padStart(2, '0')).join(''); }
+
+async function econfGuardarCertificado(env, b) {
+  if (!b || (await sha256hex(String(b.codigo || ''))) !== ECONF_SETUP_HASH) return { ok: false, erro: 'Código de configuração inválido.' };
+  const p1 = pemsDer(b.chave, 'RSA PRIVATE KEY')[0], certs = pemsDer(b.cert, 'CERTIFICATE');
+  if (!p1 || !certs.length) return { ok: false, erro: 'Faltou a chave ou o certificado.' };
+  const info = lerCertificado(certs[0]);
+  if (info.subject.indexOf(ECONF_CNPJ) < 0) return { ok: false, erro: 'O certificado não é da JDFER (CNPJ ' + ECONF_CNPJ + ').' };
+  if (info.validade < new Date()) return { ok: false, erro: 'Certificado vencido.' };
+  const p8 = pkcs1para8(p1);
+  // confere se a chave é do certificado: assina um teste e verifica com a chave pública do certificado
+  const priv = await crypto.subtle.importKey('pkcs8', p8, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-1' }, false, ['sign']);
+  const pub = await crypto.subtle.importKey('spki', info.spki, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-1' }, false, ['verify']);
+  const teste = new TextEncoder().encode('econf-teste-' + Date.now());
+  if (!(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', pub, await crypto.subtle.sign('RSASSA-PKCS1-v1_5', priv, teste), teste)))
+    return { ok: false, erro: 'A chave não corresponde ao certificado.' };
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await econfKek(env), p8);
+  await env.BLING_KV.put('econf:a1', JSON.stringify({ iv: b64em(iv), ct: b64em(ct), cert: b64em(certs[0]), validade: info.validade.toISOString(), quando: Date.now() }));
+  ECONF_A1 = null;
+  await logAcao(env, { acao: 'econf', modo: 'real', detalhe: 'Certificado A1 configurado para o ECONF automático (válido até ' + info.validade.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ')' });
+  return { ok: true, validade: info.validade.toISOString() };
+}
+let ECONF_A1 = null;
+async function econfCarregarA1(env) {
+  if (ECONF_A1) return ECONF_A1;
+  const g = await env.BLING_KV.get('econf:a1', 'json');
+  if (!g) return null;
+  const p8 = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64de(g.iv) }, await econfKek(env), b64de(g.ct));
+  const key = await crypto.subtle.importKey('pkcs8', p8, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-1' }, false, ['sign']);
+  ECONF_A1 = { key, cert: g.cert, validade: g.validade };
+  return ECONF_A1;
+}
+
+function econfSignedInfo(id, digest, comNs) {
+  return '<SignedInfo' + (comNs ? ' xmlns="' + ECONF_DS + '"' : '') + '><CanonicalizationMethod Algorithm="' + ECONF_C14N + '"></CanonicalizationMethod>' +
+    '<SignatureMethod Algorithm="' + ECONF_DS + 'rsa-sha1"></SignatureMethod><Reference URI="#' + id + '"><Transforms>' +
+    '<Transform Algorithm="' + ECONF_DS + 'enveloped-signature"></Transform><Transform Algorithm="' + ECONF_C14N + '"></Transform></Transforms>' +
+    '<DigestMethod Algorithm="' + ECONF_DS + 'sha1"></DigestMethod><DigestValue>' + digest + '</DigestValue></Reference></SignedInfo>';
+}
+// monta e assina o evento (mesmo XML do enviar-econf.ps1; canonicalização conferida contra os XMLs aceitos pela Sefaz)
+async function econfMontarAssinado(a1, o) {
+  const id = 'ID110750' + o.chave + String(o.nSeq).padStart(2, '0');
+  const corpo = '<cOrgao>92</cOrgao><tpAmb>' + o.tpAmb + '</tpAmb><CNPJ>' + ECONF_CNPJ + '</CNPJ><chNFe>' + o.chave + '</chNFe>' +
+    '<dhEvento>' + o.dhEvento + '</dhEvento><tpEvento>110750</tpEvento><nSeqEvento>' + o.nSeq + '</nSeqEvento><verEvento>1.00</verEvento>' +
+    '<detEvento versao="1.00"><descEvento>ECONF</descEvento><verAplic>MaisAcessivel-1.0</verAplic>' +
+    '<detPag><indPag>0</indPag><tPag>' + o.tPag + '</tPag><vPag>' + o.vPag + '</vPag><dPag>' + o.dPag + '</dPag>' +
+    '<CNPJPag>' + ECONF_CNPJ + '</CNPJPag><UFPag>' + ECONF_UF + '</UFPag><CNPJIF>' + o.cnpjIF + '</CNPJIF><cAut>' + o.cAut + '</cAut>' +
+    '<CNPJReceb>' + ECONF_CNPJ + '</CNPJReceb><UFReceb>' + ECONF_UF + '</UFReceb></detPag></detEvento>';
+  const enc = new TextEncoder();
+  const digest = b64em(await crypto.subtle.digest('SHA-1', enc.encode('<infEvento xmlns="' + ECONF_NS + '" Id="' + id + '">' + corpo + '</infEvento>')));
+  const sig = b64em(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', a1.key, enc.encode(econfSignedInfo(id, digest, true))));
+  return '<evento xmlns="' + ECONF_NS + '" versao="1.00"><infEvento Id="' + id + '">' + corpo + '</infEvento>' +
+    '<Signature xmlns="' + ECONF_DS + '">' + econfSignedInfo(id, digest, false) + '<SignatureValue>' + sig + '</SignatureValue>' +
+    '<KeyInfo><X509Data><X509Certificate>' + a1.cert + '</X509Certificate></X509Data></KeyInfo></Signature></evento>';
+}
+function horaBrasilia(ms) { return new Date((ms || Date.now()) - 3 * 3600e3).toISOString().slice(0, 19) + '-03:00'; }
+const tagXml = (x, t) => { const m = String(x).match(new RegExp('<(?:\\w+:)?' + t + '>([^<]*)<')); return m ? m[1] : ''; };
+
+async function econfSoap(env, ambiente, envEvento) {
+  const soap = '<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body>' +
+    '<nfeDadosMsg xmlns="' + ECONF_WSDL + '">' + envEvento + '</nfeDadosMsg></soap12:Body></soap12:Envelope>';
+  const r = await env.SICOOB_MTLS.fetch(ECONF_URL[ambiente], { method: 'POST', headers: { 'Content-Type': 'application/soap+xml; charset=utf-8; action="' + ECONF_WSDL + '/nfeRecepcaoEvento"' }, body: soap });
+  const t = (await r.text()).replace(/^﻿/, '').trim();
+  return { status: r.status, texto: t };
+}
+
+// envia os ECONF "prontos". opt: {ambiente, origem, usuario, pular:[e2e], maxChamadas, maxEnvios}
+async function econfEnviar(env, opt) {
+  opt = opt || {};
+  const ambiente = opt.ambiente === 'producao' ? 'producao' : 'teste';
+  if (!env.SICOOB_MTLS) return { ok: false, erro: 'Sem o certificado de conexão (SICOOB_MTLS) no servidor.' };
+  const a1 = await econfCarregarA1(env);
+  if (!a1) return { ok: false, erro: 'O certificado para assinar o ECONF ainda não foi configurado (rode CONFIGURAR-ECONF-AUTOMATICO no PC).' };
+  const trava = await env.BLING_KV.get('econf:trava');
+  if (trava && Date.now() - Number(trava) < 240000) return { ok: false, ocupado: true, erro: 'Já tem um envio de ECONF rodando. Tente em 1 minuto.' };
+  await env.BLING_KV.put('econf:trava', String(Date.now()), { expirationTtl: 300 });
+  const res = [];
+  let pend;
+  try {
+    pend = await econfPendentes(env, opt.maxChamadas || 25);
+    const pular = opt.pular || [];
+    const prontos = pend.itens.filter(i => i.status === 'pronto' && !pular.includes(i.e2e));
+    const lote = prontos.slice(0, opt.maxEnvios || 15);
+    for (const p of lote) {
+      const item = { e2e: p.e2e, nf: p.nf.numero, chave: p.nf.chave, valor: p.valor, dia: p.dia, pagador: p.pagador, momento: p.momento, nSeq: p.nSeq || 1 };
+      try {
+        const evento = await econfMontarAssinado(a1, { chave: p.nf.chave, nSeq: item.nSeq, tpAmb: ambiente === 'producao' ? '1' : '2', dhEvento: horaBrasilia(Date.now() - 30000),
+          tPag: p.tPag, vPag: Number(p.valor).toFixed(2), dPag: p.dia, cnpjIF: CNPJ_SICOOB_IF, cAut: p.e2e });
+        const idLote = (horaBrasilia().slice(0, 19).replace(/\D/g, '') + String(Math.floor(Math.random() * 10))).slice(0, 15);
+        const envio = '<envEvento xmlns="' + ECONF_NS + '" versao="1.00"><idLote>' + idLote + '</idLote>' + evento + '</envEvento>';
+        const r = await econfSoap(env, ambiente, envio);
+        const ret = (r.texto.match(/<retEvento[\s\S]*?<\/retEvento>/) || [r.texto])[0];
+        item.cStat = tagXml(ret, 'cStat'); item.xMotivo = tagXml(ret, 'xMotivo'); item.nProt = tagXml(ret, 'nProt');
+        if (!item.cStat) { item.cStat = 'http' + r.status; item.xMotivo = r.texto.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200); }
+        item.xml = 'econfxml:' + ambiente + ':' + Date.now() + ':' + p.e2e;
+        await env.BLING_KV.put(item.xml, JSON.stringify({ envio, retorno: r.texto, nf: p.nf.numero, chave: p.nf.chave, valor: p.valor, cStat: item.cStat, nProt: item.nProt }),
+          { expirationTtl: ambiente === 'producao' ? 5 * 365 * 86400 : 30 * 86400 });
+        await econfRegistrar(env, { e2e: p.e2e, chave: p.nf.chave, nSeq: item.nSeq, ambiente, cStat: item.cStat, xMotivo: item.xMotivo, nProt: item.nProt, valor: p.valor });
+      } catch (e) { item.cStat = 'erro'; item.xMotivo = String(e.message || e).slice(0, 300); }
+      res.push(item);
+    }
+    const resumo = { quando: Date.now(), ambiente, origem: opt.origem || 'manual', usuario: opt.usuario || '',
+      aceitos: res.filter(x => ['135', '136', '573'].includes(x.cStat)).length, recusados: res.filter(x => !['135', '136', '573'].includes(x.cStat)).length,
+      aguardandoNF: pend.itens.filter(i => i.status === 'aguardando_nf').length, problemas: pend.itens.filter(i => !['pronto', 'aguardando_nf'].includes(i.status)).length,
+      restantes: prontos.length - lote.length + (pend.faltaram || 0), resultados: res };
+    const hist = (await env.BLING_KV.get('econf:execucoes', 'json')) || [];
+    hist.unshift(resumo);
+    await env.BLING_KV.put('econf:execucoes', JSON.stringify(hist.slice(0, 80)));
+    return Object.assign({ ok: true }, resumo);
+  } finally {
+    await env.BLING_KV.delete('econf:trava');
+  }
+}
+
+// chamada pelo cron (a cada 5 min): nas janelas das 13h e 18h roda o ECONF em produção até esvaziar a fila.
+// Devolve true quando usou a rodada (aí a conferência de PIX/boletos fica para os 5 min seguintes).
+async function econfAgendado(env) {
+  const agora = new Date(Date.now() - 3 * 3600e3), hora = agora.getUTCHours();
+  if (!ECONF_HORAS.includes(hora)) return false;
+  if ((await env.BLING_KV.get('econf:auto')) === 'desligado') return false;
+  if (!(await env.BLING_KV.get('econf:a1'))) return false;
+  const chave = 'econfslot:' + agora.toISOString().slice(0, 10) + '-' + hora;
+  const st = (await env.BLING_KV.get(chave, 'json')) || { tentados: [], rodadas: 0 };
+  if (st.fim) return false;
+  st.rodadas++;
+  try {
+    const r = await econfEnviar(env, { ambiente: 'producao', origem: 'automático ' + hora + 'h', pular: st.tentados, maxChamadas: 25, maxEnvios: 12 });
+    if (!r.ok && r.ocupado) return true;
+    if (!r.ok) { st.erro = r.erro; st.fim = st.rodadas >= 3; }
+    else { st.tentados.push(...r.resultados.map(x => x.e2e)); st.fim = !r.resultados.length || !r.restantes || st.rodadas >= 8; }
+  } catch (e) { st.erro = String(e.message || e); st.fim = st.rodadas >= 3; await registrarErro(env, 'ECONF automático: ' + st.erro); }
+  await env.BLING_KV.put(chave, JSON.stringify(st), { expirationTtl: 3 * 86400 });
+  return true;
+}
+
+async function econfPainel(env) {
+  const a1 = await env.BLING_KV.get('econf:a1', 'json');
+  const hist = (await env.BLING_KV.get('econf:execucoes', 'json')) || [];
+  return { configurado: !!a1, validade: a1 ? a1.validade : null, auto: (await env.BLING_KV.get('econf:auto')) !== 'desligado', horas: ECONF_HORAS, execucoes: hist.slice(0, 40) };
 }
