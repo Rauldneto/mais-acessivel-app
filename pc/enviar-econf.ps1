@@ -56,6 +56,7 @@ foreach ($p in $prontos) {
     $i++
     $quando = if ($p.momento -eq 'anterior') { 'pago ANTES da NF' } else { 'pago depois da NF' }
     Write-Host ("  {0,2}) NF {1,-7} R$ {2,10:N2}  pago {3}  {4}  ({5})" -f $i, $p.nf.numero, [double]$p.valor, ([datetime]$p.dia).ToString('dd/MM/yyyy'), $p.pagador, $quando)
+    if ($p.obs) { Write-Host "      obs: $($p.obs)" -ForegroundColor DarkGray }
 }
 if ($semNF.Count) {
     Write-Host ''

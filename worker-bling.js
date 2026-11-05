@@ -701,9 +701,36 @@ async function nfDados(env, nfId) {
   const c = await env.BLING_KV.get(ck, 'json');
   if (c && c.chave && Date.now() - c.ts < 7 * 86400e3) return c;
   const d = (await bling(env, '/nfe/' + nfId)).data || {};
-  const out = { ts: Date.now(), id: nfId, numero: String(d.numero || ''), chave: String(d.chaveAcesso || '').replace(/\D/g, ''), situacao: d.situacao, emissao: String(d.dataEmissao || '').slice(0, 10) };
+  const out = { ts: Date.now(), id: nfId, numero: String(d.numero || ''), chave: String(d.chaveAcesso || '').replace(/\D/g, ''), situacao: d.situacao, emissao: String(d.dataEmissao || '').slice(0, 10),
+    contatoId: (d.contato && d.contato.id) || null, valor: Number(d.valorNota || d.total || 0) };
   if (out.chave.length === 44) await env.BLING_KV.put(ck, JSON.stringify(out), { expirationTtl: 30 * 86400 });
   return out;
+}
+
+// Pedido cuja NF foi rejeitada/cancelada e reemitida: acha a NF autorizada do mesmo cliente emitida depois,
+// com o mesmo valor do pedido (ou a única candidata). Guarda a escolha.
+async function nfSubstituta(env, pedId, nfVelha) {
+  const ck = 'pednfsubst:' + pedId;
+  const c = await env.BLING_KV.get(ck);
+  if (c) return c;
+  let contatoId = nfVelha.contatoId;
+  const nv = await nfDados(env, nfVelha.id).catch(() => null);
+  if (nv && nv.contatoId) contatoId = nv.contatoId;
+  if (!contatoId) return null;
+  const ped = (await bling(env, '/pedidos/vendas/' + pedId)).data || {};
+  const totalPed = Number(ped.total || 0);
+  const desde = nfVelha.emissao || String(ped.data || '').slice(0, 10);
+  const hoje = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+  const lista = await paginas(env, '/nfe?tipo=1&dataEmissaoInicial=' + encodeURIComponent(desde + ' 00:00:00') + '&dataEmissaoFinal=' + encodeURIComponent(hoje + ' 23:59:59'), 3);
+  const cands = lista.filter(n => n.contato && String(n.contato.id) === String(contatoId) && [5, 6, 7].includes(Number(n.situacao)) && String(n.id) !== String(nfVelha.id));
+  let escolha = null;
+  for (const n of cands.slice(0, 6)) {
+    const d = await nfDados(env, n.id);
+    if (totalPed && Math.abs(Number(d.valor || 0) - totalPed) <= 0.05) { escolha = n.id; break; }
+  }
+  if (!escolha && cands.length === 1) escolha = cands[0].id;
+  if (escolha) await env.BLING_KV.put(ck, String(escolha), { expirationTtl: 365 * 86400 });
+  return escolha;
 }
 
 async function nfDoPedido(env, pedId) {
@@ -743,10 +770,17 @@ async function econfPendentes(env) {
           const sitNF = Number(nf.situacao);
           const SIT_NOME = { 1: 'pendente', 2: 'cancelada', 3: 'aguardando recibo', 4: 'rejeitada', 8: 'aguardando protocolo', 9: 'denegada', 10: 'em consulta', 11: 'bloqueada' };
           if (nf.chave.length !== 44) item.status = 'nf_sem_chave';
+          else if (![5, 6, 7].includes(sitNF) && tipo === 'pedido' && (item.subst = await nfSubstituta(env, id, nf))) {
+            const nova = await nfDados(env, item.subst);
+            item.nf = nova; item.obs = 'NF ' + nf.numero + ' não autorizada; usando a NF ' + nova.numero + ' emitida depois para o mesmo cliente';
+            item.status = 'pronto';
+            item.momento = nova.emissao && dia < nova.emissao ? 'anterior' : 'posterior';
+            item.nSeq = Number((await env.BLING_KV.get('econfseq:' + nova.chave)) || 0) + 1;
+          }
           else if (![5, 6, 7].includes(sitNF)) { item.status = 'nf_nao_autorizada'; item.erro = 'NF ' + nf.numero + ' está ' + (SIT_NOME[sitNF] || ('situação ' + sitNF)) + ' no Bling'; await env.BLING_KV.delete('nfdados:' + nfId); if (tipo === 'pedido') await env.BLING_KV.delete('pednf:' + id); }
           else item.status = 'pronto';
-          item.momento = nf.emissao && dia < nf.emissao ? 'anterior' : 'posterior';
-          item.nSeq = Number((await env.BLING_KV.get('econfseq:' + nf.chave)) || 0) + 1;
+          if (item.status === 'pronto' && !item.subst) item.momento = nf.emissao && dia < nf.emissao ? 'anterior' : 'posterior';
+          if (!item.subst) item.nSeq = Number((await env.BLING_KV.get('econfseq:' + nf.chave)) || 0) + 1;
         } catch (e) { item.status = 'erro'; item.erro = String(e.message || e); }
         out.push(item);
       }
