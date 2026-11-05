@@ -105,7 +105,7 @@ function Enviar($envEvento) {
     $s = $req.GetRequestStream(); $s.Write($b, 0, $b.Length); $s.Close()
     try { $res = $req.GetResponse() } catch [System.Net.WebException] { $res = $_.Exception.Response; if (-not $res) { throw } }
     $sr = New-Object IO.StreamReader($res.GetResponseStream()); $t = $sr.ReadToEnd(); $sr.Close()
-    return $t
+    return $t.TrimStart([char]0xFEFF).Trim()
 }
 
 $enviados = 0; $falhas = 0
@@ -141,7 +141,7 @@ foreach ($p in $prontos) {
         $cStat = $ie.SelectSingleNode('n:cStat', $ns).InnerText
         $xMotivo = $ie.SelectSingleNode('n:xMotivo', $ns).InnerText
         $np = $ie.SelectSingleNode('n:nProt', $ns); if ($np) { $nProt = $np.InnerText }
-    } catch { $xMotivo = 'Resposta inesperada: ' + ($resp -replace '<[^>]+>', ' ' -replace '\s+', ' ').Trim().Substring(0, [Math]::Min(200, $resp.Length)) }
+    } catch { $limpo = ($resp -replace '<[^>]+>', ' ' -replace '\s+', ' ').Trim(); $xMotivo = 'Resposta inesperada: ' + $limpo.Substring(0, [Math]::Min(200, $limpo.Length)) }
     $cor = if ($cStat -in '135', '136') { 'Green' } elseif ($cStat -eq '573') { 'Yellow' } else { 'Red' }
     Write-Host "  Sefaz: $cStat - $xMotivo $(if ($nProt) { "(protocolo $nProt)" })" -ForegroundColor $cor
     # guarda o XML enviado e a resposta (arquivo fiscal)
