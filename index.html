@@ -1,5 +1,5 @@
 <!-- v5.4-1785154153 -->
-<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material | fin-sem-nro-documento | fin-sem-ocorrencia | energia-solar-mod11-renderEnergiaSolar | leilao-imoveis-mod12-renderLeilaoImoveis | bling-mod17-renderBling | relatorio-despesas-mod19-renderRelDespesas -->
+<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material | fin-sem-nro-documento | fin-sem-ocorrencia | energia-solar-mod11-renderEnergiaSolar | leilao-imoveis-mod12-renderLeilaoImoveis | bling-mod17-renderBling | relatorio-despesas-mod19-renderRelDespesas | conciliacao-receber-mod21-renderConciliacaoReceber -->
 <!-- ANTES DE PUBLICAR QUALQUER MUDANCA NESTE ARQUIVO: busque a versao atual em producao via GitHub API,
      confirme que os marcadores acima (nomes de funcao) ainda existem, e aplique a mudanca por cima dela -
      NUNCA sobrescreva com uma copia local antiga. Um commit em 21/08/2026 (f0ebfff) reverteu por engano
@@ -3228,7 +3228,7 @@ function iniEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){re
 function iniAdmin(){return STATE.roleLogado==='admin';}
 // Mesma regra do menu (renderModuloNav): quais abas este usuário enxerga
 function iniModulos(){
-  var todos=['frete','mod10','mod2','mod7','mod8','mod9','mod3','mod4','mod11','mod12','mod13','mod20','mod14','mod16','mod19','mod17','mod5','mod15'];
+  var todos=['frete','mod10','mod2','mod7','mod8','mod9','mod3','mod4','mod11','mod12','mod13','mod20','mod14','mod16','mod19','mod21','mod17','mod5','mod15'];
   if(iniAdmin())return todos;
   var ids=todos;
   if(STATE.abasPermitidas&&STATE.abasPermitidas.length){
@@ -3236,7 +3236,7 @@ function iniModulos(){
     ['frete','mod10'].forEach(function(x){if(p.indexOf(x)<0)p.push(x);});
     ids=todos.filter(function(id){return p.indexOf(id)>=0;});
   }
-  var soAdmin=['mod11','mod12','mod13','mod14','mod15','mod16','mod19'];
+  var soAdmin=['mod11','mod12','mod13','mod14','mod15','mod16','mod19','mod21'];
   return ids.filter(function(id){return soAdmin.indexOf(id)<0;});
 }
 function iniPode(id){return iniModulos().indexOf(id)>=0;}
@@ -3577,13 +3577,14 @@ function renderModuloNav(){
     {id:'mod14', icon:'💸', label:'Lançamento de despesas'},
     {id:'mod16', icon:'🚚', label:'Lançamento de frete'},
     {id:'mod19', icon:'📊', label:'Relatório de despesas'},
+    {id:'mod21', icon:'🏦', label:'Conciliação contas a Receber'},
     {id:'mod17', icon:'💠', label:'BLING'},
     {id:'mod5',  icon:'🧪', label:'Modelo em Teste'},
     {id:'mod15', icon:'📊', label:'Controle'},
     {id:'mod18', icon:'🛠️', label:'Reportar Problema'}
   ];
   // Mapeamento id antigo -> novo
-  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13','mod14':'mod14','mod15':'mod15','mod16':'mod16','mod17':'mod17','mod18':'mod18','mod19':'mod19','mod20':'mod20'};
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13','mod14':'mod14','mod15':'mod15','mod16':'mod16','mod17':'mod17','mod18':'mod18','mod19':'mod19','mod20':'mod20','mod21':'mod21'};
   // Admin ve tudo; outros so veem abas permitidas
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
@@ -3597,7 +3598,7 @@ function renderModuloNav(){
     }
   }
   // Abas só do administrador: Energia solar e Leilão (pessoais) e Formação de preço (mostra custos)
-  var ABAS_SO_ADMIN=['mod11','mod12','mod13','mod14','mod15','mod16','mod19'];
+  var ABAS_SO_ADMIN=['mod11','mod12','mod13','mod14','mod15','mod16','mod19','mod21'];
   if(STATE.roleLogado!=='admin'){
     MODULOS=MODULOS.filter(function(m){return ABAS_SO_ADMIN.indexOf(m.id)<0;});
     if(ABAS_SO_ADMIN.indexOf(STATE.modulo)>=0&&MODULOS.length)STATE.modulo=MODULOS[0].id;
@@ -3607,11 +3608,11 @@ function renderModuloNav(){
     {n:'Vendas',i:'ti-shopping-bag',c:'#ff9500',ids:['frete','mod10','mod2','mod7','mod8','mod4','mod5']},
     {n:'Lead',i:'ti-target-arrow',c:'#007aff',ids:['mod9']},
     {n:'Compras',i:'ti-shopping-cart',c:'#34c759',ids:['mod13','mod20']},
-    {n:'Financeiro',i:'ti-cash',c:'#0a7d6b',ids:['mod17','mod14','mod16','mod19']},
+    {n:'Financeiro',i:'ti-cash',c:'#0a7d6b',ids:['mod17','mod21','mod14','mod16','mod19']},
     {n:'T.I.',i:'ti-cpu',c:'#5856d6',ids:['mod3','mod15','mod18']},
     {n:'Particular',i:'ti-home',c:'#af52de',ids:['mod12','mod11']}
   ];
-  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod13:'ti-currency-dollar',mod20:'ti-scale',mod14:'ti-receipt-2',mod16:'ti-truck-delivery',mod17:'ti-qrcode',mod19:'ti-report-money',mod15:'ti-gauge',mod18:'ti-bug',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun'};
+  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod13:'ti-currency-dollar',mod20:'ti-scale',mod14:'ti-receipt-2',mod16:'ti-truck-delivery',mod17:'ti-qrcode',mod19:'ti-report-money',mod21:'ti-building-bank',mod15:'ti-gauge',mod18:'ti-bug',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun'};
   if(!document.getElementById('navIosCss')){
     var lk=document.createElement('link');lk.rel='stylesheet';lk.href='https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css';lk.onload=function(){document.documentElement.classList.add('ti-ok');};document.head.appendChild(lk);
     var st=document.createElement('style');st.id='navIosCss';
@@ -3745,7 +3746,7 @@ function rppAdmin(){return STATE.roleLogado==='admin';}
 function rppUsuario(){return STATE.usuarioLogado||STATE.loginUser||'?';}
 function rppData(t){var d=new Date(t);return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
 function rppNomeTela(id){
-  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod17:'BLING',mod15:'Controle',mod18:'Reportar Problema',ext:'Extensão do Chrome',outro:'Outra / não sei'};
+  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod17:'BLING',mod21:'Conciliação contas a Receber',mod15:'Controle',mod18:'Reportar Problema',ext:'Extensão do Chrome',outro:'Outra / não sei'};
   return nomes[id]||id||'?';
 }
 
@@ -13577,6 +13578,161 @@ async function lcUpload(file){
     LC.busy=null;LC.res={erro:(e&&e.message)||String(e)};lcDraw();
   }
 }
+// ===================== MÓDULO CONCILIAÇÃO CONTAS A RECEBER (mod21) =====================
+// Financeiro › Conciliação contas a Receber (só admin). Tudo que entra no Sicoob vira baixa no Contas a Receber do Bling.
+// Começa pelos BOLETOS Sicoob liquidados (os PIX continuam na aba BLING). Dados: Worker "bling" (rotas /boletos*).
+// Sub-abas: 🧪 Simulação (boletos antigos, não mexe no Bling) · 🔗 Boletos sem vínculo · 🧾 Baixas de boletos.
+var CCR={root:null,aba:'sim',sim:null,rel:[],pain:null,carr:false,rodando:false,erro:'',f:{de:'2026-07-01',ate:'2026-08-31'},filtro:'todos'};
+if((location.hash||'')==='#conciliacao-receber'){STATE.modulo='mod21';}
+function ccrEsc(s){return blgEsc(s);}
+function ccrM(v){return 'R$ '+blgMoeda(v);}
+function ccrD(d){return blgData(d);}
+function renderConciliacaoReceber(){
+  dspCss();ccrCss();
+  var w=document.createElement('div');w.className='fin-wrap';CCR.root=w;
+  setTimeout(function(){
+    (BLG.cfgCarregada?Promise.resolve():blgCarregarCfg()).then(function(){ccrCarregar();});
+  },0);
+  ccrDraw();return w;
+}
+function ccrCss(){
+  if(document.getElementById('ccrCss'))return;var st=document.createElement('style');st.id='ccrCss';
+  st.textContent=
+  '.ccr-res{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:12px 0}'+
+  '.ccr-res div{background:#fff;border:1px solid #e5e5ea;border-radius:12px;padding:10px 12px}.ccr-res b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.ccr-res span{font-size:12px;color:#636366}'+
+  '.ccr-bar{height:8px;background:#e5e5ea;border-radius:99px;overflow:hidden;margin:8px 0}.ccr-bar i{display:block;height:100%;background:#0a7d6b;transition:width .3s}'+
+  '.ccr-tab{width:100%;border-collapse:collapse;font-size:13px;background:#fff}.ccr-tab th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#636366;padding:8px;border-bottom:1px solid #e5e5ea;position:sticky;top:0;background:#fafafa}'+
+  '.ccr-tab td{padding:8px;border-bottom:1px solid #f0f0f3;vertical-align:top}.ccr-tab td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}'+
+  '.ccr-tab tr.sem td{background:#fffaf2}.ccr-tab tr.erro td{background:#fdf1f0}.ccr-tab small{color:#636366;display:block}'+
+  '.ccr-scroll{overflow:auto;max-height:70vh;border:1px solid #e5e5ea;border-radius:12px}'+
+  '.ccr-fl{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px}.ccr-fl .fin-f{width:150px}'+
+  '.ccr-pend{display:grid;gap:10px}.ccr-pend .fin-card{display:grid;gap:6px}';
+  document.head.appendChild(st);
+}
+function ccrCarregar(){
+  if(!blgUrl()){CCR.erro='Endereço do Worker não configurado (configure na aba BLING).';ccrDraw();return;}
+  CCR.carr=true;ccrDraw();
+  Promise.all([blgApi('/boletos/simular'),blgApi('/boletos')]).then(function(r){
+    CCR.carr=false;
+    if(r[0]&&r[0].ok){CCR.sim=r[0].sim;CCR.rel=r[0].rel||[];}else CCR.erro=(r[0]&&r[0].erro)||'Falhou ao ler a simulação';
+    CCR.pain=r[1]&&r[1].ok?r[1]:{erro:(r[1]&&r[1].erro)||'Falhou'};
+    ccrDraw();
+    if(CCR.sim&&!CCR.sim.fim&&!CCR.rodando)ccrRodar();   // continua de onde parou
+  }).catch(function(e){CCR.carr=false;CCR.erro=String(e);ccrDraw();});
+}
+function ccrIniciar(){
+  if(CCR.rodando)return;
+  if(CCR.sim&&!CCR.sim.fim&&!confirm('Já existe uma simulação em andamento. Começar outra do zero?'))return;
+  CCR.erro='';
+  blgApi('/boletos/simular',{method:'POST',body:{de:CCR.f.de,ate:CCR.f.ate,usuario:STATE.usuarioLogado||''}}).then(function(r){
+    if(!r||!r.ok){CCR.erro=(r&&r.erro)||'Não consegui iniciar';ccrDraw();return;}
+    CCR.rel=[];CCR.sim={de:CCR.f.de,ate:CCR.f.ate,totalDias:r.dias,feitos:0,resumo:{}};ccrRodar();
+  });
+}
+function ccrRodar(){
+  CCR.rodando=true;ccrDraw();
+  var passo=function(){
+    if(!CCR.root||!document.body.contains(CCR.root)){CCR.rodando=false;return;}   // saiu da aba: continua quando voltar
+    blgApi('/boletos/simular/passo',{method:'POST'}).then(function(r){
+      if(!r||!r.ok){CCR.rodando=false;CCR.erro=(r&&r.erro)||'Falhou';ccrDraw();return;}
+      CCR.sim=r.sim||CCR.sim;
+      if(r.fim){CCR.rodando=false;blgApi('/boletos/simular').then(function(x){if(x&&x.ok){CCR.sim=x.sim;CCR.rel=x.rel||[];}ccrDraw();});return;}
+      ccrDraw();setTimeout(passo,(r.esperar||0)*1000+400);
+    }).catch(function(e){CCR.rodando=false;CCR.erro='Conexão: '+e;ccrDraw();});
+  };
+  passo();
+  // atualiza a tabela de tempos em tempos enquanto roda
+  var atual=function(){if(!CCR.rodando)return;blgApi('/boletos/simular').then(function(x){if(x&&x.ok&&CCR.rodando){CCR.rel=x.rel||[];ccrDraw();}setTimeout(atual,8000);});};
+  setTimeout(atual,8000);
+}
+function ccrDraw(){
+  var w=CCR.root;if(!w)return;
+  var nPend=(CCR.pain&&CCR.pain.pendentes||[]).length;
+  var aba=function(id,t){return '<button type="button" data-ccr-aba="'+id+'" class="'+(CCR.aba===id?'on':'')+'">'+t+'</button>';};
+  var h='<h2 style="margin:0 0 4px;font-size:22px">Conciliação contas a Receber</h2><p class="fin-mu" style="margin:0 0 12px;color:#636366;font-size:13px">Tudo que entra na conta Sicoob vira baixa no Contas a Receber do Bling: valor cheio, data em que o dinheiro entrou e a tarifa do boleto como despesa em "Tarifa bancária". PIX continuam na aba BLING.</p>';
+  if(CCR.pain&&CCR.pain.modo)h+='<div class="fin-msg '+(CCR.pain.modo==='real'?'ok':'warn')+'">'+(CCR.pain.modo==='real'?'✅ Modo REAL: as baixas são feitas no Bling.':'🧪 Modo SIMULAÇÃO: nada é gravado no Bling, só anotado o que seria feito.')+'</div>';
+  if(CCR.erro)h+='<div class="fin-msg err">'+ccrEsc(CCR.erro)+'</div>';
+  h+='<div class="fin-tabs">'+aba('sim','🧪 Simulação (boletos antigos)')+aba('pend','🔗 Boletos sem vínculo'+(nPend?' <span class="fin-badge">'+nPend+'</span>':''))+aba('log','🧾 Baixas de boletos')+'</div>';
+  if(CCR.aba==='sim')h+=ccrHtmlSim();else if(CCR.aba==='pend')h+=ccrHtmlPend();else h+=ccrHtmlLog();
+  w.innerHTML=h;
+  w.onclick=ccrClique;
+  w.onchange=function(e){var t=e.target;if(t.id==='ccrDe')CCR.f.de=t.value;if(t.id==='ccrAte')CCR.f.ate=t.value;if(t.id==='ccrFiltro'){CCR.filtro=t.value;ccrDraw();}};
+}
+function ccrHtmlSim(){
+  var s=CCR.sim,h='<div class="fin-card"><div class="ccr-fl">'+
+    '<div class="fin-f"><label>De</label><input class="fin-in" type="date" id="ccrDe" value="'+ccrEsc(CCR.f.de)+'"></div>'+
+    '<div class="fin-f"><label>Até</label><input class="fin-in" type="date" id="ccrAte" value="'+ccrEsc(CCR.f.ate)+'"></div>'+
+    '<button class="fin-btn pri" data-ccr="iniciar"'+(CCR.rodando?' disabled':'')+'>'+(CCR.rodando?'⏳ Rodando…':'▶️ Rodar simulação')+'</button>'+
+    (s&&!s.fim&&!CCR.rodando?'<button class="fin-btn" data-ccr="continuar">⏯️ Continuar</button>':'')+
+    (CCR.rel.length?'<button class="fin-btn" data-ccr="excel">⬇️ Excel</button>':'')+
+    '</div><p style="margin:0;font-size:12.5px;color:#636366">Lê no Sicoob os boletos <b>liquidados</b> dia a dia (dias úteis) e mostra, para cada um, qual conta do Bling seria baixada, com que valor e data, e a tarifa. Não grava nada no Bling. As contas desse período já foram baixadas à mão: a coluna <b>No Bling hoje</b> serve para você conferir se a automação acharia a mesma conta.</p>';
+  if(s){
+    var pct=s.totalDias?Math.round(100*s.feitos/s.totalDias):0,r=s.resumo||{};
+    h+='<div class="ccr-bar"><i style="width:'+pct+'%"></i></div><div style="font-size:12.5px;color:#636366">'+(s.fim?'✅ Terminada — '+s.totalDias+' dias úteis de '+ccrD(s.de)+' a '+ccrD(s.ate):'Dia '+ccrD(s.diaAtual)+' ('+s.feitos+' de '+s.totalDias+') · '+ccrEsc(s.etapa||'')+(s.msg?' · '+ccrEsc(s.msg):''))+'</div>';
+    h+='<div class="ccr-res"><div><b>'+(r.boletos||0)+'</b><span>boletos liquidados</span></div><div><b>'+(r.auto||0)+'</b><span>casariam sozinhos</span></div><div><b>'+(r.sem||0)+'</b><span>sem vínculo (você escolheria)</span></div><div><b>'+ccrM(r.valor)+'</b><span>valor recebido</span></div><div><b>'+ccrM(r.tarifas)+'</b><span>tarifas (despesa)</span></div>'+(r.erros?'<div><b>'+r.erros+'</b><span>dias com erro</span></div>':'')+'</div>';
+  }
+  h+='</div>';
+  if(CCR.rel.length){
+    var L=CCR.rel.filter(function(x){return CCR.filtro==='todos'||x.tipo===CCR.filtro;});
+    h+='<div class="fin-h" style="display:flex;justify-content:space-between;align-items:center">Resultado ('+L.length+')<select id="ccrFiltro" style="width:auto;font-size:13px"><option value="todos">Todos</option><option value="auto"'+(CCR.filtro==='auto'?' selected':'')+'>Casariam sozinhos</option><option value="sem"'+(CCR.filtro==='sem'?' selected':'')+'>Sem vínculo</option><option value="erro"'+(CCR.filtro==='erro'?' selected':'')+'>Erros</option></select></div>';
+    h+='<div class="ccr-scroll"><table class="ccr-tab"><thead><tr><th>Liquidação</th><th>Boleto</th><th>Pagador</th><th class="n">Pago</th><th class="n">Tarifa</th><th>Conta no Bling</th><th>O que faria</th><th>No Bling hoje</th></tr></thead><tbody>';
+    L.forEach(function(x){
+      if(x.tipo==='erro'){h+='<tr class="erro"><td>'+ccrD(x.dia)+'</td><td colspan="7">⚠️ '+ccrEsc(x.motivo)+'</td></tr>';return;}
+      h+='<tr class="'+(x.tipo==='sem'?'sem':'')+'"><td>'+ccrD(x.liquidacao||x.dia)+(x.credito&&x.credito!==x.liquidacao?'<small>crédito '+ccrD(x.credito)+'</small>':'')+'</td>'+
+        '<td>'+ccrEsc(x.nossoNumero)+'<small>seu nº '+ccrEsc(x.seuNumero||'—')+' · venc. '+ccrD(x.vencimento)+'</small></td>'+
+        '<td>'+ccrEsc(x.pagador||'—')+'<small>'+ccrEsc(x.doc||'')+'</small></td>'+
+        '<td class="n">'+ccrM(x.pago)+(x.mora?'<small>juros '+ccrM(x.mora)+'</small>':'')+(x.desconto?'<small>desc. '+ccrM(x.desconto)+'</small>':'')+'</td><td class="n">'+ccrM(x.tarifa)+'</td>';
+      if(x.tipo==='auto')h+='<td>'+(x.origemTipo==='venda'?'Pedido ':'NF ')+ccrEsc(x.nf||'')+' · '+ccrEsc(x.cliente)+'<small>conta '+ccrEsc(x.contaId)+' · '+ccrM(x.valorConta)+'</small><small>✔ '+ccrEsc(x.motivo)+'</small></td>'+
+        '<td>'+(x.acoes||[]).map(ccrEsc).join('<br>')+'</td><td>'+ccrEsc(x.situacaoBling||'')+'</td></tr>';
+      else h+='<td colspan="2"><b>Sem vínculo:</b> '+ccrEsc(x.motivo)+((x.sugestoes||[]).length?'<small>Pistas: '+x.sugestoes.map(function(c){return (c.origemTipo==='venda'?'Pedido ':'NF ')+ccrEsc(c.numero)+' '+ccrEsc(c.cliente)+' '+ccrM(c.valor)+' ('+ccrEsc(c.motivo)+')';}).join(' · ')+'</small>':'')+'</td><td></td></tr>';
+    });
+    h+='</tbody></table></div>';
+  } else if(CCR.carr)h+='<div class="fin-empty" style="margin-top:14px">Carregando…</div>';
+  return h;
+}
+function ccrHtmlPend(){
+  var p=CCR.pain;if(!p)return '<div class="fin-empty">Carregando…</div>';if(p.erro)return '<div class="fin-msg err">'+ccrEsc(p.erro)+'</div>';
+  var h='<div class="fin-msg info">Boletos liquidados que a automação não conseguiu ligar sozinha a uma conta do Bling. Escolha a conta (ou informe o id dela) para baixar.</div>';
+  if(!p.pendentes.length)return h+'<div class="fin-empty">Nenhum boleto sem vínculo. 🎉</div>';
+  h+='<div class="ccr-pend">';
+  p.pendentes.forEach(function(x){
+    h+='<div class="fin-card"><div class="fin-st"><span>Boleto '+ccrEsc(x.nossoNumero)+' · '+ccrEsc(x.pagador||'pagador?')+'</span><span class="fin-money">'+ccrM(x.pago)+'</span></div>'+
+      '<div style="font-size:12.5px;color:#636366">Liquidado '+ccrD(x.liquidacao)+(x.credito?' · crédito '+ccrD(x.credito):'')+' · venc. '+ccrD(x.vencimento)+' · seu nº '+ccrEsc(x.seuNumero||'—')+' · tarifa '+ccrM(x.tarifa)+'</div>'+
+      '<div style="font-size:13px">'+ccrEsc(x.motivo)+'</div><div class="fin-match">'+
+      (x.sugestoes||[]).filter(function(c){return c.situacao!==2;}).map(function(c){return '<button data-ccr="vincular" data-nn="'+ccrEsc(x.nossoNumero)+'" data-conta="'+ccrEsc(c.contaId)+'">'+(c.origemTipo==='venda'?'Pedido ':'NF ')+ccrEsc(c.numero)+' — '+ccrEsc(c.cliente)+' — '+ccrM(c.valor)+' <small>('+ccrEsc(c.motivo)+')</small></button>';}).join('')+
+      '</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="fin-btn sm" data-ccr="vincularId" data-nn="'+ccrEsc(x.nossoNumero)+'">Informar id da conta</button><button class="fin-btn sm dan" data-ccr="ignorar" data-nn="'+ccrEsc(x.nossoNumero)+'">Ignorar</button></div></div>';
+  });
+  return h+'</div>';
+}
+function ccrHtmlLog(){
+  var p=CCR.pain;if(!p)return '<div class="fin-empty">Carregando…</div>';if(p.erro)return '<div class="fin-msg err">'+ccrEsc(p.erro)+'</div>';
+  var h='<div class="fin-card" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><span style="font-size:13px;color:#636366">Leitura automática a cada 30 min'+(p.ultimo?' · última: '+new Date(p.ultimo).toLocaleString('pt-BR'):'')+'<br>'+(p.dias||[]).map(function(d){return ccrD(d.dia)+': '+ccrEsc(d.etapa);}).join(' · ')+'</span><button class="fin-btn sm" data-ccr="verificar">🔄 Verificar agora</button></div>';
+  if(!p.acoes.length)return h+'<div class="fin-empty" style="margin-top:12px">Nenhum boleto tratado ainda.</div>';
+  h+='<div class="ccr-scroll" style="margin-top:12px"><table class="ccr-tab"><thead><tr><th>Quando</th><th>Ação</th><th>Detalhe</th><th>Resultado</th></tr></thead><tbody>';
+  p.acoes.forEach(function(a){h+='<tr><td>'+new Date(a.quando).toLocaleString('pt-BR')+'<small>'+ccrEsc(a.modo||'')+'</small></td><td>'+ccrEsc(a.acao)+'</td><td>'+ccrEsc(a.detalhe||'')+'</td><td>'+ccrEsc(a.resultado||'')+'</td></tr>';});
+  return h+'</tbody></table></div>';
+}
+function ccrClique(e){
+  var t=e.target.closest('[data-ccr-aba],[data-ccr]');if(!t)return;
+  if(t.dataset.ccrAba){CCR.aba=t.dataset.ccrAba;ccrDraw();return;}
+  var a=t.dataset.ccr,u=STATE.usuarioLogado||'';
+  if(a==='iniciar')return ccrIniciar();
+  if(a==='continuar')return ccrRodar();
+  if(a==='excel')return ccrExcel();
+  if(a==='verificar'){t.disabled=true;blgApi('/boletos/verificar',{method:'POST'}).then(function(){ccrCarregar();});return;}
+  if(a==='vincular'||a==='vincularId'){
+    var conta=t.dataset.conta;if(a==='vincularId'){conta=prompt('Id da conta a receber no Bling:');if(!conta)return;}
+    if(!confirm('Baixar o boleto '+t.dataset.nn+' na conta '+conta+'?'))return;
+    blgApi('/boletos/vincular',{method:'POST',body:{nossoNumero:t.dataset.nn,contaId:conta,usuario:u}}).then(function(r){if(!r||!r.ok)alert((r&&r.erro)||'Falhou');ccrCarregar();});return;}
+  if(a==='ignorar'){if(!confirm('Ignorar este boleto? (não dá baixa em nada)'))return;blgApi('/boletos/ignorar',{method:'POST',body:{nossoNumero:t.dataset.nn,usuario:u}}).then(function(){ccrCarregar();});}
+}
+function ccrExcel(){
+  var cab=['Liquidação','Crédito','Nosso número','Seu número','Vencimento','Pagador','CPF/CNPJ','Valor título','Juros','Desconto','Pago','Tarifa','Líquido','Resultado','Motivo','Conta Bling','NF/Pedido','Cliente Bling','Valor conta','Data baixa','Valor baixa','Parcial','No Bling hoje'];
+  var lin=CCR.rel.filter(function(x){return x.tipo!=='erro';}).map(function(x){return [x.liquidacao,x.credito,x.nossoNumero,x.seuNumero,x.vencimento,x.pagador,x.doc,x.valorTitulo,x.mora,x.desconto,x.pago,x.tarifa,x.liquido,x.tipo==='auto'?'Casaria sozinho':'Sem vínculo',x.motivo,x.contaId||'',x.nf||'',x.cliente||'',x.valorConta||'',x.dataBaixa||'',x.valorBaixa||'',x.parcial?'sim':'',x.situacaoBling||''];});
+  var csv='﻿'+[cab].concat(lin).map(function(l){return l.map(function(v){v=v==null?'':String(typeof v==='number'?String(v).replace('.',','):v);return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(';');}).join('\r\n');
+  var aEl=document.createElement('a');aEl.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));aEl.download='simulacao-boletos-sicoob-'+CCR.f.de+'-a-'+CCR.f.ate+'.csv';aEl.click();
+}
+
 // ===================== MÓDULO RELATÓRIO DE DESPESAS (mod19) =====================
 // Relatório (só leitura) de tudo que já foi lançado no Contas a Pagar do Bling pelas abas
 // Lançamento de despesas (financeiro/despesas) e Lançamento de frete (financeiro/fretes).
@@ -14940,6 +15096,8 @@ function renderApp(){
     main.appendChild(renderFretes());
   } else if(STATE.modulo==='mod19'&&STATE.roleLogado==='admin'){
     main.appendChild(renderRelDespesas());
+  } else if(STATE.modulo==='mod21'&&STATE.roleLogado==='admin'){
+    main.appendChild(renderConciliacaoReceber());
   } else if(STATE.modulo==='mod20'){
     main.appendChild(renderCotacaoCompra());
   } else if(STATE.modulo==='mod17'){

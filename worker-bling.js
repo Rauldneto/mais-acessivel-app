@@ -26,7 +26,8 @@
 //                             para a aba Compras › Cotação compra. Precisa do escopo "Pedidos de compra" no app do Bling.
 //   GET  /produtos-fornecedores?ids=1,2,3 → códigos que cada fornecedor usa para esses produtos (cadastro do Bling),
 //                             usados como pista para ligar a cotação do fornecedor aos itens do pedido. Cache de 1 dia.
-// Gatilho (Settings → Trigger Events → Cron): */5 * * * *
+//   GET  /boletos, POST /boletos/verificar|vincular|ignorar|simular|simular/passo → boletos Sicoob liquidados (ver o fim do arquivo)
+// Gatilho (Settings → Trigger Events → Cron): */5 * * * *  (PIX a cada 5 min; boletos a cada 30 min)
 // Modo: KV "modo" = "simulacao" (padrão: só anota o que faria) ou "real" (executa no Bling).
 
 const ORIGENS = ['https://rauldneto.github.io', 'http://localhost:8080', 'http://127.0.0.1:8080'];
@@ -40,7 +41,8 @@ const DIAS_CONTAS = 180;                  // contas a receber em aberto emitidas
 
 export default {
   async scheduled(evento, env, ctx) {
-    ctx.waitUntil(verificarPagamentos(env).then(() => registrarErro(env, null)).catch(e => registrarErro(env, String(e.message || e))));
+    ctx.waitUntil(verificarPagamentos(env).then(() => registrarErro(env, null)).catch(e => registrarErro(env, String(e.message || e)))
+      .then(() => verificarBoletos(env)).catch(e => registrarErro(env, 'Boletos: ' + String(e.message || e))));
   },
   async fetch(req, env) {
     const origem = req.headers.get('Origin') || '';
@@ -120,6 +122,21 @@ export default {
           tot.novos += r.novos; tot.vistos += r.vistos; tot.pendentes += r.pendentes || 0;
         }
         return resp(Object.assign({ ok: true, dias }, tot));
+      }
+      if (url.pathname === '/boletos') return resp(await boletosPainel(env));
+      if (url.pathname === '/boletos/verificar' && req.method === 'POST') return resp(Object.assign({ ok: true }, await verificarBoletos(env, true)));
+      if (url.pathname === '/boletos/vincular' && req.method === 'POST') return resp(await boletosVincular(env, (await req.json()) || {}));
+      if (url.pathname === '/boletos/ignorar' && req.method === 'POST') {
+        const b = (await req.json()) || {};
+        const x = await env.BLING_KV.get('bolpend:' + b.nossoNumero, 'json');
+        if (x) { x.resolvido = 'ignorado'; x.por = String(b.usuario || '').slice(0, 60); await env.BLING_KV.put('bolpend:' + b.nossoNumero, JSON.stringify(x), { expirationTtl: 180 * 86400 }); }
+        return resp({ ok: true });
+      }
+      if (url.pathname === '/boletos/simular' && req.method === 'POST') return resp(await simularIniciar(env, (await req.json().catch(() => ({}))) || {}));
+      if (url.pathname === '/boletos/simular/passo' && req.method === 'POST') return resp(await simularPasso(env));
+      if (url.pathname === '/boletos/simular') {
+        const sim = await env.BLING_KV.get('bolsim:estado', 'json');
+        return resp({ ok: true, sim: sim ? resumoSim(sim) : null, rel: sim ? ((await env.BLING_KV.get('bolsim:rel', 'json')) || []) : [] });
       }
       if (url.pathname === '/erros') {
         return resp(Object.assign({ ok: true }, (await env.BLING_KV.get('erros', 'json')) || {}));
@@ -352,20 +369,25 @@ async function listarAbertos(env) {
 const SICOOB_TOKEN = 'https://auth.sicoob.com.br/auth/realms/cooperado/protocol/openid-connect/token';
 const SICOOB_PIX = 'https://api.sicoob.com.br/pix/api/v2';
 
-function pedirTokenSicoob(env) {
+const ESCOPO_PIX = 'cob.write cob.read pix.read';
+const ESCOPO_BOLETOS = 'boletos_consulta';
+
+function pedirTokenSicoob(env, escopo) {
   return env.SICOOB_MTLS.fetch(SICOOB_TOKEN, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-    body: 'grant_type=client_credentials&client_id=' + encodeURIComponent(env.SICOOB_CLIENT_ID) + '&scope=' + encodeURIComponent('cob.write cob.read pix.read'),
+    body: 'grant_type=client_credentials&client_id=' + encodeURIComponent(env.SICOOB_CLIENT_ID) + '&scope=' + encodeURIComponent(escopo || ESCOPO_PIX),
   });
 }
 
-async function sicoobToken(env) {
-  const c = await env.BLING_KV.get('sicoob:token', 'json');
+async function sicoobToken(env, escopo) {
+  escopo = escopo || ESCOPO_PIX;
+  const chave = escopo === ESCOPO_PIX ? 'sicoob:token' : 'sicoob:token:boletos';
+  const c = await env.BLING_KV.get(chave, 'json');
   if (c && Date.now() < c.exp) return c.access;
   let r, txt = '', j = {};
   for (let t = 0; t < 2; t++) {
-    r = await pedirTokenSicoob(env);
+    r = await pedirTokenSicoob(env, escopo);
     txt = await r.text();
     try { j = JSON.parse(txt); } catch (e) { j = {}; }
     if (r.ok && j.access_token) break;
@@ -375,7 +397,7 @@ async function sicoobToken(env) {
     const info = 'status ' + r.status + ' · servidor ' + (r.headers.get('server') || '?') + ' · ' + (j.error_description || j.error || txt.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160));
     throw new Error('Sicoob recusou o acesso (' + r.status + '): ' + info);
   }
-  await env.BLING_KV.put('sicoob:token', JSON.stringify({ access: j.access_token, exp: Date.now() + (Number(j.expires_in || 300) - 30) * 1000 }), { expirationTtl: 3600 });
+  await env.BLING_KV.put(chave, JSON.stringify({ access: j.access_token, exp: Date.now() + (Number(j.expires_in || 300) - 30) * 1000 }), { expirationTtl: 3600 });
   return j.access_token;
 }
 
@@ -605,7 +627,7 @@ async function executarBaixa(env, contaId, valor, data, reg) {
   const r = await fetch(API + '/contas/receber/' + contaId + '/baixar', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ data, usarDataVencimento: false, portador: { id: PORTADOR_SICOOB }, historico: 'PIX ' + (reg.txid || 'direto') + ' - app Mais Acessível', valorRecebido: Math.round(valor * 100) / 100, juro: 0, desconto: 0, acrescimo: 0, taxa: 0 }),
+    body: JSON.stringify({ data, usarDataVencimento: false, portador: { id: PORTADOR_SICOOB }, historico: reg.historico || ('PIX ' + (reg.txid || 'direto') + ' - app Mais Acessível'), valorRecebido: Math.round(valor * 100) / 100, juro: Math.round(Number(reg.juro || 0) * 100) / 100, desconto: Math.round(Number(reg.desconto || 0) * 100) / 100, acrescimo: 0, taxa: 0 }),
   });
   const t = await r.text();
   if (!r.ok) throw new Error('Bling ' + r.status + ': ' + t.slice(0, 200));
@@ -800,4 +822,449 @@ async function econfRegistrar(env, b) {
   if (b.ambiente === 'producao' && ['135', '136'].includes(reg.cStat)) await env.BLING_KV.put('econfseq:' + b.chave, String(b.nSeq || 1), { expirationTtl: 5 * 365 * 86400 });
   if (b.ambiente === 'producao') await logAcao(env, { acao: 'econf', modo: 'real', detalhe: 'ECONF da chave ' + b.chave.slice(25, 34) + ' (R$ ' + Number(b.valor || 0).toFixed(2) + '): ' + reg.cStat + ' ' + reg.xMotivo + (reg.nProt ? ' · protocolo ' + reg.nProt : '') });
   return { ok: true, registrado: reg.ok };
+}
+
+// ======================================================================================================
+// ---------------- Boletos Sicoob liquidados → baixa no Contas a Receber do Bling ----------------
+// Mesma conciliação dos PIX: o que entra na conta Sicoob vira baixa (valor cheio, data em que o dinheiro entrou)
+// e a tarifa do boleto vira despesa separada em "Tarifa bancária".
+//
+// Fluxo da API de Cobrança Bancária v3 do Sicoob (1 dia por pedido):
+//   POST /boletos/movimentacoes {numeroCliente, tipoMovimento:5 (liquidação), dataInicial=dataFinal}
+//   GET  /boletos/movimentacoes?numeroCliente&codigoSolicitacao      → quando pronto, traz os ids dos arquivos
+//   GET  /boletos/movimentacoes/download?numeroCliente&codigoSolicitacao&idArquivo → base64 (zip com JSON)
+// Cada boleto liquidado é completado com GET /boletos?numeroCliente&codigoModalidade=1&nossoNumero=
+// (vencimento, seuNumero e CPF/CNPJ do pagador) e casado com a conta a receber do Bling:
+//   seuNumero (nº da NF ou id da conta) ou CPF/CNPJ do pagador  +  mesmo valor  +  mesmo vencimento → baixa sozinho
+//   só uma pista bate                                                                                 → "Boletos sem vínculo"
+//
+// Rotas novas (aba Financeiro › Conciliação contas a Receber):
+//   GET  /boletos                    → boletos já tratados (log), pendentes e situação da leitura diária
+//   POST /boletos/verificar          → roda agora o passo diário (o mesmo do cron, a cada 30 min)
+//   POST /boletos/vincular {nossoNumero, contaId, usuario} / POST /boletos/ignorar {nossoNumero, usuario}
+//   POST /boletos/simular {de, ate}  → prepara a SIMULAÇÃO com boletos antigos (não mexe no Bling nem no log real)
+//   POST /boletos/simular/passo      → avança a simulação um pedaço (o app chama em sequência)
+//   GET  /boletos/simular            → andamento + relatório da simulação
+
+const SICOOB_COB = 'https://api.sicoob.com.br/cobranca-bancaria/v3';
+const SICOOB_NUM_CLIENTE = 2547538;
+const BOL_POR_PASSO = 10;          // boletos tratados por chamada (limite de 50 chamadas externas do plano grátis)
+const BOL_INTERVALO = 30 * 60e3;   // leitura diária pelo cron: a cada 30 min
+
+async function sicoobCob(env, metodo, caminho, corpo) {
+  if (!env.SICOOB_MTLS || !env.SICOOB_CLIENT_ID) throw new Error('Sicoob ainda não ativado no Worker.');
+  const tok = await sicoobToken(env, ESCOPO_BOLETOS);
+  const r = await env.SICOOB_MTLS.fetch(SICOOB_COB + caminho, {
+    method: metodo,
+    headers: { Authorization: 'Bearer ' + tok, client_id: env.SICOOB_CLIENT_ID, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: corpo ? JSON.stringify(corpo) : undefined,
+  });
+  if (r.status === 204) return { _vazio: true };
+  const txt = await r.text();
+  let j = {}; try { j = JSON.parse(txt); } catch (e) { j = { _texto: txt.slice(0, 300) }; }
+  if (!r.ok) {
+    const m = (j.mensagens && j.mensagens.map(x => x.mensagem).join('; ')) || j.message || j.mensagem || j.detail || j._texto || JSON.stringify(j).slice(0, 200);
+    const e = new Error('Sicoob ' + r.status + ': ' + m); e.status = r.status; e.msg = String(m); throw e;
+  }
+  return j;
+}
+
+// ---- utilidades ----
+const r2 = v => Math.round(Number(v || 0) * 100) / 100;
+const dig = s => String(s == null ? '' : s).replace(/\D/g, '');
+function brData(iso) { return iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : ''; }
+function soData(v) {
+  // aceita 2026-07-08, 2026-07-08T00:00:00-03:00, 08/07/2026
+  const s = String(v || '');
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/); if (m) return m[3] + '-' + m[2] + '-' + m[1];
+  return '';
+}
+function hojeLocal() { return new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10); }
+function somaDias(iso, n) { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function fimDeSemana(iso) { const w = new Date(iso + 'T12:00:00Z').getUTCDay(); return w === 0 || w === 6; }
+function acharCampo(o, nomes) { // procura um campo pelo nome em qualquer nível (respostas do Sicoob variam entre versões)
+  if (!o || typeof o !== 'object') return undefined;
+  for (const n of nomes) if (o[n] != null) return o[n];
+  for (const k of Object.keys(o)) { const v = acharCampo(o[k], nomes); if (v != null) return v; }
+  return undefined;
+}
+function acharLista(o) { // primeira lista de objetos que tenha nossoNumero/seuNumero
+  if (Array.isArray(o)) {
+    if (o.length && typeof o[0] === 'object' && o[0] && ('nossoNumero' in o[0] || 'seuNumero' in o[0])) return o;
+    for (const x of o) { const l = acharLista(x); if (l) return l; }
+    return o.length === 0 ? null : null;
+  }
+  if (o && typeof o === 'object') for (const k of Object.keys(o)) { const l = acharLista(o[k]); if (l) return l; }
+  return null;
+}
+
+// zip simples (central directory; aceita "stored" e "deflate") — o arquivo da movimentação vem zipado
+async function deszipar(bytes) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes.length < 4 || dv.getUint32(0, true) !== 0x04034b50) return [new TextDecoder().decode(bytes)];
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error('Zip da movimentação inválido.');
+  const total = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const saida = [];
+  for (let n = 0; n < total; n++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const metodo = dv.getUint16(p + 10, true), tamC = dv.getUint32(p + 20, true);
+    const lNome = dv.getUint16(p + 28, true), lExtra = dv.getUint16(p + 30, true), lCom = dv.getUint16(p + 32, true);
+    const off = dv.getUint32(p + 42, true);
+    const nome = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + lNome));
+    p += 46 + lNome + lExtra + lCom;
+    if (nome.endsWith('/')) continue;
+    const ini = off + 30 + dv.getUint16(off + 26, true) + dv.getUint16(off + 28, true);
+    const dados = bytes.subarray(ini, ini + tamC);
+    let plano;
+    if (metodo === 0) plano = dados;
+    else if (metodo === 8) plano = new Uint8Array(await new Response(new Blob([dados]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+    else throw new Error('Zip com compressão não suportada (' + metodo + ').');
+    saida.push(new TextDecoder().decode(plano));
+  }
+  return saida;
+}
+
+function normalizarLiquidacao(x) {
+  const n = k => r2(x[k]);
+  const valorTitulo = n('valorTitulo'), mora = r2(Number(x.valorMora || 0) + Number(x.valorMulta || 0) + Number(x.valorJuros || 0));
+  const desconto = r2(Number(x.valorDesconto || 0) + Number(x.valorAbatimento || 0));
+  const tarifa = n('valorTarifaMovimento');
+  const pago = r2(Number(x.valorPago || 0) || (valorTitulo + mora - desconto));
+  return {
+    nossoNumero: String(x.nossoNumero || '').trim(), seuNumero: String(x.seuNumero || '').trim(),
+    dataLiquidacao: soData(x.dataLiquidacao || x.dataPagamento || x.dataMovimento),
+    dataCredito: soData(x.dataPrevisaoCredito || x.dataCredito),
+    dataVencimento: soData(x.dataVencimento), valorTitulo, mora, desconto, tarifa, pago, valorLiquido: n('valorLiquido'),
+    pagadorDoc: dig(x.numeroCpfCnpjPagador || x.cpfCnpjPagador || (x.pagador && x.pagador.numeroCpfCnpj)),
+    pagadorNome: String(x.nomePagador || (x.pagador && x.pagador.nome) || '').trim(),
+  };
+}
+
+// completa com os dados do boleto (vencimento, seuNumero, pagador). Guardado 1 ano.
+async function completarBoleto(env, b) {
+  if (!b.nossoNumero || (b.dataVencimento && b.pagadorDoc && b.seuNumero)) return b;
+  const ck = 'bolinfo:' + b.nossoNumero;
+  let info = await env.BLING_KV.get(ck, 'json');
+  if (!info) {
+    try {
+      const j = await sicoobCob(env, 'GET', '/boletos?numeroCliente=' + SICOOB_NUM_CLIENTE + '&codigoModalidade=1&nossoNumero=' + encodeURIComponent(b.nossoNumero));
+      const bo = (j && j.resultado) || j || {};
+      const pg = bo.pagador || {};
+      info = { venc: soData(bo.dataVencimento), seu: String(bo.seuNumero || ''), doc: dig(pg.numeroCpfCnpj || pg.cpfCnpj), nome: String(pg.nome || ''),
+        valor: r2(bo.valor || bo.valorTitulo), emissao: soData(bo.dataEmissao) };
+      await env.BLING_KV.put(ck, JSON.stringify(info), { expirationTtl: 365 * 86400 });
+    } catch (e) { info = { erro: String(e.message || e).slice(0, 160) }; }
+  }
+  return Object.assign({}, b, {
+    dataVencimento: b.dataVencimento || info.venc || '', seuNumero: b.seuNumero || info.seu || '',
+    pagadorDoc: b.pagadorDoc || info.doc || '', pagadorNome: b.pagadorNome || info.nome || '',
+    valorTitulo: b.valorTitulo || info.valor || 0, infoErro: info.erro || '',
+  });
+}
+
+// contas a receber do Bling com o mesmo vencimento do boleto (em aberto, parcial e — na simulação — recebidas)
+async function contasPorVencimento(env, venc, ctx, incluirRecebidas) {
+  const k = venc + (incluirRecebidas ? ':t' : ':a');
+  ctx.venc = ctx.venc || {};
+  if (ctx.venc[k]) return ctx.venc[k];
+  const ck = 'bolcand:' + k;
+  const c = await env.BLING_KV.get(ck, 'json');
+  if (c && Date.now() - c.ts < (ctx.historico ? 6 * 3600e3 : 10 * 60e3)) return (ctx.venc[k] = c.l);
+  const sits = '&situacoes[]=1&situacoes[]=3' + (incluirRecebidas ? '&situacoes[]=2' : '');
+  const lista = await paginas(env, '/contas/receber?tipoFiltroData=V&dataInicial=' + venc + '&dataFinal=' + venc + sits, 3);
+  const l = lista.map(x => ({ id: x.id, valor: r2(x.valor), venc: x.vencimento, situacao: Number(x.situacao),
+    cliente: (x.contato && x.contato.nome) || '', doc: dig(x.contato && x.contato.numeroDocumento),
+    origemTipo: (x.origem && x.origem.tipoOrigem) || '', origemId: (x.origem && x.origem.id) || 0, numero: String((x.origem && x.origem.numero) || ''),
+    boleto: !!x.linkBoleto, forma: Number(x.formaPagamento && x.formaPagamento.codigoFiscal) || 0 }));
+  await env.BLING_KV.put(ck, JSON.stringify({ ts: Date.now(), l }), { expirationTtl: 6 * 3600 });
+  return (ctx.venc[k] = l);
+}
+
+const SIT_CONTA = { 1: 'Em aberto', 2: 'Recebido', 3: 'Parcialmente recebido', 4: 'Devolvido', 5: 'Cancelado' };
+
+// decide a conta do Bling para um boleto liquidado
+async function casarBoleto(env, b, ctx, simulacao) {
+  const vinculo = await env.BLING_KV.get('bolvinc:' + b.nossoNumero, 'json');
+  if (!b.dataVencimento && !vinculo) return { tipo: 'sem', motivo: 'Sem vencimento do boleto (consulta ao Sicoob falhou' + (b.infoErro ? ': ' + b.infoErro : '') + ').', candidatos: [] };
+  const cands = b.dataVencimento ? await contasPorVencimento(env, b.dataVencimento, ctx, simulacao) : [];
+  if (vinculo) {
+    const c = cands.find(x => String(x.id) === String(vinculo.contaId)) || vinculo.conta;
+    if (c) return { tipo: 'auto', conta: c, motivo: 'Vinculado manualmente por ' + (vinculo.por || '?'), pontos: 9 };
+  }
+  const tokens = (b.seuNumero.match(/\d+/g) || []).map(t => String(Number(t)));
+  const avalia = c => {
+    const valor = Math.abs(c.valor - b.valorTitulo) <= 0.01;
+    const doc = !!(b.pagadorDoc && c.doc && b.pagadorDoc === c.doc);
+    const seuConta = tokens.includes(String(c.id));
+    const seuNf = !!(c.numero && tokens.length && tokens[0] === String(Number(c.numero)));
+    return { c, valor, doc, seu: seuConta || seuNf, seuConta, seuNf };
+  };
+  const av = cands.map(avalia);
+  const fortes = av.filter(a => a.valor && (a.doc || a.seu));
+  // prefere quem bate tudo; depois quem tem boleto/forma boleto (código fiscal 15)
+  fortes.sort((a, b2) => (Number(b2.doc) + Number(b2.seu) - Number(a.doc) - Number(a.seu)) || (Number(b2.c.forma === 15) - Number(a.c.forma === 15)));
+  if (fortes.length === 1 || (fortes.length > 1 && (fortes[0].doc && fortes[0].seu) && !(fortes[1].doc && fortes[1].seu))) {
+    const a = fortes[0];
+    const m = [a.seu ? (a.seuConta ? 'seuNumero = id da conta' : 'seuNumero = nº da NF') : '', a.doc ? 'mesmo CPF/CNPJ' : '', 'mesmo valor e vencimento'].filter(Boolean).join(' + ');
+    return { tipo: 'auto', conta: a.c, motivo: m, pontos: 1 + Number(a.doc) + Number(a.seu) };
+  }
+  const sug = av.filter(a => a.valor || a.doc || a.seu).slice(0, 6).map(a => ({
+    contaId: a.c.id, numero: a.c.numero, origemTipo: a.c.origemTipo, cliente: a.c.cliente, valor: a.c.valor, situacao: a.c.situacao,
+    motivo: [a.valor ? 'valor' : '', a.doc ? 'CPF/CNPJ' : '', a.seu ? 'seuNumero' : ''].filter(Boolean).join(' + ') + ' conferem' }));
+  return { tipo: 'sem', motivo: fortes.length > 1 ? 'Mais de uma conta com o mesmo valor e pagador — escolha qual.' : (cands.length ? 'Nenhuma conta com o mesmo valor e pagador nesse vencimento.' : 'Nenhuma conta a receber no Bling com vencimento ' + brData(b.dataVencimento) + '.'), candidatos: sug };
+}
+
+// o que a automação faria/fará com um boleto casado
+function planoBoleto(b, conta) {
+  const data = b.dataCredito || b.dataLiquidacao;   // data em que o dinheiro entrou na conta
+  const principal = r2(Math.min(r2(b.pago - b.mora + b.desconto), conta.valor));
+  const parcial = principal < conta.valor - 0.009;
+  const acoes = [{ acao: 'baixa', contaId: conta.id, data, valorBaixa: principal, juro: b.mora, desconto: b.desconto,
+    detalhe: 'Baixa de R$ ' + principal.toFixed(2) + (b.mora ? ' + juros/multa R$ ' + b.mora.toFixed(2) : '') + (b.desconto ? ' − desconto R$ ' + b.desconto.toFixed(2) : '') +
+      ' na conta ' + conta.id + (conta.numero ? ' (' + (conta.origemTipo === 'notafiscal' ? 'NF ' : 'pedido ') + conta.numero + ')' : '') + ', data ' + brData(data) + ', conta Sicoob' + (parcial ? ' — PARCIAL' : '') }];
+  if (b.tarifa > 0) acoes.push({ acao: 'tarifa', data, valor: b.tarifa,
+    detalhe: 'Despesa R$ ' + b.tarifa.toFixed(2) + ' em "Tarifa bancária", data ' + brData(data) + ', conta Sicoob (boleto ' + b.nossoNumero + ').' });
+  return { data, principal, parcial, acoes };
+}
+
+// ---- leitura de um dia de movimentação (máquina de estados: solicitar → aguardar → baixar → tratar) ----
+// job = {dia, cod, pedidoEm, tentativas, etapa, itens, idx, msg}
+async function passoDia(env, job) {
+  const nc = SICOOB_NUM_CLIENTE;
+  if (job.etapa === 'novo') {
+    try {
+      const j = await sicoobCob(env, 'POST', '/boletos/movimentacoes', { numeroCliente: nc, tipoMovimento: 5, dataInicial: job.dia, dataFinal: job.dia });
+      job.cod = acharCampo(j, ['codigoSolicitacao']);
+      if (!job.cod) { job.etapa = 'vazio'; job.msg = 'Sicoob não devolveu código de solicitação.'; return job; }
+      job.etapa = 'aguardando'; job.pedidoEm = Date.now(); job.tentativas = 0;
+    } catch (e) {
+      if (/nenhum|n[aã]o (foram )?encontrad|sem movimenta/i.test(e.msg || e.message)) { job.etapa = 'vazio'; job.msg = 'Sem liquidações neste dia.'; }
+      else { job.etapa = 'erro'; job.msg = String(e.message || e).slice(0, 200); }
+    }
+    return job;
+  }
+  if (job.etapa === 'aguardando') {
+    job.tentativas = (job.tentativas || 0) + 1;
+    let j;
+    try { j = await sicoobCob(env, 'GET', '/boletos/movimentacoes?numeroCliente=' + nc + '&codigoSolicitacao=' + encodeURIComponent(job.cod)); }
+    catch (e) {
+      if (/nenhum|n[aã]o (foram )?encontrad/i.test(e.msg || e.message) && e.status !== 500) { job.etapa = 'vazio'; job.msg = 'Sem liquidações neste dia.'; return job; }
+      job.msg = 'Aguardando o Sicoob preparar o arquivo (' + String(e.msg || e.message).slice(0, 120) + ')';
+      if (job.tentativas > 12) { job.etapa = 'erro'; }
+      return job;
+    }
+    const qtd = acharCampo(j, ['quantidadeTotalRegistros', 'quantidadeRegistros']);
+    let ids = acharCampo(j, ['idArquivos', 'idsArquivos', 'arquivos']);
+    if (ids != null && !Array.isArray(ids)) ids = [ids];
+    if (Number(qtd) === 0) { job.etapa = 'vazio'; job.msg = 'Sem liquidações neste dia.'; return job; }
+    if (!ids || !ids.length) { job.msg = 'Aguardando o Sicoob preparar o arquivo.'; if (job.tentativas > 12) { job.etapa = 'erro'; job.msg = 'Sicoob não liberou o arquivo: ' + JSON.stringify(j).slice(0, 160); } return job; }
+    job.arquivos = ids.map(x => (x && typeof x === 'object') ? (x.idArquivo || x.id) : x); job.etapa = 'baixar';
+    return job;
+  }
+  if (job.etapa === 'baixar') {
+    const itens = [];
+    for (const id of job.arquivos) {
+      const j = await sicoobCob(env, 'GET', '/boletos/movimentacoes/download?numeroCliente=' + nc + '&codigoSolicitacao=' + encodeURIComponent(job.cod) + '&idArquivo=' + encodeURIComponent(id));
+      let b64 = acharCampo(j, ['arquivo', 'conteudo', 'arquivoBase64']);
+      if (!b64 && typeof j._texto === 'string') b64 = j._texto;
+      if (!b64) throw new Error('Download da movimentação sem arquivo: ' + JSON.stringify(j).slice(0, 160));
+      let bytes;
+      const s = String(b64).trim();
+      if (s[0] === '{' || s[0] === '[') bytes = new TextEncoder().encode(s);
+      else bytes = Uint8Array.from(atob(s.replace(/\s/g, '')), ch => ch.charCodeAt(0));
+      for (const txt of await deszipar(bytes)) {
+        let o; try { o = JSON.parse(txt); } catch (e) { continue; }
+        const l = acharLista(o) || [];
+        l.forEach(x => itens.push(normalizarLiquidacao(x)));
+      }
+    }
+    job.itens = itens.filter(x => x.nossoNumero || x.seuNumero); job.idx = 0; job.etapa = job.itens.length ? 'tratar' : 'vazio';
+    if (!job.itens.length) job.msg = 'Arquivo sem boletos liquidados.';
+    return job;
+  }
+  return job;
+}
+
+// ---- simulação com boletos antigos (não grava nada no log real nem no Bling) ----
+async function simularIniciar(env, b) {
+  const de = soData(b.de) || '2026-07-01', ate = soData(b.ate) || '2026-08-31';
+  if (ate < de) return { ok: false, erro: 'Período inválido.' };
+  const dias = [];
+  for (let d = de; d <= ate && dias.length < 200; d = somaDias(d, 1)) if (!fimDeSemana(d)) dias.push(d);
+  const sim = { de, ate, dias, i: 0, job: null, iniciado: Date.now(), por: String(b.usuario || '').slice(0, 60), fim: false, resumo: { boletos: 0, auto: 0, sem: 0, jaRecebidas: 0, valor: 0, tarifas: 0, erros: 0 } };
+  await env.BLING_KV.put('bolsim:estado', JSON.stringify(sim));
+  await env.BLING_KV.put('bolsim:rel', '[]');
+  return { ok: true, dias: dias.length };
+}
+
+async function simularPasso(env) {
+  const sim = await env.BLING_KV.get('bolsim:estado', 'json');
+  if (!sim) return { ok: false, erro: 'Nenhuma simulação iniciada.' };
+  if (sim.fim) return { ok: true, fim: true, sim };
+  const rel = (await env.BLING_KV.get('bolsim:rel', 'json')) || [];
+  const ctx = { historico: true };
+  if (!sim.job) sim.job = { dia: sim.dias[sim.i], etapa: 'novo' };
+  const job = sim.job;
+  if (job.etapa === 'aguardando' && job.pedidoEm && Date.now() - (job.ultimaConsulta || 0) < 4000) {
+    return { ok: true, esperar: 4, sim: resumoSim(sim) };
+  }
+  if (job.etapa === 'tratar') {
+    const fatia = job.itens.slice(job.idx, job.idx + BOL_POR_PASSO);
+    for (const x0 of fatia) {
+      const x = await completarBoleto(env, x0);
+      const m = await casarBoleto(env, x, ctx, true);
+      const linha = { dia: job.dia, nossoNumero: x.nossoNumero, seuNumero: x.seuNumero, pagador: x.pagadorNome, doc: x.pagadorDoc,
+        vencimento: x.dataVencimento, liquidacao: x.dataLiquidacao, credito: x.dataCredito, valorTitulo: x.valorTitulo, mora: x.mora, desconto: x.desconto,
+        pago: x.pago, tarifa: x.tarifa, liquido: x.valorLiquido, tipo: m.tipo, motivo: m.motivo };
+      sim.resumo.boletos++; sim.resumo.valor = r2(sim.resumo.valor + x.pago); sim.resumo.tarifas = r2(sim.resumo.tarifas + x.tarifa);
+      if (m.tipo === 'auto') {
+        const pl = planoBoleto(x, m.conta);
+        Object.assign(linha, { contaId: m.conta.id, nf: m.conta.numero, origemTipo: m.conta.origemTipo, cliente: m.conta.cliente, valorConta: m.conta.valor,
+          situacaoBling: SIT_CONTA[m.conta.situacao] || m.conta.situacao, dataBaixa: pl.data, valorBaixa: pl.principal, parcial: pl.parcial, acoes: pl.acoes.map(a => a.detalhe) });
+        sim.resumo.auto++; if (m.conta.situacao === 2) sim.resumo.jaRecebidas++;
+      } else { linha.sugestoes = m.candidatos; sim.resumo.sem++; }
+      rel.push(linha);
+    }
+    job.idx += fatia.length;
+    if (job.idx >= job.itens.length) { job.etapa = 'feito'; job.itens = []; }
+  } else {
+    try { await passoDia(env, job); } catch (e) { job.etapa = 'erro'; job.msg = String(e.message || e).slice(0, 200); }
+    job.ultimaConsulta = Date.now();
+  }
+  if (job.etapa === 'erro') { sim.resumo.erros++; rel.push({ dia: job.dia, tipo: 'erro', motivo: job.msg }); }
+  if (['feito', 'vazio', 'erro'].includes(job.etapa)) {
+    sim.i++; sim.job = null;
+    if (sim.i >= sim.dias.length) { sim.fim = true; sim.terminado = Date.now(); }
+  }
+  await env.BLING_KV.put('bolsim:estado', JSON.stringify(sim));
+  await env.BLING_KV.put('bolsim:rel', JSON.stringify(rel));
+  return { ok: true, fim: sim.fim, sim: resumoSim(sim), esperar: job.etapa === 'aguardando' ? 4 : 0 };
+}
+
+function resumoSim(sim) {
+  const j = sim.job || {};
+  return { de: sim.de, ate: sim.ate, totalDias: sim.dias.length, diaAtual: j.dia || sim.dias[Math.min(sim.i, sim.dias.length - 1)], feitos: sim.i,
+    etapa: j.etapa || '', msg: j.msg || '', fim: sim.fim, resumo: sim.resumo, iniciado: sim.iniciado, terminado: sim.terminado || 0 };
+}
+
+// ---- leitura diária (cron) — mesmo log de ações dos PIX ----
+async function verificarBoletos(env, forcar) {
+  if (!env.SICOOB_MTLS || !env.SICOOB_CLIENT_ID) return { aviso: 'Sicoob não ativado' };
+  const st = (await env.BLING_KV.get('bol:estado', 'json')) || { jobs: {}, ultimo: 0 };
+  if (!forcar && Date.now() - (st.ultimo || 0) < BOL_INTERVALO && !Object.values(st.jobs).some(j => j.etapa === 'aguardando' || j.etapa === 'tratar' || j.etapa === 'baixar')) return { pulou: true };
+  const hoje = hojeLocal();
+  // hoje, ontem e anteontem: liquidações entram no dia e às vezes só aparecem no dia seguinte
+  const dias = [hoje, somaDias(hoje, -1), somaDias(hoje, -2), somaDias(hoje, -3)].filter(d => !fimDeSemana(d));
+  for (const k of Object.keys(st.jobs)) if (!dias.includes(k)) delete st.jobs[k];
+  const ctx = {};
+  let novos = 0, pendentes = 0, passos = 0;
+  for (const dia of dias) {
+    let job = st.jobs[dia];
+    // dia ainda "vivo": pede de novo a cada leitura (hora em hora) para pegar liquidações novas
+    if (!job || (['feito', 'vazio', 'erro'].includes(job.etapa) && Date.now() - (job.pedidoEm || 0) > 60 * 60e3 && dia >= somaDias(hoje, -1)))
+      job = st.jobs[dia] = { dia, etapa: 'novo', pedidoEm: Date.now() };
+    if (passos >= 2) break;
+    if (job.etapa === 'tratar') {
+      const fatia = job.itens.slice(job.idx, job.idx + BOL_POR_PASSO);
+      for (const x0 of fatia) {
+        const r = await tratarBoletoReal(env, x0, ctx);
+        if (r === 'auto') novos++; else if (r === 'pendente') pendentes++;
+      }
+      job.idx += fatia.length;
+      if (job.idx >= job.itens.length) { job.etapa = 'feito'; job.itens = []; }
+      passos++;
+    } else if (!['feito', 'vazio', 'erro'].includes(job.etapa)) {
+      try { await passoDia(env, job); } catch (e) { job.etapa = 'erro'; job.msg = String(e.message || e).slice(0, 200); }
+      if (job.etapa === 'novo' || job.etapa === 'aguardando') job.pedidoEm = job.pedidoEm || Date.now();
+      passos++;
+    }
+  }
+  st.ultimo = Date.now();
+  await env.BLING_KV.put('bol:estado', JSON.stringify(st));
+  if (novos) await env.BLING_KV.delete('cache:abertos');
+  return { novos, pendentes, dias: Object.values(st.jobs).map(j => ({ dia: j.dia, etapa: j.etapa, msg: j.msg || '', qtd: (j.itens || []).length })) };
+}
+
+async function tratarBoletoReal(env, x0, ctx) {
+  if (!x0.nossoNumero) return 'ignorado';
+  if (await env.BLING_KV.get('bolpago:' + x0.nossoNumero)) return 'ja';
+  const x = await completarBoleto(env, x0);
+  const m = await casarBoleto(env, x, ctx, true);
+  if (m.tipo === 'auto' && m.conta.situacao === 2) {
+    // já estava recebida no Bling (baixa manual): só registra, nada a fazer
+    await env.BLING_KV.put('bolpago:' + x.nossoNumero, 'ja-recebida', { expirationTtl: 400 * 86400 });
+    await logAcao(env, { modo: (await env.BLING_KV.get('modo')) || 'simulacao', origem: 'boleto', acao: 'boleto_pago', tipo: 'nota', numero: m.conta.numero, cliente: m.conta.cliente, valor: x.pago,
+      detalhe: 'Boleto ' + x.nossoNumero + ' de R$ ' + x.pago.toFixed(2) + ' liquidado em ' + brData(x.dataLiquidacao) + ' — a conta já estava Recebida no Bling (nada a fazer).' });
+    return 'ja';
+  }
+  if (m.tipo === 'auto') { await executarPlanoBoleto(env, x, m); return 'auto'; }
+  const pend = { nossoNumero: x.nossoNumero, seuNumero: x.seuNumero, pagador: x.pagadorNome, doc: x.pagadorDoc, vencimento: x.dataVencimento,
+    liquidacao: x.dataLiquidacao, credito: x.dataCredito, valorTitulo: x.valorTitulo, pago: x.pago, mora: x.mora, desconto: x.desconto, tarifa: x.tarifa,
+    motivo: m.motivo, sugestoes: m.candidatos, criado: Date.now(), dados: x };
+  await env.BLING_KV.put('bolpend:' + x.nossoNumero, JSON.stringify(pend), { expirationTtl: 180 * 86400 });
+  await env.BLING_KV.put('bolpago:' + x.nossoNumero, 'pendente', { expirationTtl: 400 * 86400 });
+  const ids = (await env.BLING_KV.get('bolpendentes', 'json')) || [];
+  if (!ids.includes(x.nossoNumero)) { ids.push(x.nossoNumero); await env.BLING_KV.put('bolpendentes', JSON.stringify(ids.slice(-300))); }
+  return 'pendente';
+}
+
+async function executarPlanoBoleto(env, x, m, como) {
+  const modo = (await env.BLING_KV.get('modo')) || 'simulacao';
+  const conta = m.conta;
+  const pl = planoBoleto(x, conta);
+  const base = { modo, origem: 'boleto', tipo: conta.origemTipo === 'venda' ? 'pedido' : 'nota', id: conta.origemId, numero: conta.numero, cliente: conta.cliente,
+    nossoNumero: x.nossoNumero, valor: x.pago, pagador: x.pagadorNome };
+  await env.BLING_KV.put('bolpago:' + x.nossoNumero, String(conta.id), { expirationTtl: 400 * 86400 });
+  await logAcao(env, Object.assign({}, base, { acao: 'boleto_pago',
+    detalhe: 'Boleto Sicoob ' + x.nossoNumero + (x.seuNumero ? ' (seu nº ' + x.seuNumero + ')' : '') + ' de R$ ' + x.pago.toFixed(2) + ' liquidado em ' + brData(x.dataLiquidacao) +
+      (x.dataCredito && x.dataCredito !== x.dataLiquidacao ? ', crédito em ' + brData(x.dataCredito) : '') + (x.pagadorNome ? ' — ' + x.pagadorNome : '') + ' · ' + (como || m.motivo) }));
+  for (const a of pl.acoes) {
+    const reg = Object.assign({}, a);
+    if (modo === 'real') {
+      if (a.acao === 'baixa') reg.resultado = await executarBaixa(env, a.contaId, a.valorBaixa, a.data, { historico: 'Boleto Sicoob ' + x.nossoNumero + ' - app Mais Acessível', juro: a.juro, desconto: a.desconto }).catch(e => 'ERRO: ' + (e.message || e));
+      else if (a.acao === 'tarifa') reg.resultado = 'PENDENTE: lançamento da tarifa ainda não ligado no modo real';
+    }
+    await logAcao(env, Object.assign({}, base, reg));
+  }
+  const kd = 'pagosdoc:' + base.tipo + ':' + base.id;
+  const pd = (await env.BLING_KV.get(kd, 'json')) || [];
+  pd.push({ boleto: x.nossoNumero, valor: x.pago, horario: x.dataCredito || x.dataLiquidacao, pagador: x.pagadorNome, origem: 'boleto' });
+  await env.BLING_KV.put(kd, JSON.stringify(pd), { expirationTtl: 365 * 86400 });
+}
+
+async function boletosVincular(env, b) {
+  const nn = String(b.nossoNumero || '');
+  const p = await env.BLING_KV.get('bolpend:' + nn, 'json');
+  if (!p) return { ok: false, erro: 'Boleto não encontrado.' };
+  if (p.resolvido) return { ok: false, erro: 'Este boleto já foi tratado.' };
+  const cands = p.vencimento ? await contasPorVencimento(env, p.vencimento, {}, true) : [];
+  let conta = cands.find(c => String(c.id) === String(b.contaId));
+  if (!conta) {
+    const j = await bling(env, '/contas/receber/' + encodeURIComponent(b.contaId));
+    const x = (j && j.data) || {};
+    if (!x.id) return { ok: false, erro: 'Conta a receber não encontrada no Bling.' };
+    conta = { id: x.id, valor: r2(x.valor), venc: x.vencimento, situacao: Number(x.situacao), cliente: (x.contato && x.contato.nome) || '', doc: dig(x.contato && x.contato.numeroDocumento),
+      origemTipo: (x.origem && x.origem.tipoOrigem) || '', origemId: (x.origem && x.origem.id) || 0, numero: String((x.origem && x.origem.numero) || '') };
+  }
+  if (conta.situacao === 2) return { ok: false, erro: 'Essa conta já está Recebida no Bling.' };
+  const por = String(b.usuario || '').slice(0, 60);
+  await env.BLING_KV.put('bolvinc:' + nn, JSON.stringify({ contaId: conta.id, conta, por, em: Date.now() }), { expirationTtl: 400 * 86400 });
+  await executarPlanoBoleto(env, p.dados, { conta, motivo: 'vinculado manualmente' }, 'vinculado manualmente por ' + por);
+  p.resolvido = 'vinculado'; p.vinculo = { contaId: conta.id, numero: conta.numero }; p.por = por;
+  await env.BLING_KV.put('bolpend:' + nn, JSON.stringify(p), { expirationTtl: 180 * 86400 });
+  return { ok: true };
+}
+
+async function boletosPainel(env) {
+  const ids = (await env.BLING_KV.get('bolpendentes', 'json')) || [];
+  const pendentes = [];
+  for (const nn of ids.slice(-60).reverse()) { const x = await env.BLING_KV.get('bolpend:' + nn, 'json'); if (x && !x.resolvido) { delete x.dados; pendentes.push(x); } }
+  const acoes = ((await env.BLING_KV.get('acoes', 'json')) || []).filter(a => a.origem === 'boleto').slice(-150).reverse();
+  const st = (await env.BLING_KV.get('bol:estado', 'json')) || { jobs: {} };
+  const modo = (await env.BLING_KV.get('modo')) || 'simulacao';
+  return { ok: true, modo, ultimo: st.ultimo || 0, dias: Object.values(st.jobs || {}).map(j => ({ dia: j.dia, etapa: j.etapa, msg: j.msg || '' })), pendentes, acoes };
 }
