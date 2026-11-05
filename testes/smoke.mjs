@@ -29,7 +29,7 @@ function partes(url) { return new URL(url).pathname.replace(/\.json$/, '').split
 function ler(db, ps) { let d = db; for (const k of ps) { if (!d || typeof d !== 'object' || !(k in d)) return null; d = d[k]; } return d; }
 function gravar(db, ps, v) { let d = db; ps.slice(0, -1).forEach(k => { d = d[k] = d[k] || {}; }); d[ps[ps.length - 1]] = v; }
 
-const ABAS = ['inicio', 'frete', 'mod10', 'mod2', 'mod7', 'mod8', 'mod9', 'mod3', 'mod4', 'mod5', 'mod11', 'mod12', 'mod13', 'mod14', 'mod15', 'mod16', 'mod17', 'mod18'];
+const ABAS = ['inicio', 'frete', 'mod10', 'mod2', 'mod7', 'mod8', 'mod9', 'mod3', 'mod4', 'mod5', 'mod11', 'mod12', 'mod13', 'mod20', 'mod14', 'mod15', 'mod16', 'mod17', 'mod18'];
 const falhas = [];
 
 async function sessao(browser, usuario, role, abas) {

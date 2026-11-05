@@ -22,6 +22,8 @@
 //   GET  /pix/status?txid=  → situação da cobrança no Sicoob (ATIVA / CONCLUIDA ...)
 //   GET  /pagamentos         → PIX pagos e ações planejadas/feitas no Bling (para o administrador)
 //   POST /pagamentos/verificar → roda a verificação agora (a mesma do gatilho cron a cada 5 min)
+//   GET  /pedido-compra?numero=N → pedido de compra pelo número (itens, fornecedor, frete, impostos, parcelas)
+//                             para a aba Compras › Cotação compra. Precisa do escopo "Pedidos de compra" no app do Bling.
 // Gatilho (Settings → Trigger Events → Cron): */5 * * * *
 // Modo: KV "modo" = "simulacao" (padrão: só anota o que faria) ou "real" (executa no Bling).
 
@@ -131,6 +133,11 @@ export default {
         const x = await env.BLING_KV.get('pend:' + b.e2e, 'json');
         if (x) { x.resolvido = 'ignorado'; x.por = String(b.usuario || '').slice(0, 60); await env.BLING_KV.put('pend:' + b.e2e, JSON.stringify(x), { expirationTtl: 180 * 86400 }); }
         return resp({ ok: true });
+      }
+      if (url.pathname === '/pedido-compra') {
+        const numero = String(url.searchParams.get('numero') || '').replace(/\D/g, '');
+        if (!numero) return resp({ ok: false, erro: 'Informe o número do pedido de compra' }, 400);
+        return resp(await pedidoCompra(env, numero));
       }
       if (url.pathname === '/pix/status') {
         const txid = (url.searchParams.get('txid') || '').replace(/[^A-Za-z0-9]/g, '');
@@ -559,4 +566,65 @@ async function executarContasPedido(env, reg, valor, data) {
     resto = Math.round((resto - v) * 100) / 100; feitas++;
   }
   return 'ok (' + feitas + ' parcela(s))';
+}
+
+// ---------------- pedido de compra (aba Compras › Cotação compra) ----------------
+// A API do Bling não filtra pedido de compra pelo número: procura por janelas de data (recentes primeiro)
+// e guarda número → id no KV para as próximas buscas.
+async function acharPedidoCompra(env, numero) {
+  const kv = await env.BLING_KV.get('pc:num:' + numero);
+  if (kv) return Number(kv);
+  const janelas = [[0, 60], [60, 365], [365, 1460]];
+  for (const [ini, fim] of janelas) {
+    for (let p = 1; p <= 25; p++) {
+      const j = await bling(env, '/pedidos/compras?limite=100&pagina=' + p + '&dataInicial=' + diasAtras(fim) + (ini ? '&dataFinal=' + diasAtras(ini) : ''));
+      const d = (j && j.data) || [];
+      const x = d.find(o => String(o.numero) === numero);
+      if (x) { await env.BLING_KV.put('pc:num:' + numero, String(x.id), { expirationTtl: 365 * 86400 }); return x.id; }
+      if (d.length < 100) break;
+    }
+  }
+  return null;
+}
+
+async function pedidoCompra(env, numero) {
+  const id = await acharPedidoCompra(env, numero);
+  if (!id) return { ok: false, erro: 'Pedido de compra nº ' + numero + ' não encontrado no Bling (procurei nos últimos 4 anos).' };
+  const pc = ((await bling(env, '/pedidos/compras/' + id)) || {}).data || {};
+  let forn = { id: pc.fornecedor && pc.fornecedor.id, nome: '', doc: '', uf: '' };
+  if (forn.id) {
+    try {
+      const c = ((await bling(env, '/contatos/' + forn.id)) || {}).data || {};
+      forn.nome = c.nome || c.fantasia || '';
+      forn.doc = c.numeroDocumento || '';
+      forn.uf = (c.endereco && c.endereco.geral && c.endereco.geral.uf) || '';
+    } catch (e) { forn.nome = 'Fornecedor ' + forn.id; }
+  }
+  const formas = {};
+  for (const pa of pc.parcelas || []) {
+    const fid = pa.formaPagamento && pa.formaPagamento.id;
+    if (fid && !(fid in formas)) {
+      try { const f = ((await bling(env, '/formas-pagamentos/' + fid)) || {}).data || {}; formas[fid] = f.descricao || ''; }
+      catch (e) { formas[fid] = ''; }
+    }
+  }
+  const dia = s => s ? Math.round((new Date(s) - new Date(pc.data)) / 864e5) : null;
+  const tr = pc.transporte || {}, tb = pc.tributacao || {}, ds = pc.desconto || {};
+  return {
+    ok: true,
+    pedido: {
+      id: pc.id, numero: pc.numero, data: pc.data, dataPrevista: pc.dataPrevista || '',
+      fornecedor: forn,
+      itens: (pc.itens || []).map(i => ({
+        produtoId: i.produto && i.produto.id, codigo: (i.produto && i.produto.codigo) || '', descricao: i.descricao || '',
+        unidade: i.unidade || '', quantidade: Number(i.quantidade || 0), valor: Number(i.valor || 0), aliquotaIPI: Number(i.aliquotaIPI || 0),
+      })),
+      totalProdutos: Number(pc.totalProdutos || 0), total: Number(pc.total || 0),
+      desconto: ds.unidade === 'PERCENTUAL' ? Number(pc.totalProdutos || 0) * Number(ds.valor || 0) / 100 : Number(ds.valor || 0),
+      frete: Number(tr.frete || 0), transportador: tr.transportador || '',
+      totalIPI: Number(tb.totalIPI || 0), totalICMS: Number(tb.totalICMS || 0),
+      parcelas: (pc.parcelas || []).map(pa => ({ vencimento: pa.dataVencimento, dias: dia(pa.dataVencimento), valor: Number(pa.valor || 0),
+        forma: formas[pa.formaPagamento && pa.formaPagamento.id] || '' })),
+    },
+  };
 }

@@ -1348,7 +1348,7 @@ function renderAdmin(){
   var divAbas=document.createElement('div');
   divAbas.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap';
   divAbas.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso &agrave;s abas:</span>';
-  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod8',label:'Produtos'},{id:'mod9',label:'Clientes'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod10',label:'Cotações (conferência)'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'},{id:'mod17',label:'💠 Financeiro › BLING'},{id:'ext',label:'🧩 Botão Extensão'}].forEach(function(ab){
+  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod8',label:'Produtos'},{id:'mod9',label:'Clientes'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod10',label:'Cotações (conferência)'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'},{id:'mod17',label:'💠 Financeiro › BLING'},{id:'mod20',label:'⚖️ Compras › Cotação compra'},{id:'ext',label:'🧩 Botão Extensão'}].forEach(function(ab){
     var lbl=document.createElement('label');
     lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
     var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=false;
@@ -3228,7 +3228,7 @@ function iniEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){re
 function iniAdmin(){return STATE.roleLogado==='admin';}
 // Mesma regra do menu (renderModuloNav): quais abas este usuário enxerga
 function iniModulos(){
-  var todos=['frete','mod10','mod2','mod7','mod8','mod9','mod3','mod4','mod11','mod12','mod13','mod14','mod16','mod19','mod17','mod5','mod15'];
+  var todos=['frete','mod10','mod2','mod7','mod8','mod9','mod3','mod4','mod11','mod12','mod13','mod20','mod14','mod16','mod19','mod17','mod5','mod15'];
   if(iniAdmin())return todos;
   var ids=todos;
   if(STATE.abasPermitidas&&STATE.abasPermitidas.length){
@@ -3572,6 +3572,7 @@ function renderModuloNav(){
     {id:'mod11', icon:'☀️', label:'Energia solar'},
     {id:'mod12', icon:'🏠', label:'Leilão de imóveis'},
     {id:'mod13', icon:'💲', label:'Formação de preço'},
+    {id:'mod20', icon:'⚖️', label:'Cotação compra'},
     {id:'mod14', icon:'💸', label:'Lançamento de despesas'},
     {id:'mod16', icon:'🚚', label:'Lançamento de frete'},
     {id:'mod19', icon:'📊', label:'Relatório de despesas'},
@@ -3581,7 +3582,7 @@ function renderModuloNav(){
     {id:'mod18', icon:'🛠️', label:'Reportar Problema'}
   ];
   // Mapeamento id antigo -> novo
-  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13','mod14':'mod14','mod15':'mod15','mod16':'mod16','mod17':'mod17','mod18':'mod18','mod19':'mod19'};
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13','mod14':'mod14','mod15':'mod15','mod16':'mod16','mod17':'mod17','mod18':'mod18','mod19':'mod19','mod20':'mod20'};
   // Admin ve tudo; outros so veem abas permitidas
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
@@ -3604,12 +3605,12 @@ function renderModuloNav(){
   var GRUPOS=[
     {n:'Vendas',i:'ti-shopping-bag',c:'#ff9500',ids:['frete','mod10','mod2','mod7','mod8','mod4','mod5']},
     {n:'Lead',i:'ti-target-arrow',c:'#007aff',ids:['mod9']},
-    {n:'Compras',i:'ti-shopping-cart',c:'#34c759',ids:['mod13']},
+    {n:'Compras',i:'ti-shopping-cart',c:'#34c759',ids:['mod13','mod20']},
     {n:'Financeiro',i:'ti-cash',c:'#0a7d6b',ids:['mod17','mod14','mod16','mod19']},
     {n:'T.I.',i:'ti-cpu',c:'#5856d6',ids:['mod3','mod15','mod18']},
     {n:'Particular',i:'ti-home',c:'#af52de',ids:['mod12','mod11']}
   ];
-  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod13:'ti-currency-dollar',mod14:'ti-receipt-2',mod16:'ti-truck-delivery',mod17:'ti-qrcode',mod19:'ti-report-money',mod15:'ti-gauge',mod18:'ti-bug',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun'};
+  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod13:'ti-currency-dollar',mod20:'ti-scale',mod14:'ti-receipt-2',mod16:'ti-truck-delivery',mod17:'ti-qrcode',mod19:'ti-report-money',mod15:'ti-gauge',mod18:'ti-bug',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun'};
   if(!document.getElementById('navIosCss')){
     var lk=document.createElement('link');lk.rel='stylesheet';lk.href='https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css';lk.onload=function(){document.documentElement.classList.add('ti-ok');};document.head.appendChild(lk);
     var st=document.createElement('style');st.id='navIosCss';
@@ -3742,7 +3743,7 @@ function rppAdmin(){return STATE.roleLogado==='admin';}
 function rppUsuario(){return STATE.usuarioLogado||STATE.loginUser||'?';}
 function rppData(t){var d=new Date(t);return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
 function rppNomeTela(id){
-  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod17:'BLING',mod15:'Controle',mod18:'Reportar Problema',ext:'Extensão do Chrome',outro:'Outra / não sei'};
+  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod17:'BLING',mod15:'Controle',mod18:'Reportar Problema',ext:'Extensão do Chrome',outro:'Outra / não sei'};
   return nomes[id]||id||'?';
 }
 
@@ -3834,7 +3835,7 @@ async function rppAnalisar(c,fotos,anteriores){
 // ---- Envio do chamado ----
 // ---- Correção automática (robô no GitHub: .github/workflows/corrigir-chamado.yml, disparado pelo Worker corrigir-chamado) ----
 // Firebase chamadosConfig = {autoUrl, autoLigado}. Resultado do robô: chamados-auto/<autoId>.json, publicado junto com o app.
-var RPP_AUTO_TELAS_FORA=['mod2','mod13','mod14','mod15','mod16','mod17']; // crédito e financeiro: nunca disparam sozinhos
+var RPP_AUTO_TELAS_FORA=['mod2','mod13','mod20','mod14','mod15','mod16','mod17']; // crédito e financeiro: nunca disparam sozinhos
 var RPP_AUTO_PARECER='Erro confirmado! A correção automática já está sendo aplicada. Em alguns minutos a resposta aparece aqui em Meus chamados.';
 async function rppCfg(forcar){
   if(RPP.cfg&&!forcar)return RPP.cfg;
@@ -4229,7 +4230,7 @@ function rppHtmlNovo(){
     '<p style="color:#6b7280;margin:0 0 16px">'+(RPP.ok.resolvido?'Se o erro continuar, abra <b>Meus chamados</b> e clique em <b>🔁 Reabrir</b>.':'O T.I. já foi avisado. Você acompanha a situação em <b>Meus chamados</b>.')+'</p>'+
     '<button class="rpp-btn" data-a="outro">Reportar outro problema</button> <button class="rpp-btn sec" data-a="voltar">Voltar ao que eu estava fazendo</button></div>';
   // Só as abas que este colaborador enxerga no menu (mesma regra do menu), mais o Início e a extensão (se liberada)
-  var telas=['inicio','frete','mod10','mod2','mod4','mod8','mod9','mod7','mod3','mod17','mod14','mod16','mod13','mod15','mod5','mod11','mod12'];
+  var telas=['inicio','frete','mod10','mod2','mod4','mod8','mod9','mod7','mod3','mod17','mod14','mod16','mod13','mod20','mod15','mod5','mod11','mod12'];
   var pode=telas;try{if(typeof iniModulos==='function')pode=iniModulos();}catch(e){}
   telas=telas.filter(function(t){return t==='inicio'||pode.indexOf(t)>=0;});
   if(rppAdmin()||(STATE.abasPermitidas&&STATE.abasPermitidas.indexOf('ext')>=0))telas.push('ext');
@@ -4458,7 +4459,7 @@ var CTL_PRECOS=[
   {p:'claude-sonnet',in:3,out:15},
   {p:'claude-opus-4-5',in:5,out:25},{p:'claude-opus-4-6',in:5,out:25},{p:'claude-opus',in:15,out:75}
 ];
-var CTL_AREAS={mod18:'Reportar Problema',frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod14:'Despesas (comprovantes)',mod16:'Lançamento de frete (CT-e)',mod17:'BLING (PIX e crédito)',mod15:'Controle'};
+var CTL_AREAS={mod18:'Reportar Problema',frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Despesas (comprovantes)',mod16:'Lançamento de frete (CT-e)',mod17:'BLING (PIX e crédito)',mod15:'Controle'};
 var CTL={cfg:null,ia:null,carregando:false,erro:'',dolar:null,root:null};
 
 function ctlPreco(model){model=model||'';for(var k=0;k<CTL_PRECOS.length;k++){if(model.indexOf(CTL_PRECOS[k].p)===0)return CTL_PRECOS[k];}return {in:3,out:15};}
@@ -13756,6 +13757,303 @@ function rdsImprimir(){
   w.document.open();w.document.write(html);w.document.close();setTimeout(function(){try{w.focus();w.print();}catch(_e){}},400);
 }
 
+// ===================== MÓDULO COTAÇÃO COMPRA (mod20) — Compras › Cotação compra =====================
+// Puxa o pedido de compra do Bling pelo número (Worker "bling", rota /pedido-compra) e compara o fornecedor do pedido
+// com outros fornecedores: preço por item, desconto, IPI, ST, crédito de ICMS, frete, forma/prazo de pagamento e entrega.
+// Vencedor sugerido: menor custo final; empate (diferença até R$ 0,01) → menor prazo de entrega.
+// O usuário pode escolher outro vencedor (pede o motivo). Tudo fica no Firebase em cotacoesCompra/{numero do pedido}.
+var CC={num:'',cot:null,carr:false,erro:'',aviso:'',root:null,salvando:false,salvoEm:0,lista:null,_t:null};
+var CC_FORMAS=['Boleto','PIX','Transferência','Cartão de crédito','Dinheiro','Outra'];
+var CC_MAX_FORN=6;
+function ccEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function ccNum(v){if(typeof v==='number')return isFinite(v)?v:0;var s=String(v==null?'':v).trim().replace(/\s|R\$|%/g,'');if(!s)return 0;if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');var n=Number(s);return isFinite(n)?n:0;}
+function ccR(v){return Math.round((Number(v)||0)*100)/100;}
+function ccMoeda(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function ccIn(v,dec){if(v===''||v==null)return '';var n=Number(v);if(!isFinite(n))return '';return n.toLocaleString('pt-BR',{minimumFractionDigits:dec==null?2:dec,maximumFractionDigits:dec==null?4:dec});}
+function ccDataBr(d){if(!d)return '';var p=String(d).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+function ccEl(id){return CC.root?CC.root.querySelector('#'+id):null;}
+
+function ccFornVazio(nome,nItens){return {nome:nome||'',fixo:false,precos:Array(nItens).fill(''),desconto:'',ipi:'',st:'',credIcms:'',frete:'',formaPag:'',prazoPag:'',entrega:'',obs:''};}
+// Monta a cotação nova a partir do pedido que veio do Bling
+function ccDoPedido(p){
+  var itens=(p.itens||[]).map(function(i){return {cod:i.codigo||'',desc:i.descricao||'',un:i.unidade||'',q:Number(i.quantidade)||0};});
+  var ipiPct=p.totalProdutos>0?Math.round(p.totalIPI/p.totalProdutos*1e6)/1e4:0;
+  var dias=(p.parcelas||[]).map(function(x){return x.dias;}).filter(function(x){return x!=null;});
+  var entrega='';if(p.dataPrevista&&p.data){var d=Math.round((new Date(p.dataPrevista)-new Date(p.data))/864e5);if(d>=0)entrega=d;}
+  var forma=((p.parcelas||[])[0]||{}).forma||'';
+  var principal={nome:(p.fornecedor&&p.fornecedor.nome)||'Fornecedor do pedido',doc:(p.fornecedor&&p.fornecedor.doc)||'',uf:(p.fornecedor&&p.fornecedor.uf)||'',fixo:true,
+    precos:(p.itens||[]).map(function(i){return Number(i.valor)||0;}),desconto:ccR(p.desconto||0),ipi:ipiPct,st:'',credIcms:'',frete:ccR(p.frete||0),
+    formaPag:forma,prazoPag:!dias.length?'':dias.every(function(x){return x<=0;})?'À vista':dias.join('/')+' dias',entrega:entrega,obs:''};
+  return {numero:String(p.numero),pedidoId:p.id,data:p.data||'',totalPedido:p.total||0,itens:itens,forn:[principal,ccFornVazio('',itens.length),ccFornVazio('',itens.length)],
+    vencedor:null,criadoPor:(STATE.usuarioLogado||STATE.loginUser||''),criadoEm:Date.now()};
+}
+
+// ---- cálculo ----
+function ccCalc(f,itens){
+  var prod=0,faltam=0;
+  itens.forEach(function(it,i){var v=ccNum(f.precos&&f.precos[i]);if(v>0)prod+=v*it.q;else faltam++;});
+  var desc=ccNum(f.desconto),base=Math.max(prod-desc,0);
+  var ipi=prod*ccNum(f.ipi)/100,st=prod*ccNum(f.st)/100,frete=ccNum(f.frete);
+  var total=base+ipi+st+frete,cred=base*ccNum(f.credIcms)/100;
+  return {prod:ccR(prod),desc:ccR(desc),ipi:ccR(ipi),st:ccR(st),frete:ccR(frete),total:ccR(total),cred:ccR(cred),custo:ccR(total-cred),faltam:faltam,
+    completo:faltam===0&&itens.length>0,entrega:String(f.entrega).trim()===''?null:ccNum(f.entrega)};
+}
+// Ranking: só quem cotou todos os itens; menor custo final, empate → menor prazo de entrega (sem prazo vai para o fim)
+function ccRanking(c){
+  var r=c.forn.map(function(f,i){return {i:i,c:ccCalc(f,c.itens)};}).filter(function(x){return x.c.completo&&(c.forn[x.i].nome||'').trim();});
+  r.sort(function(a,b){var d=a.c.custo-b.c.custo;if(Math.abs(d)>0.01)return d;var ea=a.c.entrega==null?1e9:a.c.entrega,eb=b.c.entrega==null?1e9:b.c.entrega;return ea-eb;});
+  return r;
+}
+
+// ---- dados ----
+function ccSalvar(){
+  if(!CC.cot)return;clearTimeout(CC._t);
+  CC._t=setTimeout(function(){
+    var c=CC.cot;c.atualizadoEm=Date.now();c.atualizadoPor=(STATE.usuarioLogado||STATE.loginUser||'');
+    CC.salvando=true;ccStatus();
+    fetch(FIREBASE_DB+'/cotacoesCompra/'+encodeURIComponent(c.numero)+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)})
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);CC.salvoEm=Date.now();CC.lista=null;})
+    .catch(function(e){CC.erro='Não foi possível salvar ('+e.message+'). As alterações estão só nesta tela.';ccDraw();})
+    .finally(function(){CC.salvando=false;ccStatus();});
+  },700);
+}
+function ccNormalizar(c){
+  c.itens=c.itens||[];c.forn=(c.forn||[]).map(function(f){f.precos=f.precos||[];while(f.precos.length<c.itens.length)f.precos.push('');return f;});return c;
+}
+function ccBuscar(numero,doBling){
+  numero=String(numero||'').replace(/\D/g,'');
+  if(!numero){CC.erro='Digite o número do pedido de compra.';ccDraw();return;}
+  CC.num=numero;CC.carr=true;CC.erro='';CC.aviso='';ccDraw();
+  var salvo=doBling?Promise.resolve(null):fetch(FIREBASE_DB+'/cotacoesCompra/'+numero+'.json').then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
+  salvo.then(function(s){
+    if(s&&s.itens){CC.cot=ccNormalizar(s);CC.carr=false;CC.aviso='Cotação já salva deste pedido aberta. Use "Atualizar do Bling" para puxar o pedido de novo.';ccDraw();return;}
+    var cfg=(typeof BLG!=='undefined'&&BLG.cfgCarregada)?Promise.resolve():blgCarregarCfg();
+    return cfg.then(function(){
+      if(!blgUrl())throw new Error('O endereço do Worker do Bling não está configurado (aba Financeiro › BLING).');
+      return blgApi('/pedido-compra?numero='+numero);
+    }).then(function(r){
+      CC.carr=false;
+      if(!r||!r.ok){var e=(r&&r.erro)||'Falhou';if(/Rota inexistente/.test(e))e='O Worker do Bling ainda não tem a busca de pedido de compra. Atualize o código do Worker na Cloudflare (arquivo worker-bling.js).';
+        else if(/403|insufficient|escopo|scope/i.test(e))e='O app do Bling não tem permissão para Pedidos de compra. Marque esse escopo no aplicativo do Bling e reconecte em Financeiro › BLING. ('+e+')';
+        CC.erro=e;ccDraw();return;}
+      var novo=ccDoPedido(r.pedido);
+      if(doBling&&CC.cot&&CC.cot.numero===novo.numero){ // mantém os outros fornecedores, troca itens e o fornecedor do pedido
+        var velho=CC.cot,mapa={};velho.itens.forEach(function(it,i){mapa[(it.cod||it.desc)]=i;});
+        novo.forn=[novo.forn[0]].concat(velho.forn.filter(function(f){return !f.fixo;}).map(function(f){
+          var g=Object.assign({},f);g.precos=novo.itens.map(function(it){var k=mapa[(it.cod||it.desc)];return k==null?'':f.precos[k];});return g;}));
+        novo.vencedor=null;novo.criadoPor=velho.criadoPor;novo.criadoEm=velho.criadoEm;
+        CC.aviso='Pedido atualizado do Bling. Os outros fornecedores foram mantidos; confira os preços e escolha o vencedor de novo.';
+      }
+      CC.cot=novo;ccDraw();ccSalvar();
+    });
+  }).catch(function(e){CC.carr=false;CC.erro=String(e&&e.message||e);ccDraw();});
+}
+function ccCarregarLista(){
+  CC.lista='carr';ccDrawLista();
+  fetch(FIREBASE_DB+'/cotacoesCompra.json').then(function(r){return r.ok?r.json():{};}).then(function(d){
+    CC.lista=Object.keys(d||{}).map(function(k){var c=d[k]||{},v=c.vencedor&&c.forn&&c.forn[c.vencedor.i];
+      return {num:k,data:c.data,forn:(c.forn&&c.forn[0]&&c.forn[0].nome)||'',venc:v?v.nome:'',em:c.atualizadoEm||c.criadoEm||0};})
+      .sort(function(a,b){return b.em-a.em;}).slice(0,40);
+    ccDrawLista();
+  }).catch(function(){CC.lista=[];ccDrawLista();});
+}
+
+// ---- tela ----
+function ccCss(){
+  if(document.getElementById('ccCss'))return;
+  var st=document.createElement('style');st.id='ccCss';
+  st.textContent=
+  '.cc-wrap{padding:16px 18px 60px;max-width:1500px;margin:0 auto;font-family:inherit}'+
+  '.cc-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px}'+
+  '.cc-head h2{margin:0;font-size:20px;color:#1c1917}.cc-sub{font-size:12px;color:#78716c;margin-top:2px}'+
+  '.cc-btn{border:1px solid #d6d3d1;background:#fff;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#1c1917}'+
+  '.cc-btn:hover{background:#f5f5f4}.cc-btn.pri{background:#34c759;border-color:#2fb14f;color:#fff}.cc-btn.pri:hover{background:#2fb14f}'+
+  '.cc-btn.sm{padding:4px 8px;font-size:12px}.cc-btn.dan{color:#b91c1c;border-color:#fecaca}'+
+  '.cc-inp{border:1px solid #d6d3d1;border-radius:8px;padding:7px 10px;font-size:14px;font-family:inherit;background:#fff}'+
+  '.cc-card{background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:12px 14px;margin-bottom:12px}'+
+  '.cc-msg{border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px}.cc-msg.err{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}.cc-msg.inf{background:#eff6ff;color:#1e3a8a;border:1px solid #bfdbfe}'+
+  '.cc-info{display:flex;flex-wrap:wrap;gap:18px;font-size:13px}.cc-info b{display:block;font-size:11px;color:#78716c;font-weight:600;text-transform:uppercase;letter-spacing:.3px}'+
+  '.cc-scroll{overflow-x:auto;border:1px solid #e7e5e4;border-radius:12px;background:#fff}'+
+  '.cc-t{border-collapse:collapse;font-size:13px;min-width:100%}'+
+  '.cc-t th,.cc-t td{border-bottom:1px solid #f0efee;padding:5px 7px;text-align:right;vertical-align:middle}'+
+  '.cc-t th:first-child,.cc-t td:first-child{text-align:left;position:sticky;left:0;background:#fff;z-index:1;min-width:230px;max-width:300px;border-right:1px solid #e7e5e4}'+
+  '.cc-t thead th{background:#fafaf9;vertical-align:top}.cc-t thead th:first-child{background:#fafaf9}'+
+  '.cc-t td.col,.cc-t th.col{min-width:150px}'+
+  '.cc-t .win{background:#ecfdf3}.cc-t thead th.win{background:#d1fae5}'+
+  '.cc-t input,.cc-t select{width:100%;box-sizing:border-box;border:1px solid #e7e5e4;border-radius:6px;padding:5px 6px;font-size:13px;font-family:inherit;text-align:right;background:#fff}'+
+  '.cc-t input.txt,.cc-t select{text-align:left}.cc-t input:focus,.cc-t select:focus{outline:2px solid #34c759;border-color:#34c759}'+
+  '.cc-t input.best{color:#047857;font-weight:700;border-color:#86efac}'+
+  '.cc-t tr.sec td{background:#f5f5f4;font-size:11px;font-weight:700;color:#57534e;text-transform:uppercase;letter-spacing:.4px;text-align:left}'+
+  '.cc-t tr.sec td:first-child{background:#f5f5f4}'+
+  '.cc-t tr.tot td{font-weight:700}.cc-t tr.custo td{font-weight:800;font-size:14px;border-top:2px solid #e7e5e4}'+
+  '.cc-mu{color:#78716c;font-size:12px}.cc-tag{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;background:#f5f5f4;color:#57534e}'+
+  '.cc-tag.ok{background:#d1fae5;color:#065f46}.cc-tag.warn{background:#fef3c7;color:#92400e}'+
+  '.cc-rank{display:flex;flex-direction:column;gap:6px}.cc-rk{display:flex;align-items:center;gap:10px;font-size:13px;padding:8px 10px;border-radius:10px;border:1px solid #e7e5e4}'+
+  '.cc-rk.v{border-color:#34c759;background:#ecfdf3}.cc-rk .pos{font-weight:800;width:26px;text-align:center}.cc-rk .nm{font-weight:700;flex:1}'+
+  '.cc-lista{width:100%;border-collapse:collapse;font-size:13px}.cc-lista td,.cc-lista th{padding:6px 8px;border-bottom:1px solid #f0efee;text-align:left}.cc-lista tr:hover td{background:#fafaf9;cursor:pointer}'+
+  '@media(max-width:700px){.cc-t th:first-child,.cc-t td:first-child{min-width:150px}}';
+  document.head.appendChild(st);
+}
+function renderCotacaoCompra(){
+  ccCss();
+  var wrap=document.createElement('div');wrap.className='cc-wrap';CC.root=wrap;
+  wrap.innerHTML=
+    '<div class="cc-head"><div><h2>⚖️ Cotação compra</h2><div class="cc-sub">Compare o fornecedor do pedido de compra com outros fornecedores e defina a melhor condição.</div></div>'+
+    '<span style="flex:1"></span><span class="cc-mu" id="ccStatus"></span></div>'+
+    '<div class="cc-card" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">'+
+      '<label for="ccNumInp" style="font-size:13px;font-weight:600">Nº do pedido de compra</label>'+
+      '<input id="ccNumInp" class="cc-inp" inputmode="numeric" placeholder="Ex.: 1542" style="width:150px" value="'+ccEsc(CC.num)+'">'+
+      '<button type="button" class="cc-btn pri" id="ccBuscar">🔎 Puxar pedido</button>'+
+      '<button type="button" class="cc-btn" id="ccListaBtn">📂 Cotações salvas</button>'+
+    '</div>'+
+    '<div id="ccLista"></div><div id="ccCorpo"></div>';
+  var inp=wrap.querySelector('#ccNumInp');
+  wrap.querySelector('#ccBuscar').onclick=function(){ccBuscar(inp.value,false);};
+  inp.onkeydown=function(e){if(e.key==='Enter')ccBuscar(inp.value,false);};
+  wrap.querySelector('#ccListaBtn').onclick=function(){if(CC.lista&&CC.lista!=='carr'&&CC.listaAberta){CC.listaAberta=false;ccDrawLista();return;}CC.listaAberta=true;ccCarregarLista();};
+  ccDraw();ccDrawLista();
+  return wrap;
+}
+function ccStatus(){var e=ccEl('ccStatus');if(!e)return;e.textContent=CC.salvando?'💾 Salvando…':CC.salvoEm?'✅ Salvo às '+new Date(CC.salvoEm).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'';}
+function ccDrawLista(){
+  var el=ccEl('ccLista');if(!el)return;
+  if(!CC.listaAberta){el.innerHTML='';return;}
+  if(CC.lista==='carr'||CC.lista==null){el.innerHTML='<div class="cc-card">⏳ Carregando cotações salvas…</div>';return;}
+  if(!CC.lista.length){el.innerHTML='<div class="cc-card cc-mu">Nenhuma cotação salva ainda.</div>';return;}
+  el.innerHTML='<div class="cc-card"><table class="cc-lista"><thead><tr><th>Pedido</th><th>Data</th><th>Fornecedor do pedido</th><th>Vencedor</th></tr></thead><tbody>'+
+    CC.lista.map(function(x){return '<tr data-n="'+ccEsc(x.num)+'"><td><b>'+ccEsc(x.num)+'</b></td><td>'+ccEsc(ccDataBr(x.data))+'</td><td>'+ccEsc(x.forn)+'</td><td>'+(x.venc?'🏆 '+ccEsc(x.venc):'<span class="cc-mu">a definir</span>')+'</td></tr>';}).join('')+
+    '</tbody></table></div>';
+  el.querySelectorAll('tr[data-n]').forEach(function(tr){tr.onclick=function(){CC.listaAberta=false;ccDrawLista();var i=ccEl('ccNumInp');if(i)i.value=tr.dataset.n;ccBuscar(tr.dataset.n,false);};});
+}
+function ccDraw(){
+  var el=ccEl('ccCorpo');if(!el)return;ccStatus();
+  var h='';
+  if(CC.erro)h+='<div class="cc-msg err">⚠️ '+ccEsc(CC.erro)+'</div>';
+  if(CC.aviso)h+='<div class="cc-msg inf">ℹ️ '+ccEsc(CC.aviso)+'</div>';
+  if(CC.carr){el.innerHTML=h+'<div class="cc-card">⏳ Buscando o pedido de compra nº '+ccEsc(CC.num)+' no Bling…</div>';return;}
+  var c=CC.cot;
+  if(!c){el.innerHTML=h+'<div class="cc-card"><b>Comece pelo número do pedido de compra</b><p class="cc-mu" style="margin:6px 0 0">O app traz do Bling os itens, quantidades, preços, impostos, frete e pagamento do fornecedor do pedido. Depois é só incluir os outros fornecedores e os preços deles.</p></div>';return;}
+  var calc=c.forn.map(function(f){return ccCalc(f,c.itens);});
+  var rk=ccRanking(c),auto=rk.length?rk[0].i:-1;
+  var venc=c.vencedor&&c.forn[c.vencedor.i]?c.vencedor.i:auto;
+  var p0=c.forn[0];
+  h+='<div class="cc-card cc-info">'+
+    '<div><b>Pedido</b>nº '+ccEsc(c.numero)+'</div><div><b>Data</b>'+ccEsc(ccDataBr(c.data))+'</div>'+
+    '<div><b>Fornecedor do pedido</b>'+ccEsc(p0.nome)+(p0.uf?' · '+ccEsc(p0.uf):'')+'</div>'+
+    '<div><b>Total no Bling</b>'+ccMoeda(c.totalPedido)+'</div><div><b>Itens</b>'+c.itens.length+'</div>'+
+    '<span style="flex:1"></span>'+
+    '<button type="button" class="cc-btn sm" data-a="bling">🔄 Atualizar do Bling</button>'+
+    (c.forn.length<CC_MAX_FORN?'<button type="button" class="cc-btn sm" data-a="add">➕ Fornecedor</button>':'')+
+    '<button type="button" class="cc-btn sm" data-a="copiar">📋 Copiar resumo</button>'+
+  '</div>';
+  // menor preço por item (entre quem cotou)
+  var menor=c.itens.map(function(it,i){var vs=c.forn.map(function(f){return ccNum(f.precos[i]);}).filter(function(v){return v>0;});return vs.length>1?Math.min.apply(null,vs):-1;});
+  var cls=function(j){return 'col'+(j===venc?' win':'');};
+  var t='<table class="cc-t"><thead><tr><th>Produto</th>';
+  c.forn.forEach(function(f,j){
+    t+='<th class="'+cls(j)+'">'+(f.fixo
+      ?'<div style="text-align:left;font-weight:700">'+ccEsc(f.nome)+'</div><div class="cc-mu" style="text-align:left">do pedido'+(f.doc?' · '+ccEsc(f.doc):'')+'</div>'
+      :'<input class="txt" data-j="'+j+'" data-k="nome" placeholder="Nome do fornecedor" value="'+ccEsc(f.nome)+'" style="font-weight:700">'+
+       '<div style="text-align:left;margin-top:3px"><button type="button" class="cc-btn sm dan" data-a="rem" data-j="'+j+'" title="Remover fornecedor">✕ remover</button></div>')+
+      '<div style="text-align:left;margin-top:4px">'+(j===venc?'<span class="cc-tag ok">🏆 vencedor</span>':(calc[j].completo&&(f.nome||'').trim()?'<button type="button" class="cc-btn sm" data-a="venc" data-j="'+j+'">Escolher</button>':'<span class="cc-tag warn">'+(calc[j].faltam?'faltam '+calc[j].faltam+' preço(s)':'sem nome')+'</span>'))+'</div></th>';
+  });
+  t+='</tr></thead><tbody><tr class="sec"><td colspan="'+(c.forn.length+1)+'">Preço unitário (R$)</td></tr>';
+  c.itens.forEach(function(it,i){
+    t+='<tr><td><div style="font-weight:600">'+ccEsc(it.desc)+'</div><div class="cc-mu">'+(it.cod?'cód. '+ccEsc(it.cod)+' · ':'')+ccIn(it.q,0)+' '+ccEsc(it.un)+'</div></td>';
+    c.forn.forEach(function(f,j){var v=ccNum(f.precos[i]);
+      t+='<td class="'+cls(j)+'"><input inputmode="decimal" data-j="'+j+'" data-i="'+i+'" class="'+(v>0&&v===menor[i]?'best':'')+'" value="'+ccEsc(f.precos[i]===''?'':ccIn(f.precos[i]))+'" placeholder="0,00"></td>';});
+    t+='</tr>';
+  });
+  var linha=function(rot,k,ph,tipo,dica){
+    var r='<tr><td>'+rot+(dica?'<div class="cc-mu">'+dica+'</div>':'')+'</td>';
+    c.forn.forEach(function(f,j){
+      if(tipo==='forma'){r+='<td class="'+cls(j)+'"><select data-j="'+j+'" data-k="'+k+'"><option value="">—</option>'+CC_FORMAS.concat(f[k]&&CC_FORMAS.indexOf(f[k])<0?[f[k]]:[]).map(function(o){return '<option'+(o===f[k]?' selected':'')+'>'+ccEsc(o)+'</option>';}).join('')+'</select></td>';}
+      else r+='<td class="'+cls(j)+'"><input '+(tipo==='txt'?'class="txt"':'inputmode="decimal"')+' data-j="'+j+'" data-k="'+k+'" placeholder="'+ph+'" value="'+ccEsc(tipo==='txt'?f[k]:(f[k]===''||f[k]==null?'':ccIn(f[k],tipo==='int'?0:undefined)))+'"></td>';
+    });
+    return r+'</tr>';
+  };
+  var calcLinha=function(rot,campo,trc,sinal){var r='<tr class="'+(trc||'')+'"><td>'+rot+'</td>';calc.forEach(function(x,j){r+='<td class="'+cls(j)+'">'+(x.prod?(sinal||'')+ccMoeda(x[campo]):'<span class="cc-mu">—</span>')+'</td>';});return r+'</tr>';};
+  t+='<tr class="sec"><td colspan="'+(c.forn.length+1)+'">Impostos, frete e desconto</td></tr>'+
+    linha('Desconto (R$)','desconto','0,00')+
+    linha('IPI (%)','ipi','0,00','','sobre o valor dos produtos')+
+    linha('ICMS ST (%)','st','0,00','','substituição tributária')+
+    linha('Frete (R$)','frete','0,00','','0 se for CIF')+
+    linha('Crédito de ICMS (%)','credIcms','0,00','','abate do custo (Lucro Real)')+
+    '<tr class="sec"><td colspan="'+(c.forn.length+1)+'">Pagamento e entrega</td></tr>'+
+    linha('Forma de pagamento','formaPag','','forma')+
+    linha('Prazo de pagamento','prazoPag','28/56 dias','txt')+
+    linha('Prazo de entrega (dias)','entrega','0','int')+
+    linha('Observação','obs','','txt')+
+    '<tr class="sec"><td colspan="'+(c.forn.length+1)+'">Resultado</td></tr>'+
+    calcLinha('Produtos','prod')+calcLinha('(−) Desconto','desc','','− ')+calcLinha('(+) IPI','ipi')+calcLinha('(+) ICMS ST','st')+calcLinha('(+) Frete','frete')+
+    calcLinha('Total da compra','total','tot')+calcLinha('(−) Crédito de ICMS','cred','','− ')+calcLinha('Custo final','custo','custo');
+  t+='</tbody></table>';
+  h+='<div class="cc-scroll">'+t+'</div>';
+  // ranking + vencedor
+  var r='<div class="cc-card" style="margin-top:12px"><div style="font-weight:800;font-size:15px;margin-bottom:4px">🏆 Melhor condição</div>'+
+    '<div class="cc-mu" style="margin-bottom:10px">Critério: menor custo final (com impostos, frete e crédito de ICMS); no empate, menor prazo de entrega. Só entra quem cotou todos os itens.</div>';
+  if(!rk.length)r+='<div class="cc-mu">Preencha os preços de todos os itens para comparar.</div>';
+  else{
+    var base=calc[0].completo?calc[0].custo:null;
+    r+='<div class="cc-rank">'+rk.map(function(x,pos){var f=c.forn[x.i],d=pos?x.c.custo-rk[0].c.custo:0;
+      return '<div class="cc-rk'+(x.i===venc?' v':'')+'"><span class="pos">'+(pos+1)+'º</span><span class="nm">'+ccEsc(f.nome)+(f.fixo?' <span class="cc-tag">do pedido</span>':'')+(x.i===venc?' <span class="cc-tag ok">vencedor</span>':'')+'</span>'+
+        '<span>'+ccMoeda(x.c.custo)+'</span><span class="cc-mu" style="min-width:110px;text-align:right">'+(pos?'+ '+ccMoeda(d):'melhor preço')+'</span>'+
+        '<span class="cc-mu" style="min-width:150px;text-align:right">'+(f.formaPag?ccEsc(f.formaPag)+' · ':'')+(f.prazoPag?ccEsc(f.prazoPag)+' · ':'')+(x.c.entrega==null?'entrega ?':'entrega '+x.c.entrega+' d')+'</span></div>';}).join('')+'</div>';
+    if(venc>=0){var fv=c.forn[venc],cv=calc[venc];
+      r+='<div style="margin-top:12px;font-size:14px">Vencedor: <b>'+ccEsc(fv.nome)+'</b> · custo final '+ccMoeda(cv.custo)+
+        (base!=null&&venc!==0?(cv.custo<base?' · <b style="color:#047857">economia de '+ccMoeda(base-cv.custo)+'</b> sobre o fornecedor do pedido':' · '+ccMoeda(cv.custo-base)+' acima do fornecedor do pedido'):'')+
+        (venc===0?' · o fornecedor do pedido já é o melhor':'')+'</div>';
+      if(c.vencedor&&c.vencedor.manual)r+='<div class="cc-mu" style="margin-top:4px">Escolhido manualmente por '+ccEsc(c.vencedor.por||'?')+(c.vencedor.motivo?' · motivo: '+ccEsc(c.vencedor.motivo):'')+' · <a href="#" data-a="auto">voltar ao automático</a></div>';
+    }
+  }
+  r+='</div>';
+  h+=r;
+  el.innerHTML=h;
+  ccLigar(el);
+}
+function ccLigar(el){
+  var c=CC.cot;if(!c)return;
+  el.querySelectorAll('input[data-j],select[data-j]').forEach(function(inp){
+    inp.addEventListener('change',function(){
+      var f=c.forn[+inp.dataset.j];if(!f)return;
+      if(inp.dataset.i!=null){var v=inp.value.trim();f.precos[+inp.dataset.i]=v===''?'':ccNum(v);}
+      else{var k=inp.dataset.k;if(['nome','formaPag','prazoPag','obs'].indexOf(k)>=0)f[k]=inp.value;else f[k]=inp.value.trim()===''?'':ccNum(inp.value);}
+      if(c.vencedor&&!c.vencedor.manual)c.vencedor=null;
+      CC.aviso='';ccDraw();ccSalvar();
+    });
+    inp.addEventListener('keydown',function(e){ // Enter desce para a linha de baixo, mesmo fornecedor
+      if(e.key!=='Enter')return;e.preventDefault();
+      var j=inp.dataset.j,col=Array.prototype.slice.call(el.querySelectorAll('[data-j="'+j+'"]')).filter(function(x){return x.tagName!=='BUTTON';});
+      var pos=col.indexOf(inp);inp.blur();
+      setTimeout(function(){var col2=Array.prototype.slice.call(CC.root.querySelectorAll('#ccCorpo [data-j="'+j+'"]')).filter(function(x){return x.tagName!=='BUTTON';});var n=col2[pos+1];if(n){n.focus();if(n.select)n.select();}},30);
+    });
+  });
+  el.querySelectorAll('[data-a]').forEach(function(b){
+    b.onclick=function(e){
+      e.preventDefault();var a=b.dataset.a,j=+b.dataset.j;
+      if(a==='add'){if(c.forn.length>=CC_MAX_FORN)return;c.forn.push(ccFornVazio('',c.itens.length));ccDraw();ccSalvar();setTimeout(function(){var x=CC.root.querySelectorAll('#ccCorpo input[data-k="nome"]');if(x.length)x[x.length-1].focus();},30);}
+      else if(a==='rem'){var f=c.forn[j];if(!f||f.fixo)return;if((f.nome||f.precos.some(function(v){return v!=='';}))&&!confirm('Remover '+(f.nome||'este fornecedor')+' da cotação?'))return;
+        c.forn.splice(j,1);if(c.vencedor){if(c.vencedor.i===j)c.vencedor=null;else if(c.vencedor.i>j)c.vencedor.i--;}ccDraw();ccSalvar();}
+      else if(a==='venc'){var rk=ccRanking(c),auto=rk.length?rk[0].i:-1,motivo='';
+        if(j!==auto){motivo=prompt('Este fornecedor não é o de menor custo. Qual o motivo da escolha? (ex.: prazo de entrega, prazo de pagamento, qualidade)','');if(motivo===null)return;}
+        c.vencedor={i:j,manual:j!==auto,motivo:motivo||'',por:(STATE.usuarioLogado||STATE.loginUser||''),em:Date.now()};ccDraw();ccSalvar();}
+      else if(a==='auto'){c.vencedor=null;ccDraw();ccSalvar();}
+      else if(a==='bling'){if(confirm('Puxar o pedido de novo do Bling? Os itens e o fornecedor do pedido serão atualizados; os outros fornecedores ficam.'))ccBuscar(c.numero,true);}
+      else if(a==='copiar')ccCopiar();
+    };
+  });
+}
+function ccCopiar(){
+  var c=CC.cot;if(!c)return;var rk=ccRanking(c),venc=c.vencedor?c.vencedor.i:(rk.length?rk[0].i:-1);
+  var l=['*Cotação de compra — pedido nº '+c.numero+'*',''];
+  rk.forEach(function(x,pos){var f=c.forn[x.i];l.push((pos+1)+'º '+f.nome+(x.i===venc?' 🏆':'')+': '+ccMoeda(x.c.custo)+(f.formaPag?' · '+f.formaPag:'')+(f.prazoPag?' · '+f.prazoPag:'')+(x.c.entrega!=null?' · entrega '+x.c.entrega+' dias':''));});
+  c.forn.forEach(function(f){var k=ccCalc(f,c.itens);if(!k.completo&&(f.nome||'').trim())l.push('— '+f.nome+': cotação incompleta');});
+  if(venc>=0&&c.vencedor&&c.vencedor.motivo)l.push('','Motivo da escolha: '+c.vencedor.motivo);
+  var txt=l.join('\n');
+  (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(function(){CC.aviso='Resumo copiado. É só colar no WhatsApp.';ccDraw();})
+    .catch(function(){prompt('Copie o resumo:',txt);});
+}
+
 // ===================== MÓDULO BLING (mod17) — pedidos e notas a receber por PIX / link de crédito =====================
 // Tela com o mesmo visual do Bling (tema escuro). Quem vê: admin + quem tiver 'mod17' marcado em Configurações › Acesso às abas.
 // Dados: Worker "bling" (worker-bling.js) que fala com a API oficial do Bling. Endereço em Firebase bling/config.workerUrl.
@@ -14303,6 +14601,8 @@ function renderApp(){
     main.appendChild(renderFretes());
   } else if(STATE.modulo==='mod19'&&STATE.roleLogado==='admin'){
     main.appendChild(renderRelDespesas());
+  } else if(STATE.modulo==='mod20'){
+    main.appendChild(renderCotacaoCompra());
   } else if(STATE.modulo==='mod17'){
     main.appendChild(renderBling());
   } else if(STATE.modulo==='mod18'){
