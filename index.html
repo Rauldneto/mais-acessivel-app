@@ -13875,6 +13875,47 @@ function ccCss(){
   '.cc-card{background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:12px 14px;margin-bottom:12px}'+
   '.cc-msg{border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:12px}.cc-msg.err{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}.cc-msg.inf{background:#eff6ff;color:#1e3a8a;border:1px solid #bfdbfe}'+
   '.cc-info{display:flex;flex-wrap:wrap;gap:18px;font-size:13px}.cc-info b{display:block;font-size:11px;color:#78716c;font-weight:600;text-transform:uppercase;letter-spacing:.3px}'+
+  '.cc-gw{overflow-x:auto;border:1px solid #cbd5e1;border-radius:10px;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.05)}'+
+  '.cc-g{border-collapse:separate;border-spacing:0;width:100%;table-layout:fixed;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:13px;color:#0f172a;font-variant-numeric:tabular-nums}'+
+  '.cc-g th,.cc-g td{font-family:inherit!important;font-size:13px;border:0;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:0 10px;height:36px;background:#fff;color:#0f172a;text-transform:none;letter-spacing:0;white-space:nowrap;text-align:left;vertical-align:middle}'+
+  '.cc-g col.cg-prod{width:300px}.cc-g col.cg-q{width:64px}.cc-g col.cg-un{width:52px}.cc-g col.cg-p{width:112px}.cc-g col.cg-t{width:118px}'+
+  '.cc-g .n{text-align:right}.cc-g .c{text-align:center;color:#475569}'+
+  '.cc-g .l{border-left:2px solid #94a3b8}'+
+  '.cc-g thead th{position:sticky;z-index:3;background:#f1f5f9;font-weight:600;color:#334155}'+
+  '.cc-g tr.h1 th{top:0;height:auto;padding:0;vertical-align:top}.cc-g tr.h1 th.prod,.cc-g tr.h1 th.n,.cc-g tr.h1 th.c{padding:0 10px;vertical-align:bottom;padding-bottom:8px;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:#64748b}'+
+  '.cc-g tr.h2 th{top:var(--cc-h1,96px);height:28px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#64748b;border-bottom:2px solid #94a3b8}'+
+  '.cc-g tr.h1 th.prod,.cc-g tr.h1 th.n,.cc-g tr.h1 th.c{border-bottom:2px solid #94a3b8}'+
+  '.cc-g th.forn{border-left:2px solid #94a3b8;border-top:4px solid #94a3b8;min-width:230px}.cc-g th.forn.fixo{border-top-color:#475569}'+
+  '.cc-g th.forn.w{border-top-color:#16a34a;background:#dcfce7}'+
+  '.cc-g .fh{display:flex;flex-direction:column;gap:2px;padding:8px 10px 8px}'+
+  '.cc-g .fn{font-weight:700;font-size:14px;color:#0f172a;max-width:220px;overflow:hidden;text-overflow:ellipsis}'+
+  '.cc-g .fn-in{font-family:inherit;font-weight:700;font-size:14px;color:#0f172a;border:1px solid transparent;border-radius:6px;background:transparent;padding:3px 6px;margin:-3px -6px;width:calc(100% + 12px);box-sizing:border-box}'+
+  '.cc-g .fn-in:hover{border-color:#cbd5e1;background:#fff}.cc-g .fn-in:focus{border-color:#16a34a;background:#fff;box-shadow:0 0 0 3px rgba(22,163,74,.15)}.cc-g .fn-in::placeholder{color:#94a3b8;font-weight:500}'+
+  '.cc-g .fs{font-size:11.5px;color:#64748b;font-weight:400;max-width:220px;overflow:hidden;text-overflow:ellipsis}'+
+  '.cc-g .fa{display:flex;align-items:center;gap:6px;margin-top:6px}'+
+  '.cc-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:999px;padding:2px 9px;background:#e2e8f0;color:#334155;text-transform:none;letter-spacing:0}'+
+  '.cc-chip.ok{background:#16a34a;color:#fff}.cc-chip.warn{background:#fef3c7;color:#92400e}'+
+  '.cc-lnk{border:0;background:none;color:#15803d;font-family:inherit;font-weight:600;font-size:12px;cursor:pointer;padding:0;text-decoration:underline}'+
+  '.cc-ico{width:26px;height:26px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;line-height:1;display:inline-flex;align-items:center;justify-content:center;padding:0}'+
+  '.cc-ico:hover{background:#f1f5f9}.cc-ico.dan{color:#b91c1c}.cc-ico.dan:hover{background:#fef2f2;border-color:#fecaca}'+
+  '.cc-g td.prod,.cc-g th.prod{position:sticky;left:0;z-index:2;border-right:2px solid #94a3b8}.cc-g thead th.prod{z-index:4}'+
+  '.cc-g tr.it td{height:44px}.cc-g tr.it:nth-child(even) td{background:#f8fafc}'+
+  '.cc-g .pd{font-weight:600;max-width:280px;overflow:hidden;text-overflow:ellipsis}.cc-g .pc{font-size:11.5px;color:#64748b;margin-top:1px}'+
+  '.cc-g td.inp{padding:0}.cc-g td.inp input,.cc-g td.inp select{width:100%;height:100%;min-height:34px;box-sizing:border-box;border:0;border-radius:0;background:transparent;font:inherit;font-family:inherit;color:#0f172a;padding:0 10px;outline:none;text-align:inherit}'+
+  '.cc-g td.inp select{cursor:pointer;text-align:left}.cc-g td.inp:hover{background:#f0fdf4!important}'+
+  '.cc-g td.inp:focus-within{box-shadow:inset 0 0 0 2px #16a34a;background:#fff!important}.cc-g td.inp input::placeholder{color:#cbd5e1}'+
+  '.cc-g td.w{background:#f0fdf4!important}'+
+  '.cc-g td.best input,.cc-g td.best{color:#15803d;font-weight:700}.cc-g td.tot{color:#334155}.cc-g td.tot.best{color:#15803d}'+
+  '.cc-g .nil{color:#cbd5e1}'+
+  '.cc-g .inc{color:#94a3b8;font-weight:600;font-size:13px}'+
+  '.cc-g tr.sub td{font-weight:700;background:#f1f5f9!important;border-top:2px solid #94a3b8}.cc-g tr.sub td.w{background:#dcfce7!important}'+
+  '.cc-g tr.sec td{height:30px;background:#e2e8f0!important;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#475569;border-right:0}'+
+  '.cc-g tr.sec td span{position:sticky;left:10px}'+
+  '.cc-g .dc{margin-left:8px;font-size:11.5px;color:#94a3b8;font-weight:400}'+
+  '.cc-g tr.cd td.prod,.cc-g tr.rs td.prod{color:#334155}'+
+  '.cc-g tr.rs td{height:32px}.cc-g tr.tt td{font-weight:700;border-top:2px solid #94a3b8}'+
+  '.cc-g tr.cf td{height:46px;font-weight:800;font-size:15px;background:#f1f5f9!important;border-top:3px double #475569;border-bottom:0}'+
+  '.cc-g tr.cf td.w{background:#16a34a!important;color:#fff}'+
   '.cc-scroll{overflow-x:auto;border:1px solid #e7e5e4;border-radius:12px;background:#fff}'+
   '.cc-t{border-collapse:collapse;font-size:13px;min-width:100%}'+
   '.cc-t th,.cc-t td{border-bottom:1px solid #f0efee;padding:5px 7px;text-align:right;vertical-align:middle}'+
@@ -13952,48 +13993,64 @@ function ccDraw(){
   '<input type="file" id="ccFile" multiple accept=".pdf,.xlsx,.xls,.csv,.ods,image/*" style="display:none">'+ccDrawImp();
   // menor preço por item (entre quem cotou)
   var menor=c.itens.map(function(it,i){var vs=c.forn.map(function(f){return ccNum(f.precos[i]);}).filter(function(v){return v>0;});return vs.length>1?Math.min.apply(null,vs):-1;});
-  var cls=function(j){return 'col'+(j===venc?' win':'');};
-  var t='<table class="cc-t"><thead><tr><th>Produto</th>';
+  // ---- grade (mapa de cotação): Produto | Qtd | Un | por fornecedor: Unitário + Total ----
+  var NF=c.forn.length,COLS=3+NF*2;
+  var pos={};rk.forEach(function(x,p){pos[x.i]=p+1;});
+  var wc=function(j,extra){return (j===venc?'w ':'')+(extra||'');};
+  var t='<table class="cc-g" style="min-width:'+(416+NF*230)+'px"><colgroup><col class="cg-prod"><col class="cg-q"><col class="cg-un">'+c.forn.map(function(){return '<col class="cg-p"><col class="cg-t">';}).join('')+'</colgroup>';
+  // cabeçalho 1: fornecedores
+  t+='<thead><tr class="h1"><th class="prod" rowspan="2">Produto</th><th rowspan="2" class="n">Qtd</th><th rowspan="2" class="c">Un</th>';
   c.forn.forEach(function(f,j){
-    t+='<th class="'+cls(j)+'">'+(f.fixo
-      ?'<div style="text-align:left;font-weight:700">'+ccEsc(f.nome)+'</div><div class="cc-mu" style="text-align:left">do pedido'+(f.doc?' · '+ccEsc(f.doc):'')+'</div>'
-      :'<input class="txt" data-j="'+j+'" data-k="nome" placeholder="Nome do fornecedor" value="'+ccEsc(f.nome)+'" style="font-weight:700">'+
-       '<div style="text-align:left;margin-top:3px;display:flex;gap:4px;flex-wrap:wrap"><button type="button" class="cc-btn sm" data-a="carregar" data-j="'+j+'" title="Ler PDF, foto ou Excel da cotação deste fornecedor">📎 Carregar</button><button type="button" class="cc-btn sm dan" data-a="rem" data-j="'+j+'" title="Remover fornecedor">✕</button></div>'+
-       ((f.arquivos||[]).length?'<div class="cc-mu" style="text-align:left;margin-top:3px;font-weight:400;text-transform:none" title="'+ccEsc(f.arquivos.map(function(a){return a.nome;}).join(', '))+'">📄 '+ccEsc(f.arquivos[f.arquivos.length-1].nome).slice(0,28)+'</div>':''))+
-      '<div style="text-align:left;margin-top:4px">'+(j===venc?'<span class="cc-tag ok">🏆 vencedor</span>':(calc[j].completo&&(f.nome||'').trim()?'<button type="button" class="cc-btn sm" data-a="venc" data-j="'+j+'">Escolher</button>':'<span class="cc-tag warn">'+(calc[j].faltam?'faltam '+calc[j].faltam+' preço(s)':'sem nome')+'</span>'))+'</div></th>';
+    var est=calc[j],status;
+    if(j===venc)status='<span class="cc-chip ok">🏆 Vencedor</span>';
+    else if(pos[j])status='<span class="cc-chip">'+pos[j]+'º lugar</span><button type="button" class="cc-lnk" data-a="venc" data-j="'+j+'">Escolher</button>';
+    else if(!(f.nome||'').trim())status='<span class="cc-chip warn">Sem nome</span>';
+    else status='<span class="cc-chip warn">Faltam '+est.faltam+' preço'+(est.faltam>1?'s':'')+'</span>';
+    t+='<th colspan="2" class="forn '+wc(j)+(f.fixo?'fixo':'')+'"><div class="fh">'+
+      (f.fixo?'<div class="fn" title="'+ccEsc(f.nome)+'">'+ccEsc(f.nome)+'</div><div class="fs">Fornecedor do pedido'+(f.doc?' · '+ccEsc(f.doc):'')+'</div>'
+        :'<input class="fn-in" data-j="'+j+'" data-k="nome" placeholder="Nome do fornecedor" value="'+ccEsc(f.nome)+'">'+
+         '<div class="fs">'+((f.arquivos||[]).length?'<span title="'+ccEsc(f.arquivos.map(function(a){return a.nome;}).join(', '))+'">📄 '+ccEsc(String(f.arquivos[f.arquivos.length-1].nome).slice(0,26))+'</span>':(f.doc?ccEsc(f.doc):'Digite ou carregue a cotação'))+'</div>')+
+      '<div class="fa">'+status+'<span style="flex:1"></span>'+
+        (f.fixo?'':'<button type="button" class="cc-ico" data-a="carregar" data-j="'+j+'" title="Carregar cotação (PDF, foto ou Excel)">📎</button><button type="button" class="cc-ico dan" data-a="rem" data-j="'+j+'" title="Remover fornecedor">✕</button>')+
+      '</div></div></th>';
   });
-  t+='</tr></thead><tbody><tr class="sec"><td colspan="'+(c.forn.length+1)+'">Preço unitário (R$)</td></tr>';
+  t+='</tr><tr class="h2">';
+  c.forn.forEach(function(f,j){t+='<th class="n '+wc(j,'l')+'">Unitário</th><th class="n '+wc(j)+'">Total</th>';});
+  t+='</tr></thead><tbody>';
+  // itens
   c.itens.forEach(function(it,i){
-    t+='<tr><td><div style="font-weight:600">'+ccEsc(it.desc)+'</div><div class="cc-mu">'+(it.cod?'cód. '+ccEsc(it.cod)+' · ':'')+ccIn(it.q,0)+' '+ccEsc(it.un)+'</div></td>';
-    c.forn.forEach(function(f,j){var v=ccNum(f.precos[i]);
-      t+='<td class="'+cls(j)+'"><input inputmode="decimal" data-j="'+j+'" data-i="'+i+'" class="'+(v>0&&v===menor[i]?'best':'')+'" value="'+ccEsc(f.precos[i]===''?'':ccIn(f.precos[i]))+'" placeholder="0,00"></td>';});
+    t+='<tr class="it"><td class="prod"><div class="pd" title="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div>'+(it.cod?'<div class="pc">Cód. '+ccEsc(it.cod)+'</div>':'')+'</td>'+
+      '<td class="n">'+ccIn(it.q,0)+'</td><td class="c">'+ccEsc(it.un)+'</td>';
+    c.forn.forEach(function(f,j){var v=ccNum(f.precos[i]),best=v>0&&v===menor[i];
+      t+='<td class="n inp '+wc(j,'l')+(best?' best':'')+'"><input inputmode="decimal" data-j="'+j+'" data-i="'+i+'" value="'+ccEsc(v>0?ccIn(f.precos[i]):'')+'" placeholder="—" aria-label="Preço unitário '+ccEsc(it.desc)+' '+ccEsc(f.nome)+'"></td>'+
+        '<td class="n tot '+wc(j)+(best?' best':'')+'">'+(v>0?ccMoeda(v*it.q).replace('R$ ',''):'<span class="nil">—</span>')+'</td>';});
     t+='</tr>';
   });
-  var linha=function(rot,k,ph,tipo,dica){
-    var r='<tr><td>'+rot+(dica?'<div class="cc-mu">'+dica+'</div>':'')+'</td>';
+  t+='<tr class="sub"><td class="prod" colspan="3">Total dos produtos</td>';
+  calc.forEach(function(x,j){t+='<td colspan="2" class="n '+wc(j,'l')+'">'+(x.prod?ccMoeda(x.prod):'<span class="nil">—</span>')+'</td>';});
+  t+='</tr>';
+  var sec=function(nome){return '<tr class="sec"><td colspan="'+COLS+'"><span>'+nome+'</span></td></tr>';};
+  var linha=function(rot,k,tipo,dica){
+    var r='<tr class="cd"><td class="prod" colspan="3">'+rot+(dica?'<span class="dc">'+dica+'</span>':'')+'</td>';
     c.forn.forEach(function(f,j){
-      if(tipo==='forma'){r+='<td class="'+cls(j)+'"><select data-j="'+j+'" data-k="'+k+'"><option value="">—</option>'+CC_FORMAS.concat(f[k]&&CC_FORMAS.indexOf(f[k])<0?[f[k]]:[]).map(function(o){return '<option'+(o===f[k]?' selected':'')+'>'+ccEsc(o)+'</option>';}).join('')+'</select></td>';}
-      else r+='<td class="'+cls(j)+'"><input '+(tipo==='txt'?'class="txt"':'inputmode="decimal"')+' data-j="'+j+'" data-k="'+k+'" placeholder="'+ph+'" value="'+ccEsc(tipo==='txt'?f[k]:(f[k]===''||f[k]==null?'':ccIn(f[k],tipo==='int'?0:undefined)))+'"></td>';
+      if(tipo==='forma')r+='<td colspan="2" class="inp '+wc(j,'l')+'"><select data-j="'+j+'" data-k="'+k+'"><option value="">—</option>'+CC_FORMAS.concat(f[k]&&CC_FORMAS.indexOf(f[k])<0?[f[k]]:[]).map(function(o){return '<option'+(o===f[k]?' selected':'')+'>'+ccEsc(o)+'</option>';}).join('')+'</select></td>';
+      else r+='<td colspan="2" class="inp '+(tipo==='txt'?'':'n ')+wc(j,'l')+'"><input '+(tipo==='txt'?'':'inputmode="decimal" ')+'data-j="'+j+'" data-k="'+k+'" placeholder="—" value="'+ccEsc(tipo==='txt'?(f[k]||''):(f[k]===''||f[k]==null?'':ccIn(f[k],tipo==='int'?0:undefined)))+'"></td>';
     });
     return r+'</tr>';
   };
-  var calcLinha=function(rot,campo,trc,sinal){var r='<tr class="'+(trc||'')+'"><td>'+rot+'</td>';calc.forEach(function(x,j){r+='<td class="'+cls(j)+'">'+(x.prod?(sinal||'')+ccMoeda(x[campo]):'<span class="cc-mu">—</span>')+'</td>';});return r+'</tr>';};
-  t+='<tr class="sec"><td colspan="'+(c.forn.length+1)+'">Impostos, frete e desconto</td></tr>'+
-    linha('Desconto (R$)','desconto','0,00')+
-    linha('IPI (%)','ipi','0,00','','sobre o valor dos produtos')+
-    linha('ICMS ST (%)','st','0,00','','substituição tributária')+
-    linha('Frete (R$)','frete','0,00','','0 se for CIF')+
-    linha('Crédito de ICMS (%)','credIcms','0,00','','abate do custo (Lucro Real)')+
-    '<tr class="sec"><td colspan="'+(c.forn.length+1)+'">Pagamento e entrega</td></tr>'+
-    linha('Forma de pagamento','formaPag','','forma')+
-    linha('Prazo de pagamento','prazoPag','28/56 dias','txt')+
-    linha('Prazo de entrega (dias)','entrega','0','int')+
-    linha('Observação','obs','','txt')+
-    '<tr class="sec"><td colspan="'+(c.forn.length+1)+'">Resultado</td></tr>'+
-    calcLinha('Produtos','prod')+calcLinha('(−) Desconto','desc','','− ')+calcLinha('(+) IPI','ipi')+calcLinha('(+) ICMS ST','st')+calcLinha('(+) Frete','frete')+
-    calcLinha('Total da compra','total','tot')+calcLinha('(−) Crédito de ICMS','cred','','− ')+calcLinha('Custo final','custo','custo');
+  var res=function(rot,campo,trc,sinal){var r='<tr class="rs '+(trc||'')+'"><td class="prod" colspan="3">'+rot+'</td>';
+    calc.forEach(function(x,j){var v=x.prod?(x[campo]&&sinal?sinal:'')+ccMoeda(x[campo]):'<span class="nil">—</span>';
+      if(campo==='custo'&&x.prod&&!x.completo)v='<span class="inc" title="Faltam preços: não entra na comparação">incompleto · '+ccMoeda(x[campo])+'</span>';
+      r+='<td colspan="2" class="n '+wc(j,'l')+'">'+v+'</td>';});return r+'</tr>';};
+  t+=sec('Impostos, frete e desconto')+
+    linha('Desconto','desconto','','R$')+linha('IPI','ipi','','% sobre produtos')+linha('ICMS ST','st','','%')+linha('Frete','frete','','R$ · 0 se CIF')+linha('Crédito de ICMS','credIcms','','% · abate do custo')+
+    sec('Pagamento e entrega')+
+    linha('Forma de pagamento','formaPag','forma')+linha('Prazo de pagamento','prazoPag','txt')+linha('Prazo de entrega','entrega','int','dias')+linha('Observação','obs','txt')+
+    sec('Resultado')+
+    res('Produtos','prod')+res('Desconto','desc','','− ')+res('IPI','ipi','','+ ')+res('ICMS ST','st','','+ ')+res('Frete','frete','','+ ')+
+    res('Total da compra','total','tt')+res('Crédito de ICMS','cred','','− ')+res('Custo final','custo','cf');
   t+='</tbody></table>';
-  h+='<div class="cc-scroll">'+t+'</div>';
+  h+='<div class="cc-gw">'+t+'</div>';
   // ranking + vencedor
   var r='<div class="cc-card" style="margin-top:12px"><div style="font-weight:800;font-size:15px;margin-bottom:4px">🏆 Melhor condição</div>'+
     '<div class="cc-mu" style="margin-bottom:10px">Critério: menor custo final (com impostos, frete e crédito de ICMS); no empate, menor prazo de entrega. Só entra quem cotou todos os itens.</div>';
@@ -14014,6 +14071,7 @@ function ccDraw(){
   r+='</div>';
   h+=r;
   el.innerHTML=h;
+  var g=el.querySelector('.cc-g'),h1=g&&g.querySelector('tr.h1');if(h1)g.style.setProperty('--cc-h1',h1.offsetHeight+'px');
   ccLigar(el);
 }
 function ccLigar(el){
