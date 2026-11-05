@@ -14376,7 +14376,7 @@ function ccCopiar(){
 // Dados: Worker "bling" (worker-bling.js) que fala com a API oficial do Bling. Endereço em Firebase bling/config.workerUrl.
 // PIX: gerado na própria página (sem popup). A cobrança via Sicoob entra quando o Worker tiver o certificado (BLG.pixAtivo).
 var BLG={cfg:null,cfgCarregada:false,dados:null,carr:false,erro:null,ts:0,sel:null,demo:false,status:null,
-  f:{busca:'',tipo:'todos',forma:'todos',vendedor:''},pix:{},valorEdit:{},root:null,trocaFeita:false};
+  f:{busca:'',tipo:'todos',forma:'todos',vendedor:'',sit:'aberto'},pix:{},stage:{},valorEdit:{},root:null,trocaFeita:false};
 function blgEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function blgMoeda(v){return Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function blgData(d){if(!d||d.indexOf('0000')===0)return '';var p=String(d).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
@@ -14438,21 +14438,25 @@ function blgCarregarPend(){
   blgApi('/pendentes').then(function(r){if(r&&r.ok){BLG.pend=r.pendentes||[];blgDraw();}}).catch(function(){});
 }
 function blgTelaConc(){
-  var L=BLG.pend||[],h='<div class="blg-msg"><b>PIX recebidos sem vínculo</b> — pagamentos que caíram direto na chave PIX e não bateram sozinhos (mesma empresa + mesmo valor). '+
-    'Escolha o pedido/nota de cada um. Quando o pagador for diferente do cliente, o sistema <b>aprende</b> e da próxima vez vincula sozinho.'+
+  var L=BLG.pend||[],st=BLG.stage||{},nMarc=Object.keys(st).filter(function(k){return st[k];}).length;
+  var h='<div class="blg-msg"><b>PIX recebidos sem vínculo</b> — caíram direto na chave PIX e não bateram sozinhos (mesma empresa + mesmo valor). '+
+    'Marque o pedido/nota de cada um (ou <b>Ignorar</b>) e no fim clique em <b>Salvar vínculos</b>. Quando o pagador for diferente do cliente, o sistema aprende para a próxima vez.'+
     (blgAdmin()?' <button class="blg-btn sec" style="height:26px;margin-left:8px" data-a="retroativo">'+(BLG.retroCarr?'<span class="blg-spin"></span>':'Buscar pagamentos dos últimos 10 dias')+'</button>':'')+(BLG.retroMsg?'<br>'+blgEsc(BLG.retroMsg):'')+'</div>';
   if(!L.length)return h+'<div class="blg-vazio">Nenhum PIX esperando vínculo. 🎉</div>';
   var abertos=(BLG.dados||[]).filter(function(x){return Number(x.aReceber||0)-Number(x.pago||0)>0.009;});
   h+='<table class="blg-tb"><thead><tr><th>Recebido</th><th>Pagador</th><th class="r">Valor (R$)</th><th>Sugestão</th><th>Vincular a</th><th></th></tr></thead><tbody>';
   L.forEach(function(p,i){
-    var sug=(p.sugestoes||[]).map(function(s2){return '<button class="blg-btn sec" style="height:24px;font-size:11px;margin:2px 4px 2px 0" data-a="vinc" data-i="'+i+'" data-k="'+blgEsc(s2.tipo+':'+s2.id)+'" title="'+blgEsc(s2.motivo)+'">'+(s2.tipo==='nota'?'NF ':'Pedido ')+blgEsc(s2.numero)+' · '+blgEsc((s2.cliente||'').slice(0,22))+'</button>';}).join('');
-    var opts='<option value="">Escolher…</option>'+abertos.map(function(x){return '<option value="'+blgEsc(x.tipo+':'+x.id)+'">'+(x.tipo==='nota'?'NF ':'Pedido ')+blgEsc(x.numero)+' — '+blgEsc((x.cliente||'').slice(0,28))+' — R$ '+blgMoeda(Number(x.aReceber||0)-Number(x.pago||0))+'</option>';}).join('');
-    h+='<tr style="cursor:default"><td>'+blgData(p.dia)+' '+blgEsc(String(p.horario||'').slice(11,16))+'</td><td style="white-space:normal;max-width:240px">'+blgEsc(p.pagador)+(p.info?'<div style="font-size:10.5px;color:#777">'+blgEsc(p.info)+'</div>':'')+'</td>'+
+    var m=st[p.e2e]||'';
+    var sug=(p.sugestoes||[]).map(function(s2){var k=s2.tipo+':'+s2.id;return '<button class="blg-btn sec'+(m===k?' marcado':'')+'" style="height:24px;font-size:11px;margin:2px 4px 2px 0" data-a="marcar" data-i="'+i+'" data-k="'+blgEsc(k)+'" title="'+blgEsc(s2.motivo)+'">'+(m===k?'✓ ':'')+(s2.tipo==='nota'?'NF ':'Pedido ')+blgEsc(s2.numero)+' · '+blgEsc((s2.cliente||'').slice(0,22))+'</button>';}).join('');
+    var opts='<option value="">Escolher…</option>'+abertos.map(function(x){var k=x.tipo+':'+x.id;return '<option value="'+blgEsc(k)+'"'+(m===k?' selected':'')+'>'+(x.tipo==='nota'?'NF ':'Pedido ')+blgEsc(x.numero)+' — '+blgEsc((x.cliente||'').slice(0,28))+' — R$ '+blgMoeda(Number(x.aReceber||0)-Number(x.pago||0))+'</option>';}).join('');
+    h+='<tr class="'+(m&&m!=='ignorar'?'blg-conc-ok':'')+'" style="cursor:default'+(m==='ignorar'?';opacity:.55':'')+'"><td>'+blgData(p.dia)+' '+blgEsc(String(p.horario||'').slice(11,16))+'</td><td style="white-space:normal;max-width:240px">'+blgEsc(p.pagador)+(p.info?'<div style="font-size:10.5px;color:#777">'+blgEsc(p.info)+'</div>':'')+'</td>'+
        '<td class="r">'+blgMoeda(p.valor)+'</td><td style="white-space:normal;max-width:300px">'+(sug||'<span style="color:#999">—</span>')+'</td>'+
-       '<td><select data-sel="'+i+'" style="height:28px;border-radius:8px;border:1px solid var(--bd);max-width:260px;font-size:11.5px">'+opts+'</select> <button class="blg-btn" style="height:28px" data-a="vincSel" data-i="'+i+'">Vincular</button></td>'+
-       '<td><button class="blg-btn sec" style="height:28px" data-a="ignorar" data-i="'+i+'" title="Não é de pedido/nota (ex.: outro serviço)">Ignorar</button></td></tr>';
+       '<td><select data-sel="'+i+'" style="height:28px;border-radius:8px;border:1px solid var(--bd);max-width:300px;font-size:11.5px;background:#fff">'+opts+'</select></td>'+
+       '<td><button class="blg-btn sec'+(m==='ignorar'?' marcado':'')+'" style="height:28px" data-a="marcar" data-i="'+i+'" data-k="ignorar" title="Não é de pedido/nota (ex.: outro serviço)">'+(m==='ignorar'?'✓ Ignorar':'Ignorar')+'</button></td></tr>';
   });
-  return h+'</tbody></table>';
+  h+='</tbody></table><div class="blg-salvar"><button class="blg-btn" data-a="salvarVinc"'+(nMarc&&!BLG.salvando?'':' disabled')+'>'+(BLG.salvando?'<span class="blg-spin"></span> Salvando…':'💾 Salvar vínculos'+(nMarc?' ('+nMarc+')':''))+'</button>'+
+     (nMarc?'<a data-a="limparMarc" style="color:#6f6f6f;cursor:pointer">Desmarcar tudo</a>':'<span style="color:#6f6f6f">Marque pelo menos um para salvar.</span>')+'</div>';
+  return h;
 }
 function blgCarregarPag(){BLG.pagCarr=true;blgApi('/pagamentos').then(function(r){BLG.pagCarr=false;BLG.pag=r&&r.ok?r:{erro:(r&&r.erro)||'Falhou'};blgDraw();}).catch(function(e){BLG.pagCarr=false;BLG.pag={erro:String(e)};blgDraw();});}
 function blgTelaPag(){
@@ -14481,9 +14485,14 @@ function blgDemo(){
   ];
 }
 
+function blgSit(x){var a=Number(x.aReceber||0),p=Number(x.pago||0);return p>0&&p>=a-0.009?'pago':p>0?'parcial':'aberto';}
 function blgFiltrados(){
   var f=BLG.f,b=(f.busca||'').toLowerCase().trim(),bd=b.replace(/\D/g,'');
   return (BLG.dados||[]).filter(function(x){
+    var st=blgSit(x);
+    if(f.sit==='aberto'&&st==='pago')return false;
+    if(f.sit==='parcial'&&st!=='parcial')return false;
+    if(f.sit==='pago'&&st!=='pago')return false;
     if(f.tipo!=='todos'&&x.tipo!==f.tipo)return false;
     if(f.forma!=='todos'&&(x.formas||[]).indexOf(f.forma)<0)return false;
     if(f.vendedor&&(x.vendedor||'')!==f.vendedor)return false;
@@ -14607,7 +14616,13 @@ function blgCss(){
   '.blg-msg.err{background:#fef2f2;border-color:#fecaca;color:#991b1b}.blg-msg.ok{background:#f0fdf4;border-color:#bbf7d0;color:#166534}.blg-msg.demo{background:#fffbeb;border-color:#fde68a;color:#92400e}'+
   '.blg-pix .ln{border-bottom-color:#ececec}.blg-pix .ln b{color:#111}.blg-pix textarea{color:#333}.blg-pix .qr{border:1px solid #e5e5e5}'+
   '.blg-kb{color:#666}.blg-act .it:hover{color:#222}.blg-act .grp:before{color:#fff}.blg-spin{border-color:#ddd;border-top-color:var(--vd)}.blg-sep{background:#cfcfcf}'+
-  '.blg-tb td.ok{color:#15803d}.blg-tb .blg-tb-sub{color:#777}';
+  '.blg-tb td.ok{color:#15803d}.blg-tb .blg-tb-sub{color:#777}'+
+  '.blg-abas{display:flex;gap:4px;padding:0 12px;border-bottom:1px solid #e3e3e3;margin-bottom:10px;flex-wrap:wrap}'+
+  '.blg-aba{background:none;border:0;border-bottom:3px solid transparent;padding:8px 14px;font:600 13px Inter,arial,sans-serif;color:#6f6f6f;cursor:pointer}'+
+  '.blg-aba:hover{color:#2b2b2b}.blg-aba.on{color:#288f4e;border-bottom-color:#34ad61}'+
+  '.blg-aba i{font-style:normal;background:#f59e0b;color:#fff;border-radius:9px;padding:0 6px;font-size:11px;margin-left:4px}'+
+  '.blg-conc-ok{background:#e3f3e8!important}.blg-btn.marcado{background:#34ad61!important;color:#fff!important;border-color:#34ad61!important}'+
+  '.blg-salvar{position:sticky;bottom:0;background:#fff;border-top:1px solid #e3e3e3;padding:10px 0;margin-top:10px;display:flex;gap:12px;align-items:center;z-index:2}';
   document.head.appendChild(st);
 }
 
@@ -14642,12 +14657,15 @@ function blgDraw(){
   var vendedores=[];(BLG.dados||[]).forEach(function(x){if(x.vendedor&&vendedores.indexOf(x.vendedor)<0)vendedores.push(x.vendedor);});
   var h='';
   // cabeçalho (igual ao "… > Pedidos de venda | Todas as lojas  [+ Incluir pedido]")
-  h+='<div class="blg-top"><div class="blg-bc"><span class="dots">…</span>›&nbsp;A receber: PIX e crédito</div><div class="blg-sep"></div><div class="blg-loja">Pedidos e notas</div><div class="blg-sp"></div>'+
-     '<button class="blg-btn" data-a="pixSel"'+(sel?'':' disabled')+'>'+BLG_IC.pix+' Gerar PIX</button></div>';
+  var selPago=sel&&blgSit(sel)==='pago',nPend=(BLG.pend||[]).length;
+  h+='<div class="blg-top"><div class="blg-bc">Vendas a receber</div><div class="blg-sep"></div><div class="blg-loja">Pedidos e notas</div><div class="blg-sp"></div>'+
+     '<button class="blg-btn" data-a="pixSel"'+(sel&&!selPago?'':' disabled')+'>'+BLG_IC.pix+' Gerar PIX</button></div>';
+  var aba=function(v,t){return '<button class="blg-aba'+((BLG.view||'')===v?' on':'')+'" data-a="aba" data-k="'+v+'">'+t+'</button>';};
+  if(!BLG.demo)h+='<div class="blg-abas">'+aba('','📋 Vendas a receber')+aba('conc','💰 PIX sem vínculo'+(nPend?' <i>'+nPend+'</i>':''))+(blgAdmin()?aba('pag','🧾 Pagamentos e ações'):'')+'</div>';
   h+='<div class="blg-body">';
   // filtros (coluna esquerda)
   h+='<aside class="blg-fil"><h3><svg width="12" height="12" viewBox="0 0 512 512" fill="#2b2b2b"><path d="M487.976 0H24.028C2.71 0-8.047 25.866 7.058 40.971L192 225.941V432c0 7.831 3.821 15.17 10.237 19.662l80 55.98C298.02 518.69 320 507.493 320 487.98V225.941l184.947-184.97C520.021 25.896 509.338 0 487.976 0z"/></svg> Filtrar<span class="x" data-a="limpar">✕</span></h3>'+
-     '<label>Situação</label><div class="blg-chips"><span class="blg-chip">Em aberto <i>✕</i></span></div>'+
+     '<label>Situação</label><select data-f="sit"><option value="aberto"'+(BLG.f.sit==='aberto'?' selected':'')+'>Em aberto (inclui parciais)</option><option value="parcial"'+(BLG.f.sit==='parcial'?' selected':'')+'>Parcialmente pagos</option><option value="pago"'+(BLG.f.sit==='pago'?' selected':'')+'>Pagos</option><option value="todos"'+(BLG.f.sit==='todos'?' selected':'')+'>Todos</option></select>'+
      '<label>Tipo</label><select data-f="tipo"><option value="todos">Pedidos e notas</option><option value="pedido"'+(BLG.f.tipo==='pedido'?' selected':'')+'>Só pedidos de venda</option><option value="nota"'+(BLG.f.tipo==='nota'?' selected':'')+'>Só notas fiscais</option></select>'+
      '<label>Forma de pagamento</label><select data-f="forma"><option value="todos">PIX e link de crédito</option><option value="pix"'+(BLG.f.forma==='pix'?' selected':'')+'>PIX</option><option value="credito"'+(BLG.f.forma==='credito'?' selected':'')+'>Link de crédito</option></select>'+
      '<label>Vendedor</label><select data-f="vendedor"><option value="">Todos</option>'+vendedores.map(function(v){return '<option'+(BLG.f.vendedor===v?' selected':'')+'>'+blgEsc(v)+'</option>';}).join('')+'</select>'+
@@ -14655,9 +14673,10 @@ function blgDraw(){
   // centro
   h+='<section class="blg-mid">';
   h+='<div class="blg-bar"><div class="blg-srch"><input id="blgBusca" placeholder="Pesquisar por nome, CPF/CNPJ ou nº do pedido/nota" value="'+blgEsc(BLG.f.busca)+'">'+BLG_IC.busca+'</div>'+
-     '<span class="blg-date">'+BLG_IC.cal+' Situação: em aberto · '+(BLG.demo?'dados de exemplo':(BLG.ts?'atualizado '+new Date(BLG.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'—'))+'</span>'+
+     '<span class="blg-date">'+BLG_IC.cal+' '+({aberto:'Em aberto',parcial:'Parcialmente pagos',pago:'Pagos',todos:'Todos'}[BLG.f.sit||'aberto'])+' · '+(BLG.demo?'dados de exemplo':(BLG.ts?'atualizado '+new Date(BLG.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'—'))+'</span>'+
      '<span style="flex:1"></span><button class="blg-ib" data-a="recarregar" title="Atualizar: confere pagamentos no Sicoob e recarrega do Bling">'+BLG_IC.rec+'</button><button class="blg-ib gray" data-a="imprimir" title="Imprimir">'+BLG_IC.imp+'</button></div>';
-  h+='<div class="blg-fsit">Situação: Em aberto <span class="x">✕</span>'+(BLG.f.tipo!=='todos'||BLG.f.forma!=='todos'||BLG.f.vendedor||BLG.f.busca?'<a data-a="limpar">Limpar</a>':'')+'</div>';
+  var nomeSit={aberto:'Em aberto',parcial:'Parcialmente pagos',pago:'Pagos',todos:'Todos'}[BLG.f.sit||'aberto'];
+  if(!BLG.view)h+='<div class="blg-fsit">Situação: '+nomeSit+(BLG.f.sit!=='aberto'||BLG.f.tipo!=='todos'||BLG.f.forma!=='todos'||BLG.f.vendedor||BLG.f.busca?'<a data-a="limpar">Limpar</a>':'')+'</div>';
   h+=blgAvisos();
   if(BLG.view==='conc'){h+=blgTelaConc()+'</section><aside class="blg-act">'+blgAcoes()+'</aside></div>';w.innerHTML=h;blgLigar(w);return;}
   if(BLG.view==='pag'){h+=blgTelaPag()+'</section><aside class="blg-act">'+blgAcoes()+'</aside></div>';w.innerHTML=h;blgLigar(w);return;}
@@ -14694,7 +14713,7 @@ function blgDraw(){
 function blgAvisos(){
   var h='',adm=blgAdmin();
   if(BLG.avisoPag)h+='<div class="blg-msg ok">'+blgEsc(BLG.avisoPag)+'</div>';
-  if(!BLG.demo&&BLG.view!=='conc'&&BLG.pend&&BLG.pend.length)h+='<div class="blg-msg demo">💰 <b>'+BLG.pend.length+' PIX recebido(s) sem vínculo</b> — caíram direto na chave e não bateram sozinhos. <a data-a="verConc" style="color:#15803d;cursor:pointer;font-weight:700">Ver e vincular</a></div>';
+  if(!BLG.demo&&BLG.view!=='conc'&&BLG.pend&&BLG.pend.length)h+='<div class="blg-msg demo">💰 <b>'+BLG.pend.length+' PIX recebido(s) sem vínculo</b> — caíram direto na chave e não bateram sozinhos. <a data-a="aba" data-k="conc" style="color:#15803d;cursor:pointer;font-weight:700">Ver e vincular</a></div>';
   if(BLG.demo)h+='<div class="blg-msg demo">👀 <b>Prévia com dados de exemplo</b> (nomes fictícios). Nada aqui é real e nenhum PIX é cobrado. '+(blgUrl()?'<a data-a="sairDemo" style="color:#34ad61;cursor:pointer;font-weight:700">Voltar para os dados do Bling</a>':'')+'</div>';
   if(BLG.status&&BLG.status.conectando)h+='<div class="blg-msg"><span class="blg-spin"></span>&nbsp; Conectando ao Bling…</div>';
   if(BLG.status&&BLG.status.recem)h+='<div class="blg-msg ok">✅ Bling conectado'+(BLG.status.empresa?' — '+blgEsc(BLG.status.empresa):'')+'.</div>';
@@ -14717,8 +14736,7 @@ function blgAvisos(){
 
 function blgAcoes(){
   var it=function(a,ic,t,dis){return '<button class="it" data-a="'+a+'"'+(dis?' disabled':'')+'>'+ic+'<span>'+t+'</span></button>';};
-  return it('pixSel',BLG_IC.pix,'Gerar PIX do pedido/nota selecionado',!BLG.sel)+
-    (BLG.demo?'':it('verConc',BLG_IC.pix,(BLG.view==='conc'?'Voltar para a lista':'PIX recebidos sem vínculo'+(BLG.pend&&BLG.pend.length?' ('+BLG.pend.length+')':''))))+
+  return it('pixSel',BLG_IC.pix,'Gerar PIX do pedido/nota selecionado',!BLG.sel||blgSit(blgSelecionado()||{})==='pago')+
     it('credSel',BLG_IC.card,'Gerar link de crédito',true)+
     it('abrirBling',BLG_IC.olho,'Abrir no Bling',!BLG.sel)+
     it('imprimir',BLG_IC.imp,'Imprimir lista')+
@@ -14727,7 +14745,7 @@ function blgAcoes(){
     '<span class="lk">Pagou parte? O sistema baixa só o valor pago e o pedido fica como “Parcialmente pago”.</span>'+
     '<div class="sub">Depois de pago</div><span class="lk">Situação do pedido, baixa no Bling e vínculo do pagamento à nota (ECONF) são feitos sozinhos.</span>'+
     '<div class="sub">Link de crédito</div><span class="lk">Entra junto com a nova maquininha.</span>'+
-    (blgAdmin()&&blgUrl()?'<div class="grp">Administrador</div>'+it('verPagamentos',BLG_IC.pix,BLG.view==='pag'?'Voltar para a lista':'Pagamentos recebidos e ações')+it('conectar',BLG_IC.rec,'Reconectar ao Bling')+it('demo',BLG_IC.olho,BLG.demo?'Prévia ligada':'Ver prévia com dados de exemplo')+it('trocarWk',BLG_IC.copiar,'Trocar endereço do Worker'):'');
+    (blgAdmin()&&blgUrl()?'<div class="grp">Administrador</div>'+it('conectar',BLG_IC.rec,'Reconectar ao Bling')+it('demo',BLG_IC.olho,BLG.demo?'Prévia ligada':'Ver prévia com dados de exemplo')+it('trocarWk',BLG_IC.copiar,'Trocar endereço do Worker'):'');
 }
 
 function blgPainelPix(x){
@@ -14740,6 +14758,9 @@ function blgPainelPix(x){
     '<div class="ln"><span>Forma</span><b>'+blgEsc(x.formaNome||((x.formas||[]).indexOf('pix')>=0?'PIX':'Crédito'))+'</b></div>'+
     (x.vendedor?'<div class="ln"><span>Vendedor</span><b>'+blgEsc(x.vendedor)+'</b></div>':'')+
     (x.pago?'<div class="ln"><span>Pago por PIX</span><b style="color:#15803d">R$ '+blgMoeda(x.pago)+'</b></div>'+(x.pagos||[]).map(function(p){return '<div class="ln" style="font-size:11px"><span>'+blgEsc(String(p.horario||'').slice(0,16).replace('T',' '))+'</span><span>R$ '+blgMoeda(p.valor)+'</span></div>';}).join(''):'');
+  if(blgSit(x)==='pago'&&!pg.copia){
+    return h+'<div class="blg-msg ok" style="margin-top:12px">✅ <b>Já está pago</b> (R$ '+blgMoeda(x.pago)+'). Não dá para gerar outro PIX para '+(x.tipo==='nota'?'esta nota':'este pedido')+'.</div></div>';
+  }
   if(pg.copia){
     if(pg.pagoAgora)h+='<div class="blg-msg ok" style="margin-top:10px">✅ <b>PIX pago!</b> R$ '+blgMoeda(pg.valor)+' confirmado pelo Sicoob.</div>';
     else h+='<div class="nota" style="margin-top:8px"><span class="blg-spin"></span> Aguardando pagamento… (confere sozinho a cada 10 s)</div>';
@@ -14784,6 +14805,7 @@ function blgLigar(w){
   var b=w.querySelector('#blgBusca');
   if(b){b.oninput=function(){BLG.f.busca=b.value;var pos=b.selectionStart;blgDraw();var nb=BLG.root.querySelector('#blgBusca');if(nb){nb.focus();try{nb.setSelectionRange(pos,pos);}catch(e){}}};}
   w.querySelectorAll('select[data-f]').forEach(function(s){s.onchange=function(){BLG.f[s.getAttribute('data-f')]=s.value;blgDraw();};});
+  w.querySelectorAll('select[data-sel]').forEach(function(s){s.onchange=function(){var pp=(BLG.pend||[])[s.getAttribute('data-sel')];if(!pp)return;if(s.value)BLG.stage[pp.e2e]=s.value;else delete BLG.stage[pp.e2e];blgDraw();};});
   w.querySelectorAll('tbody tr[data-k]').forEach(function(tr){tr.onclick=function(){var k=tr.getAttribute('data-k');BLG.sel=BLG.sel===k?null:k;blgDraw();};});
   var vi=w.querySelector('#blgValor');if(vi)vi.oninput=function(){BLG.valorEdit[BLG.sel]=vi.value;};
   var qr=w.querySelector('#blgQr');if(qr&&BLG.sel&&BLG.pix[BLG.sel])blgQr(qr,BLG.pix[BLG.sel].copia);
@@ -14797,22 +14819,22 @@ function blgSelecionado(){return BLG.sel&&(BLG.dados||[]).filter(function(x){ret
 
 function blgAcao(a){
   var x=blgSelecionado();
-  if(a==='limpar'){BLG.f={busca:'',tipo:'todos',forma:'todos',vendedor:''};blgDraw();return;}
-  if(a==='verConc'){BLG.view=BLG.view==='conc'?'':'conc';BLG.sel=null;blgCarregarPend();blgDraw();return;}
+  if(a==='limpar'){BLG.f={busca:'',tipo:'todos',forma:'todos',vendedor:'',sit:'aberto'};blgDraw();return;}
+  if(a==='aba'){BLG.view=BLG._k||'';BLG.sel=null;if(BLG.view==='conc')blgCarregarPend();if(BLG.view==='pag')blgCarregarPag();blgDraw();return;}
   if(a==='retroativo'){BLG.retroCarr=true;blgDraw();blgApi('/pagamentos/retroativo',{method:'POST',body:{dias:10}}).then(function(r){BLG.retroCarr=false;BLG.retroMsg=r&&r.ok?('Últimos '+r.dias+' dias: '+r.novos+' pagamento(s) vinculado(s) sozinho(s), '+r.pendentes+' para você vincular.'):('Erro: '+((r&&r.erro)||'?'));blgCarregar(true);}).catch(function(e){BLG.retroCarr=false;BLG.retroMsg='Erro: '+e;blgDraw();});return;}
-  if(a==='vinc'||a==='vincSel'||a==='ignorar'){
-    var el=BLG.root.querySelector('[data-a="'+a+'"][data-i="'+BLG._i+'"]'),pp=(BLG.pend||[])[BLG._i];if(!pp)return;
-    if(a==='ignorar'){if(!confirm('Ignorar este PIX de R$ '+blgMoeda(pp.valor)+' ('+pp.pagador+')? Ele sai da lista e não dá baixa em nada.'))return;
-      blgApi('/ignorar',{method:'POST',body:{e2e:pp.e2e,usuario:STATE.usuarioLogado||''}}).then(function(){blgCarregarPend();});return;}
-    var k=a==='vinc'?BLG._k:((BLG.root.querySelector('select[data-sel="'+BLG._i+'"]')||{}).value||'');
-    if(!k){alert('Escolha o pedido ou a nota.');return;}
-    var tp=k.split(':')[0],id=k.split(':')[1],it=(BLG.dados||[]).filter(function(x){return x.tipo===tp&&String(x.id)===id;})[0];
-    if(!confirm('Vincular o PIX de R$ '+blgMoeda(pp.valor)+' ('+pp.pagador+') '+(tp==='nota'?'à NF ':'ao pedido ')+(it?it.numero+' — '+it.cliente:id)+'?'))return;
-    blgApi('/conciliar',{method:'POST',body:{e2e:pp.e2e,tipo:tp,id:id,usuario:STATE.usuarioLogado||''}}).then(function(r){
-      if(!r||!r.ok){alert((r&&r.erro)||'Não vinculou.');return;}
-      BLG.avisoPag='✅ PIX de R$ '+blgMoeda(pp.valor)+' vinculado.';blgCarregarPend();blgCarregar(true);});
-    return;}
-  if(a==='verPagamentos'){BLG.view=BLG.view==='pag'?'':'pag';BLG.sel=null;if(BLG.view==='pag')blgCarregarPag();blgDraw();return;}
+  if(a==='marcar'){var pp=(BLG.pend||[])[BLG._i];if(!pp)return;if(BLG.stage[pp.e2e]===BLG._k)delete BLG.stage[pp.e2e];else BLG.stage[pp.e2e]=BLG._k;blgDraw();return;}
+  if(a==='limparMarc'){BLG.stage={};blgDraw();return;}
+  if(a==='salvarVinc'){
+    var fila=(BLG.pend||[]).filter(function(p){return BLG.stage[p.e2e];});if(!fila.length)return;
+    var nV=fila.filter(function(p){return BLG.stage[p.e2e]!=='ignorar';}).length,nI=fila.length-nV;
+    if(!confirm('Salvar '+(nV?nV+' vínculo(s)':'')+(nV&&nI?' e ':'')+(nI?nI+' PIX ignorado(s)':'')+'?'))return;
+    BLG.salvando=true;blgDraw();var ok=0,erros=[];
+    var prox=function(i){
+      if(i>=fila.length){BLG.salvando=false;BLG.stage={};BLG.avisoPag='✅ '+ok+' PIX salvo(s).'+(erros.length?' Não salvou: '+erros.join('; '):'');blgCarregarPend();blgCarregar(true);return;}
+      var p=fila[i],k=BLG.stage[p.e2e],req=k==='ignorar'?blgApi('/ignorar',{method:'POST',body:{e2e:p.e2e,usuario:STATE.usuarioLogado||''}}):blgApi('/conciliar',{method:'POST',body:{e2e:p.e2e,tipo:k.split(':')[0],id:k.split(':')[1],usuario:STATE.usuarioLogado||''}});
+      req.then(function(r){if(r&&r.ok)ok++;else erros.push(p.pagador+' R$ '+blgMoeda(p.valor)+': '+((r&&r.erro)||'erro'));prox(i+1);}).catch(function(e){erros.push(p.pagador+': '+e);prox(i+1);});
+    };
+    prox(0);return;}
   if(a==='verificarAgora'){BLG.pagCarr=true;blgDraw();blgApi('/pagamentos/verificar',{method:'POST',body:{}}).then(function(r){BLG.pagMsg=r&&r.ok?('Verificado: '+r.novos+' pagamento(s) novo(s) entre '+r.vistos+' PIX recebidos.'):('Erro: '+((r&&r.erro)||'?'));blgCarregarPag();if(r&&r.novos)blgCarregar(true);});return;}
   if(a==='recarregar'){
     if(BLG.demo||!BLG.pixAtivo){blgCarregar(true);return;}
