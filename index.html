@@ -3243,6 +3243,7 @@ function iniPode(id){return iniModulos().indexOf(id)>=0;}
 function iniPodeAprovar(){return iniAdmin()||!!(STATE.abasPermitidas&&STATE.abasPermitidas.indexOf('mod6')>=0);}
 // Abre uma aba (usado pelos botões do painel e pelo botão Início do menu)
 function irParaModulo(id,sub){
+  if(STATE.modulo==='mod20'&&id!=='mod20'&&typeof CC!=='undefined'&&CC.sujo&&!ccPodeSair())return;
   STATE.modulo=id;
   if(id==='frete')STATE.tab=sub||'cotacao';
   else if(id==='mod2')STATE.tabCredito=sub||'analise';
@@ -3664,6 +3665,7 @@ function renderModuloNav(){
     document.head.appendChild(st);
   }
   function irPara(m){
+    if(STATE.modulo==='mod20'&&m.id!=='mod20'&&typeof CC!=='undefined'&&CC.sujo&&!ccPodeSair())return;
     var user=STATE.usuarios&&STATE.usuarios[STATE.loginUser];
     var abas=user&&user.abas;
     if(abas&&abas.length>0&&abas.indexOf(m.id)===-1&&['frete','mod10','mod18'].indexOf(m.id)<0&&STATE.roleLogado!=='admin'){alert('Voce nao tem acesso a esta aba.');return;}
@@ -13807,16 +13809,27 @@ function ccRanking(c){
 }
 
 // ---- dados ----
-function ccSalvar(){
-  if(!CC.cot)return;clearTimeout(CC._t);
-  CC._t=setTimeout(function(){
-    var c=CC.cot;c.atualizadoEm=Date.now();c.atualizadoPor=(STATE.usuarioLogado||STATE.loginUser||'');
-    CC.salvando=true;ccStatus();
-    fetch(FIREBASE_DB+'/cotacoesCompra/'+encodeURIComponent(c.numero)+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)})
-    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);CC.salvoEm=Date.now();CC.lista=null;})
-    .catch(function(e){CC.erro='Não foi possível salvar ('+e.message+'). As alterações estão só nesta tela.';ccDraw();})
+// Alterações ficam só na tela até clicar em "Salvar cotação" (ou Ctrl+S). Sair com alteração não salva pede confirmação.
+var CC_DIAS_GUARDA=90; // cotações sem atualização há mais de 3 meses são apagadas
+function ccSalvar(){if(!CC.cot)return;CC.sujo=true;ccStatus();}
+function ccGravar(){
+  if(!CC.cot||CC.salvando)return Promise.resolve(false);
+  var c=CC.cot;c.atualizadoEm=Date.now();c.atualizadoPor=(STATE.usuarioLogado||STATE.loginUser||'');
+  CC.salvando=true;ccStatus();
+  return fetch(FIREBASE_DB+'/cotacoesCompra/'+encodeURIComponent(c.numero)+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)})
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);CC.salvoEm=Date.now();CC.sujo=false;CC.lista=null;CC.erro='';
+      CC.aviso='Cotação do pedido nº '+c.numero+' salva. Ela fica guardada por 3 meses depois da última atualização.';ccDraw();return true;})
+    .catch(function(e){CC.erro='Não foi possível salvar ('+e.message+'). Confira a internet e clique em Salvar de novo; as alterações continuam nesta tela.';ccDraw();return false;})
     .finally(function(){CC.salvando=false;ccStatus();});
-  },700);
+}
+function ccPodeSair(){return !CC.sujo||confirm('Há alterações não salvas nesta cotação. Sair sem salvar?');}
+window.addEventListener('beforeunload',function(e){if(CC.sujo&&STATE.modulo==='mod20'){e.preventDefault();e.returnValue='';}});
+document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&(e.key==='s'||e.key==='S')&&STATE.modulo==='mod20'&&CC.cot){e.preventDefault();ccGravar();}});
+// Apaga cotações com mais de 3 meses sem atualização (uma vez por sessão)
+function ccLimparAntigas(d){
+  var lim=Date.now()-CC_DIAS_GUARDA*864e5,apagar=Object.keys(d||{}).filter(function(k){var c=d[k]||{};var em=c.atualizadoEm||c.criadoEm||0;return em&&em<lim;});
+  apagar.forEach(function(k){fetch(FIREBASE_DB+'/cotacoesCompra/'+encodeURIComponent(k)+'.json',{method:'DELETE'}).catch(function(){});delete d[k];});
+  return apagar.length;
 }
 function ccNormalizar(c){
   c.itens=c.itens||[];c.forn=(c.forn||[]).map(function(f){f.precos=f.precos||[];while(f.precos.length<c.itens.length)f.precos.push('');return f;});return c;
@@ -13824,10 +13837,12 @@ function ccNormalizar(c){
 function ccBuscar(numero,doBling){
   numero=String(numero||'').replace(/\D/g,'');
   if(!numero){CC.erro='Digite o número do pedido de compra.';ccDraw();return;}
+  if(!doBling&&CC.cot&&!ccPodeSair())return;
+  CC.sujo=false;CC.salvoEm=0;
   CC.num=numero;CC.carr=true;CC.erro='';CC.aviso='';CC.imp=null;ccDraw();
   var salvo=doBling?Promise.resolve(null):fetch(FIREBASE_DB+'/cotacoesCompra/'+numero+'.json').then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
   salvo.then(function(s){
-    if(s&&s.itens){CC.cot=ccNormalizar(s);CC.carr=false;CC.aviso='Cotação já salva deste pedido aberta. Use "Atualizar do Bling" para puxar o pedido de novo.';ccDraw();return;}
+    if(s&&s.itens){CC.cot=ccNormalizar(s);CC.carr=false;CC.salvoEm=s.atualizadoEm||0;CC.aviso='Cotação salva deste pedido aberta'+(s.atualizadoEm?' (última gravação em '+new Date(s.atualizadoEm).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})+(s.atualizadoPor?' por '+s.atualizadoPor:'')+')':'')+'. Use "Atualizar do Bling" para puxar o pedido de novo.';ccDraw();return;}
     var cfg=(typeof BLG!=='undefined'&&BLG.cfgCarregada)?Promise.resolve():blgCarregarCfg();
     return cfg.then(function(){
       if(!blgUrl())throw new Error('O endereço do Worker do Bling não está configurado (aba Financeiro › BLING).');
@@ -13853,9 +13868,10 @@ function ccBuscar(numero,doBling){
 function ccCarregarLista(){
   CC.lista='carr';ccDrawLista();
   fetch(FIREBASE_DB+'/cotacoesCompra.json').then(function(r){return r.ok?r.json():{};}).then(function(d){
-    CC.lista=Object.keys(d||{}).map(function(k){var c=d[k]||{},v=c.vencedor&&c.forn&&c.forn[c.vencedor.i];
-      return {num:k,data:c.data,forn:(c.forn&&c.forn[0]&&c.forn[0].nome)||'',venc:v?v.nome:'',em:c.atualizadoEm||c.criadoEm||0};})
-      .sort(function(a,b){return b.em-a.em;}).slice(0,40);
+    d=d||{};CC.apagadas=ccLimparAntigas(d);CC.limpou=true;
+    CC.lista=Object.keys(d).map(function(k){var c=d[k]||{},v=c.vencedor&&c.forn&&c.forn[c.vencedor.i];
+      return {num:k,data:c.data,forn:(c.forn&&c.forn[0]&&c.forn[0].nome)||'',venc:v?v.nome:'',em:c.atualizadoEm||c.criadoEm||0,por:c.atualizadoPor||'',nf:(c.forn||[]).filter(function(f){return f&&(f.nome||'').trim();}).length};})
+      .sort(function(a,b){return b.em-a.em;});
     ccDrawLista();
   }).catch(function(){CC.lista=[];ccDrawLista();});
 }
@@ -13870,6 +13886,9 @@ function ccCss(){
   '.cc-head h2{margin:0;font-size:20px;color:#1c1917}.cc-sub{font-size:12px;color:#78716c;margin-top:2px}'+
   '.cc-btn{border:1px solid #d6d3d1;background:#fff;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#1c1917}'+
   '.cc-btn:hover{background:#f5f5f4}.cc-btn.pri{background:#34c759;border-color:#2fb14f;color:#fff}.cc-btn.pri:hover{background:#2fb14f}'+
+  '.cc-st{font-size:13px;font-weight:600;color:#64748b}.cc-st.pend{color:#b45309}.cc-st.ok{color:#15803d}'+
+  '.cc-save{padding:9px 16px;font-size:14px}.cc-save.pend{background:#d97706;border-color:#b45309;animation:ccPulse 1.6s ease-in-out infinite}.cc-save.pend:hover{background:#b45309}'+
+  '@keyframes ccPulse{0%,100%{box-shadow:0 0 0 0 rgba(217,119,6,.45)}50%{box-shadow:0 0 0 6px rgba(217,119,6,0)}}'+
   '.cc-btn.sm{padding:4px 8px;font-size:12px}.cc-btn.dan{color:#b91c1c;border-color:#fecaca}'+
   '.cc-inp{border:1px solid #d6d3d1;border-radius:8px;padding:7px 10px;font-size:14px;font-family:inherit;background:#fff}'+
   '.cc-card{background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:12px 14px;margin-bottom:12px}'+
@@ -13960,7 +13979,7 @@ function renderCotacaoCompra(){
   var wrap=document.createElement('div');wrap.className='cc-wrap';CC.root=wrap;
   wrap.innerHTML=
     '<div class="cc-head"><div><h2>⚖️ Cotação compra</h2><div class="cc-sub">Compare o fornecedor do pedido de compra com outros fornecedores e defina a melhor condição.</div></div>'+
-    '<span style="flex:1"></span><span class="cc-mu" id="ccStatus"></span></div>'+
+    '<span style="flex:1"></span><span id="ccStatus" class="cc-st"></span><button type="button" class="cc-btn pri cc-save" id="ccSalvarTopo">💾 Salvar cotação</button></div>'+
     '<div class="cc-card" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">'+
       '<label for="ccNumInp" style="font-size:13px;font-weight:600">Nº do pedido de compra</label>'+
       '<input id="ccNumInp" class="cc-inp" inputmode="numeric" placeholder="Ex.: 1542" style="width:150px" value="'+ccEsc(CC.num)+'">'+
@@ -13972,17 +13991,31 @@ function renderCotacaoCompra(){
   wrap.querySelector('#ccBuscar').onclick=function(){ccBuscar(inp.value,false);};
   inp.onkeydown=function(e){if(e.key==='Enter')ccBuscar(inp.value,false);};
   wrap.querySelector('#ccListaBtn').onclick=function(){if(CC.lista&&CC.lista!=='carr'&&CC.listaAberta){CC.listaAberta=false;ccDrawLista();return;}CC.listaAberta=true;ccCarregarLista();};
+  wrap.querySelector('#ccSalvarTopo').onclick=function(){ccGravar();};
   ccDraw();ccDrawLista();
+  if(!CC.limpou){CC.limpou=true;fetch(FIREBASE_DB+'/cotacoesCompra.json').then(function(r){return r.ok?r.json():null;}).then(function(d){if(d)ccLimparAntigas(d);}).catch(function(){});}
   return wrap;
 }
-function ccStatus(){var e=ccEl('ccStatus');if(!e)return;e.textContent=CC.salvando?'💾 Salvando…':CC.salvoEm?'✅ Salvo às '+new Date(CC.salvoEm).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'';}
+function ccStatus(){
+  var e=ccEl('ccStatus'),b=ccEl('ccSalvarTopo'),b2=CC.root&&CC.root.querySelector('[data-a="salvar"]');
+  [b,b2].forEach(function(x){if(x){x.style.display=CC.cot?'':'none';x.classList.toggle('pend',!!CC.sujo);x.textContent=CC.salvando?'⏳ Salvando…':'💾 Salvar cotação';}});
+  if(!e)return;
+  if(CC.salvando){e.className='cc-st';e.textContent='Salvando…';}
+  else if(CC.sujo){e.className='cc-st pend';e.textContent='● Alterações não salvas';}
+  else if(CC.salvoEm){var d=new Date(CC.salvoEm),hoje=new Date().toDateString()===d.toDateString();e.className='cc-st ok';e.textContent='✅ Salva '+(hoje?'às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'em '+d.toLocaleDateString('pt-BR'));}
+  else{e.className='cc-st';e.textContent=CC.cot?'Ainda não salva':'';}
+}
 function ccDrawLista(){
   var el=ccEl('ccLista');if(!el)return;
   if(!CC.listaAberta){el.innerHTML='';return;}
   if(CC.lista==='carr'||CC.lista==null){el.innerHTML='<div class="cc-card">⏳ Carregando cotações salvas…</div>';return;}
-  if(!CC.lista.length){el.innerHTML='<div class="cc-card cc-mu">Nenhuma cotação salva ainda.</div>';return;}
-  el.innerHTML='<div class="cc-card"><table class="cc-lista"><thead><tr><th>Pedido</th><th>Data</th><th>Fornecedor do pedido</th><th>Vencedor</th></tr></thead><tbody>'+
-    CC.lista.map(function(x){return '<tr data-n="'+ccEsc(x.num)+'"><td><b>'+ccEsc(x.num)+'</b></td><td>'+ccEsc(ccDataBr(x.data))+'</td><td>'+ccEsc(x.forn)+'</td><td>'+(x.venc?'🏆 '+ccEsc(x.venc):'<span class="cc-mu">a definir</span>')+'</td></tr>';}).join('')+
+  var nota='<div class="cc-mu" style="margin-bottom:8px">Ficam guardadas por 3 meses depois da última gravação; as mais antigas são apagadas sozinhas.'+(CC.apagadas?' '+CC.apagadas+' cotação(ões) antiga(s) apagada(s) agora.':'')+'</div>';
+  if(!CC.lista.length){el.innerHTML='<div class="cc-card">'+nota+'<span class="cc-mu">Nenhuma cotação salva.</span></div>';return;}
+  var dt=function(t){return t?new Date(t).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';};
+  var resta=function(t){var d=Math.ceil((t+CC_DIAS_GUARDA*864e5-Date.now())/864e5);return d<=15?'<span class="cc-chip warn">expira em '+Math.max(d,0)+' dia'+(d===1?'':'s')+'</span>':'';};
+  el.innerHTML='<div class="cc-card">'+nota+'<table class="cc-lista"><thead><tr><th>Pedido</th><th>Data do pedido</th><th>Fornecedor do pedido</th><th>Fornecedores</th><th>Vencedor</th><th>Salva em</th></tr></thead><tbody>'+
+    CC.lista.map(function(x){return '<tr data-n="'+ccEsc(x.num)+'"><td><b>'+ccEsc(x.num)+'</b></td><td>'+ccEsc(ccDataBr(x.data))+'</td><td>'+ccEsc(x.forn)+'</td><td>'+x.nf+'</td><td>'+(x.venc?'🏆 '+ccEsc(x.venc):'<span class="cc-mu">a definir</span>')+'</td>'+
+      '<td>'+ccEsc(dt(x.em))+(x.por?' <span class="cc-mu">· '+ccEsc(x.por)+'</span>':'')+' '+resta(x.em)+'</td></tr>';}).join('')+
     '</tbody></table></div>';
   el.querySelectorAll('tr[data-n]').forEach(function(tr){tr.onclick=function(){CC.listaAberta=false;ccDrawLista();var i=ccEl('ccNumInp');if(i)i.value=tr.dataset.n;ccBuscar(tr.dataset.n,false);};});
 }
@@ -14008,9 +14041,10 @@ function ccDraw(){
       (rk.length?ci('Melhor custo',ccMoeda(rk[0].c.custo)+' <small>'+ccEsc(c.forn[rk[0].i].nome)+'</small>','ok'):'')+
     '</div><div class="cc-info-a">'+
     '<button type="button" class="cc-btn sm" data-a="bling">🔄 Atualizar do Bling</button>'+
-    '<button type="button" class="cc-btn sm pri" data-a="carregar" data-j="novo">📎 Carregar cotação de fornecedor</button>'+
+    '<button type="button" class="cc-btn sm" data-a="carregar" data-j="novo">📎 Carregar cotação de fornecedor</button>'+
     (c.forn.length<CC_MAX_FORN?'<button type="button" class="cc-btn sm" data-a="add">➕ Fornecedor</button>':'')+
     '<button type="button" class="cc-btn sm" data-a="copiar">📋 Copiar resumo</button>'+
+    '<button type="button" class="cc-btn sm pri cc-save'+(CC.sujo?' pend':'')+'" data-a="salvar">💾 Salvar cotação</button>'+
   '</div></div>'+
   '<input type="file" id="ccFile" multiple accept=".pdf,.xlsx,.xls,.csv,.ods,image/*" style="display:none">'+ccDrawImp();
   // menor preço por item (entre quem cotou)
@@ -14131,6 +14165,7 @@ function ccLigar(el){
       else if(a==='auto'){c.vencedor=null;ccDraw();ccSalvar();}
       else if(a==='bling'){if(confirm('Puxar o pedido de novo do Bling? Os itens e o fornecedor do pedido serão atualizados; os outros fornecedores ficam.'))ccBuscar(c.numero,true);}
       else if(a==='copiar')ccCopiar();
+      else if(a==='salvar')ccGravar();
       else if(a==='carregar'){if(CC.imp&&CC.imp.status==='lendo')return;CC.impAlvo=b.dataset.j==='novo'?null:j;var fi=CC.root.querySelector('#ccFile');if(fi){fi.value='';fi.click();}}
     };
   });
