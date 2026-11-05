@@ -110,7 +110,9 @@ export default {
       }
       if (url.pathname === '/pagamentos/verificar' && req.method === 'POST') {
         const r = await verificarPagamentos(env);
-        return resp(Object.assign({ ok: true }, r));
+        let boletos = null;
+        try { boletos = await verificarBoletos(env, true); } catch (e) { boletos = { erro: String(e.message || e) }; }
+        return resp(Object.assign({ ok: true, boletos }, r));
       }
       if (url.pathname === '/pagamentos/retroativo' && req.method === 'POST') {
         const b = await req.json().catch(() => ({}));

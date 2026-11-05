@@ -29,7 +29,7 @@ function partes(url) { return new URL(url).pathname.replace(/\.json$/, '').split
 function ler(db, ps) { let d = db; for (const k of ps) { if (!d || typeof d !== 'object' || !(k in d)) return null; d = d[k]; } return d; }
 function gravar(db, ps, v) { let d = db; ps.slice(0, -1).forEach(k => { d = d[k] = d[k] || {}; }); d[ps[ps.length - 1]] = v; }
 
-const ABAS = ['inicio', 'frete', 'mod10', 'mod2', 'mod7', 'mod8', 'mod9', 'mod3', 'mod4', 'mod5', 'mod11', 'mod12', 'mod13', 'mod20', 'mod14', 'mod15', 'mod16', 'mod17', 'mod18', 'mod19', 'mod21'];
+const ABAS = ['inicio', 'frete', 'mod10', 'mod2', 'mod7', 'mod8', 'mod9', 'mod3', 'mod4', 'mod5', 'mod11', 'mod12', 'mod13', 'mod20', 'mod14', 'mod15', 'mod16', 'mod17', 'mod18', 'mod19'];
 const falhas = [];
 
 async function sessao(browser, usuario, role, abas) {
@@ -97,6 +97,15 @@ try {
   await adm.page.evaluate(() => { RPP.aba = 'aprendizado'; rppDraw(); });
   await adm.page.waitForTimeout(500);
   if (adm.erros.length) falhas.push('[admin] painel de chamados: ' + adm.erros.join(' | '));
+  // Conciliação contas a Receber: sub-abas de boletos (sem Worker: mostram aviso, mas não podem quebrar)
+  await adm.page.evaluate(() => { irParaModulo('mod17'); });
+  await adm.page.waitForTimeout(600);
+  for (const v of ['bol', 'sim', 'pag', 'conc', '']) {
+    const antes = adm.erros.length;
+    await adm.page.evaluate(k => { BLG.view = k; CCR.rel = k === 'sim' ? [{ tipo: 'auto', dia: '2026-07-09', nossoNumero: '1', pago: 10, tarifa: 1.6, acoes: ['x'] }, { tipo: 'sem', dia: '2026-07-09', nossoNumero: '2', pago: 5, tarifa: 1.6, sugestoes: [] }] : CCR.rel; blgDraw(); }, v);
+    await adm.page.waitForTimeout(300);
+    if (adm.erros.length > antes) falhas.push('[admin] conciliação sub-aba ' + (v || 'vendas') + ': ' + adm.erros.slice(antes).join(' | '));
+  }
 
   const col = await sessao(browser, 'teste', 'user', ['frete', 'mod10', 'mod8']);
   await conferirAbas('colaborador', col, ['inicio', 'frete', 'mod10', 'mod8', 'mod18']);
