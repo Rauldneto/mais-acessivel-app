@@ -14660,10 +14660,10 @@ function blgDemo(){
   var h=new Date(),d=function(n){var x=new Date(h.getTime()-n*864e5);return x.toISOString().slice(0,10);};
   return [
     {tipo:'pedido',id:1,numero:'4321',data:d(0),prevista:d(-12),cliente:'CONSTRUTORA EXEMPLO ALFA LTDA',total:2695.76,aReceber:2695.76,formas:['pix'],formaNome:'PIX',vendedor:'Raul',situacao:'Em aberto'},
-    {tipo:'pedido',id:2,numero:'4320',data:d(0),prevista:d(0),cliente:'ENGENHARIA MODELO BETA LTDA',total:16120,aReceber:8060,formas:['pix'],formaNome:'PIX',vendedor:'Renata',situacao:'Em aberto',parcial:8060},
+    {tipo:'pedido',id:2,numero:'4320',data:d(0),prevista:d(0),cliente:'ENGENHARIA MODELO BETA LTDA',total:16120,aReceber:8060,formas:['pix'],formaNome:'PIX',vendedor:'Renata',situacao:'Em aberto',parcial:8060,tef:{total:1,informados:0,erros:0}},
     {tipo:'nota',id:3,numero:'003990',data:d(2),prevista:'',cliente:'INCORPORADORA FICTÍCIA GAMA S/A',total:9429,aReceber:9429,formas:['pix'],formaNome:'PIX',vendedor:'',situacao:'Em aberto',contas:[{id:31,valor:9429,venc:d(-5)}]},
     {tipo:'pedido',id:4,numero:'4318',data:d(5),prevista:d(-1),cliente:'SERVIÇOS DEMONSTRAÇÃO DELTA EIRELI',total:13121.2,aReceber:13121.2,formas:['credito'],formaNome:'Cartão de crédito (link)',vendedor:'Luis',situacao:'Em aberto'},
-    {tipo:'nota',id:5,numero:'003987',data:d(6),prevista:'',cliente:'CONSÓRCIO TESTE ÔMEGA',total:8595.46,aReceber:4297.73,formas:['pix'],formaNome:'PIX',vendedor:'',situacao:'Em aberto',contas:[{id:51,valor:4297.73,venc:d(-3)}]},
+    {tipo:'nota',id:5,numero:'003987',data:d(6),prevista:'',cliente:'CONSÓRCIO TESTE ÔMEGA',total:8595.46,aReceber:4297.73,formas:['pix'],formaNome:'PIX',vendedor:'',situacao:'Em aberto',contas:[{id:51,valor:4297.73,venc:d(-3)}],pago:4297.73,tef:{total:1,informados:1,erros:0,protocolos:['152260000012345']}},
     {tipo:'pedido',id:6,numero:'4310',data:d(8),prevista:d(8),cliente:'JOÃO DA SILVA EXEMPLO',total:196.24,aReceber:196.24,formas:['pix'],formaNome:'PIX',vendedor:'Raul',situacao:'Em aberto'}
   ];
 }
@@ -14747,11 +14747,12 @@ function blgCss(){
   '.blg-bd{display:inline-block;background:#713f12;color:#fcf9eb;font-size:11px;font-weight:700;border-radius:9999px;padding:0 8px;line-height:16px}'+
   '.blg-bd.parc{background:#1e3a8a;color:#dbeafe}'+
   '.blg-bd.pago{background:#14532d;color:#dcfce7}'+
-  '.blg-tags{display:inline-flex;gap:4px;align-items:center}'+
+  '.blg-tags{display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap;white-space:normal;padding:3px 6px 3px 0}.blg-tb td.hm{white-space:normal;width:150px;max-width:150px;min-width:110px}'+
   '.blg-tg{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:2px;font-size:9px;font-weight:700;color:#fff;font-family:Arial,sans-serif}'+
   '.blg-tg.p{background:#c62828}.blg-tg.e{background:#1e88e5}.blg-tg.n{background:#7b1fa2}'+
   '.blg-pill{background:#7a7a7a;color:#fff;font-size:9px;border-radius:9999px;padding:1px 7px;line-height:13px}'+
   '.blg-pill.pix{background:#0f766e}.blg-pill.cr{background:#6d28d9}'+
+  '.blg-pill.tef.ok{background:#15803d}.blg-pill.tef.pend{background:#d97706}.blg-pill.tef.err{background:#dc2626}.blg-tags [title]{cursor:help}'+
   '.blg-kb{color:#fff;font-size:16px;font-weight:700;text-align:center;width:28px;letter-spacing:-1px}'+
   '.blg-act{width:190px;flex-shrink:0;background:var(--card2);padding:12px 10px 20px 14px}'+
   '.blg-act .it{display:flex;gap:10px;align-items:flex-start;color:var(--tx2);font-size:12px;line-height:15px;padding:7px 0;cursor:pointer;background:none;border:0;text-align:left;width:100%;font-family:arial,sans-serif}'+
@@ -14881,9 +14882,10 @@ function blgDraw(){
            '<td>'+(x.tipo==='nota'?'NF ':'')+blgEsc(x.numero)+'</td><td>'+dt+'</td><td title="'+blgEsc(x.cliente)+'">'+blgEsc(x.cliente)+'</td>'+
            '<td class="r">'+blgMoeda(x.aReceber)+(x.aReceber<x.total-0.009?'<div style="font-size:10px;color:#969696;margin-top:-2px">de '+blgMoeda(x.total)+'</div>':'')+'</td>'+
            '<td><span class="blg-sit"><span class="clk"></span><span class="blg-bd'+(pagoTot?' pago':parcial?' parc':'')+'">'+(pagoTot?'Pago':parcial?'Parcialmente pago':'Em aberto')+'</span></span></td>'+
-           '<td class="hm"><span class="blg-tags">'+(x.tipo==='pedido'?'<span class="blg-tg p">P</span>':'<span class="blg-tg n">N</span>')+
-             (x.formas||[]).map(function(f){return f==='pix'?'<span class="blg-pill pix">PIX</span>':'<span class="blg-pill cr">Crédito</span>';}).join('')+
-             (pg&&pg.copia?'<span class="blg-pill">PIX gerado</span>':'')+(x.vendedor?'<span class="blg-pill">'+blgEsc(x.vendedor)+'</span>':'')+'</span></td>'+
+           '<td class="hm"><span class="blg-tags">'+(x.tipo==='pedido'?'<span class="blg-tg p" title="P = Pedido de venda (ainda sem nota fiscal ligada)">P</span>':'<span class="blg-tg n" title="N = Nota fiscal com conta a receber em aberto">N</span>')+
+             (x.formas||[]).map(function(f){return f==='pix'?'<span class="blg-pill pix" title="Forma de pagamento: PIX">PIX</span>':'<span class="blg-pill cr" title="Forma de pagamento: link de cartão de crédito">Crédito</span>';}).join('')+
+             blgTefTag(x)+
+             (pg&&pg.copia?'<span class="blg-pill" title="Já foi gerado um PIX (QR Code / copia e cola) para este pedido/nota">PIX gerado</span>':'')+(x.vendedor?'<span class="blg-pill" title="Vendedor: '+blgEsc(x.vendedor)+'">'+blgEsc(x.vendedor)+'</span>':'')+'</span></td>'+
            '<td class="blg-kb">⋮</td></tr>';
       });
       h+='</tbody></table>';
@@ -14897,6 +14899,16 @@ function blgDraw(){
   h+='</div>';
   w.innerHTML=h;
   blgLigar(w);
+}
+
+// Etiqueta TEF: se os PIX recebidos deste pedido/nota já foram informados à Sefaz-GO pelo ECONF (evento 110750)
+function blgTefTag(x){
+  var t=x.tef;if(!t||!t.total)return '';
+  var falta=t.total-t.informados,cls,txt,tit;
+  if(!falta){cls='ok';txt='TEF ✓';tit='TEF informado: '+(t.total>1?'os '+t.total+' pagamentos PIX foram informados':'o pagamento PIX foi informado')+' à Sefaz-GO pelo ECONF'+(t.protocolos&&t.protocolos.length?' (protocolo '+t.protocolos.join(', ')+')':'')+'.';}
+  else if(t.erros){cls='err';txt='TEF ✕';tit='TEF com erro: '+t.erros+' envio(s) do ECONF recusado(s) pela Sefaz'+(t.ultimoErro?' — '+t.ultimoErro:'')+'. Veja a sub-aba 📨 ECONF Sefaz.';}
+  else{cls='pend';txt='TEF';tit='TEF pendente: '+falta+' de '+t.total+' pagamento(s) PIX ainda não informado(s) à Sefaz-GO pelo ECONF'+(x.tipo==='pedido'?' (o envio acontece depois que a nota fiscal for autorizada)':'')+'.';}
+  return '<span class="blg-pill tef '+cls+'" title="'+blgEsc(tit)+'">'+txt+'</span>';
 }
 
 function blgAvisos(){

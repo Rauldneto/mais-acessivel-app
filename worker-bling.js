@@ -391,6 +391,17 @@ async function listarAbertos(env) {
   for (const it of itens) {
     const pg = (await env.BLING_KV.get('pagosdoc:' + it.tipo + ':' + it.id, 'json')) || [];
     if (pg.length) { it.pago = Math.round(pg.reduce((s, x) => s + Number(x.valor || 0), 0) * 100) / 100; it.pagos = pg; }
+    // TEF/ECONF (evento 110750): quantos PIX recebidos deste pedido/nota já foram informados à Sefaz
+    const pix = pg.filter(x => x.e2e);
+    if (pix.length) {
+      const t = { total: pix.length, informados: 0, erros: 0, protocolos: [], ultimoErro: '' };
+      for (const x of pix) {
+        const r = await env.BLING_KV.get('econf:' + x.e2e, 'json');
+        if (r && r.ok) { t.informados++; if (r.nProt) t.protocolos.push(r.nProt); }
+        else if (r && r.ambiente === 'producao') { t.erros++; t.ultimoErro = ((r.cStat || '') + ' ' + (r.xMotivo || '')).trim(); }
+      }
+      it.tef = t;
+    }
   }
   itens.sort((a, b) => String(b.data).localeCompare(String(a.data)) || Number(b.numero) - Number(a.numero));
   return { itens, faltaram };
