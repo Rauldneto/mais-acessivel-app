@@ -14593,7 +14593,7 @@ function blgTelaConc(){
 function blgCarregarEconf(){BLG.ecCarr=true;Promise.all([blgApi('/econf/painel'),blgApi('/econf/pendentes')]).then(function(r){BLG.ecCarr=false;BLG.ec=r[0]&&r[0].ok?r[0]:{erro:(r[0]&&r[0].erro)||'Falhou'};BLG.ecPend=r[1]&&r[1].ok?r[1]:{erro:(r[1]&&r[1].erro)||'Falhou',itens:[]};blgDraw();}).catch(function(e){BLG.ecCarr=false;BLG.ec={erro:String(e)};blgDraw();});}
 function blgTelaEconf(){
   var e=BLG.ec||{},pd=BLG.ecPend||{itens:[]},R=function(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});},D=function(d){return d?String(d).slice(8,10)+'/'+String(d).slice(5,7)+'/'+String(d).slice(0,4):'';};
-  var h='<div class="blg-msg"><b>📨 ECONF — vínculo do pagamento PIX com a NF-e na Sefaz</b> (TEF Goiás)<br>';
+  var h=tefHtmlAlertas()+'<div class="blg-msg"><b>📨 ECONF — vínculo do pagamento PIX com a NF-e na Sefaz</b> (TEF Goiás)<br>';
   if(BLG.ecCarr&&!BLG.ec)return h+'<span class="blg-spin"></span> Carregando…</div>';
   if(e.erro)return h+'</div><div class="blg-msg err">'+blgEsc(e.erro)+'</div>';
   h+=(e.configurado?'✅ Envio automático configurado (certificado válido até '+new Date(e.validade).toLocaleDateString('pt-BR')+'). ':'⚠️ <b>Falta configurar o certificado</b> (rodar CONFIGURAR-ECONF-AUTOMATICO no PC). ')+
@@ -14641,7 +14641,7 @@ function blgTelaPag(){
   if(p.erro)return h+'<div class="blg-msg err">'+blgEsc(p.erro)+'</div>';
   var ac=p.acoes||[];
   if(!ac.length)return h+'<div class="blg-vazio">Nenhum pagamento (PIX ou boleto) tratado ainda.</div>';
-  var nome={pix_pago:'💰 PIX pago',boleto_pago:'📄 Boleto pago',baixa:'✅ Baixa',tarifa:'🏦 Tarifa bancária',situacao:'🏷️ Situação',sobra:'⚠️ Conferir',erro:'❌ Erro'};
+  var nome={pix_pago:'💰 PIX pago',boleto_pago:'📄 Boleto pago',tef_alerta:'⚠️ TEF',econf:'📨 ECONF',baixa:'✅ Baixa',tarifa:'🏦 Tarifa bancária',situacao:'🏷️ Situação',sobra:'⚠️ Conferir',erro:'❌ Erro'};
   h+='<table class="blg-tb"><thead><tr><th>Quando</th><th>Pedido/NF</th><th>Cliente</th><th>Ação</th><th>Detalhe</th></tr></thead><tbody>';
   ac.forEach(function(a){h+='<tr style="cursor:default"><td>'+new Date(a.quando).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</td><td>'+(a.tipo==='nota'?'NF ':'')+blgEsc(a.numero||'')+'</td><td title="'+blgEsc(a.cliente||'')+'">'+blgEsc(a.cliente||'')+'</td><td>'+(nome[a.acao]||blgEsc(a.acao))+(a.modo==='simulacao'&&a.acao!=='pix_pago'?' <span class="blg-pill">simulação</span>':'')+'</td><td style="white-space:normal;max-width:520px">'+blgEsc(a.detalhe||'')+(a.resultado?' — '+blgEsc(a.resultado):'')+'</td></tr>';});
   return h+'</tbody></table>';
@@ -14652,7 +14652,7 @@ function blgDemo(){
   var h=new Date(),d=function(n){var x=new Date(h.getTime()-n*864e5);return x.toISOString().slice(0,10);};
   return [
     {tipo:'pedido',id:1,numero:'4321',data:d(0),prevista:d(-12),cliente:'CONSTRUTORA EXEMPLO ALFA LTDA',total:2695.76,aReceber:2695.76,formas:['pix'],formaNome:'PIX',vendedor:'Raul',situacao:'Em aberto'},
-    {tipo:'pedido',id:2,numero:'4320',data:d(0),prevista:d(0),cliente:'ENGENHARIA MODELO BETA LTDA',total:16120,aReceber:8060,formas:['pix'],formaNome:'PIX',vendedor:'Renata',situacao:'Em aberto',parcial:8060,tef:{total:1,informados:0,erros:0}},
+    {tipo:'pedido',id:2,numero:'4320',data:d(0),prevista:d(0),cliente:'ENGENHARIA MODELO BETA LTDA',total:16120,aReceber:8060,formas:['pix'],formaNome:'PIX',vendedor:'Renata',situacao:'Em aberto',parcial:8060,tef:{total:1,informados:0,erros:1,ultimoErro:'Sefaz recusou (539): Duplicidade de evento'}},
     {tipo:'nota',id:3,numero:'003990',data:d(2),prevista:'',cliente:'INCORPORADORA FICTÍCIA GAMA S/A',total:9429,aReceber:9429,formas:['pix'],formaNome:'PIX',vendedor:'',situacao:'Em aberto',contas:[{id:31,valor:9429,venc:d(-5)}]},
     {tipo:'pedido',id:4,numero:'4318',data:d(5),prevista:d(-1),cliente:'SERVIÇOS DEMONSTRAÇÃO DELTA EIRELI',total:13121.2,aReceber:13121.2,formas:['credito'],formaNome:'Cartão de crédito (link)',vendedor:'Luis',situacao:'Em aberto'},
     {tipo:'nota',id:5,numero:'003987',data:d(6),prevista:'',cliente:'CONSÓRCIO TESTE ÔMEGA',total:8595.46,aReceber:4297.73,formas:['pix'],formaNome:'PIX',vendedor:'',situacao:'Em aberto',contas:[{id:51,valor:4297.73,venc:d(-3)}],pago:4297.73,tef:{total:1,informados:1,erros:0,protocolos:['152260000012345']}},
@@ -14893,19 +14893,77 @@ function blgDraw(){
   blgLigar(w);
 }
 
-// Etiqueta TEF: se os PIX recebidos deste pedido/nota já foram informados à Sefaz-GO pelo ECONF (evento 110750)
+// Etiqueta TEF: verde quando todos os PIX recebidos deste pedido/nota já foram informados à Sefaz-GO pelo ECONF (evento 110750);
+// vermelha quando a Sefaz recusou ou o envio não foi possível. Enquanto só está aguardando o envio, não aparece nada.
 function blgTefTag(x){
   var t=x.tef;if(!t||!t.total)return '';
-  var falta=t.total-t.informados,cls,txt,tit;
-  if(!falta){cls='ok';txt='TEF ✓';tit='TEF informado: '+(t.total>1?'os '+t.total+' pagamentos PIX foram informados':'o pagamento PIX foi informado')+' à Sefaz-GO pelo ECONF'+(t.protocolos&&t.protocolos.length?' (protocolo '+t.protocolos.join(', ')+')':'')+'.';}
-  else if(t.erros){cls='err';txt='TEF ✕';tit='TEF com erro: '+t.erros+' envio(s) do ECONF recusado(s) pela Sefaz'+(t.ultimoErro?' — '+t.ultimoErro:'')+'. Veja a sub-aba 📨 ECONF Sefaz.';}
-  else{cls='pend';txt='TEF';tit='TEF pendente: '+falta+' de '+t.total+' pagamento(s) PIX ainda não informado(s) à Sefaz-GO pelo ECONF'+(x.tipo==='pedido'?' (o envio acontece depois que a nota fiscal for autorizada)':'')+'.';}
-  return '<span class="blg-pill tef '+cls+'" title="'+blgEsc(tit)+'">'+txt+'</span>';
+  if(t.erros)return '<span class="blg-pill tef err" title="'+blgEsc('TEF recusado/não enviado: '+t.erros+' de '+t.total+' pagamento(s) PIX'+(t.ultimoErro?' — '+t.ultimoErro:'')+'. Veja a sub-aba 📨 ECONF Sefaz.')+'">TEF ✕</span>';
+  if(t.informados>=t.total)return '<span class="blg-pill tef ok" title="'+blgEsc('TEF enviado: '+(t.total>1?'os '+t.total+' pagamentos PIX foram informados':'o pagamento PIX foi informado')+' à Sefaz-GO pelo ECONF'+(t.protocolos&&t.protocolos.length?' (protocolo '+t.protocolos.join(', ')+')':'')+'.')+'">TEF ✓</span>';
+  return '';
+}
+
+// ---- Avisos de TEF não enviado / recusado pela Sefaz (só admin) ----
+// O servidor guarda os avisos (rota /tef/alertas). O app confere ao abrir e a cada 5 min: mostra um aviso na tela,
+// manda notificação do navegador (se permitida) e deixa uma faixa vermelha na aba até o aviso ser marcado como visto.
+var TEF={alertas:[],naoVistos:0,poll:null,lido:false};
+function tefCss(){
+  if(document.getElementById('tefCss'))return;var st=document.createElement('style');st.id='tefCss';
+  st.textContent='.tef-toast{position:fixed;right:18px;bottom:18px;z-index:99999;width:340px;max-width:calc(100vw - 32px);background:#fff;border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.28);border-top:5px solid #dc2626;font-family:inherit;color:#1c1c1e}'+
+    '.tef-toast h4{margin:0;padding:12px 14px 4px;font-size:14px;display:flex;justify-content:space-between;gap:8px}.tef-toast h4 button{border:0;background:none;font-size:16px;cursor:pointer;color:#888}'+
+    '.tef-toast p{margin:0;padding:0 14px 10px;font-size:12.5px;color:#444;line-height:1.4}.tef-toast .bt{display:flex;gap:8px;padding:0 14px 12px;flex-wrap:wrap}'+
+    '.tef-toast .bt button{font:inherit;font-size:12.5px;font-weight:700;border-radius:8px;padding:7px 10px;cursor:pointer;border:1px solid #d1d1d6;background:#fff}.tef-toast .bt button.pri{background:#dc2626;border-color:#dc2626;color:#fff}';
+  document.head.appendChild(st);
+}
+function tefAvisoGlobal(){
+  if(STATE.roleLogado!=='admin'||TEF.poll)return;
+  var checar=function(){
+    (BLG.cfgCarregada?Promise.resolve():blgCarregarCfg()).then(function(){
+      if(!blgUrl())return;
+      return blgApi('/tef/alertas').then(function(r){
+        if(!r||!r.ok)return;
+        TEF.alertas=r.alertas||[];TEF.naoVistos=r.naoVistos||0;TEF.lido=true;
+        var avisados=[];try{avisados=JSON.parse(localStorage.getItem('tefAvisados')||'[]');}catch(e){}
+        var novos=TEF.alertas.filter(function(a){return !a.visto&&avisados.indexOf(a.id)<0;});
+        if(novos.length){
+          tefToast(novos);
+          try{localStorage.setItem('tefAvisados',JSON.stringify(avisados.concat(novos.map(function(a){return a.id;})).slice(-300)));}catch(e){}
+        }
+        if(STATE.modulo==='mod17'&&BLG.root&&document.body.contains(BLG.root))blgDraw();
+      });
+    }).catch(function(){});
+  };
+  setTimeout(checar,3000);TEF.poll=setInterval(checar,5*60000);
+}
+function tefTitulo(a){return a.tipo==='recusado'?'TEF recusado pela Sefaz':'TEF não enviado';}
+function tefToast(novos){
+  tefCss();var a=novos[0];
+  var el=document.getElementById('tefToast');if(el)el.remove();
+  el=document.createElement('div');el.id='tefToast';el.className='tef-toast';
+  el.innerHTML='<h4><span>⚠️ '+(novos.length>1?novos.length+' avisos de TEF':blgEsc(tefTitulo(a))+(a.nf?' — NF '+blgEsc(a.nf):''))+'</span><button title="Fechar">✕</button></h4>'+
+    '<p>'+blgEsc(a.motivo)+(a.valor?'<br>R$ '+blgMoeda(a.valor)+(a.pagador?' · '+blgEsc(a.pagador):''):'')+(novos.length>1?'<br>+ '+(novos.length-1)+' outro(s).':'')+'</p>'+
+    '<div class="bt"><button class="pri" data-t="ver">Ver no ECONF Sefaz</button>'+(window.Notification&&Notification.permission==='default'?'<button data-t="perm">🔔 Avisar também no computador</button>':'')+'</div>';
+  el.onclick=function(e){var b=e.target.closest('button');if(!b)return;
+    if(b.dataset.t==='ver'){el.remove();BLG.view='econf';BLG.sel=null;blgCarregarEconf();irParaModulo('mod17');return;}
+    if(b.dataset.t==='perm'){try{Notification.requestPermission().then(function(){b.remove();});}catch(x){}return;}
+    el.remove();};
+  document.body.appendChild(el);
+  try{if(window.Notification&&Notification.permission==='granted')new Notification('⚠️ '+(novos.length>1?novos.length+' avisos de TEF':tefTitulo(a)+(a.nf?' — NF '+a.nf:'')),{body:String(a.motivo||'').slice(0,160)});}catch(e){}
+}
+function tefMarcarVistos(){
+  var ids=TEF.alertas.filter(function(a){return !a.visto;}).map(function(a){return a.id;});if(!ids.length)return;
+  blgApi('/tef/alertas/visto',{method:'POST',body:{ids:ids,usuario:STATE.usuarioLogado||''}}).then(function(){TEF.alertas.forEach(function(a){if(ids.indexOf(a.id)>=0)a.visto=Date.now();});TEF.naoVistos=0;blgDraw();});
+}
+function tefHtmlAlertas(){
+  var L=TEF.alertas.filter(function(a){return !a.visto;});if(!L.length)return '';
+  var h='<div class="blg-msg err"><b>⚠️ '+L.length+' aviso(s) de TEF não enviado ou recusado pela Sefaz</b> <button class="blg-btn" style="height:26px;margin-left:8px" data-a="tefVisto">Marcar como visto</button><ul style="margin:6px 0 0 18px;padding:0">';
+  L.slice(0,15).forEach(function(a){h+='<li>'+new Date(a.quando).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' · '+(a.nf?'NF '+blgEsc(a.nf)+' · ':'')+(a.valor?'R$ '+blgMoeda(a.valor)+' · ':'')+blgEsc(a.motivo)+'</li>';});
+  return h+'</ul></div>';
 }
 
 function blgAvisos(){
   var h='',adm=blgAdmin();
   if(BLG.avisoPag)h+='<div class="blg-msg ok">'+blgEsc(BLG.avisoPag)+'</div>';
+  if(adm&&!BLG.demo){var nT=TEF.alertas.filter(function(a){return !a.visto;}).length;if(nT&&BLG.view!=='econf')h+='<div class="blg-msg err">⚠️ <b>'+nT+' aviso(s) de TEF</b> não enviado ou recusado pela Sefaz. <a data-a="aba" data-k="econf" style="color:#b91c1c;cursor:pointer;font-weight:700;text-decoration:underline">Ver no ECONF Sefaz</a></div>';}
   if(!BLG.demo&&BLG.view!=='conc'&&BLG.pend&&BLG.pend.length)h+='<div class="blg-msg demo">💰 <b>'+BLG.pend.length+' PIX recebido(s) sem vínculo</b> — caíram direto na chave e não bateram sozinhos. <a data-a="aba" data-k="conc" style="color:#15803d;cursor:pointer;font-weight:700">Ver e vincular</a></div>';
   if(BLG.demo)h+='<div class="blg-msg demo">👀 <b>Prévia com dados de exemplo</b> (nomes fictícios). Nada aqui é real e nenhum PIX é cobrado. '+(blgUrl()?'<a data-a="sairDemo" style="color:#34ad61;cursor:pointer;font-weight:700">Voltar para os dados do Bling</a>':'')+'</div>';
   if(BLG.status&&BLG.status.conectando)h+='<div class="blg-msg"><span class="blg-spin"></span>&nbsp; Conectando ao Bling…</div>';
@@ -15013,6 +15071,7 @@ function blgSelecionado(){return BLG.sel&&(BLG.dados||[]).filter(function(x){ret
 function blgAcao(a){
   var x=blgSelecionado();
   if(a==='limpar'){BLG.f={busca:'',tipo:'todos',forma:'todos',vendedor:'',sit:'aberto'};blgDraw();return;}
+  if(a==='tefVisto'){tefMarcarVistos();return;}
   if(a.indexOf('econf')===0&&blgEconfAcao(a,BLG._k))return;
   if(a==='aba'){BLG.view=BLG._k||'';BLG.sel=null;if(BLG.view==='conc')blgCarregarPend();if(BLG.view==='pag')blgCarregarPag();if(BLG.view==='econf')blgCarregarEconf();if(BLG.view==='bol')ccrCarregarPain();blgDraw();return;}
   if(a==='retroativo'){BLG.retroCarr=true;blgDraw();blgApi('/pagamentos/retroativo',{method:'POST',body:{dias:10}}).then(function(r){BLG.retroCarr=false;BLG.retroMsg=r&&r.ok?('Últimos '+r.dias+' dias: '+r.novos+' pagamento(s) vinculado(s) sozinho(s), '+r.pendentes+' para você vincular.'):('Erro: '+((r&&r.erro)||'?'));blgCarregar(true);}).catch(function(e){BLG.retroCarr=false;BLG.retroMsg='Erro: '+e;blgDraw();});return;}
@@ -15143,7 +15202,7 @@ function renderApp(){
   } else if(STATE.modulo==='mod18'){
     main.appendChild(renderReportarProblema());
   }
-  setTimeout(dspAvisoGlobal,1500);setTimeout(frtAvisoGlobal,1600);
+  setTimeout(dspAvisoGlobal,1500);setTimeout(frtAvisoGlobal,1600);setTimeout(tefAvisoGlobal,1700);
   wrap.appendChild(main);
   if(STATE.showConfigPanel && STATE.roleLogado==='admin'){
     var overlay=document.createElement('div');

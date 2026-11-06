@@ -11,6 +11,7 @@
 //     Bindings → Certificado mTLS:  SICOOB_MTLS  (certificado A1 da JDFER enviado pela API da Cloudflare)
 //     SICOOB_CLIENT_ID     = client_id do app no portal Sicoob        (tipo Text)
 //     PIX_CHAVE            = chave PIX que recebe as cobranças (CNPJ) (tipo Text)
+//   Avisos de TEF no celular (opcional): NTFY_TOPICO = nome do tópico no app ntfy (grátis). Sem isso, o aviso aparece só no app.
 //
 // Rotas (todas só aceitam chamadas vindas do app https://rauldneto.github.io):
 //   GET  /status            → {ok, conectado, empresa?}
@@ -164,6 +165,17 @@ export default {
       }
       if (url.pathname === '/econf/certificado' && req.method === 'POST') return resp(await econfGuardarCertificado(env, await req.json().catch(() => null)));
       if (url.pathname === '/econf/painel') return resp(Object.assign({ ok: true }, await econfPainel(env)));
+      if (url.pathname === '/tef/alertas') {
+        const l = (await env.BLING_KV.get('tef:alertas', 'json')) || [];
+        return resp({ ok: true, alertas: l.slice(0, 60), naoVistos: l.filter(a => !a.visto).length });
+      }
+      if (url.pathname === '/tef/alertas/visto' && req.method === 'POST') {
+        const b = (await req.json().catch(() => ({}))) || {};
+        const l = (await env.BLING_KV.get('tef:alertas', 'json')) || [];
+        l.forEach(a => { if (b.todos || (b.ids || []).includes(a.id)) { a.visto = Date.now(); a.por = String(b.usuario || '').slice(0, 60); } });
+        await env.BLING_KV.put('tef:alertas', JSON.stringify(l));
+        return resp({ ok: true });
+      }
       if (url.pathname === '/econf/enviar' && req.method === 'POST') {
         const b = (await req.json().catch(() => ({}))) || {};
         return resp(await econfEnviar(env, { ambiente: b.ambiente, origem: 'manual (app)', usuario: String(b.usuario || '').slice(0, 60), maxChamadas: 25, maxEnvios: 15 }));
@@ -388,17 +400,20 @@ async function listarAbertos(env) {
   }
   itens.push(...Object.values(porNota));
 
+  const ctxTef = {};
   for (const it of itens) {
     const pg = (await env.BLING_KV.get('pagosdoc:' + it.tipo + ':' + it.id, 'json')) || [];
     if (pg.length) { it.pago = Math.round(pg.reduce((s, x) => s + Number(x.valor || 0), 0) * 100) / 100; it.pagos = pg; }
     // TEF/ECONF (evento 110750): quantos PIX recebidos deste pedido/nota já foram informados à Sefaz
     const pix = pg.filter(x => x.e2e);
+    if (pix.length && !ctxTef.alertas) ctxTef.alertas = (await env.BLING_KV.get('tef:alertas', 'json')) || [];
     if (pix.length) {
       const t = { total: pix.length, informados: 0, erros: 0, protocolos: [], ultimoErro: '' };
       for (const x of pix) {
         const r = await env.BLING_KV.get('econf:' + x.e2e, 'json');
         if (r && r.ok) { t.informados++; if (r.nProt) t.protocolos.push(r.nProt); }
         else if (r && r.ambiente === 'producao') { t.erros++; t.ultimoErro = ((r.cStat || '') + ' ' + (r.xMotivo || '')).trim(); }
+        else { const al = ctxTef.alertas.find(a => a.e2e === x.e2e); if (al) { t.erros++; t.ultimoErro = al.motivo; } }
       }
       it.tef = t;
     }
@@ -1465,7 +1480,14 @@ async function econfEnviar(env, opt) {
         await econfRegistrar(env, { e2e: p.e2e, chave: p.nf.chave, nSeq: item.nSeq, ambiente, cStat: item.cStat, xMotivo: item.xMotivo, nProt: item.nProt, valor: p.valor });
       } catch (e) { item.cStat = 'erro'; item.xMotivo = String(e.message || e).slice(0, 300); }
       res.push(item);
+      if (ambiente === 'producao' && !['135', '136', '573'].includes(item.cStat))
+        await tefAlerta(env, { e2e: p.e2e, chave: item.cStat, tipo: /^\d+$/.test(item.cStat) ? 'recusado' : 'falha', nf: item.nf, valor: p.valor, pagador: p.pagador, dia: p.dia,
+          motivo: (/^\d+$/.test(item.cStat) ? 'Sefaz recusou (' + item.cStat + '): ' : 'Não consegui enviar: ') + (item.xMotivo || '') });
     }
+    // PIX que não dá para enviar (NF rejeitada/cancelada, sem chave, erro ao ler a NF): avisa uma vez por motivo
+    if (ambiente === 'producao') for (const i of pend.itens.filter(x => ['nf_nao_autorizada', 'nf_sem_chave', 'erro'].includes(x.status)))
+      await tefAlerta(env, { e2e: i.e2e, chave: i.status, tipo: 'nao_enviado', nf: (i.nf && i.nf.numero) || '', valor: i.valor, pagador: i.pagador, dia: i.dia,
+        motivo: 'TEF não enviado: ' + (i.erro || (i.status === 'nf_sem_chave' ? 'a nota não tem chave de acesso' : i.status)) });
     const resumo = { quando: Date.now(), ambiente, origem: opt.origem || 'manual', usuario: opt.usuario || '',
       aceitos: res.filter(x => ['135', '136', '573'].includes(x.cStat)).length, recusados: res.filter(x => !['135', '136', '573'].includes(x.cStat)).length,
       aguardandoNF: pend.itens.filter(i => i.status === 'aguardando_nf').length, problemas: pend.itens.filter(i => !['pronto', 'aguardando_nf'].includes(i.status)).length,
@@ -1493,11 +1515,30 @@ async function econfAgendado(env) {
   try {
     const r = await econfEnviar(env, { ambiente: 'producao', origem: 'automático ' + hora + 'h', pular: st.tentados, maxChamadas: 25, maxEnvios: 12 });
     if (!r.ok && r.ocupado) return true;
-    if (!r.ok) { st.erro = r.erro; st.fim = st.rodadas >= 3; }
+    if (!r.ok) { st.erro = r.erro; st.fim = st.rodadas >= 3; if (st.fim) await tefAlerta(env, { e2e: 'geral', chave: chave, tipo: 'falha', motivo: 'O envio automático do ECONF das ' + hora + 'h não rodou: ' + r.erro }); }
     else { st.tentados.push(...r.resultados.map(x => x.e2e)); st.fim = !r.resultados.length || !r.restantes || st.rodadas >= 8; }
-  } catch (e) { st.erro = String(e.message || e); st.fim = st.rodadas >= 3; await registrarErro(env, 'ECONF automático: ' + st.erro); }
+  } catch (e) { st.erro = String(e.message || e); st.fim = st.rodadas >= 3; await registrarErro(env, 'ECONF automático: ' + st.erro); if (st.fim) await tefAlerta(env, { e2e: 'geral', chave: chave, tipo: 'falha', motivo: 'O envio automático do ECONF das ' + hora + 'h falhou: ' + st.erro }); }
   await env.BLING_KV.put(chave, JSON.stringify(st), { expirationTtl: 3 * 86400 });
   return true;
+}
+
+// Aviso de TEF não enviado/recusado: fica na lista "tef:alertas" (o app mostra e notifica o admin).
+// Um aviso por PIX + motivo (não repete a cada rodada). Se NTFY_TOPICO estiver configurado no Worker, também manda push no celular (app ntfy).
+async function tefAlerta(env, a) {
+  const id = String(a.e2e || '') + '|' + String(a.chave || a.tipo || '');
+  const l = (await env.BLING_KV.get('tef:alertas', 'json')) || [];
+  if (l.some(x => x.id === id)) return;
+  const al = { id, quando: Date.now(), tipo: a.tipo, e2e: a.e2e || '', nf: a.nf || '', valor: Number(a.valor || 0), pagador: a.pagador || '', dia: a.dia || '', motivo: String(a.motivo || '').slice(0, 300), visto: 0 };
+  l.unshift(al);
+  await env.BLING_KV.put('tef:alertas', JSON.stringify(l.slice(0, 200)));
+  await logAcao(env, { acao: 'tef_alerta', modo: 'real', numero: al.nf, cliente: al.pagador, valor: al.valor, detalhe: '⚠️ ' + al.motivo });
+  if (env.NTFY_TOPICO) {
+    try {
+      await fetch('https://ntfy.sh/' + encodeURIComponent(env.NTFY_TOPICO), { method: 'POST',
+        headers: { Title: (a.tipo === 'recusado' ? 'TEF recusado pela Sefaz' : 'TEF nao enviado') + (al.nf ? ' - NF ' + al.nf : ''), Priority: 'high', Tags: 'warning', Click: 'https://rauldneto.github.io/mais-acessivel-app/#bling' },
+        body: al.motivo + (al.valor ? ' (R$ ' + al.valor.toFixed(2) + (al.pagador ? ', ' + al.pagador : '') + ')' : '') });
+    } catch (e) {}
+  }
 }
 
 async function econfPainel(env) {
