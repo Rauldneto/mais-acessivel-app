@@ -1318,6 +1318,52 @@ function renderExtensao(){
   return wrap;
 }
 
+// ===== Acesso às abas (Configurações › Cadastrar Usuários) =====
+// Mesma organização do menu: aba mãe > abas filhas. Ao criar uma aba nova, inclua aqui
+// para ela aparecer na lista de permissões. fixo = todos veem; admin = só o administrador.
+var ACESSO_ABAS=[
+  {g:'Vendas',e:'🛍️',c:'#ff9500',itens:[
+    {id:'mod1',n:'Frete',fixo:true},
+    {id:'mod10',n:'Cotações (conferência)',fixo:true},
+    {id:'mod2',n:'Análise de Crédito',filhos:[{id:'mod6',n:'Pode aprovar crédito'}]},
+    {id:'mod7',n:'Norma NBR 9050'},
+    {id:'mod8',n:'Produtos'},
+    {id:'mod4',n:'Cotação avulsa'},
+    {id:'mod5',n:'Modelo em Teste'}]},
+  {g:'Lead',e:'🎯',c:'#007aff',itens:[
+    {id:'mod9',n:'Licitação'}]},
+  {g:'Compras',e:'🛒',c:'#34c759',itens:[
+    {id:'mod20',n:'Cotação compra'},
+    {id:'mod13',n:'Formação de preço',admin:true}]},
+  {g:'Financeiro',e:'💰',c:'#0a7d6b',itens:[
+    {sub:'📥 Contas a receber'},
+    {id:'mod17',n:'Conciliação contas a Receber'},
+    {id:'mod22',n:'Pagamentos (gerar PIX / link)'},
+    {sub:'📤 Contas a pagar'},
+    {id:'mod16',n:'Lançamento de frete',admin:true},
+    {id:'mod19',n:'Relatório de despesas',admin:true},
+    {id:'mod14',n:'Lançamento de despesas',admin:true}]},
+  {g:'T.I.',e:'💻',c:'#5856d6',itens:[
+    {id:'mod3',n:'Ace IA'},
+    {id:'ext',n:'Botão Extensão'},
+    {id:'mod18',n:'Reportar Problema',fixo:true},
+    {id:'mod15',n:'Controle',admin:true}]},
+  {g:'Particular',e:'🏠',c:'#af52de',itens:[
+    {id:'mod12',n:'Leilão de imóveis',admin:true},
+    {id:'mod11',n:'Energia solar',admin:true}]}
+];
+// Lista de abas que o usuário realmente enxerga (converte cadastros antigos).
+// '_v2' marca cadastro salvo na tela nova: aí Pagamentos (mod22) só vale se estiver marcado.
+function acxNormalizar(abas){
+  if(!abas||!abas.length){
+    var todos=[];ACESSO_ABAS.forEach(function(g){g.itens.forEach(function(it){if(it.id&&!it.admin)todos.push(it.id);});});
+    return todos;
+  }
+  var r=abas.map(function(a){return a==='mod21'?'mod17':a;});
+  if(r.indexOf('_v2')<0&&r.indexOf('mod17')>=0&&r.indexOf('mod22')<0)r.push('mod22');
+  return r;
+}
+
 function renderAdmin(){
   var wrap=document.createElement('div');
   wrap.style.cssText='max-width:900px;margin:24px auto;padding:0 16px';
@@ -1345,16 +1391,119 @@ function renderAdmin(){
   btnAdd.textContent='+ Adicionar';
   btnAdd.style.cssText='padding:8px 14px;background:#27ae60;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap';
 
+  // ── Acesso às abas: lista por aba mãe (igual ao menu), com marcar tudo / grupo / copiar de outro usuário ──
   var divAbas=document.createElement('div');
-  divAbas.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap';
-  divAbas.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso &agrave;s abas:</span>';
-  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod8',label:'Produtos'},{id:'mod9',label:'Clientes'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod10',label:'Cotações (conferência)'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'},{id:'mod17',label:'🏦 Financeiro › Conciliação contas a Receber'},{id:'mod22',label:'💳 Financeiro › Pagamentos (gerar PIX / link)'},{id:'mod20',label:'⚖️ Compras › Cotação compra'},{id:'ext',label:'🧩 Botão Extensão'}].forEach(function(ab){
-    var lbl=document.createElement('label');
-    lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
-    var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=false;
-    lbl.appendChild(cb);lbl.appendChild(document.createTextNode(ab.label));
-    divAbas.appendChild(lbl);
+  divAbas.style.cssText='grid-column:1/-1;padding:6px 0 4px';
+  if(!document.getElementById('acessoCss')){
+    var stA=document.createElement('style');stA.id='acessoCss';
+    stA.textContent=
+      '.acx-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}'+
+      '.acx-tt{font-size:13px;font-weight:700;color:#333;margin-right:4px}'+
+      '.acx-cnt{font-size:12px;color:#666;background:#f2f2f7;border-radius:10px;padding:3px 9px}'+
+      '.acx-bt{padding:5px 10px;font-size:12px;border:1px solid #d1d5db;background:#fff;border-radius:6px;cursor:pointer;font-family:inherit;color:#333}'+
+      '.acx-bt:hover{background:#f5f5f5}'+
+      '.acx-sel{padding:5px 8px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;font-family:inherit;background:#fff;max-width:220px}'+
+      '.acx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}'+
+      '.acx-g{border:1px solid #e5e5ea;border-top:4px solid var(--c);border-radius:10px;background:#fff;overflow:hidden}'+
+      '.acx-gh{display:flex;align-items:center;gap:8px;padding:8px 10px;background:color-mix(in srgb,var(--c) 9%,#fff);border-bottom:1px solid #eee;cursor:pointer;user-select:none}'+
+      '.acx-gh b{font-size:13px;color:#1c1c1e;flex:1}'+
+      '.acx-gh small{font-size:11px;color:#8e8e93;font-weight:600}'+
+      '.acx-it{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:12.5px;color:#222;cursor:pointer;border-top:1px solid #f3f3f5}'+
+      '.acx-it:hover{background:#fafafa}'+
+      '.acx-it.filho{padding-left:30px;color:#444}'+
+      '.acx-it.off{color:#aaa;cursor:default}.acx-it.off:hover{background:none}'+
+      '.acx-it input,.acx-gh input{width:16px;height:16px;cursor:pointer;accent-color:var(--c);margin:0;flex-shrink:0}'+
+      '.acx-it input:disabled{cursor:default}'+
+      '.acx-tag{margin-left:auto;font-size:10.5px;padding:1px 7px;border-radius:8px;background:#f2f2f7;color:#8e8e93;white-space:nowrap}'+
+      '.acx-sub{padding:5px 10px 3px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#8e8e93;border-top:1px solid #f3f3f5}'+
+      '.acx-adm{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:8px;padding:10px 12px;font-size:12.5px;margin-bottom:10px}'+
+      '.acx-wrap.desab .acx-grid{opacity:.45;pointer-events:none}';
+    document.head.appendChild(stA);
+  }
+  var acxWrap=document.createElement('div');acxWrap.className='acx-wrap';
+  var acxTop=document.createElement('div');acxTop.className='acx-top';
+  acxTop.innerHTML='<span class="acx-tt">🔐 Acesso às abas</span><span class="acx-cnt" id="acxCnt"></span>'+
+    '<button type="button" class="acx-bt" data-acx="tudo">☑️ Marcar tudo</button>'+
+    '<button type="button" class="acx-bt" data-acx="nada">⬜ Desmarcar tudo</button>'+
+    '<select class="acx-sel" id="acxCopiar"><option value="">📋 Copiar acessos de...</option></select>';
+  var acxAdm=document.createElement('div');acxAdm.className='acx-adm';acxAdm.style.display='none';
+  acxAdm.textContent='👑 Perfil Admin vê todas as abas. As marcações abaixo só valem para Operador e Gestor.';
+  var acxGrid=document.createElement('div');acxGrid.className='acx-grid';
+  acxWrap.appendChild(acxTop);acxWrap.appendChild(acxAdm);acxWrap.appendChild(acxGrid);divAbas.appendChild(acxWrap);
+
+  ACESSO_ABAS.forEach(function(g){
+    var box=document.createElement('div');box.className='acx-g';box.style.setProperty('--c',g.c);
+    var livres=g.itens.filter(function(it){return it.id&&!it.admin&&!it.fixo;}).length+
+      g.itens.reduce(function(s,it){return s+(it.filhos?it.filhos.length:0);},0);
+    var gh=document.createElement('label');gh.className='acx-gh';
+    gh.innerHTML=(livres?'<input type="checkbox" class="acx-gcb">':'')+'<span>'+g.e+'</span><b>'+g.g+'</b><small class="acx-gn"></small>';
+    box.appendChild(gh);
+    function linha(it,filho){
+      var l=document.createElement('label');l.className='acx-it'+(filho?' filho':'')+(it.admin?' off':'');
+      if(it.admin){l.innerHTML='<span style="width:16px;text-align:center">🔒</span><span>'+it.n+'</span><span class="acx-tag">só admin</span>';return l;}
+      var cb=document.createElement('input');cb.type='checkbox';cb.name='abaAcesso';cb.value=it.id;
+      if(it.fixo){cb.checked=true;cb.disabled=true;cb.setAttribute('data-fixo','1');}
+      if(filho)cb.setAttribute('data-pai',filho);
+      l.appendChild(cb);
+      var sp=document.createElement('span');sp.textContent=(filho?'↳ ':'')+it.n;l.appendChild(sp);
+      if(it.fixo){var t=document.createElement('span');t.className='acx-tag';t.textContent='todos veem';l.appendChild(t);}
+      return l;
+    }
+    g.itens.forEach(function(it){
+      if(it.sub){var s=document.createElement('div');s.className='acx-sub';s.textContent=it.sub;box.appendChild(s);return;}
+      box.appendChild(linha(it));
+      (it.filhos||[]).forEach(function(f){box.appendChild(linha(f,it.id));});
+    });
+    var gcb=gh.querySelector('.acx-gcb');
+    if(gcb)gcb.onchange=function(){
+      box.querySelectorAll('input[name=abaAcesso]:not([data-fixo])').forEach(function(c){c.checked=gcb.checked;});
+      acxAtualizar();
+    };
+    acxGrid.appendChild(box);
   });
+
+  // Filho (ex.: Aprovação) liga o pai; desligar o pai desliga os filhos
+  acxGrid.addEventListener('change',function(ev){
+    var c=ev.target;if(!c||c.name!=='abaAcesso')return;
+    var pai=c.getAttribute('data-pai');
+    if(pai&&c.checked){var p=acxGrid.querySelector('input[name=abaAcesso][value="'+pai+'"]');if(p)p.checked=true;}
+    if(!pai&&!c.checked)acxGrid.querySelectorAll('input[data-pai="'+c.value+'"]').forEach(function(f){f.checked=false;});
+    acxAtualizar();
+  });
+  function acxAtualizar(){
+    var tot=0,mar=0;
+    acxGrid.querySelectorAll('.acx-g').forEach(function(box){
+      var cbs=box.querySelectorAll('input[name=abaAcesso]:not([data-fixo])'),n=0;
+      cbs.forEach(function(c){if(c.checked)n++;});
+      tot+=cbs.length;mar+=n;
+      var gcb=box.querySelector('.acx-gcb');
+      if(gcb){gcb.checked=cbs.length>0&&n===cbs.length;gcb.indeterminate=n>0&&n<cbs.length;}
+      var gn=box.querySelector('.acx-gn');if(gn)gn.textContent=cbs.length?n+'/'+cbs.length:'';
+    });
+    var el=acxTop.querySelector('#acxCnt');if(el)el.textContent=mar+' de '+tot+' liberadas';
+  }
+  divAbas.marcar=function(lista){
+    lista=lista||[];
+    acxGrid.querySelectorAll('input[name=abaAcesso]:not([data-fixo])').forEach(function(c){c.checked=lista.indexOf(c.value)>-1;});
+    acxAtualizar();
+  };
+  divAbas.setUsuarios=function(users){
+    var sel=acxTop.querySelector('#acxCopiar');divAbas._users=users||{};
+    sel.innerHTML='<option value="">📋 Copiar acessos de...</option>'+Object.keys(divAbas._users).map(function(k){
+      var x=divAbas._users[k];if(!x||x.role==='admin')return '';
+      return '<option value="'+k+'">'+String(x.nome||x.usuario).replace(/</g,'&lt;')+'</option>';}).join('');
+  };
+  acxTop.querySelector('[data-acx=tudo]').onclick=function(){acxGrid.querySelectorAll('input[name=abaAcesso]:not([data-fixo])').forEach(function(c){c.checked=true;});acxAtualizar();};
+  acxTop.querySelector('[data-acx=nada]').onclick=function(){divAbas.marcar([]);};
+  acxTop.querySelector('#acxCopiar').onchange=function(){
+    var x=divAbas._users&&divAbas._users[this.value];
+    if(x)divAbas.marcar(acxNormalizar(x.abas));
+    this.value='';
+  };
+  selRole.addEventListener('change',function(){
+    var adm=selRole.value==='admin';acxAdm.style.display=adm?'':'none';acxWrap.classList.toggle('desab',adm);
+  });
+  acxAtualizar();
   formU.appendChild(iNome); formU.appendChild(iUser); formU.appendChild(iSenha);
   formU.appendChild(selRole); formU.appendChild(btnAdd);
   formU.appendChild(divAbas);
@@ -1414,6 +1563,7 @@ function renderAdmin(){
   async function loadUsers(){
     tblWrap.innerHTML='<p style="color:#999;font-size:13px">Carregando...</p>';
     var users=await fbGetUsers();
+    if(divAbas.setUsuarios)divAbas.setUsuarios(users);
     tblWrap.innerHTML='';
     if(!users||Object.keys(users).length===0){
       tblWrap.innerHTML='<p style="color:#999;font-size:13px">Nenhum usuário cadastrado.</p>';
@@ -1484,10 +1634,8 @@ function renderAdmin(){
     selRole.value=u.role||'user';
 
     // Marcar checkboxes de abas com os dados do usuario
-    var abasAtivas=u.abas||['mod1','mod2','mod7','mod8','mod9','mod3','mod4','mod5'];
-    divAbas.querySelectorAll('input[name=abaAcesso]').forEach(function(cb){
-      cb.checked=abasAtivas.indexOf(cb.value)>-1;
-    });
+    divAbas.marcar(acxNormalizar(u.abas));
+    selRole.dispatchEvent(new Event('change'));
 
     // Trocar botao de Adicionar para Salvar edicao
     btnAdd.textContent='💾 Salvar Alterações';
@@ -1521,7 +1669,8 @@ function renderAdmin(){
     iSenha.value='';
     iSenha.placeholder='Senha';
     selRole.value='user';
-    divAbas.querySelectorAll('input[name=abaAcesso]').forEach(function(cb){cb.checked=true;});
+    divAbas.marcar([]);
+    selRole.dispatchEvent(new Event('change'));
     btnAdd.textContent='+ Adicionar';
     btnAdd.style.background='#27ae60';
     msgU.textContent='';
@@ -1540,7 +1689,8 @@ function renderAdmin(){
       updated.role=selRole.value;
       var abasEdit=[];
       divAbas.querySelectorAll('input[name=abaAcesso]:checked').forEach(function(cb){abasEdit.push(cb.value);});
-      updated.abas=abasEdit.length>0?abasEdit:['mod1'];
+      abasEdit.push('_v2');
+      updated.abas=abasEdit;
       if(FBA.ativo()&&novaSenha){
         if(novaSenha.length<6){msgU.style.color='red';msgU.textContent='A senha precisa ter pelo menos 6 caracteres.';return;}
         try{ updated=await fbCriarContaUsuario(editandoId,updated,novaSenha); }
@@ -1564,7 +1714,8 @@ function renderAdmin(){
     }
     var id='u_'+Date.now();
     var abasSel=[];if(typeof divAbas!=='undefined'){divAbas.querySelectorAll('input[name=abaAcesso]:checked').forEach(function(cb){abasSel.push(cb.value);});}
-    var novoU={nome:n,usuario:u,role:selRole.value,ativo:true,abas:abasSel.length>0?abasSel:['mod1','mod2','mod7','mod8','mod9','mod3','mod4']};
+    abasSel.push('_v2');
+    var novoU={nome:n,usuario:u,role:selRole.value,ativo:true,abas:abasSel};
     if(FBA.ativo()){
       if(s.length<6){msgU.style.color='red';msgU.textContent='A senha precisa ter pelo menos 6 caracteres.';return;}
       try{ await fbCriarContaUsuario(id,novoU,s); }
@@ -1574,7 +1725,7 @@ function renderAdmin(){
       await fbSaveUser(id,novoU);
     }
     msgU.style.color='green';msgU.textContent='✅ Usuário '+n+' criado!';
-    iNome.value='';iUser.value='';iSenha.value='';
+    iNome.value='';iUser.value='';iSenha.value='';divAbas.marcar([]);
     loadUsers();
   };
 
@@ -3234,7 +3385,7 @@ function iniModulos(){
   if(STATE.abasPermitidas&&STATE.abasPermitidas.length){
     var p=STATE.abasPermitidas.map(function(a){return a==='mod1'?'frete':a;});
     ['frete','mod10'].forEach(function(x){if(p.indexOf(x)<0)p.push(x);});
-    if(p.indexOf('mod17')>=0&&p.indexOf('mod22')<0)p.push('mod22');
+    if(p.indexOf('_v2')<0&&p.indexOf('mod17')>=0&&p.indexOf('mod22')<0)p.push('mod22');
     ids=todos.filter(function(id){return p.indexOf(id)>=0;});
   }
   var soAdmin=['mod11','mod12','mod13','mod14','mod15','mod16','mod19'];
@@ -3585,7 +3736,7 @@ function renderModuloNav(){
     // Frete, Cotações (check das cotações) e Reportar Problema: todos os colaboradores veem sempre
     ['frete','mod10','mod18'].forEach(function(x){if(permitidas.indexOf(x)<0)permitidas.push(x);});
     // quem já gerava PIX na antiga aba BLING/Conciliação (mod17) continua gerando, agora na tela Pagamentos
-    if(permitidas.indexOf('mod17')>=0&&permitidas.indexOf('mod22')<0)permitidas.push('mod22');
+    if(permitidas.indexOf('_v2')<0&&permitidas.indexOf('mod17')>=0&&permitidas.indexOf('mod22')<0)permitidas.push('mod22');
     MODULOS=TODOS_MODULOS.filter(function(m){return permitidas.indexOf(m.id)>=0;});
     // Se modulo atual nao esta permitido, ir para o primeiro permitido
     if(MODULOS.length>0 && permitidas.indexOf(STATE.modulo)<0 && STATE.modulo!=='inicio'){
@@ -3675,7 +3826,7 @@ function renderModuloNav(){
     if(STATE.modulo==='mod20'&&m.id!=='mod20'&&typeof CC!=='undefined'&&CC.sujo&&!ccPodeSair())return;
     var user=STATE.usuarios&&STATE.usuarios[STATE.loginUser];
     var abas=user&&user.abas;
-    if(abas&&abas.length>0&&abas.indexOf(m.id)===-1&&['frete','mod10','mod18'].indexOf(m.id)<0&&STATE.roleLogado!=='admin'){alert('Voce nao tem acesso a esta aba.');return;}
+    if(abas&&abas.length>0&&acxNormalizar(abas).indexOf(m.id)===-1&&['frete','mod10','mod18'].indexOf(m.id)<0&&STATE.roleLogado!=='admin'){alert('Voce nao tem acesso a esta aba.');return;}
     STATE.modulo=m.id;
     if(m.id==='frete') STATE.tab='cotacao';
     else if(m.id==='mod2') STATE.tabCredito='analise';
