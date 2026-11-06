@@ -15195,9 +15195,8 @@ function blgPainelPix(x){
       outros.map(function(v){return '<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;margin-top:4px">R$ '+blgMoeda(v.valor)+' · '+blgDataHora(v.criado)+' <button class="blg-btn sec" style="height:24px;width:auto;margin:0;padding:0 8px" data-a="cancelarOutro" data-k="'+blgEsc(v.txid)+'">Cancelar</button></div>';}).join('')+'</div>';
     h+='<div class="qr" id="blgQr"></div><label>PIX copia e cola</label><textarea readonly id="blgCopia">'+blgEsc(pg.copia)+'</textarea>'+
        '<button class="blg-btn" data-a="copiar">'+BLG_IC.copiar+' Copiar código</button>'+
-       '<div class="nota" style="margin-top:12px;color:#111"><b>Mandar para o cliente no WhatsApp</b> (2 mensagens):</div>'+
-       '<button class="blg-btn sec" data-a="wpp" title="Envia a imagem com o QR Code e uma mensagem explicando como pagar">'+BLG_IC.wpp+' 1. Imagem + mensagem</button>'+
-       '<button class="blg-btn sec'+(pg.passo2?' marcado':'')+'" data-a="wppCodigo" title="Envia só o código Copia e Cola, sozinho numa mensagem: o cliente toca, segura e copia">'+BLG_IC.copiar+' 2. Código Copia e Cola</button>'+
+       '<button class="blg-btn" data-a="wpp" style="margin-top:12px" title="Manda 2 mensagens: 1ª a imagem do QR Code, 2ª o código Copia e Cola sozinho (o cliente toca, segura e copia)">'+BLG_IC.wpp+' Mandar no WhatsApp</button>'+
+       (pg.falta2?'<button class="blg-btn marcado" data-a="wppCodigo" title="Manda a 2ª mensagem: só o código Copia e Cola">'+BLG_IC.copiar+' Enviar o código (2ª mensagem)</button>':'')+
        (pg.avisoWpp?'<div class="nota" style="color:#b45309">'+pg.avisoWpp+'</div>':'')+
        '<button class="blg-btn sec" data-a="baixarQr" title="Salva a imagem do QR Code (PNG) no computador/celular">🖼️ Baixar imagem</button>'+
        '<div class="nota">Valor: <b style="color:#111">R$ '+blgMoeda(pg.valor)+'</b> · vale até '+blgEsc(pg.validade||'hoje 23:59')+'.'+(BLG.demo?'<br><b style="color:#b45309">Prévia: código de exemplo, não paga nada.</b>':'')+'</div>'+
@@ -15239,7 +15238,7 @@ function blgCancelarPix(k,cb){
     p.cancelando=false;
     if(r&&r.ok){var sx=blgSelecionado();if(sx&&sx.pixAtivos)sx.pixAtivos=sx.pixAtivos.filter(function(v){return v.txid!==p.txid;});p.cancelado=true;p.txidCancelado=p.txid;p.txid=null;blgDraw();if(cb)cb(true);return;}   // sem txid o acompanhamento para
     if(r&&r.pago){p.pagoAgora=true;blgCarregar(true);}
-    p.erroCancelar=(r&&r.erro)||'Não consegui cancelar.';blgDraw();if(cb)cb(false);
+    p.erroCancelar=(r&&r.erro)==='Rota inexistente'?'O servidor ainda está na versão antiga e não sabe cancelar PIX. Publique o worker-bling.js novo no Cloudflare (Workers › bling › Edit code › colar › Deploy) e tente de novo.':((r&&r.erro)||'Não consegui cancelar.');blgDraw();if(cb)cb(false);
   }).catch(function(e){p.cancelando=false;p.erroCancelar='Sem conexão: '+(e&&e.message||e);blgDraw();if(cb)cb(false);});
 }
 function blgNomeCliente(x){
@@ -15247,19 +15246,6 @@ function blgNomeCliente(x){
   var tc=function(t){return t.toLowerCase().replace(/(^|[\s\/(-])([a-zà-ú])/g,function(m,a,b){return a+b.toUpperCase();}).replace(/\b(De|Da|Do|Das|Dos|E)\b/g,function(m){return m.toLowerCase();}).replace(/\b(Ltda|Eireli|Me|Epp|S\/A|Sa)\b/gi,function(m){return m.toUpperCase().replace('LTDA','Ltda');});};
   if(d.length===11||(!d&&n.split(/\s+/).length<=4&&!/ltda|eireli|s\/a|engenharia|constru/i.test(n)))return tc(n.split(/\s+/)[0]||'');   // pessoa física: primeiro nome
   return '';   // empresa: cumprimento sem nome
-}
-function blgMsgPix(x,p){
-  var nome=blgNomeCliente(x),ref=x.tipo==='nota'?'da *nota fiscal nº '+x.numero+'*':'do *pedido nº '+x.numero+'*';
-  return 'Olá'+(nome?', '+nome:'')+'! 👋\n\n'+
-    'Aqui é da *Mais Acessível*. Segue o PIX para pagamento '+ref+(nome?'':' ('+x.cliente+')')+':\n\n'+
-    '💰 *Valor:* R$ '+blgMoeda(p.valor)+'\n'+
-    '⏰ *Válido até:* '+String(p.validade||'hoje 23:59')+'\n\n'+
-    '*Como pagar:*\n'+
-    '1️⃣ Abra o app do seu banco e entre em *PIX*\n'+
-    '2️⃣ Escolha *Ler QR Code* (use a imagem) ou *PIX Copia e Cola*\n'+
-    '3️⃣ Confira o recebedor: *JDFER COMÉRCIO E SERVIÇOS LTDA*\n\n'+
-    'O código *Copia e Cola* vai na próxima mensagem — é só tocar, segurar e copiar. 👇\n\n'+
-    'Qualquer dúvida, estamos à disposição. Obrigado! 🙏';
 }
 function blgNomeImg(x){return 'PIX-'+(x.tipo==='nota'?'NF-':'pedido-')+String(x.numero).replace(/[^\w-]/g,'')+'.png';}
 function blgCarregarQrLib(){return new Promise(function(ok){if(window.qrcode)return ok();var sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';sc.onload=function(){ok();};sc.onerror=function(){ok();};document.head.appendChild(sc);});}
@@ -15301,28 +15287,38 @@ function blgEnviarTexto(texto,titulo){
   if(navigator.share&&/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)){navigator.share({text:texto}).catch(function(){});return;}
   window.open('https://wa.me/?text='+encodeURIComponent(texto),'_blank');
 }
-function blgWhatsPix(x,p,k){
-  var msg=blgMsgPix(x,p);
-  blgImagemPix(x,p).then(function(bl){
-    var arq=null;try{arq=new File([bl],blgNomeImg(x),{type:'image/png'});}catch(e){}
-    if(arq&&navigator.canShare&&navigator.canShare({files:[arq]})){
-      // celular (e Windows com o app do WhatsApp): imagem + mensagem juntas, escolhendo o contato
-      navigator.share({files:[arq],text:msg}).then(function(){p.passo2=true;p.avisoWpp='Agora toque em <b>2. Código Copia e Cola</b> e mande para o mesmo contato.';blgDraw();}).catch(function(){});
-      return;
-    }
-    // computador: copia a imagem e abre o WhatsApp com a mensagem — é só colar (Ctrl+V) a imagem na conversa
-    var abrir=function(copiou){
-      p.passo2=true;
-      p.avisoWpp=copiou?'📋 A <b>imagem do QR Code foi copiada</b>. No WhatsApp, escolha o contato, envie a mensagem e depois aperte <b>Ctrl+V</b> para colar a imagem. Por fim, toque em <b>2. Código Copia e Cola</b>.'
-        :'A imagem do QR Code foi <b>baixada</b>. No WhatsApp, envie a mensagem e anexe a imagem (📎). Por fim, toque em <b>2. Código Copia e Cola</b>.';
-      blgDraw();window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+// WhatsApp: SEMPRE 2 mensagens — 1ª a imagem do QR Code, 2ª o código Copia e Cola sozinho.
+// O WhatsApp não deixa um site mandar duas mensagens com um clique só (isso exige a API do WhatsApp), então:
+//  • iPhone: o menu de compartilhar manda imagem + código e o WhatsApp entrega como 2 mensagens, nessa ordem;
+//  • Android: manda a imagem e aparece o botão "Enviar o código" para a 2ª mensagem (1 toque);
+//  • computador: a imagem vai para a área de transferência e o WhatsApp abre com o código já escrito → Ctrl+V + Enter (imagem), Enter (código).
+function blgPreparaImg(x,p){if(!p.imgProm)p.imgProm=blgImagemPix(x,p).then(function(b){p.imgBlob=b;return b;});return p.imgProm;}
+function blgWhatsPix(x,p){
+  var UA=navigator.userAgent,movel=/Android|iPhone|iPad|iPod|Mobile/i.test(UA),ios=/iPhone|iPad|iPod/i.test(UA)||(/Macintosh/.test(UA)&&navigator.maxTouchPoints>1);
+  var nome=blgNomeImg(x);
+  if(movel&&navigator.share){
+    var vai=function(bl){
+      var arq=null;try{arq=new File([bl],nome,{type:'image/png'});}catch(e){}
+      if(!arq||!(navigator.canShare&&navigator.canShare({files:[arq]}))){blgBaixarBlob(bl,nome);p.falta2=true;p.avisoWpp='A imagem foi salva no aparelho: anexe no WhatsApp e depois toque em <b>Enviar o código</b>.';blgDraw();return;}
+      navigator.share(ios?{files:[arq],text:p.copia}:{files:[arq]}).then(function(){
+        if(ios){p.falta2=false;p.avisoWpp='✅ Imagem e código enviados (2 mensagens).';}
+        else{p.falta2=true;p.avisoWpp='✅ Imagem enviada. Agora toque em <b>Enviar o código</b> e escolha o mesmo contato.';}
+        blgDraw();
+      }).catch(function(){});
     };
-    try{
-      if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write)
-        navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).then(function(){abrir(true);}).catch(function(){blgBaixarBlob(bl,blgNomeImg(x));abrir(false);});
-      else{blgBaixarBlob(bl,blgNomeImg(x));abrir(false);}
-    }catch(e){blgBaixarBlob(bl,blgNomeImg(x));abrir(false);}
-  });
+    if(p.imgBlob)vai(p.imgBlob);else blgPreparaImg(x,p).then(vai);
+    return;
+  }
+  // computador
+  var prom=blgPreparaImg(x,p),copiou=false;
+  try{if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){navigator.clipboard.write([new ClipboardItem({'image/png':prom})]).catch(function(){prom.then(function(bl){blgBaixarBlob(bl,nome);});p.avisoWpp=blgAvisoPc(false);blgDraw();});copiou=true;}}catch(e){}
+  if(!copiou)prom.then(function(bl){blgBaixarBlob(bl,nome);});
+  p.falta2=false;p.avisoWpp=blgAvisoPc(copiou);blgDraw();
+  window.open('https://wa.me/?text='+encodeURIComponent(p.copia),'_blank');
+}
+function blgAvisoPc(copiou){
+  return copiou?'📋 No WhatsApp: escolha o contato → aperte <b>Ctrl+V</b> e <b>Enter</b> (vai a imagem do QR Code) → aperte <b>Enter</b> de novo (vai o código, que já está escrito).'
+    :'A imagem foi <b>baixada</b>. No WhatsApp: escolha o contato → anexe a imagem (📎) e envie → aperte <b>Enter</b> (vai o código, que já está escrito).';
 }
 
 function blgQr(el,texto){
@@ -15339,7 +15335,7 @@ function blgLigar(w){
   w.querySelectorAll('select[data-sel]').forEach(function(s){s.onchange=function(){var pp=(BLG.pend||[])[s.getAttribute('data-sel')];if(!pp)return;if(s.value)BLG.stage[pp.e2e]=s.value;else delete BLG.stage[pp.e2e];blgDraw();};});
   w.querySelectorAll('tbody tr[data-k]').forEach(function(tr){tr.onclick=function(){var k=tr.getAttribute('data-k');BLG.sel=BLG.sel===k?null:k;blgDraw();};});
   var vi=w.querySelector('#blgValor');if(vi)vi.oninput=function(){BLG.valorEdit[BLG.sel]=vi.value;};
-  var qr=w.querySelector('#blgQr');if(qr&&BLG.sel&&BLG.pix[BLG.sel])blgQr(qr,BLG.pix[BLG.sel].copia);
+  var qr=w.querySelector('#blgQr');if(qr&&BLG.sel&&BLG.pix[BLG.sel]){blgQr(qr,BLG.pix[BLG.sel].copia);var xs=blgSelecionado();if(xs)blgPreparaImg(xs,BLG.pix[BLG.sel]).catch(function(){});}   // imagem pronta antes do clique (o celular exige)
   w.querySelectorAll('[data-a]').forEach(function(el){
     if(el.tagName==='SPAN'&&el.classList.contains('x')&&el.closest('.blg-fsit'))return;
     el.onclick=function(ev){ev.stopPropagation();BLG._i=el.getAttribute('data-i');BLG._k=el.getAttribute('data-k');blgAcao(el.getAttribute('data-a'));};
@@ -15418,9 +15414,9 @@ function blgAcao(a){
     if(!confirm('Cancelar este PIX de R$ '+blgMoeda(pc.valor)+'?\n\nO QR Code e o código Copia e Cola param de aceitar pagamento e o app para de conferir.'))return;
     blgCancelarPix(BLG.sel);return;}
   if(a==='baixarQr'&&x){var pb=BLG.pix[BLG.sel];if(!pb)return;blgImagemPix(x,pb).then(function(bl){blgBaixarBlob(bl,blgNomeImg(x));});return;}
-  if(a==='wppCodigo'&&x){var pw=BLG.pix[BLG.sel];if(!pw)return;blgEnviarTexto(pw.copia,'Código PIX');pw.passo2=false;blgDraw();return;}
+  if(a==='wppCodigo'&&x){var pw=BLG.pix[BLG.sel];if(!pw)return;blgEnviarTexto(pw.copia,'Código PIX');pw.falta2=false;pw.avisoWpp='✅ Código enviado.';blgDraw();return;}
   if(a==='copiar'){var t=BLG.root.querySelector('#blgCopia');if(t){t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand('copy');}var bt=BLG.root.querySelector('[data-a="copiar"]');if(bt){bt.innerHTML='✓ Copiado';setTimeout(function(){if(bt)bt.innerHTML=BLG_IC.copiar+' Copiar código';},1800);}}return;}
-  if(a==='wpp'&&x){var p=BLG.pix[BLG.sel];if(!p)return;blgWhatsPix(x,p,BLG.sel);return;}
+  if(a==='wpp'&&x){var p=BLG.pix[BLG.sel];if(!p)return;blgWhatsPix(x,p);return;}
   if(a==='gerarPix'&&x){
     var falta=Math.max(0,Number(x.aReceber||0)-Number(x.pago||0));var val=blgValorNum(BLG.valorEdit[BLG.sel]!=null?BLG.valorEdit[BLG.sel]:falta);
     if(!(val>0)){BLG.pix[BLG.sel]={erro:'Valor inválido.'};blgDraw();return;}
