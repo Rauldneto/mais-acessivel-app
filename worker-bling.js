@@ -765,7 +765,11 @@ async function executarContasPedido(env, reg, valor, data) {
   //  3) pedido sem nota e sem contas → lança as contas do pedido e baixa.
   const ped = (await bling(env, '/pedidos/vendas/' + reg.id)).data || {};
   const idContato = ped.contato && ped.contato.id;
-  const nfId = ped.notaFiscal && ped.notaFiscal.id;
+  let nfId = ped.notaFiscal && ped.notaFiscal.id;
+  if (nfId) { // nota rejeitada/cancelada e reemitida: usa a nota nova do mesmo cliente e valor
+    const nf = await nfDados(env, nfId).catch(() => null);
+    if (nf && ![5, 6, 7].includes(Number(nf.situacao))) { const sub = await nfSubstituta(env, reg.id, nf).catch(() => null); if (sub) nfId = sub; }
+  }
   const origemId = nfId || reg.id;
   const daOrigem = async () => (await paginas(env, '/contas/receber?dataInicial=' + diasAtras(360) + '&dataFinal=' + isoDia(new Date()) + (idContato ? '&idContato=' + idContato : ''), 3))
     .filter(c => String(c.idOrigem || (c.origem && c.origem.id)) === String(origemId));
