@@ -15434,9 +15434,11 @@ function blgPainelPix(x){
     if(outros.length)h+='<div class="blg-msg" style="margin-top:8px;font-size:11.5px">⚠️ <b>Há mais '+outros.length+' PIX ativo(s)</b> para '+(x.tipo==='nota'?'esta nota':'este pedido')+' (o cliente pode pagar duas vezes):'+
       outros.map(function(v){return '<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;margin-top:4px">R$ '+blgMoeda(v.valor)+' · '+blgDataHora(v.criado)+' <button class="blg-btn sec" style="height:24px;width:auto;margin:0;padding:0 8px" data-a="cancelarOutro" data-k="'+blgEsc(v.txid)+'">Cancelar</button></div>';}).join('')+'</div>';
     h+='<div class="qr" id="blgQr"></div><label>PIX copia e cola</label><textarea readonly id="blgCopia">'+blgEsc(pg.copia)+'</textarea>'+
-       '<div class="nota" style="margin-top:12px;color:#111"><b>Para mandar ao cliente:</b> copie e cole na conversa do WhatsApp (Ctrl+V). Primeiro a imagem, depois o código.</div>'+
-       '<button class="blg-btn" data-a="copiarImg" title="Copia a imagem do QR Code (com valor e pedido/nota) para colar no WhatsApp com Ctrl+V">🖼️ 1. Copiar imagem do QR Code</button>'+
-       '<button class="blg-btn" data-a="copiar" title="Copia só o código PIX Copia e Cola para colar no WhatsApp com Ctrl+V">'+BLG_IC.copiar+' 2. Copiar código PIX</button>'+
+       '<div class="nota" style="margin-top:12px;color:#111"><b>Para mandar ao cliente:</b> copie e cole na conversa do WhatsApp (Ctrl+V), nesta ordem.</div>'+
+       '<label for="blgMsg">Mensagem (pode editar antes de copiar)</label><textarea id="blgMsg" style="height:150px;font-family:arial,sans-serif;font-size:11px">'+blgEsc(pg.msg!=null?pg.msg:blgMsgPix(x,pg))+'</textarea>'+
+       '<button class="blg-btn" data-a="copiarMsg" title="Copia a mensagem acima para colar no WhatsApp com Ctrl+V">💬 1. Copiar mensagem</button>'+
+       '<button class="blg-btn" data-a="copiarImg" title="Copia a imagem do QR Code (com valor e pedido/nota) para colar no WhatsApp com Ctrl+V">🖼️ 2. Copiar imagem do QR Code</button>'+
+       '<button class="blg-btn" data-a="copiar" title="Copia só o código PIX Copia e Cola para colar no WhatsApp com Ctrl+V">'+BLG_IC.copiar+' 3. Copiar código PIX</button>'+
        (pg.avisoCopia?'<div class="nota" style="color:#15803d">'+pg.avisoCopia+'</div>':'')+
        '<button class="blg-btn sec" data-a="baixarQr" title="Salva a imagem do QR Code (PNG) no computador/celular">⬇️ Baixar imagem</button>'+
        '<div class="nota">Valor: <b style="color:#111">R$ '+blgMoeda(pg.valor)+'</b> · vale até '+blgEsc(pg.validade||'hoje 23:59')+'.'+(BLG.demo?'<br><b style="color:#b45309">Prévia: código de exemplo, não paga nada.</b>':'')+'</div>'+
@@ -15480,6 +15482,19 @@ function blgCancelarPix(k,cb){
     if(r&&r.pago){p.pagoAgora=true;blgCarregar(true);}
     p.erroCancelar=(r&&r.erro)==='Rota inexistente'?'O servidor ainda está na versão antiga e não sabe cancelar PIX. Publique o worker-bling.js novo no Cloudflare (Workers › bling › Edit code › colar › Deploy) e tente de novo.':((r&&r.erro)||'Não consegui cancelar.');blgDraw();if(cb)cb(false);
   }).catch(function(e){p.cancelando=false;p.erroCancelar='Sem conexão: '+(e&&e.message||e);blgDraw();if(cb)cb(false);});
+}
+// texto que acompanha o QR Code no WhatsApp (o código Copia e Cola vai em mensagem separada)
+function blgMsgPix(x,p){
+  var nome=blgNomeCliente(x),ref=x.tipo==='nota'?'da *nota fiscal nº '+x.numero+'*':'do *pedido nº '+x.numero+'*';
+  return 'Olá'+(nome?', '+nome:'')+'! 👋\n'+
+    'Aqui é da *Mais Acessível*. Segue o PIX para pagamento '+ref+(nome||!x.cliente?'':' ('+x.cliente+')')+'.\n\n'+
+    '💰 *Valor:* R$ '+blgMoeda(p.valor)+'\n'+
+    '⏰ *Válido até:* '+String(p.validade||'hoje 23:59')+'\n\n'+
+    '*Como pagar:*\n'+
+    '1️⃣ Abra o app do seu banco › *PIX*\n'+
+    '2️⃣ *Ler QR Code* (imagem abaixo) ou *PIX Copia e Cola* (código na próxima mensagem)\n'+
+    '3️⃣ Confira o recebedor: *JDFER COMÉRCIO E SERVIÇOS LTDA*\n\n'+
+    'Assim que o pagamento cair, já damos baixa por aqui. Qualquer dúvida, estamos à disposição. Obrigado! 🙏';
 }
 function blgNomeCliente(x){
   var n=String(x.cliente||'').trim(),d=String(x.doc||'').replace(/\D/g,'');
@@ -15584,6 +15599,7 @@ function blgLigar(w){
   w.querySelectorAll('input[data-fd]').forEach(function(s){s.onchange=function(){BLG.f[s.getAttribute('data-fd')]=s.value;blgDraw();};});
   w.querySelectorAll('select[data-sel]').forEach(function(s){s.onchange=function(){var pp=(BLG.pend||[])[s.getAttribute('data-sel')];if(!pp)return;if(s.value)BLG.stage[pp.e2e]=s.value;else delete BLG.stage[pp.e2e];blgDraw();};});
   w.querySelectorAll('tbody tr[data-k]').forEach(function(tr){tr.onclick=function(){var k=tr.getAttribute('data-k');BLG.sel=BLG.sel===k?null:k;blgDraw();};});
+  var tmsg=w.querySelector('#blgMsg');if(tmsg)tmsg.oninput=function(){var pp=BLG.pix[BLG.sel];if(pp)pp.msg=tmsg.value;};
   var vi=w.querySelector('#blgValor');if(vi)vi.oninput=function(){BLG.valorEdit[BLG.sel]=vi.value;};
   var qr=w.querySelector('#blgQr');if(qr&&BLG.sel&&BLG.pix[BLG.sel]){blgQr(qr,BLG.pix[BLG.sel].copia);var xs=blgSelecionado();if(xs)blgPreparaImg(xs,BLG.pix[BLG.sel]).catch(function(){});}   // imagem pronta antes do clique (o celular exige)
   w.querySelectorAll('[data-a]').forEach(function(el){
@@ -15651,7 +15667,7 @@ function blgAcao(a){
   }
   if(a==='abrirBling'&&x){window.open(x.tipo==='nota'?'https://www.bling.com.br/notas.fiscais.php#edit/'+x.id:'https://www.bling.com.br/vendas.php#edit/'+x.id,'_blank');return;}
   if(a==='irPagamentos'){var keep=BLG.sel;irParaModulo('mod22');if(keep){BLG.sel=keep;blgDraw();}return;}
-  if(!blgPag()&&['pixSel','gerarPix','credSel','novoPix','cancelarPix','cancelarOutro','wpp','wppCodigo','baixarQr','copiar','copiarImg'].indexOf(a)>=0)return;
+  if(!blgPag()&&['pixSel','gerarPix','credSel','novoPix','cancelarPix','cancelarOutro','wpp','wppCodigo','baixarQr','copiar','copiarImg','copiarMsg'].indexOf(a)>=0)return;
   if(a==='pixSel'){if(!x)return;blgDraw();var i=BLG.root.querySelector('#blgValor');if(i){i.focus();i.select();}return;}
   if(a==='novoPix'&&x){
     var pn=BLG.pix[BLG.sel];
@@ -15667,8 +15683,11 @@ function blgAcao(a){
     blgCancelarPix(BLG.sel);return;}
   if(a==='baixarQr'&&x){var pb=BLG.pix[BLG.sel];if(!pb)return;blgImagemPix(x,pb).then(function(bl){blgBaixarBlob(bl,blgNomeImg(x));});return;}
   if(a==='wppCodigo'&&x){var pw=BLG.pix[BLG.sel];if(!pw)return;blgEnviarTexto(pw.copia,'Código PIX');pw.falta2=false;pw.avisoWpp='✅ Código enviado.';blgDraw();return;}
+  if(a==='copiarMsg'&&x){var pm=BLG.pix[BLG.sel],tm=BLG.root.querySelector('#blgMsg');if(!pm||!tm)return;
+    var feito=function(){pm.avisoCopia='✓ Mensagem copiada. Cole na conversa do WhatsApp (<b>Ctrl+V</b>) e envie. Depois copie a imagem.';blgDraw();};
+    try{navigator.clipboard.writeText(tm.value).then(feito).catch(function(){tm.select();document.execCommand('copy');feito();});}catch(e){tm.select();document.execCommand('copy');feito();}return;}
   if(a==='copiarImg'&&x){var pi=BLG.pix[BLG.sel];if(!pi)return;blgCopiarImagem(x,pi);return;}
-  if(a==='copiar'){var t=BLG.root.querySelector('#blgCopia');if(t){t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand('copy');}var bt=BLG.root.querySelector('[data-a="copiar"]');if(bt){bt.innerHTML='✓ Código copiado';setTimeout(function(){if(bt)bt.innerHTML=BLG_IC.copiar+' 2. Copiar código PIX';},1800);}}return;}
+  if(a==='copiar'){var t=BLG.root.querySelector('#blgCopia');if(t){t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand('copy');}var bt=BLG.root.querySelector('[data-a="copiar"]');if(bt){bt.innerHTML='✓ Código copiado';setTimeout(function(){if(bt)bt.innerHTML=BLG_IC.copiar+' 3. Copiar código PIX';},1800);}}return;}
   if(a==='wpp'&&x){var p=BLG.pix[BLG.sel];if(!p)return;blgWhatsPix(x,p);return;}
   if(a==='gerarPix'&&x){
     var falta=Math.max(0,Number(x.aReceber||0)-Number(x.pago||0));var val=blgValorNum(BLG.valorEdit[BLG.sel]!=null?BLG.valorEdit[BLG.sel]:falta);
