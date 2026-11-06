@@ -12854,7 +12854,7 @@ function ppRenderApresentacao(){
 // ===== FIM ABA PRODUTOS =====
 
 // ===== ABA NORMA NBR 9050 (consulta NBR 9050 + NBR 16537) =====
-var NORMA={dados:null,carregando:false,erro:'',imgs:{},q:'',res:[],cur:-1,IDX:null};
+var NORMA={zoom:(function(){try{return !!localStorage.getItem('nmZoom')}catch(e){return false}})(),dados:null,carregando:false,erro:'',imgs:{},q:'',res:[],cur:-1,IDX:null};
 function normaCss(){
   if(document.getElementById('normaCss'))return;
   var st=document.createElement('style');st.id='normaCss';
@@ -12880,6 +12880,13 @@ function normaCss(){
   '.nm-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1e293b;color:#fff;padding:9px 16px;border-radius:10px;font-size:13px;z-index:99999;opacity:0;pointer-events:none;transition:opacity .2s}.nm-toast.show{opacity:1}'+
   '.nm-tl mark{background:rgba(255,196,0,.45);color:transparent;border-radius:2px;padding:0;box-shadow:0 0 0 1px rgba(255,140,0,.6)}'+
   '.nm-crop{position:absolute;inset:0;z-index:5;cursor:crosshair;background:rgba(15,23,42,.18);touch-action:none}.nm-crop-tip{position:sticky;top:60px;margin:8px auto 0;width:max-content;background:#1e293b;color:#fff;font-size:12px;padding:5px 12px;border-radius:999px;pointer-events:none}.nm-crop-box{position:absolute;display:none;border:2px dashed #FF6B00;background:rgba(255,107,0,.12);box-shadow:0 0 0 9999px rgba(15,23,42,.25)}'+
+  '.nm-scroll{position:relative}.nm-z .nm-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}.nm-z .nm-page{width:210%}.nm-cel{display:none}'+
+  '@media (max-width:640px){.nm-wrap{padding:10px 6px 90px}.nm-h h2{font-size:15px}.nm-h .nm-btn{padding:6px 10px;font-size:12px}.nm-ask input{font-size:16px}'+
+  '.nm-res button{max-width:190px;padding:6px 10px}.nm-view{margin:0 -6px;border-radius:8px}'+
+  '.nm-bar{padding:6px;gap:6px}.nm-bar .nm-btn{padding:10px 14px;font-size:16px;line-height:1}.nm-tx{display:none}.nm-info{font-size:12px}.nm-info span{display:none}'+
+  '.nm-tools{flex-wrap:nowrap;overflow-x:auto;padding:6px;gap:6px;scrollbar-width:none}.nm-tools::-webkit-scrollbar{display:none}.nm-tools .nm-btn{white-space:nowrap;font-size:12px;padding:8px 10px;flex:0 0 auto}'+
+  '.nm-pc{display:none}.nm-cel{display:inline}.nm-hint{padding:4px 8px 6px}.nm-foot .nm-btn{padding:12px 18px;font-size:15px}.nm-fg i{opacity:1;font-size:10px;padding:1px 6px}}'+
+  'body:has(.nm-wrap) .header-right{flex-wrap:wrap;max-width:100%}'+
   '.nm-fb textarea{width:100%;min-height:130px;font:inherit;font-size:12px;border:1px solid #ddd;border-radius:8px;padding:8px;margin:6px 0}';
   document.head.appendChild(st);
 }
@@ -12960,12 +12967,12 @@ function renderNormaNBR(){
     pagina()}
   function pagina(){var D=NORMA.dados.docs,i=NORMA.cur,d=D[i],v=document.getElementById('nmView');if(!v)return;
     var norma=d.k.split('_')[0],prev=i>0&&D[i-1].k.split('_')[0]===norma,next=i<D.length-1&&D[i+1].k.split('_')[0]===norma;
-    var nav='<button type="button" class="nm-btn" data-mv="-1" '+(prev?'':'disabled')+'>◀ Anterior</button>';var nav2='<button type="button" class="nm-btn" data-mv="1" '+(next?'':'disabled')+'>Próxima ▶</button>';
+    var nav='<button type="button" class="nm-btn" data-mv="-1" '+(prev?'':'disabled')+'>◀<span class="nm-tx"> Anterior</span></button>';var nav2='<button type="button" class="nm-btn" data-mv="1" '+(next?'':'disabled')+'><span class="nm-tx">Próxima </span>▶</button>';
     var clips=(NORMA.dados.clips||{})[d.k]||[],tl=(NORMA.dados.tl||{})[d.k]||[];
-    v.innerHTML='<div class="nm-bar">'+nav+'<div class="nm-info"><b>'+normaNome(i)+' · página '+normaEsc(d.n)+'</b><span>'+normaEsc(d.lab)+'</span></div>'+nav2+'</div>'+
-     '<div class="nm-tools"><button type="button" class="nm-btn" data-cp="txt">📋 Copiar texto da página</button><button type="button" class="nm-btn" data-cp="img">🖼️ Copiar página inteira</button><button type="button" class="nm-btn" data-cp="ref">🔖 Copiar referência</button><button type="button" class="nm-btn" data-cp="crop">✂️ Recortar área</button></div>'+
-     '<div class="nm-hint">Dica: arraste o mouse sobre o texto para selecionar e copiar (no celular, toque e segure). Clique em um desenho para copiar só a figura, ou use ✂️ Recortar área para marcar qualquer parte com o mouse.</div><div class="nm-fb" id="nmFb"></div>'+
-     '<div class="nm-page" id="nmPage"><div class="nm-empty" style="border:0">Carregando página…</div></div><div class="nm-foot">'+nav+nav2+'</div>';
+    v.classList.toggle('nm-z',!!NORMA.zoom);v.innerHTML='<div class="nm-bar">'+nav+'<div class="nm-info"><b>'+normaNome(i)+' · página '+normaEsc(d.n)+'</b><span>'+normaEsc(d.lab)+'</span></div>'+nav2+'</div>'+
+     '<div class="nm-tools"><button type="button" class="nm-btn" data-cp="txt">📋 Copiar texto da página</button><button type="button" class="nm-btn" data-cp="img">🖼️ Copiar página inteira</button><button type="button" class="nm-btn" data-cp="ref">🔖 Copiar referência</button><button type="button" class="nm-btn" data-cp="crop">✂️ Recortar área</button><button type="button" class="nm-btn" data-cp="zoom">'+(NORMA.zoom?'🔍 Reduzir':'🔍 Ampliar')+'</button></div>'+
+     '<div class="nm-hint"><span class="nm-pc">Dica: arraste o mouse sobre o texto para selecionar e copiar. Clique em um desenho para copiar só a figura, ou use ✂️ Recortar área para marcar qualquer parte com o mouse.</span><span class="nm-cel">Toque e segure no texto para copiar · toque num desenho para copiar a figura · 🔍 Ampliar para ler melhor · deslize para trocar de página.</span></div><div class="nm-fb" id="nmFb"></div>'+
+     '<div class="nm-scroll"><div class="nm-page" id="nmPage"><div class="nm-empty" style="border:0">Carregando página…</div></div></div><div class="nm-foot">'+nav+nav2+'</div>';
     [].forEach.call(out.querySelectorAll('.nm-res button'),function(b){b.classList.toggle('on',+b.dataset.i===i)});
     normaImg(d.k).then(function(src){if(NORMA.cur!==i)return;var pg=document.getElementById('nmPage');if(!pg)return;
       pg.innerHTML='<img id="nmImg" src="'+src+'" alt="'+normaNome(i)+', página '+normaEsc(d.n)+'">'+clips.map(function(c,j){return '<button type="button" class="nm-fg" data-fg="'+j+'" style="left:'+c[0]+'%;top:'+c[1]+'%;width:'+(c[2]-c[0])+'%;height:'+(c[3]-c[1])+'%" aria-label="Copiar Figura '+c[4]+'"><i>📋 Copiar Figura '+c[4]+'</i></button>'}).join('')+
@@ -12996,9 +13003,9 @@ function recortarArea(){var pg=document.getElementById('nmPage'),img=document.ge
     if(b.dataset.i){NORMA.cur=+b.dataset.i;NORMA.rolar=true;pagina();return}
     if(b.dataset.mv){NORMA.cur+=(+b.dataset.mv);pagina();if(b.closest('.nm-foot'))document.getElementById('nmView').scrollIntoView({block:'start'});return}
     if(b.dataset.fg!==undefined){var d=NORMA.dados.docs[NORMA.cur],c=NORMA.dados.clips[d.k][+b.dataset.fg];copiarRecorte(c,'Figura '+c[4]+' copiada');return}
-    if(b.dataset.cp){if(fb)fb.innerHTML='';var d2=NORMA.dados.docs[NORMA.cur];if(b.dataset.cp==='txt')copiarTexto(ref(NORMA.cur)+'\n\n'+d2.t.trim(),'Texto da página copiado');else if(b.dataset.cp==='ref')copiarTexto(ref(NORMA.cur),'Referência copiada');else if(b.dataset.cp==='crop')recortarArea();else copiarRecorte(null,'Página copiada');}};
+    if(b.dataset.cp){if(fb)fb.innerHTML='';var d2=NORMA.dados.docs[NORMA.cur];if(b.dataset.cp==='txt')copiarTexto(ref(NORMA.cur)+'\n\n'+d2.t.trim(),'Texto da página copiado');else if(b.dataset.cp==='ref')copiarTexto(ref(NORMA.cur),'Referência copiada');else if(b.dataset.cp==='crop')recortarArea();else if(b.dataset.cp==='zoom'){NORMA.zoom=!NORMA.zoom;try{localStorage.setItem('nmZoom',NORMA.zoom?'1':'')}catch(e){}var vw=document.getElementById('nmView');vw.classList.toggle('nm-z',NORMA.zoom);b.textContent=NORMA.zoom?'🔍 Reduzir':'🔍 Ampliar';setTimeout(ajustar,50)}else copiarRecorte(null,'Página copiada');}};
   var tx=null;out.addEventListener('touchstart',function(e){if(e.target.closest('.nm-page'))tx=e.touches[0].clientX},{passive:true});
-  out.addEventListener('touchend',function(e){if(tx===null)return;var dx=e.changedTouches[0].clientX-tx;tx=null;if(String(window.getSelection())!=='')return;if(Math.abs(dx)>70){var b=out.querySelector('.nm-bar [data-mv="'+(dx<0?1:-1)+'"]');if(b&&!b.disabled)b.click()}});
+  out.addEventListener('touchend',function(e){if(tx===null)return;var dx=e.changedTouches[0].clientX-tx;tx=null;if(String(window.getSelection())!=='')return;if(Math.abs(dx)>70&&!NORMA.zoom){var b=out.querySelector('.nm-bar [data-mv="'+(dx<0?1:-1)+'"]');if(b&&!b.disabled)b.click()}});
   // restaura estado ao re-renderizar
   if(NORMA.dados&&NORMA.q&&NORMA.res.length){setTimeout(desenhar,0)}else if(!NORMA.dados&&!NORMA.erro){normaCarregar(function(){if(STATE.modulo==='mod7')render()})}
   return wrap;
