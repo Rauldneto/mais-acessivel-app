@@ -1,5 +1,5 @@
 <!-- v5.4-1785154153 -->
-<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material | fin-sem-nro-documento | fin-sem-ocorrencia | energia-solar-mod11-renderEnergiaSolar | leilao-imoveis-mod12-renderLeilaoImoveis | bling-mod17-renderBling | relatorio-despesas-mod19-renderRelDespesas | conciliacao-receber-boletos-dentro-do-mod17 -->
+<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material | fin-sem-nro-documento | fin-sem-ocorrencia | energia-solar-mod11-renderEnergiaSolar | leilao-imoveis-mod12-renderLeilaoImoveis | bling-mod17-renderBling | relatorio-despesas-mod19-renderRelDespesas | conciliacao-receber-boletos-dentro-do-mod17 | pagamentos-mod22-renderBling-pag -->
 <!-- ANTES DE PUBLICAR QUALQUER MUDANCA NESTE ARQUIVO: busque a versao atual em producao via GitHub API,
      confirme que os marcadores acima (nomes de funcao) ainda existem, e aplique a mudanca por cima dela -
      NUNCA sobrescreva com uma copia local antiga. Um commit em 21/08/2026 (f0ebfff) reverteu por engano
@@ -1348,7 +1348,7 @@ function renderAdmin(){
   var divAbas=document.createElement('div');
   divAbas.style.cssText='grid-column:1/-1;display:flex;gap:16px;align-items:center;padding:8px 0;flex-wrap:wrap';
   divAbas.innerHTML='<span style="font-size:12px;font-weight:600;color:#555">Acesso &agrave;s abas:</span>';
-  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod8',label:'Produtos'},{id:'mod9',label:'Clientes'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod10',label:'Cotações (conferência)'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'},{id:'mod17',label:'🏦 Financeiro › Conciliação contas a Receber'},{id:'mod20',label:'⚖️ Compras › Cotação compra'},{id:'ext',label:'🧩 Botão Extensão'}].forEach(function(ab){
+  [{id:'mod1',label:'Frete'},{id:'mod2',label:'Credito'},{id:'mod7',label:'Norma NBR 9050'},{id:'mod8',label:'Produtos'},{id:'mod9',label:'Clientes'},{id:'mod3',label:'Ace IA'},{id:'mod4',label:'Cotação avulsa'},{id:'mod5',label:'Modelo em Teste'},{id:'mod10',label:'Cotações (conferência)'},{id:'mod6',label:'Aprovação (dentro de Análise de Crédito)'},{id:'mod17',label:'🏦 Financeiro › Conciliação contas a Receber'},{id:'mod22',label:'💳 Financeiro › Pagamentos (gerar PIX / link)'},{id:'mod20',label:'⚖️ Compras › Cotação compra'},{id:'ext',label:'🧩 Botão Extensão'}].forEach(function(ab){
     var lbl=document.createElement('label');
     lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer';
     var cb=document.createElement('input');cb.type='checkbox';cb.value=ab.id;cb.name='abaAcesso';cb.checked=false;
@@ -3228,12 +3228,13 @@ function iniEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){re
 function iniAdmin(){return STATE.roleLogado==='admin';}
 // Mesma regra do menu (renderModuloNav): quais abas este usuário enxerga
 function iniModulos(){
-  var todos=['frete','mod10','mod2','mod7','mod8','mod9','mod3','mod4','mod11','mod12','mod13','mod20','mod14','mod16','mod19','mod17','mod5','mod15'];
+  var todos=['frete','mod10','mod2','mod7','mod8','mod9','mod3','mod4','mod11','mod12','mod13','mod20','mod14','mod16','mod19','mod17','mod22','mod5','mod15'];
   if(iniAdmin())return todos;
   var ids=todos;
   if(STATE.abasPermitidas&&STATE.abasPermitidas.length){
     var p=STATE.abasPermitidas.map(function(a){return a==='mod1'?'frete':a;});
     ['frete','mod10'].forEach(function(x){if(p.indexOf(x)<0)p.push(x);});
+    if(p.indexOf('mod17')>=0&&p.indexOf('mod22')<0)p.push('mod22');
     ids=todos.filter(function(id){return p.indexOf(id)>=0;});
   }
   var soAdmin=['mod11','mod12','mod13','mod14','mod15','mod16','mod19'];
@@ -3570,18 +3571,21 @@ function renderModuloNav(){
     {id:'mod16', icon:'🚚', label:'Lançamento de frete'},
     {id:'mod19', icon:'📊', label:'Relatório de despesas'},
     {id:'mod17', icon:'🏦', label:'Conciliação contas a Receber'},
+    {id:'mod22', icon:'💳', label:'Pagamentos'},
     {id:'mod5',  icon:'🧪', label:'Modelo em Teste'},
     {id:'mod15', icon:'📊', label:'Controle'},
     {id:'mod18', icon:'🛠️', label:'Reportar Problema'}
   ];
   // Mapeamento id antigo -> novo
-  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13','mod14':'mod14','mod15':'mod15','mod16':'mod16','mod17':'mod17','mod18':'mod18','mod19':'mod19','mod20':'mod20','mod21':'mod17'};
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13','mod14':'mod14','mod15':'mod15','mod16':'mod16','mod17':'mod17','mod22':'mod22','mod18':'mod18','mod19':'mod19','mod20':'mod20','mod21':'mod17'};
   // Admin ve tudo; outros so veem abas permitidas
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
     var permitidas=STATE.abasPermitidas.map(function(a){return MAPA_IDS[a]||a;});
     // Frete, Cotações (check das cotações) e Reportar Problema: todos os colaboradores veem sempre
     ['frete','mod10','mod18'].forEach(function(x){if(permitidas.indexOf(x)<0)permitidas.push(x);});
+    // quem já gerava PIX na antiga aba BLING/Conciliação (mod17) continua gerando, agora na tela Pagamentos
+    if(permitidas.indexOf('mod17')>=0&&permitidas.indexOf('mod22')<0)permitidas.push('mod22');
     MODULOS=TODOS_MODULOS.filter(function(m){return permitidas.indexOf(m.id)>=0;});
     // Se modulo atual nao esta permitido, ir para o primeiro permitido
     if(MODULOS.length>0 && permitidas.indexOf(STATE.modulo)<0 && STATE.modulo!=='inicio'){
@@ -3599,12 +3603,12 @@ function renderModuloNav(){
     {n:'Vendas',i:'ti-shopping-bag',c:'#ff9500',ids:['frete','mod10','mod2','mod7','mod8','mod4','mod5']},
     {n:'Lead',i:'ti-target-arrow',c:'#007aff',ids:['mod9']},
     {n:'Compras',i:'ti-shopping-cart',c:'#34c759',ids:['mod13','mod20']},
-    {n:'Financeiro',i:'ti-cash',c:'#0a7d6b',ids:['mod16','mod19','mod14','mod17'],
-     sub:[{n:'Contas a pagar',i:'ti-arrow-up-right',e:'📤',ids:['mod16','mod19','mod14']},{n:'Contas a receber',i:'ti-arrow-down-left',e:'📥',ids:['mod17']}]},
+    {n:'Financeiro',i:'ti-cash',c:'#0a7d6b',ids:['mod16','mod19','mod14','mod17','mod22'],
+     sub:[{n:'Contas a pagar',i:'ti-arrow-up-right',e:'📤',ids:['mod16','mod19','mod14']},{n:'Contas a receber',i:'ti-arrow-down-left',e:'📥',ids:['mod17','mod22']}]},
     {n:'T.I.',i:'ti-cpu',c:'#5856d6',ids:['mod3','mod15','mod18']},
     {n:'Particular',i:'ti-home',c:'#af52de',ids:['mod12','mod11']}
   ];
-  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod13:'ti-currency-dollar',mod20:'ti-scale',mod14:'ti-receipt-2',mod16:'ti-truck-delivery',mod17:'ti-building-bank',mod19:'ti-report-money',mod15:'ti-gauge',mod18:'ti-bug',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun'};
+  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod13:'ti-currency-dollar',mod20:'ti-scale',mod14:'ti-receipt-2',mod16:'ti-truck-delivery',mod17:'ti-building-bank',mod22:'ti-credit-card',mod19:'ti-report-money',mod15:'ti-gauge',mod18:'ti-bug',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun'};
   if(!document.getElementById('navIosCss')){
     var lk=document.createElement('link');lk.rel='stylesheet';lk.href='https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css';lk.onload=function(){document.documentElement.classList.add('ti-ok');};document.head.appendChild(lk);
     var st=document.createElement('style');st.id='navIosCss';
@@ -3768,7 +3772,7 @@ function rppAdmin(){return STATE.roleLogado==='admin';}
 function rppUsuario(){return STATE.usuarioLogado||STATE.loginUser||'?';}
 function rppData(t){var d=new Date(t);return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
 function rppNomeTela(id){
-  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod17:'Conciliação contas a Receber',mod15:'Controle',mod18:'Reportar Problema',ext:'Extensão do Chrome',outro:'Outra / não sei'};
+  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod17:'Conciliação contas a Receber',mod22:'Pagamentos (gerar PIX / link)',mod15:'Controle',mod18:'Reportar Problema',ext:'Extensão do Chrome',outro:'Outra / não sei'};
   return nomes[id]||id||'?';
 }
 
@@ -3860,7 +3864,7 @@ async function rppAnalisar(c,fotos,anteriores){
 // ---- Envio do chamado ----
 // ---- Correção automática (robô no GitHub: .github/workflows/corrigir-chamado.yml, disparado pelo Worker corrigir-chamado) ----
 // Firebase chamadosConfig = {autoUrl, autoLigado}. Resultado do robô: chamados-auto/<autoId>.json, publicado junto com o app.
-var RPP_AUTO_TELAS_FORA=['mod2','mod13','mod20','mod14','mod15','mod16','mod17']; // crédito e financeiro: nunca disparam sozinhos
+var RPP_AUTO_TELAS_FORA=['mod2','mod13','mod20','mod14','mod15','mod16','mod17','mod22']; // crédito e financeiro: nunca disparam sozinhos
 var RPP_AUTO_PARECER='Erro confirmado! A correção automática já está sendo aplicada. Em alguns minutos a resposta aparece aqui em Meus chamados.';
 async function rppCfg(forcar){
   if(RPP.cfg&&!forcar)return RPP.cfg;
@@ -4297,7 +4301,7 @@ function rppHtmlNovo(){
     '<p style="color:#6b7280;margin:0 0 16px">'+(RPP.ok.resolvido?'Se o erro continuar, abra <b>Meus chamados</b> e clique em <b>🔁 Reabrir</b>.':'O T.I. já foi avisado. Você acompanha a situação em <b>Meus chamados</b>.')+'</p>'+
     '<button class="rpp-btn" data-a="outro">Reportar outro problema</button> <button class="rpp-btn sec" data-a="voltar">Voltar ao que eu estava fazendo</button></div>';
   // Só as abas que este colaborador enxerga no menu (mesma regra do menu), mais o Início e a extensão (se liberada)
-  var telas=['inicio','frete','mod10','mod2','mod4','mod8','mod9','mod7','mod3','mod17','mod14','mod16','mod13','mod20','mod15','mod5','mod11','mod12'];
+  var telas=['inicio','frete','mod10','mod2','mod4','mod8','mod9','mod7','mod3','mod17','mod22','mod14','mod16','mod13','mod20','mod15','mod5','mod11','mod12'];
   var pode=telas;try{if(typeof iniModulos==='function')pode=iniModulos();}catch(e){}
   telas=telas.filter(function(t){return t==='inicio'||pode.indexOf(t)>=0;});
   if(rppAdmin()||(STATE.abasPermitidas&&STATE.abasPermitidas.indexOf('ext')>=0))telas.push('ext');
@@ -4535,7 +4539,7 @@ var CTL_PRECOS=[
   {p:'claude-sonnet',in:3,out:15},
   {p:'claude-opus-4-5',in:5,out:25},{p:'claude-opus-4-6',in:5,out:25},{p:'claude-opus',in:15,out:75}
 ];
-var CTL_AREAS={mod18:'Reportar Problema',frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Despesas (comprovantes)',mod16:'Lançamento de frete (CT-e)',mod17:'Conciliação contas a Receber (PIX, boletos e crédito)',mod15:'Controle'};
+var CTL_AREAS={mod18:'Reportar Problema',frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Despesas (comprovantes)',mod16:'Lançamento de frete (CT-e)',mod17:'Conciliação contas a Receber (PIX, boletos e crédito)',mod22:'Pagamentos (gerar PIX / link de crédito)',mod15:'Controle'};
 var CTL={cfg:null,ia:null,carregando:false,erro:'',dolar:null,root:null};
 
 function ctlPreco(model){model=model||'';for(var k=0;k<CTL_PRECOS.length;k++){if(model.indexOf(CTL_PRECOS[k].p)===0)return CTL_PRECOS[k];}return {in:3,out:15};}
@@ -14647,6 +14651,7 @@ function blgRetornoOAuth(){
   });
 }
 if((location.hash||'')==='#bling'){STATE.modulo='mod17';}
+if((location.hash||'')==='#pagamentos'){STATE.modulo='mod22';}
 (function(){try{var q=new URLSearchParams(location.search);if(q.get('code')&&(q.get('state')||'').indexOf('wb')===0)STATE.modulo='mod17';}catch(e){}})();
 
 function blgCarregar(forcar){
@@ -14661,7 +14666,7 @@ function blgCarregar(forcar){
     blgCarregarPend();
     if(BLG.sel&&!BLG.dados.some(function(x){return blgChave(x)===BLG.sel;}))BLG.sel=null;
     blgDraw();
-    if(BLG.faltaram)setTimeout(function(){if(STATE.modulo==='mod17')blgCarregar(true);},4000);
+    if(BLG.faltaram)setTimeout(function(){if(STATE.modulo==='mod17'||STATE.modulo==='mod22')blgCarregar(true);},4000);
   }).catch(function(e){BLG.carr=false;BLG.erro='Sem conexão com o Worker: '+(e&&e.message||e);blgDraw();});
 }
 function blgChave(x){return x.tipo+':'+x.id;}
@@ -14969,15 +14974,19 @@ var BLG_IC={
   olho:'<svg width="16" height="14" viewBox="0 0 576 512" fill="currentColor"><path d="M572.52 241.4C518.29 135.59 410.93 64 288 64S57.68 135.64 3.48 241.41a32.35 32.35 0 0 0 0 29.19C57.71 376.41 165.07 448 288 448s230.32-71.64 284.52-177.41a32.35 32.35 0 0 0 0-29.19zM288 400a144 144 0 1 1 144-144 143.93 143.93 0 0 1-144 144zm0-240a95.31 95.31 0 0 0-25.31 3.79 47.85 47.85 0 0 1-66.9 66.9A95.78 95.78 0 1 0 288 160z"/></svg>'
 };
 
-function renderBling(){
+// A mesma tela serve duas abas: 'conc' = Conciliação contas a Receber (mod17, só consulta/conciliação, sem gerar cobrança)
+// e 'pag' = Pagamentos (mod22, só gera PIX / link de crédito).
+function blgPag(){return BLG.modo==='pag';}
+function renderBling(modo){
+  var novo=(modo||'conc');if(BLG.modo!==novo){BLG.sel=null;BLG.view='';}BLG.modo=novo;
   blgCss();
   var w=document.createElement('div');w.className='blg';w.id='blgRoot';BLG.root=w;
   blgRetornoOAuth();
   if(!BLG.cfgCarregada){blgCarregarCfg().then(function(){if(blgUrl()&&!BLG.dados&&!BLG.carr)blgCarregar(false);else blgDraw();});}
   else if(blgUrl()&&!BLG.dados&&!BLG.carr&&!BLG.erro)blgCarregar(false);
   blgDraw();
-  if(blgAdmin()&&!CCR.pain)setTimeout(function(){if(blgUrl())ccrCarregarPain();},1500);
-  if(!BLG.poll)BLG.poll=setInterval(function(){if(STATE.modulo==='mod17'&&!document.hidden&&BLG.root&&document.body.contains(BLG.root)&&!BLG.demo)blgCarregar(false);},90000);
+  if(!blgPag()&&blgAdmin()&&!CCR.pain)setTimeout(function(){if(blgUrl())ccrCarregarPain();},1500);
+  if(!BLG.poll)BLG.poll=setInterval(function(){if((STATE.modulo==='mod17'||STATE.modulo==='mod22')&&!document.hidden&&BLG.root&&document.body.contains(BLG.root)&&!BLG.demo)blgCarregar(false);},90000);
   return w;
 }
 
@@ -14988,17 +14997,19 @@ function blgDraw(){
   var h='';
   // cabeçalho (igual ao "… > Pedidos de venda | Todas as lojas  [+ Incluir pedido]")
   var selPago=sel&&blgSit(sel)==='pago',nPend=(BLG.pend||[]).length,nBol=(CCR.pain&&CCR.pain.pendentes||[]).length;
-  h+='<div class="blg-top"><div class="blg-bc">Conciliação contas a Receber</div><div class="blg-sep"></div><div class="blg-loja">PIX e boletos Sicoob</div><div class="blg-sp"></div>'+
-     (blgAdmin()&&!BLG.demo?blgBotaoTef():'')+'<button class="blg-btn" data-a="pixSel"'+(sel&&!selPago?'':' disabled')+'>'+BLG_IC.pix+' Gerar PIX</button></div>';
+  if(blgPag())h+='<div class="blg-top"><div class="blg-bc">Pagamentos</div><div class="blg-sep"></div><div class="blg-loja">Gerar PIX e link de crédito</div><div class="blg-sp"></div>'+
+     '<button class="blg-btn" data-a="pixSel"'+(sel&&!selPago?'':' disabled')+'>'+BLG_IC.pix+' Gerar PIX</button></div>';
+  else h+='<div class="blg-top"><div class="blg-bc">Conciliação contas a Receber</div><div class="blg-sep"></div><div class="blg-loja">PIX e boletos Sicoob</div><div class="blg-sp"></div>'+
+     (blgAdmin()&&!BLG.demo?blgBotaoTef():'')+'</div>';
   var aba=function(v,t){return '<button class="blg-aba'+((BLG.view||'')===v?' on':'')+'" data-a="aba" data-k="'+v+'">'+t+'</button>';};
-  if(!BLG.demo)h+='<div class="blg-abas">'+aba('','📋 Vendas a receber')+(blgAdmin()?aba('bol','📄 Boletos sem vínculo'+(nBol?' <i>'+nBol+'</i>':''))+aba('sim','🧪 Simulação boletos'):'')+'</div>';
+  if(!BLG.demo&&!blgPag())h+='<div class="blg-abas">'+aba('','📋 Vendas a receber')+(blgAdmin()?aba('bol','📄 Boletos sem vínculo'+(nBol?' <i>'+nBol+'</i>':''))+aba('sim','🧪 Simulação boletos'):'')+'</div>';
   h+='<div class="blg-body">';
   // filtros (coluna esquerda)
   h+='<aside class="blg-fil"><h3><svg width="12" height="12" viewBox="0 0 512 512" fill="#2b2b2b"><path d="M487.976 0H24.028C2.71 0-8.047 25.866 7.058 40.971L192 225.941V432c0 7.831 3.821 15.17 10.237 19.662l80 55.98C298.02 518.69 320 507.493 320 487.98V225.941l184.947-184.97C520.021 25.896 509.338 0 487.976 0z"/></svg> Filtrar<span class="x" data-a="limpar">✕</span></h3>'+
      '<label>Situação</label><select data-f="sit"><option value="aberto"'+(BLG.f.sit==='aberto'?' selected':'')+'>Em aberto (inclui parciais)</option><option value="parcial"'+(BLG.f.sit==='parcial'?' selected':'')+'>Parcialmente pagos</option><option value="pago"'+(BLG.f.sit==='pago'?' selected':'')+'>Pagos</option><option value="todos"'+(BLG.f.sit==='todos'?' selected':'')+'>Todos</option></select>'+
-     '<label>Baixa automática no Bling</label><select data-f="baixa"><option value="todos">Todas</option><option value="auto"'+(BLG.f.baixa==='auto'?' selected':'')+'>Com baixa automática</option><option value="sem"'+(BLG.f.baixa==='sem'?' selected':'')+'>Sem baixa automática</option></select>'+
+     (blgPag()?'':'<label>Baixa automática no Bling</label><select data-f="baixa"><option value="todos">Todas</option><option value="auto"'+(BLG.f.baixa==='auto'?' selected':'')+'>Com baixa automática</option><option value="sem"'+(BLG.f.baixa==='sem'?' selected':'')+'>Sem baixa automática</option></select>'+
      '<label>Dia da baixa automática</label><input type="date" data-fd="diaBaixa" value="'+blgEsc(BLG.f.diaBaixa||'')+'" style="width:100%;height:36px;border:1px solid #d6d6d6;border-radius:6px;padding:0 8px;font:inherit;box-sizing:border-box">'+
-     '<label>TEF (Sefaz)</label><select data-f="tef"><option value="todos">Todos</option><option value="ok"'+(BLG.f.tef==='ok'?' selected':'')+'>Com TEF ✓ (informado)</option><option value="sem"'+(BLG.f.tef==='sem'?' selected':'')+'>Sem TEF</option><option value="erro"'+(BLG.f.tef==='erro'?' selected':'')+'>TEF com erro ✕</option></select>'+
+     '<label>TEF (Sefaz)</label><select data-f="tef"><option value="todos">Todos</option><option value="ok"'+(BLG.f.tef==='ok'?' selected':'')+'>Com TEF ✓ (informado)</option><option value="sem"'+(BLG.f.tef==='sem'?' selected':'')+'>Sem TEF</option><option value="erro"'+(BLG.f.tef==='erro'?' selected':'')+'>TEF com erro ✕</option></select>')+
      '<label>Tipo</label><select data-f="tipo"><option value="todos">Pedidos e notas</option><option value="pedido"'+(BLG.f.tipo==='pedido'?' selected':'')+'>Só pedidos de venda</option><option value="nota"'+(BLG.f.tipo==='nota'?' selected':'')+'>Só notas fiscais</option></select>'+
      '<label>Forma de pagamento</label><select data-f="forma"><option value="todos">PIX e link de crédito</option><option value="pix"'+(BLG.f.forma==='pix'?' selected':'')+'>PIX</option><option value="credito"'+(BLG.f.forma==='credito'?' selected':'')+'>Link de crédito</option></select>'+
      '<label>Vendedor</label><select data-f="vendedor"><option value="">Todos</option>'+vendedores.map(function(v){return '<option'+(BLG.f.vendedor===v?' selected':'')+'>'+blgEsc(v)+'</option>';}).join('')+'</select>'+
@@ -15124,8 +15135,8 @@ function tefHtmlAlertas(){
 function blgAvisos(){
   var h='',adm=blgAdmin();
   if(BLG.avisoPag)h+='<div class="blg-msg ok">'+blgEsc(BLG.avisoPag)+'</div>';
-  if(adm&&!BLG.demo){var nT=TEF.alertas.filter(function(a){return !a.visto;}).length;if(nT&&BLG.view!=='econf')h+='<div class="blg-msg err">⚠️ <b>'+nT+' aviso(s) de TEF</b> não enviado ou recusado pela Sefaz. <a data-a="aba" data-k="econf" style="color:#b91c1c;cursor:pointer;font-weight:700;text-decoration:underline">Ver no ECONF Sefaz</a></div>';}
-  if(!BLG.demo&&BLG.view!=='conc'&&BLG.pend&&BLG.pend.length)h+='<div class="blg-msg demo">💰 <b>'+BLG.pend.length+' PIX recebido(s) sem vínculo</b> — caíram direto na chave e não bateram sozinhos. <a data-a="aba" data-k="conc" style="color:#15803d;cursor:pointer;font-weight:700">Ver e vincular</a></div>';
+  if(adm&&!BLG.demo&&!blgPag()){var nT=TEF.alertas.filter(function(a){return !a.visto;}).length;if(nT&&BLG.view!=='econf')h+='<div class="blg-msg err">⚠️ <b>'+nT+' aviso(s) de TEF</b> não enviado ou recusado pela Sefaz. <a data-a="aba" data-k="econf" style="color:#b91c1c;cursor:pointer;font-weight:700;text-decoration:underline">Ver no ECONF Sefaz</a></div>';}
+  if(!BLG.demo&&!blgPag()&&BLG.view!=='conc'&&BLG.pend&&BLG.pend.length)h+='<div class="blg-msg demo">💰 <b>'+BLG.pend.length+' PIX recebido(s) sem vínculo</b> — caíram direto na chave e não bateram sozinhos. <a data-a="aba" data-k="conc" style="color:#15803d;cursor:pointer;font-weight:700">Ver e vincular</a></div>';
   if(BLG.demo)h+='<div class="blg-msg demo">👀 <b>Prévia com dados de exemplo</b> (nomes fictícios). Nada aqui é real e nenhum PIX é cobrado. '+(blgUrl()?'<a data-a="sairDemo" style="color:#34ad61;cursor:pointer;font-weight:700">Voltar para os dados do Bling</a>':'')+'</div>';
   if(BLG.status&&BLG.status.conectando)h+='<div class="blg-msg"><span class="blg-spin"></span>&nbsp; Conectando ao Bling…</div>';
   if(BLG.status&&BLG.status.recem)h+='<div class="blg-msg ok">✅ Bling conectado'+(BLG.status.empresa?' — '+blgEsc(BLG.status.empresa):'')+'.</div>';
@@ -15148,18 +15159,25 @@ function blgAvisos(){
 
 function blgAcoes(){
   var it=function(a,ic,t,dis){return '<button class="it" data-a="'+a+'"'+(dis?' disabled':'')+'>'+ic+'<span>'+t+'</span></button>';};
-  return it('pixSel',BLG_IC.pix,'Gerar PIX do pedido/nota selecionado',!BLG.sel||blgSit(blgSelecionado()||{})==='pago')+
-    it('credSel',BLG_IC.card,'Gerar link de crédito',true)+
+  var como=blgPag()
+    ?'<div class="grp">Como funciona</div>'+
+     '<div class="sub">PIX</div><span class="lk">Clique numa linha e gere o QR Code e o “copia e cola” aqui mesmo. Dá para mandar no WhatsApp, cancelar ou mudar o valor.</span>'+
+     '<span class="lk">Pagou parte? O sistema baixa só o valor pago e o pedido fica como “Parcialmente pago”.</span>'+
+     '<div class="sub">Depois de pago</div><span class="lk">A conferência e a baixa no Bling aparecem em <b>Conciliação contas a Receber</b>.</span>'+
+     '<div class="sub">Link de crédito</div><span class="lk">Entra junto com a nova maquininha.</span>'
+    :'<div class="grp">Como funciona</div>'+
+     '<div class="sub">Conciliação</div><span class="lk">Mostra o que entrou no Sicoob (PIX e boletos) e o que foi baixado no Contas a Receber do Bling.</span>'+
+     '<div class="sub">Depois de pago</div><span class="lk">Situação do pedido, baixa no Bling e vínculo do pagamento à nota (ECONF) são feitos sozinhos.</span>'+
+     '<div class="sub">Gerar cobrança</div><span class="lk">PIX e link de crédito ficam na tela <b>Pagamentos</b>.</span>';
+  return (blgPag()?it('pixSel',BLG_IC.pix,'Gerar PIX do pedido/nota selecionado',!BLG.sel||blgSit(blgSelecionado()||{})==='pago')+
+    it('credSel',BLG_IC.card,'Gerar link de crédito',true):(blgPodePag()?it('irPagamentos',BLG_IC.pix,'Ir para Pagamentos (gerar PIX / link)'):''))+
     it('abrirBling',BLG_IC.olho,'Abrir no Bling',!BLG.sel)+
     it('imprimir',BLG_IC.imp,'Imprimir lista')+
-    '<div class="grp">Como funciona</div>'+
-    '<div class="sub">PIX</div><span class="lk">Clique numa linha e gere o QR Code e o “copia e cola” aqui mesmo.</span>'+
-    '<span class="lk">Pagou parte? O sistema baixa só o valor pago e o pedido fica como “Parcialmente pago”.</span>'+
-    '<div class="sub">Depois de pago</div><span class="lk">Situação do pedido, baixa no Bling e vínculo do pagamento à nota (ECONF) são feitos sozinhos.</span>'+
-    '<div class="sub">Link de crédito</div><span class="lk">Entra junto com a nova maquininha.</span>'+
+    como+
     (blgAdmin()&&blgUrl()?'<div class="grp">Administrador</div>'+blgAdminStatus()+it('conectar',BLG_IC.rec,'Reconectar ao Bling')+it('demo',BLG_IC.olho,BLG.demo?'Prévia ligada':'Ver prévia com dados de exemplo')+it('trocarWk',BLG_IC.copiar,'Trocar endereço do Worker'):'');
 }
 
+function blgPodePag(){try{return typeof iniPode==='function'?iniPode('mod22'):true;}catch(e){return true;}}
 function blgDataHora(ms){var d=new Date(ms);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
 // PIX já gerado (de outra vez/tela/aparelho) que ainda vale: volta a aparecer com o QR Code e o acompanhamento
 function blgRestaurarPix(x){
@@ -15169,7 +15187,7 @@ function blgRestaurarPix(x){
   blgAcompanhar(k,v.txid);
 }
 function blgPainelPix(x){
-  blgRestaurarPix(x);
+  if(blgPag())blgRestaurarPix(x);
   var k=blgChave(x),pg=BLG.pix[k]||{},falta=Math.max(0,Number(x.aReceber||0)-Number(x.pago||0)),val=BLG.valorEdit[k]!=null?BLG.valorEdit[k]:blgMoeda(falta);
   var pixAtivo=!!BLG.pixAtivo||BLG.demo;
   var h='<div class="blg-pix"><span class="voltar" data-a="desmarcar">‹ Voltar às ações</span>'+
@@ -15179,7 +15197,14 @@ function blgPainelPix(x){
     '<div class="ln"><span>Forma</span><b>'+blgEsc(x.formaNome||((x.formas||[]).indexOf('pix')>=0?'PIX':'Crédito'))+'</b></div>'+
     (x.vendedor?'<div class="ln"><span>Vendedor</span><b>'+blgEsc(x.vendedor)+'</b></div>':'')+
     (x.pago?'<div class="ln"><span>Pago por PIX</span><b style="color:#15803d">R$ '+blgMoeda(x.pago)+'</b></div>'+(x.pagos||[]).map(function(p){return '<div class="ln" style="font-size:11px"><span>'+blgEsc(String(p.horario||'').slice(0,16).replace('T',' '))+'</span><span>R$ '+blgMoeda(p.valor)+'</span></div>';}).join(''):'');
-  h+=blgPainelTefHist(x);
+  if(!blgPag())h+=blgPainelTefHist(x);   // histórico de TEF/baixas é assunto da Conciliação
+  if(!blgPag()){   // Conciliação: só consulta. Gerar/cancelar/enviar PIX fica na tela Pagamentos
+    var at=(x.pixAtivos||[]).length;
+    h+=(at?'<div class="nota" style="margin-top:10px;color:#111">💳 '+(at>1?at+' PIX ativos':'1 PIX ativo')+' para '+(x.tipo==='nota'?'esta nota':'este pedido')+' (aguardando pagamento).</div>':'')+
+       (blgPodePag()&&blgSit(x)!=='pago'?'<button class="blg-btn sec" data-a="irPagamentos">'+BLG_IC.pix+' Abrir em Pagamentos</button>':'')+
+       '<button class="blg-btn sec" data-a="abrirBling">'+BLG_IC.olho+' Abrir no Bling</button>';
+    return h+'</div>';
+  }
   if(blgSit(x)==='pago'&&!pg.copia){
     return h+'<div class="blg-msg ok" style="margin-top:12px">✅ <b>Já está pago</b> (R$ '+blgMoeda(x.pago)+'). Não dá para gerar outro PIX para '+(x.tipo==='nota'?'esta nota':'este pedido')+'.</div></div>';
   }
@@ -15400,6 +15425,8 @@ function blgAcao(a){
       .catch(function(e){BLG.erro='Sem conexão com o Worker: '+(e&&e.message||e);blgDraw();});return;
   }
   if(a==='abrirBling'&&x){window.open(x.tipo==='nota'?'https://www.bling.com.br/notas.fiscais.php#edit/'+x.id:'https://www.bling.com.br/vendas.php#edit/'+x.id,'_blank');return;}
+  if(a==='irPagamentos'){var keep=BLG.sel;irParaModulo('mod22');if(keep){BLG.sel=keep;blgDraw();}return;}
+  if(!blgPag()&&['pixSel','gerarPix','credSel','novoPix','cancelarPix','cancelarOutro','wpp','wppCodigo','baixarQr','copiar'].indexOf(a)>=0)return;
   if(a==='pixSel'){if(!x)return;blgDraw();var i=BLG.root.querySelector('#blgValor');if(i){i.focus();i.select();}return;}
   if(a==='novoPix'&&x){
     var pn=BLG.pix[BLG.sel];
@@ -15497,11 +15524,13 @@ function renderApp(){
   } else if(STATE.modulo==='mod19'&&STATE.roleLogado==='admin'){
     main.appendChild(renderRelDespesas());
   } else if(STATE.modulo==='mod21'){
-    STATE.modulo='mod17';main.appendChild(renderBling());
+    STATE.modulo='mod17';main.appendChild(renderBling('conc'));
   } else if(STATE.modulo==='mod20'){
     main.appendChild(renderCotacaoCompra());
   } else if(STATE.modulo==='mod17'){
-    main.appendChild(renderBling());
+    main.appendChild(renderBling('conc'));
+  } else if(STATE.modulo==='mod22'){
+    main.appendChild(renderBling('pag'));
   } else if(STATE.modulo==='mod18'){
     main.appendChild(renderReportarProblema());
   }
