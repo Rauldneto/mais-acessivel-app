@@ -14739,11 +14739,13 @@ function blgPainelTefHist(x){
     h+='</div>';
   }
   var ac=((BLG.pag&&BLG.pag.acoes)||[]).filter(function(a){return a.tipo===x.tipo&&String(a.id)===String(x.id);});
+  var pendSim=ac.filter(function(a){return a.modo==='simulacao'&&!a.executado&&(a.acao==='baixa'||a.acao==='contas_pedido');}).length;
+  if(pendSim&&blgAdmin())h+='<button class="blg-btn" style="margin-top:10px;width:100%" data-a="executarSim"'+(BLG.execCarr?' disabled':'')+'>'+(BLG.execCarr?'<span class="blg-spin"></span> Executando…':'✅ Dar baixa no Bling agora')+'</button><div style="font-size:11px;color:#6f6f6f;margin-top:4px">O pagamento foi identificado quando a baixa ainda estava em simulação. Se alguém já baixou à mão no Bling, o sistema percebe e não baixa de novo.</div>';
   if(ac.length){
     var nome={pix_pago:'💰 PIX pago',boleto_pago:'📄 Boleto pago',baixa:'✅ Baixa',contas_pedido:'✅ Contas/baixa',tarifa:'🏦 Tarifa',situacao:'🏷️ Situação',sobra:'⚠️ Conferir',erro:'❌ Erro'};
     h+='<div style="margin-top:10px;font-size:11.5px"><b>Histórico</b>';
     ac.forEach(function(a){h+='<div style="padding:4px 0;border-bottom:1px solid #eee"><span style="color:#888">'+new Date(a.quando).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span> '+(nome[a.acao]||blgEsc(a.acao))+
-      (a.modo==='simulacao'&&a.acao!=='pix_pago'?' <span class="blg-pill">simulação</span>':'')+'<br>'+blgEsc(a.detalhe||'')+(a.resultado?' — <b style="color:'+(/^ERRO/.test(a.resultado)?'#b91c1c':'#15803d')+'">'+blgEsc(a.resultado)+'</b>':'')+'</div>';});
+      (a.modo==='simulacao'&&a.acao!=='pix_pago'?' <span class="blg-pill">'+(a.executado?'executado depois':'simulação')+'</span>':'')+'<br>'+blgEsc(a.detalhe||'')+(a.resultado?' — <b style="color:'+(/^ERRO/.test(a.resultado)?'#b91c1c':'#15803d')+'">'+blgEsc(a.resultado)+'</b>':'')+'</div>';});
     h+='</div>';
   }
   return h;
@@ -15198,6 +15200,11 @@ function blgAcao(a){
     blgApi('/econf/enviar',{method:'POST',body:{ambiente:'producao',usuario:STATE.usuarioLogado||''}}).then(function(r){BLG.ecEnv=false;
       alert(r&&r.ok?('TEF: '+r.aceitos+' aceito(s) pela Sefaz'+(r.recusados?', '+r.recusados+' recusado(s)':'')+(r.restantes?'. Faltam '+r.restantes+' — clique de novo.':'.')):('Não enviou: '+((r&&r.erro)||'falhou')));
       blgCarregarTefInfo(true);blgCarregar(true);}).catch(function(e){BLG.ecEnv=false;alert(String(e));blgDraw();});return;}
+  if(a==='executarSim'){var xs=blgSelecionado();if(!xs)return;
+    if(!confirm('Dar baixa no Bling agora para '+(xs.tipo==='nota'?'a NF ':'o pedido ')+xs.numero+'?'))return;
+    BLG.execCarr=true;blgDraw();
+    blgApi('/pagamentos/executar',{method:'POST',body:{tipo:xs.tipo,id:xs.id,usuario:STATE.usuarioLogado||''}}).then(function(r){BLG.execCarr=false;
+      alert(r&&r.ok?('Bling: '+r.resultados.join(' · ')):('Não executou: '+((r&&r.erro)||'falhou')));blgCarregarTefInfo(true);blgCarregar(true);}).catch(function(e){BLG.execCarr=false;alert(String(e));blgDraw();});return;}
   if(a==='modoBaixa'){var real=BLG._k==='real';
     if(!confirm(real?'Ligar a baixa automática no Bling?\n\nA partir de agora, quando um PIX for identificado, o sistema lança as contas e dá baixa no Bling sozinho.':'Voltar a baixa para SIMULAÇÃO (só anota, não mexe no Bling)?'))return;
     blgApi('/modo',{method:'POST',body:{modo:real?'real':'simulacao',usuario:STATE.usuarioLogado||''}}).then(function(){blgCarregarTefInfo(true);});return;}

@@ -119,6 +119,27 @@ export default {
         await logAcao(env, { acao: 'modo', modo, detalhe: 'Baixa automática no Bling: ' + (modo === 'real' ? 'MODO REAL (executa no Bling)' : 'SIMULAÇÃO') + (b.usuario ? ' — por ' + String(b.usuario).slice(0, 60) : '') });
         return resp({ ok: true, modo });
       }
+      if (url.pathname === '/pagamentos/executar' && req.method === 'POST') {
+        // executa no Bling as ações que ficaram só anotadas na simulação (de um pedido/nota)
+        const b = (await req.json().catch(() => ({}))) || {};
+        const acoes = (await env.BLING_KV.get('acoes', 'json')) || [];
+        const alvo = acoes.filter(a => a.tipo === b.tipo && String(a.id) === String(b.id) && a.modo === 'simulacao' && !a.executado && ['baixa', 'contas_pedido'].includes(a.acao));
+        if (!alvo.length) return resp({ ok: false, erro: 'Nada pendente de executar para este ' + (b.tipo === 'nota' ? 'nota' : 'pedido') + '.' });
+        const res = [];
+        for (const a of alvo) {
+          const reg = { tipo: a.tipo, id: a.id, numero: a.numero, cliente: a.cliente, txid: a.txid || '' };
+          let r;
+          try { r = a.acao === 'baixa' ? await executarBaixa(env, a.contaId, a.valorBaixa, a.data, reg) : await executarContasPedido(env, reg, a.valorBaixa, a.data); }
+          catch (e) { r = 'ERRO: ' + String(e.message || e).slice(0, 200); }
+          a.executado = r; res.push(r);
+          await logAcao(env, { modo: 'real', acao: a.acao, tipo: a.tipo, id: a.id, numero: a.numero, cliente: a.cliente, valor: a.valor, detalhe: a.detalhe + ' (executado depois, a partir da simulação' + (b.usuario ? ' — ' + String(b.usuario).slice(0, 60) : '') + ')', resultado: r });
+        }
+        const lista = (await env.BLING_KV.get('acoes', 'json')) || [];
+        for (const a of alvo) { const x = lista.find(y => y.quando === a.quando && y.acao === a.acao && y.contaId === a.contaId && String(y.id) === String(a.id)); if (x) x.executado = a.executado; }
+        await env.BLING_KV.put('acoes', JSON.stringify(lista.slice(-300)));
+        await env.BLING_KV.delete('cache:abertos');
+        return resp({ ok: true, resultados: res });
+      }
       if (url.pathname === '/diag/bling-escrita') {
         // testa a permissão de escrita com IDs que não existem (não altera nada): 403 = falta permissão; 404/400 = permissão ok
         const tok = await tokenValido(env), out = {};
@@ -724,6 +745,9 @@ async function planejarAcoes(env, reg, valor, p, pagosDoc, origem) {
 async function executarBaixa(env, contaId, valor, data, reg) {
   // ativado só no modo "real", depois de conferido na simulação
   const tok = await tokenValido(env);
+  // se alguém já baixou essa conta no Bling (à mão), não baixa de novo
+  const atual = ((await bling(env, '/contas/receber/' + contaId).catch(() => null)) || {}).data;
+  if (atual && ![1, 3].includes(Number(atual.situacao))) return 'já estava baixada no Bling (nada feito)';
   const r = await fetch(API + '/contas/receber/' + contaId + '/baixar', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Accept: 'application/json' },
