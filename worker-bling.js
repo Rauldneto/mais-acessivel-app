@@ -415,6 +415,7 @@ async function listarAbertos(env) {
       formas: tipos, formaNome: parc.map(x => x.forma && x.forma.nome).filter(Boolean)[0] || '',
       vendedor: vend[d.vendedor && d.vendedor.id] || '', situacao: 'Em aberto', loja: (d.loja && d.loja.id) || 0,
       nf: (d.notaFiscal && d.notaFiscal.id) ? true : false,
+      venc: parc.filter(x => tipoForma(x.forma)).map(x => x.venc).filter(Boolean).sort()[0] || '',
     });
   }
 
@@ -439,6 +440,7 @@ async function listarAbertos(env) {
     if (!n.formas.includes(t)) n.formas.push(t);
     n.contas.push({ id: c.id, valor: Number(c.valor || 0), venc: c.vencimento, pixBling: c.linkQRCodePix || '' });
   }
+  Object.values(porNota).forEach(n => { n.venc = n.contas.map(c => c.venc).filter(Boolean).sort()[0] || ''; });
   itens.push(...Object.values(porNota));
 
   // 3) Pedidos/notas já pagos pelo app que saíram do "em aberto" do Bling (ex.: conta baixada) — continuam na lista como "pago"
@@ -472,10 +474,10 @@ async function listarAbertos(env) {
     const pd = (await env.BLING_KV.get('pixdoc:' + it.tipo + ':' + it.id, 'json')) || [];
     const vivos = [];
     for (const x of pd) {
-      if (x.cancelado || Date.now() - Number(x.criado || 0) > 86400e3) continue;
+      if (x.cancelado || Date.now() > Number(x.expira || (Number(x.criado || 0) + 86400e3))) continue;
       const reg = await env.BLING_KV.get('pix:' + x.txid, 'json');
       if (!reg || reg.status === 'PAGO' || reg.status === 'CANCELADA') continue;
-      vivos.push({ txid: x.txid, valor: reg.valor, criado: reg.criado, copia: reg.copia, usuario: reg.usuario || '', validoAte: Number(reg.criado || 0) + 86400e3 });
+      vivos.push({ txid: x.txid, valor: reg.valor, criado: reg.criado, copia: reg.copia, usuario: reg.usuario || '', validoAte: Number(reg.expira || (Number(reg.criado || 0) + 86400e3)) });
     }
     if (vivos.length) it.pixAtivos = vivos.sort((a, b) => b.criado - a.criado);
     const pg = (await env.BLING_KV.get('pagosdoc:' + it.tipo + ':' + it.id, 'json')) || [];
@@ -562,6 +564,29 @@ function txidNovo(tipo, id) {
   return (base + 'X' + rnd).slice(0, 35);
 }
 
+// ---- dias úteis (fim de semana + feriados nacionais, inclusive Carnaval, Sexta-feira Santa e Corpus Christi) ----
+function pascoa(ano) {
+  const a = ano % 19, b = Math.floor(ano / 100), c = ano % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(ano, mes - 1, dia, 12));
+}
+function feriado(iso) {
+  const md = iso.slice(5);
+  if (['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25'].includes(md)) return true;
+  const p = pascoa(Number(iso.slice(0, 4))), rel = n => new Date(p.getTime() + n * 864e5).toISOString().slice(0, 10);
+  return [rel(-48), rel(-47), rel(-2), rel(60)].includes(iso);   // Carnaval (seg e ter), Sexta-feira Santa, Corpus Christi
+}
+function diaUtil(iso) { const w = new Date(iso + 'T12:00:00Z').getUTCDay(); return w !== 0 && w !== 6 && !feriado(iso); }
+function proxDiaUtil(iso) { let d = iso; do { d = new Date(new Date(d + 'T12:00:00Z').getTime() + 864e5).toISOString().slice(0, 10); } while (!diaUtil(d)); return d; }
+// validade do PIX: vencimento do pedido/NF + 1 dia útil, até 23:59 (Brasília). Vencido ou sem vencimento: hoje + 1 dia útil.
+function validadePix(venc) {
+  const hoje = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+  const base = /^\d{4}-\d{2}-\d{2}$/.test(String(venc || '')) && venc >= hoje ? venc : hoje;
+  const dia = proxDiaUtil(base);
+  return { dia, ms: Date.parse(dia + 'T23:59:59-03:00') };
+}
+
 async function gerarPix(env, b) {
   const valor = Math.round(Number(b.valor) * 100) / 100;
   if (!(valor > 0) || valor > 1e7) return { ok: false, erro: 'Valor inválido.' };
@@ -570,8 +595,10 @@ async function gerarPix(env, b) {
   const txid = txidNovo(b.tipo, b.id);
   const doc = String(b.doc || '').replace(/\D/g, '');
   const nome = String(b.cliente || '').slice(0, 200);
+  const vencs = [b.venc].concat(Array.isArray(b.contas) ? b.contas.map(c => c && c.venc) : []).filter(v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''))).sort();
+  const val = validadePix(vencs[0]);
   const corpo = {
-    calendario: { expiracao: 86400 },
+    calendario: { expiracao: Math.max(3600, Math.floor((val.ms - Date.now()) / 1000)) },
     valor: { original: valor.toFixed(2) },
     chave: env.PIX_CHAVE,
     solicitacaoPagador: ((b.tipo === 'nota' ? 'NF ' : 'Pedido ') + String(b.numero || '')).slice(0, 140),
@@ -582,16 +609,15 @@ async function gerarPix(env, b) {
   const contas = Array.isArray(b.contas) ? b.contas.slice(0, 24).map(x => ({ id: x.id, valor: Number(x.valor || 0), venc: x.venc || '' })) : [];
   const reg = { txid, tipo: b.tipo, id: b.id, numero: b.numero || '', valor, cliente: nome, doc, usuario: String(b.usuario || '').slice(0, 60),
     total: Number(b.total || 0), aReceber: Number(b.aReceber || 0), contas,
-    criado: Date.now(), copia: c.brcode || '', status: c.status || 'ATIVA' };
+    criado: Date.now(), expira: val.ms, venc: vencs[0] || '', copia: c.brcode || '', status: c.status || 'ATIVA' };
   await env.BLING_KV.put('pix:' + txid, JSON.stringify(reg), { expirationTtl: 90 * 86400 });
   // lista por pedido/nota, para mostrar no app e conciliar pagamentos parciais
   const k = 'pixdoc:' + b.tipo + ':' + b.id;
   const lista = (await env.BLING_KV.get(k, 'json')) || [];
-  lista.push({ txid, valor, criado: reg.criado });
+  lista.push({ txid, valor, criado: reg.criado, expira: val.ms });
   await env.BLING_KV.put(k, JSON.stringify(lista.slice(-20)), { expirationTtl: 90 * 86400 });
   await env.BLING_KV.delete('cache:abertos');
-  const ate = new Date(Date.now() + 86400e3 - 3 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');
-  return { ok: true, txid, copiaECola: c.brcode || '', validade: ate.slice(8, 10) + '/' + ate.slice(5, 7) + ' ' + ate.slice(11) };
+  return { ok: true, txid, copiaECola: c.brcode || '', validade: val.dia.slice(8, 10) + '/' + val.dia.slice(5, 7) + '/' + val.dia.slice(0, 4) + ' 23:59', expira: val.ms };
 }
 
 // cancela a cobrança no Sicoob (o QR Code para de aceitar pagamento). Padrão do Banco Central: PATCH /cob/{txid} status REMOVIDA_PELO_USUARIO_RECEBEDOR

@@ -15117,7 +15117,7 @@ function blgCss(){
   '.blg-tg.p{background:#c62828}.blg-tg.e{background:#1e88e5}.blg-tg.n{background:#7b1fa2}'+
   '.blg-pill{background:#7a7a7a;color:#fff;font-size:9px;border-radius:9999px;padding:1px 7px;line-height:13px}'+
   '.blg-pill.pix{background:#0f766e}.blg-pill.cr{background:#6d28d9}'+
-  '.blg-pill.tef.ok{background:#15803d}.blg-pill.tef.pend{background:#d97706}.blg-pill.tef.err{background:#dc2626}.blg-tags [title]{cursor:help}'+
+  '.blg-pill.pagook{background:#16a34a}.blg-pill.pagoparc{background:#2563eb}.blg-pill.tef.ok{background:#15803d}.blg-pill.tef.pend{background:#d97706}.blg-pill.tef.err{background:#dc2626}.blg-tags [title]{cursor:help}'+
   '.blg-kb{color:#fff;font-size:16px;font-weight:700;text-align:center;width:28px;letter-spacing:-1px}'+
   '.blg-act{width:190px;flex-shrink:0;background:var(--card2);padding:12px 10px 20px 14px}'+
   '.blg-act .it{display:flex;gap:10px;align-items:flex-start;color:var(--tx2);font-size:12px;line-height:15px;padding:7px 0;cursor:pointer;background:none;border:0;text-align:left;width:100%;font-family:arial,sans-serif}'+
@@ -15176,6 +15176,7 @@ function blgCss(){
 }
 
 var BLG_IC={
+  qr:'<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm8-2h2v2h-2v-2zm4 0h4v2h-2v2h-2v-4zm-4 4h2v2h2v2h-4v-4zm6 2h2v2h-2v-2z"/></svg>',
   busca:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34ad61" stroke-width="2.6"><circle cx="10.5" cy="10.5" r="7"/><path d="M16 16l5 5" stroke-linecap="round"/></svg>',
   cal:'<svg width="12" height="13" viewBox="0 0 448 512" fill="#34ad61"><path d="M12 192h424c6.6 0 12 5.4 12 12v260c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V204c0-6.6 5.4-12 12-12zm436-44v-36c0-26.5-21.5-48-48-48h-48V12c0-6.6-5.4-12-12-12h-40c-6.6 0-12 5.4-12 12v52H160V12c0-6.6-5.4-12-12-12h-40c-6.6 0-12 5.4-12 12v52H48C21.5 64 0 85.5 0 112v36c0 6.6 5.4 12 12 12h424c6.6 0 12-5.4 12-12z"/></svg>',
   imp:'<svg width="15" height="15" viewBox="0 0 512 512" fill="currentColor"><path d="M448 192V77.25c0-8.49-3.37-16.62-9.37-22.63L393.37 9.37c-6-6-14.14-9.37-22.63-9.37H96C78.33 0 64 14.33 64 32v160c-35.35 0-64 28.65-64 64v112c0 8.84 7.16 16 16 16h48v96c0 17.67 14.33 32 32 32h320c17.67 0 32-14.33 32-32v-96h48c8.84 0 16-7.16 16-16V256c0-35.35-28.65-64-64-64zm-64 256H128v-96h256v96zm0-224H128V64h192v48c0 8.84 7.16 16 16 16h48v96zm48 72c-13.25 0-24-10.75-24-24 0-13.26 10.75-24 24-24s24 10.74 24 24c0 13.25-10.75 24-24 24z"/></svg>',
@@ -15258,7 +15259,7 @@ function blgDraw(){
            '<td><span class="blg-sit"><span class="clk"></span><span class="blg-bd'+(pagoTot?' pago':parcial?' parc':'')+'">'+(pagoTot?'Pago':parcial?'Parcialmente pago':'Em aberto')+'</span></span></td>'+
            '<td class="hm"><span class="blg-tags">'+(x.tipo==='pedido'?'<span class="blg-tg p" title="P = Pedido de venda (ainda sem nota fiscal ligada)">P</span>':'<span class="blg-tg n" title="N = Nota fiscal com conta a receber em aberto">N</span>')+
              (x.formas||[]).map(function(f){return f==='pix'?'<span class="blg-pill pix" title="Forma de pagamento: PIX">PIX</span>':'<span class="blg-pill cr" title="Forma de pagamento: link de cartão de crédito">Crédito</span>';}).join('')+
-             blgTefTag(x)+blgBaixaTag(x)+
+             blgPagoTag(x)+blgTefTag(x)+blgBaixaTag(x)+
              ((pg&&pg.copia&&!pg.cancelado)||(x.pixAtivos&&x.pixAtivos.length)?'<span class="blg-pill" title="Já existe um PIX gerado e ainda valendo para este pedido/nota (QR Code / copia e cola)'+(x.pixAtivos&&x.pixAtivos.length>1?' — são '+x.pixAtivos.length+' PIX ativos':'')+'">PIX gerado'+(x.pixAtivos&&x.pixAtivos.length>1?' ('+x.pixAtivos.length+')':'')+'</span>':'')+'</span></td>'+
            '<td class="blg-kb">⋮</td></tr>';
       });
@@ -15281,6 +15282,14 @@ function blgBaixaTag(x){
   var ba=x.baixasAuto||[];if(!ba.length)return '';
   var t='Baixa automática no Bling: '+ba.map(function(b){return new Date(b.quando).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' — R$ '+blgMoeda(b.valor);}).join('; ');
   return '<span class="blg-pill" style="background:#dbeafe;color:#1d4ed8;border-color:#bfdbfe" title="'+blgEsc(t)+'">Baixa auto</span>';
+}
+// Etiqueta "Pago": aparece quando o pagamento (PIX/boleto) foi confirmado pelo Sicoob. Ao passar o mouse, mostra data e valor.
+function blgPagoTag(x){
+  var pg=Number(x.pago||0);if(!(pg>0))return '';
+  var tot=pg>=Number(x.aReceber||0)-0.009;
+  var lst=(x.pagos||[]).map(function(p){var t=Date.parse(p.horario||'');return (isNaN(t)?String(p.horario||'').slice(0,10):new Date(t).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))+' — R$ '+blgMoeda(p.valor)+(p.origem==='boleto'||p.boleto?' (boleto)':' (PIX)');}).join('\n');
+  var tit=(tot?'Pago':'Pago em parte')+': R$ '+blgMoeda(pg)+' de R$ '+blgMoeda(x.aReceber)+' confirmado pelo Sicoob'+(lst?'\n'+lst:'');
+  return '<span class="blg-pill '+(tot?'pagook':'pagoparc')+'" title="'+blgEsc(tit)+'">'+(tot?'Pago ✓':'Pago parcial')+'</span>';
 }
 function blgTefTag(x){
   var t=x.tef;if(!t||!t.total)return '';
@@ -15320,6 +15329,47 @@ function tefAvisoGlobal(){
     }).catch(function(){});
   };
   setTimeout(checar,3000);TEF.poll=setInterval(checar,5*60000);
+}
+// ---- Aviso na tela quando um pagamento é confirmado (PIX ou boleto Sicoob) ----
+// Para o admin e quem usa Pagamentos/Conciliação. Confere a cada 1 min; mostra cada pagamento uma vez por navegador.
+var PAGAV={poll:null};
+function pagAvisoGlobal(){
+  if(PAGAV.poll)return;
+  var pode=STATE.roleLogado==='admin';try{pode=pode||iniPode('mod22')||iniPode('mod17');}catch(e){}
+  if(!pode)return;
+  var checar=function(){
+    if(document.hidden)return;
+    (BLG.cfgCarregada?Promise.resolve():blgCarregarCfg()).then(function(){
+      if(!blgUrl())return;
+      return blgApi('/pagamentos').then(function(r){
+        if(!r||!r.ok)return;
+        var pg=(r.acoes||[]).filter(function(a){return a.acao==='pix_pago'||a.acao==='boleto_pago';});
+        var visto=0;try{visto=Number(localStorage.getItem('pagVistoAte')||0);}catch(e){}
+        var maior=pg.reduce(function(m,a){return Math.max(m,Number(a.quando||0));},visto);
+        if(!visto){try{localStorage.setItem('pagVistoAte',String(maior||Date.now()));}catch(e){}return;}   // 1ª vez: não mostra os antigos
+        var novos=pg.filter(function(a){return Number(a.quando||0)>visto;});
+        if(!novos.length)return;
+        try{localStorage.setItem('pagVistoAte',String(maior));}catch(e){}
+        pagToast(novos);
+        if((STATE.modulo==='mod17'||STATE.modulo==='mod22')&&BLG.root&&document.body.contains(BLG.root))blgCarregar(true);
+      });
+    }).catch(function(){});
+  };
+  setTimeout(checar,2500);PAGAV.poll=setInterval(checar,60000);
+}
+function pagToast(novos){
+  tefCss();
+  var a=novos[0],ref=function(x){return x.numero?(x.tipo==='nota'?'NF ':'Pedido ')+x.numero:'';};
+  var tot=novos.reduce(function(s,x){return s+Number(x.valor||0);},0);
+  var el=document.getElementById('pagToast');if(el)el.remove();
+  el=document.createElement('div');el.id='pagToast';el.className='tef-toast';el.style.borderTopColor='#16a34a';el.style.bottom=document.getElementById('tefToast')?'200px':'18px';
+  el.innerHTML='<h4><span>💰 '+(novos.length>1?novos.length+' pagamentos confirmados':'Pagamento confirmado')+'</span><button title="Fechar">✕</button></h4>'+
+    '<p>'+(novos.length>1?'Total R$ '+blgMoeda(tot)+'<br>':'')+novos.slice(0,4).map(function(x){return '<b>'+blgEsc(ref(x)||'—')+'</b> · R$ '+blgMoeda(x.valor)+(x.cliente?' · '+blgEsc(x.cliente):x.pagador?' · '+blgEsc(x.pagador):'')+(x.acao==='boleto_pago'?' (boleto)':' (PIX)');}).join('<br>')+(novos.length>4?'<br>+ '+(novos.length-4)+' outro(s)':'')+'</p>'+
+    '<div class="bt"><button class="pri" style="background:#16a34a;border-color:#16a34a" data-t="ver">Ver na Conciliação</button></div>';
+  el.onclick=function(e){var b=e.target.closest('button');if(!b)return;el.remove();if(b.dataset.t==='ver'){BLG.view='';irParaModulo(iniPode&&iniPode('mod17')?'mod17':'mod22');}};
+  document.body.appendChild(el);
+  setTimeout(function(){if(el.parentNode)el.remove();},120000);
+  try{if(window.Notification&&Notification.permission==='granted')new Notification('💰 '+(novos.length>1?novos.length+' pagamentos confirmados':'Pagamento confirmado'),{body:(ref(a)?ref(a)+' · ':'')+'R$ '+blgMoeda(a.valor)+(a.cliente?' · '+a.cliente:'')});}catch(e){}
 }
 function tefTitulo(a){return a.tipo==='recusado'?'TEF recusado pela Sefaz':'TEF não enviado';}
 function tefToast(novos){
@@ -15436,14 +15486,14 @@ function blgPainelPix(x){
        '<label for="blgMsg">Mensagem para o cliente (já com o código PIX)</label><textarea id="blgMsg" style="height:150px;font-family:arial,sans-serif;font-size:11px">'+blgEsc(pg.msg!=null?pg.msg:blgMsgPix(x,pg))+'</textarea>'+
        '<button class="blg-btn" data-a="copiarMsg" title="Copia a mensagem com o código PIX para colar no WhatsApp (Ctrl+V)">'+BLG_IC.copiar+' Copiar mensagem</button>'+
        (pg.avisoCopia?'<div class="nota" style="color:#15803d">'+pg.avisoCopia+'</div>':'')+
-       '<button class="blg-btn sec" data-a="copiarImg" title="Opcional: copia a imagem do QR Code para colar no WhatsApp">🖼️ Copiar imagem do QR Code (opcional)</button>'+
+       '<button class="blg-btn" data-a="copiarImg" title="Copia a imagem do QR Code (com valor e pedido/nota) para colar no WhatsApp com Ctrl+V">'+BLG_IC.qr+' Copiar QR Code</button>'+
        '<div class="nota">Valor: <b style="color:#111">R$ '+blgMoeda(pg.valor)+'</b> · vale até '+blgEsc(pg.validade||'hoje 23:59')+'.'+(BLG.demo?'<br><b style="color:#b45309">Prévia: código de exemplo, não paga nada.</b>':'')+'</div>'+
        (pg.pagoAgora?'':'<button class="blg-btn sec" data-a="cancelarPix" style="color:#dc2626;border-color:#f3c2bd" title="Cancela o PIX no Sicoob: o QR Code e o código param de aceitar pagamento e o app para de conferir">'+(pg.cancelando?'<span class="blg-spin"></span> Cancelando…':'🚫 Cancelar este PIX')+'</button>')+
        (pg.erroCancelar?'<div class="blg-msg err" style="margin-top:8px">'+blgEsc(pg.erroCancelar)+'</div>':'');
   }else{
     var faltaG=Math.max(0,Number(x.aReceber||0)-Number(x.pago||0));
     h+='<div class="ln" style="margin-top:10px;font-size:13px"><span>Valor do PIX</span><b>R$ '+blgMoeda(faltaG)+'</b></div>'+
-       '<div class="nota">É sempre o valor '+(x.pago>0?'que falta pagar d':'d')+(x.tipo==='nota'?'a nota fiscal':'o pedido')+'.</div>'+
+       '<div class="nota">É sempre o valor '+(x.pago>0?'que falta pagar d':'d')+(x.tipo==='nota'?'a nota fiscal':'o pedido')+'. Vale até '+(x.venc?'o vencimento ('+blgData(x.venc)+')':'hoje')+' + 1 dia útil.</div>'+
        '<button class="blg-btn" data-a="gerarPix"'+(pixAtivo&&!pg.gerando?'':' disabled')+'>'+(pg.gerando?'<span class="blg-spin"></span> Gerando…':BLG_IC.pix+' Gerar PIX')+'</button>'+
        '<button class="blg-btn sec" data-a="credSel" disabled>'+BLG_IC.card+' Link de crédito</button>'+
        (pixAtivo?'':'<div class="nota">⏳ O PIX pelo Sicoob é ativado na próxima etapa (certificado no Worker). Por enquanto você já confere a lista.</div>')+
@@ -15692,7 +15742,7 @@ function blgAcao(a){
     if(val>falta+0.009){BLG.pix[BLG.sel]={erro:'O valor passa do que falta receber (R$ '+blgMoeda(falta)+').'};blgDraw();return;}
     if(BLG.demo){BLG.pix[BLG.sel]={valor:val,copia:'00020101021226870014br.gov.bcb.pix2565pix.exemplo.com.br/qr/v3/PREVIA-'+x.numero+'-SEM-VALOR-REAL5204000053039865802BR5915MAIS ACESSIVEL6007GOIANIA62070503***6304ABCD',validade:'hoje 23:59'};blgDraw();return;}
     var k=BLG.sel;BLG.pix[k]={gerando:true};blgDraw();
-    blgApi('/pix',{method:'POST',body:{tipo:x.tipo,id:x.id,numero:x.numero,valor:val,cliente:x.cliente||'',doc:x.doc||'',total:x.total||0,aReceber:x.aReceber||0,contas:x.contas||[],usuario:STATE.usuarioLogado||''}}).then(function(r){
+    blgApi('/pix',{method:'POST',body:{tipo:x.tipo,id:x.id,numero:x.numero,valor:val,venc:x.venc||'',cliente:x.cliente||'',doc:x.doc||'',total:x.total||0,aReceber:x.aReceber||0,contas:x.contas||[],usuario:STATE.usuarioLogado||''}}).then(function(r){
       BLG.pix[k]=r&&r.ok?{valor:val,copia:r.copiaECola,validade:r.validade,txid:r.txid}:{erro:(r&&r.erro)||'Não gerou o PIX.'};blgDraw();
       if(r&&r.ok&&r.txid)blgAcompanhar(k,r.txid);
     }).catch(function(e){BLG.pix[k]={erro:'Sem conexão: '+(e&&e.message||e)};blgDraw();});
@@ -15776,7 +15826,7 @@ function renderApp(){
   } else if(STATE.modulo==='mod18'){
     main.appendChild(renderReportarProblema());
   }
-  setTimeout(dspAvisoGlobal,1500);setTimeout(frtAvisoGlobal,1600);setTimeout(tefAvisoGlobal,1700);
+  setTimeout(dspAvisoGlobal,1500);setTimeout(frtAvisoGlobal,1600);setTimeout(tefAvisoGlobal,1700);setTimeout(pagAvisoGlobal,1900);
   wrap.appendChild(main);
   if(STATE.showConfigPanel && STATE.roleLogado==='admin'){
     var overlay=document.createElement('div');
