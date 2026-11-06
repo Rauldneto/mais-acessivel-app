@@ -3983,7 +3983,7 @@ async function rppChecarAuto(lista){
       var r=await fetch('chamados-auto/'+encodeURIComponent(c.autoId)+'.json?v='+agora,{cache:'no-store'});
       if(r.ok){var x=await r.json();
         d={status:x.ok?'resolvido':'novo',parecer:x.parecer||'',autoCorrigido:!!x.ok,autoResumo:x.resumo||'',autoMotivo:x.motivo||'',autoExecucao:x.execucao||'',lido:false,ta:agora};
-        if(x.ok)d.fim=agora;
+        if(x.ok){d.fim=agora;d.avisoColab=agora;}
       }else if(agora-(c.autoInicio||agora)>45*60000){
         d={status:'novo',autoMotivo:'O robô de correção não respondeu em 45 minutos (veja a aba Actions do GitHub).',parecer:'O erro foi confirmado e ficou pendente para o T.I. avaliar. Você acompanha a resposta aqui.',lido:false,ta:agora};
       }
@@ -4061,6 +4061,47 @@ function rppVigiar(){
     }).catch(function(){});
   };
   setTimeout(checar,4000);RPP.poll=setInterval(checar,60000);
+}
+// ---- Colaborador: avisa quando o T.I. responde um chamado dele (em qualquer tela do app) ----
+function rppRespostasNovas(l){var eu=rppUsuario();return (l||[]).filter(function(c){return c.u===eu&&c.avisoColab&&!(c.vistoColab>=c.avisoColab);});}
+function rppContarRespostas(){
+  var n=rppRespostasNovas(RPP.lista).length;
+  var b=document.getElementById('rppColabN');if(b){b.textContent=n;b.style.display=n?'':'none';}
+  return n;
+}
+function rppMarcarRespostasVistas(){
+  if(STATE.modulo!=='mod18'||RPP.aba!=='meus'||document.hidden)return;
+  var agora=Date.now(),mudou=false;
+  rppRespostasNovas(RPP.lista).forEach(function(c){c.vistoColab=agora;mudou=true;rppPatch(c.k,{vistoColab:agora}).catch(function(){});});
+  if(mudou){rppContarRespostas();var t=document.getElementById('rppToast');if(t)t.remove();setTimeout(rppDraw,4000);}
+}
+function rppVigiarColab(){
+  if(RPP.pollColab)return;
+  var avisados={};
+  var checar=function(){
+    if(!STATE.auth||rppAdmin()||document.hidden)return;
+    rppGetLista().then(function(l){
+      var eu=rppUsuario();var meus=l.filter(function(c){return c.u===eu;});
+      RPP.lista=l;if(STATE.modulo==='mod18'&&RPP.aba==='meus')rppDraw();
+      rppChecarAuto(meus);
+      var novas=rppRespostasNovas(l);rppContarRespostas();
+      var ainda=novas.filter(function(c){return avisados[c.k]!==c.avisoColab;});
+      if(ainda.length&&!(STATE.modulo==='mod18'&&RPP.aba==='meus')){ainda.forEach(function(c){avisados[c.k]=c.avisoColab;});rppAvisoColab(ainda);}
+    }).catch(function(){});
+  };
+  setTimeout(checar,5000);RPP.pollColab=setInterval(checar,60000);
+}
+function rppAvisoColab(novas){
+  var c=novas[0];rppCss();
+  var el=document.getElementById('rppToast');if(el)el.remove();
+  el=document.createElement('div');el.id='rppToast';el.className='rpp-toast';el.style.borderTopColor='#16a34a';
+  el.innerHTML='<div class="rpp-toast-h">📨 '+(novas.length>1?novas.length+' chamados respondidos pelo T.I.':'O T.I. respondeu o chamado #'+c.n)+'<button aria-label="Fechar">✕</button></div>'+
+    '<div class="rpp-toast-b">'+rppStatusTag(c.status)+'<br>'+rppEsc(String(c.parecer||'').slice(0,160))+'</div>'+
+    '<button class="rpp-toast-v">Ver resposta</button>';
+  el.querySelector('.rpp-toast-h button').onclick=function(){el.remove();};
+  el.querySelector('.rpp-toast-v').onclick=function(){el.remove();RPP.aba='meus';irParaModulo('mod18');};
+  document.body.appendChild(el);
+  try{if(window.Notification&&Notification.permission==='granted')new Notification('O T.I. respondeu o chamado #'+c.n,{body:String(c.parecer||'').slice(0,120)});}catch(e){}
 }
 function rppAviso(novos){
   var c=novos[0];var g=c.ia&&RPP_GRAV[c.ia.gravidade]||['⚪',''];
@@ -4167,6 +4208,7 @@ function rppCss(){
   '.rpp-hora{font-size:10.5px;color:#9ca3af;margin:3px 4px 0}.rpp-pensando{color:#6b7280;font-style:italic}'+
   '.rpp-plano{margin-top:8px;border:1.5px solid #67e8f9;background:#ecfeff;border-radius:10px;padding:8px}.rpp-plano-h{font-weight:800;color:#155e75;font-size:12.5px}.rpp-plano .s{font-size:12px;color:#155e75}'+
   '.rpp-chat-f{display:flex;gap:8px;padding:10px;border-top:1px solid #e0e7ff;background:#fff;align-items:flex-end}.rpp-chat-f textarea{min-height:44px;flex:1;resize:vertical}'+
+  '.rpp-li.rpp-nova{border:2px solid #16a34a;background:#f0fdf4}.rpp-novatag{font-size:11px;font-weight:800;color:#fff;background:#16a34a;border-radius:20px;padding:2px 8px;align-self:flex-start;white-space:nowrap}'+
   '.rpp-okbox{text-align:center;padding:28px 16px}.rpp-okbox .big{font-size:44px}.rpp-okbox h3{font-size:20px;margin:6px 0}'+
   '.rpp-st{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:800;padding:3px 9px;border-radius:20px;color:#fff;white-space:nowrap}'+
   '.rpp-li{display:flex;gap:12px;align-items:flex-start;padding:11px 12px;border:1px solid #e5e7eb;border-radius:11px;margin-bottom:7px;cursor:pointer;background:#fff}'+
@@ -4187,7 +4229,7 @@ function rppCss(){
   '.rpp-toast-h{display:flex;align-items:center;justify-content:space-between;padding:10px 12px 4px;font-weight:800;font-size:14px}.rpp-toast-h button{border:none;background:none;font-size:15px;cursor:pointer;color:#6b7280}'+
   '.rpp-toast-b{padding:0 12px 10px;font-size:13px;color:#374151;line-height:1.4}'+
   '.rpp-toast-v{display:block;width:100%;border:none;border-top:1px solid #eee;background:#f5f5ff;color:#5856d6;font-weight:800;padding:10px;cursor:pointer;font-family:inherit;font-size:13px}'+
-  '.rpp-sino{position:relative}.rpp-sino #rppSinoN{position:absolute;top:-7px;right:-7px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;min-width:17px;height:17px;line-height:17px;border-radius:9px;text-align:center;padding:0 4px}';
+  '.rpp-sino{position:relative}.rpp-sino #rppColabN,.rpp-sino #rppSinoN{position:absolute;top:-7px;right:-7px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;min-width:17px;height:17px;line-height:17px;border-radius:9px;text-align:center;padding:0 4px}';
   document.head.appendChild(st);
 }
 function renderReportarProblema(){
@@ -4253,10 +4295,12 @@ function rppHtmlMeus(){
   var adm=rppAdmin(),eu=rppUsuario();
   var l=adm?RPP.lista:RPP.lista.filter(function(c){return c.u===eu;});
   if(!l.length)return '<div class="rpp-card">'+(adm?'Nenhum chamado aberto ainda.':'Você ainda não abriu nenhum chamado. 👍')+'</div>';
+  if(!adm)setTimeout(rppMarcarRespostasVistas,1200);
   return '<div class="rpp-card"><h3>📄 '+(adm?'Todos os chamados':'Meus chamados')+'</h3><p class="s">'+(adm?'Chamados de todos os colaboradores, como cada um vê.':'Situação dos problemas que você reportou.')+'</p>'+
     l.map(function(c){
       var pend=c.status!=='resolvido'&&c.status!=='nao_procede'&&c.status!=='duplicado';
-      return '<div class="rpp-li" style="cursor:default;flex-wrap:wrap"><span class="nn">#'+c.n+'</span><div class="tt"><b>'+rppEsc((c.aconteceu||'').slice(0,120))+'</b><small>'+(adm?rppEsc(c.u)+' · ':'')+rppEsc(c.telaNome)+' · '+rppData(c.t)+(c.autoResolvido?' · ⚡ resolvido na hora':'')+(c.reaberturas?' · reaberto '+c.reaberturas.length+'x':'')+'</small>'+
+      var nova=!adm&&c.avisoColab&&!(c.vistoColab>=c.avisoColab);
+      return '<div class="rpp-li'+(nova?' rpp-nova':'')+'" style="cursor:default;flex-wrap:wrap"><span class="nn">#'+c.n+'</span>'+(nova?'<span class="rpp-novatag">🔔 Resposta nova</span>':'')+'<div class="tt"><b>'+rppEsc((c.aconteceu||'').slice(0,120))+'</b><small>'+(adm?rppEsc(c.u)+' · ':'')+rppEsc(c.telaNome)+' · '+rppData(c.t)+(c.autoResolvido?' · ⚡ resolvido na hora':'')+(c.reaberturas?' · reaberto '+c.reaberturas.length+'x':'')+'</small>'+
         (c.parecer?'<div class="rpp-parecer'+(pend?'':' ok')+'" style="margin:8px 0 0;text-align:left"><b>Parecer do T.I.:</b> '+rppEsc(c.parecer)+'</div>':'')+
         (!pend&&(c.u===eu||adm)?'<button class="rpp-btn mini sec" data-reabrir="'+c.k+'" style="margin-top:8px">🔁 Reabrir — o erro continua</button>':'')+
       '</div>'+rppStatusTag(c.status)+'</div>';
@@ -4316,7 +4360,9 @@ function rppHtmlDetalhe(c){
      '<label>Parecer para o colaborador <span style="font-weight:500;color:#6b7280">(é o que ele vê)</span></label><textarea id="rppParecer">'+rppEsc(c.parecer||'')+'</textarea>'+
      '<label>Sua anotação interna (o que foi feito, versão corrigida...)</label><textarea id="rppNota">'+rppEsc(c.nota||'')+'</textarea>'+
      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'+
-     '<button class="rpp-btn mini" data-a="salvar">💾 Salvar</button>'+
+     '<button class="rpp-btn mini" data-a="enviarResposta" style="background:#16a34a" title="Salva e avisa o colaborador no app com o parecer">📨 Enviar resposta ao colaborador</button>'+
+     '<button class="rpp-btn mini sec" data-a="salvar">💾 Só salvar</button>'+
+     (c.avisoColab?'<span style="font-size:12px;color:#16a34a;align-self:center">'+(c.vistoColab>=c.avisoColab?'👁️ Visto por '+rppEsc(c.u)+' em '+rppData(c.vistoColab):'📨 Enviado em '+rppData(c.avisoColab)+' · ainda não visto')+'</span>':'')+
      '<button class="rpp-btn mini sec" data-a="copiar">📋 Copiar relatório</button>'+
      '<button class="rpp-btn mini sec" data-a="claude" title="Copia o relatório pronto para colar no chat do Claude e ele corrigir o código">🤖 Copiar para o Claude corrigir</button>'+
      '<button class="rpp-btn mini sec" data-a="imprimir">🖨️ Imprimir</button>'+
@@ -4405,10 +4451,15 @@ function rppLigar(w){
     else if(a==='outro'){RPP.ok=null;RPP.msg='';rppDraw();}
     else if(a==='voltar'){RPP.ok=null;irParaModulo(RPP.origem&&RPP.origem!=='mod18'?RPP.origem:'inicio');}
     else if(a==='recarregar'){RPP.lista=null;rppDraw();rppCarregar();}
-    else if(a==='salvar'&&c){
+    else if((a==='salvar'||a==='enviarResposta')&&c){
       var st=w.querySelector('#rppStatus').value,nota=w.querySelector('#rppNota').value.trim();
       var parecer=w.querySelector('#rppParecer').value.trim();var d={status:st,nota:nota,parecer:parecer,lido:true};if((st==='resolvido'||st==='nao_procede')&&!c.fim)d.fim=Date.now();
-      rppPatch(c.k,d).then(function(){Object.assign(c,d);RPP.msg='Salvo.';RPP.msgTipo='ok';rppContarNovos();rppDraw();}).catch(function(e){RPP.msg=e.message;RPP.msgTipo='err';rppDraw();});
+      if(a==='enviarResposta'){
+        if(!parecer){RPP.msg='Escreva o parecer para o colaborador antes de enviar.';RPP.msgTipo='err';return rppDraw();}
+        if(['novo','analise','reaberto'].indexOf(st)>=0&&!confirm('A situação ainda está "'+RPP_STATUS[st][1]+'". Enviar a resposta mesmo assim?\n\n(Para finalizar, mude a Situação para Resolvido ou Não procede antes de enviar.)'))return;
+        d.avisoColab=Date.now();
+      }
+      rppPatch(c.k,d).then(function(){Object.assign(c,d);RPP.msg=a==='enviarResposta'?'Resposta enviada! '+c.u+' será avisado no app.':'Salvo.';RPP.msgTipo='ok';rppContarNovos();rppDraw();}).catch(function(e){RPP.msg=e.message;RPP.msgTipo='err';rppDraw();});
     }
     else if(a==='copiar'&&c)rppCopiar(rppRelatorioTexto(c),b);
     else if(a==='claude'&&c)rppCopiar('Corrija este erro do app mais-acessivel-app (repositório rauldneto/mais-acessivel-app, arquivo index.html). Confira a causa no código antes de mudar, corrija e me diga como evitar que se repita.\n\n'+rppRelatorioTexto(c),b);
@@ -15206,7 +15257,7 @@ function blgAcao(a){
 }
 
 function renderApp(){
-  if(typeof rppTrilha==='function'){rppTrilha();if(rppAdmin())rppVigiar();}
+  if(typeof rppTrilha==='function'){rppTrilha();if(rppAdmin())rppVigiar();else rppVigiarColab();}
   // Chegou um pedido do Bling (bookmarklet/extensão): vai direto para a cotação de frete
   if(STATE.modulo==='inicio'&&window._blingImport){STATE.modulo='frete';STATE.tab='cotacao';}
   if(STATE.modulo!=='mod14'&&typeof DSP!=='undefined')DSP.modoPc=false;
@@ -15733,7 +15784,7 @@ function renderHeader(){
       <span style="font-family:monospace;font-size:11px;color:#888">35.017.646/0001-66</span>
       <span id="syncBadge" style="display:none;background:#10b981;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;margin-right:8px;vertical-align:middle">↻ Sincronizado!</span>
       ${(STATE.roleLogado==='admin'||(STATE.abasPermitidas&&STATE.abasPermitidas.indexOf('ext')>=0)) ? '<button class="btn-out" id="btnExtensao" style="border-color:#fdba74;color:#c2410c">🧩 Extensão</button>' : ''}
-      ${STATE.roleLogado==='admin' ? '<button class="btn-out rpp-sino" id="btnChamados" title="Chamados de erro dos colaboradores" style="border-color:#c7d2fe;color:#4338ca">🛎️ Chamados<span id="rppSinoN" style="display:none">0</span></button>' : '<button class="btn-out" id="btnReportar" title="Deu erro? Mande o print para o T.I." style="border-color:#c7d2fe;color:#4338ca">🛠️ Reportar problema</button>'}
+      ${STATE.roleLogado==='admin' ? '<button class="btn-out rpp-sino" id="btnChamados" title="Chamados de erro dos colaboradores" style="border-color:#c7d2fe;color:#4338ca">🛎️ Chamados<span id="rppSinoN" style="display:none">0</span></button>' : '<button class="btn-out rpp-sino" id="btnReportar" title="Deu erro? Mande o print para o T.I." style="border-color:#c7d2fe;color:#4338ca">🛠️ Reportar problema<span id="rppColabN" style="display:none">0</span></button>'}
       <button class="btn-out" id="btnAtualizar" title="Baixa a versão mais nova do app (limpa o cache)" style="border-color:#86efac;color:#15803d">🔄 Atualizar</button>
       ${STATE.roleLogado==='admin' ? '<button class="btn-out" id="btnConfig" style="border-color:#fde68a;color:#92400e">⚙️ Configurações</button>' : ''}
       ${FBA.logado() ? '<button class="btn-out" id="btnMinhaSenha" title="Trocar minha senha">🔑 Senha</button>' : ''}
@@ -15750,7 +15801,7 @@ function renderHeader(){
   };
   var btnCfg=el.querySelector('#btnConfig');
   if(btnCfg) btnCfg.onclick=function(){STATE.showConfigPanel=true;render();};
-  var btnRpp=el.querySelector('#btnReportar');if(btnRpp)btnRpp.onclick=function(){rppAbrir();};
+  var btnRpp=el.querySelector('#btnReportar');if(btnRpp){btnRpp.onclick=function(){if(rppContarRespostas()){RPP.aba='meus';irParaModulo('mod18');}else rppAbrir();};if(typeof rppCss==='function')rppCss();setTimeout(rppContarRespostas,0);}
   var btnCh=el.querySelector('#btnChamados');if(btnCh){btnCh.onclick=function(){RPP.aba='chamados';RPP.filtro='abertos';irParaModulo('mod18');};setTimeout(rppContarNovos,0);if(typeof rppCss==='function')rppCss();}
   var btnExt=el.querySelector('#btnExtensao');
   if(btnExt) btnExt.onclick=function(){STATE.showExtPanel=true;render();};
