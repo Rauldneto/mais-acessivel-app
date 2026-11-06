@@ -15259,7 +15259,7 @@ function blgDraw(){
            '<td class="hm"><span class="blg-tags">'+(x.tipo==='pedido'?'<span class="blg-tg p" title="P = Pedido de venda (ainda sem nota fiscal ligada)">P</span>':'<span class="blg-tg n" title="N = Nota fiscal com conta a receber em aberto">N</span>')+
              (x.formas||[]).map(function(f){return f==='pix'?'<span class="blg-pill pix" title="Forma de pagamento: PIX">PIX</span>':'<span class="blg-pill cr" title="Forma de pagamento: link de cartão de crédito">Crédito</span>';}).join('')+
              blgTefTag(x)+blgBaixaTag(x)+
-             ((pg&&pg.copia&&!pg.cancelado)||(x.pixAtivos&&x.pixAtivos.length)?'<span class="blg-pill" title="Já existe um PIX gerado e ainda valendo para este pedido/nota (QR Code / copia e cola)'+(x.pixAtivos&&x.pixAtivos.length>1?' — são '+x.pixAtivos.length+' PIX ativos':'')+'">PIX gerado'+(x.pixAtivos&&x.pixAtivos.length>1?' ('+x.pixAtivos.length+')':'')+'</span>':'')+(x.vendedor?'<span class="blg-pill" title="Vendedor: '+blgEsc(x.vendedor)+'">'+blgEsc(x.vendedor)+'</span>':'')+'</span></td>'+
+             ((pg&&pg.copia&&!pg.cancelado)||(x.pixAtivos&&x.pixAtivos.length)?'<span class="blg-pill" title="Já existe um PIX gerado e ainda valendo para este pedido/nota (QR Code / copia e cola)'+(x.pixAtivos&&x.pixAtivos.length>1?' — são '+x.pixAtivos.length+' PIX ativos':'')+'">PIX gerado'+(x.pixAtivos&&x.pixAtivos.length>1?' ('+x.pixAtivos.length+')':'')+'</span>':'')+'</span></td>'+
            '<td class="blg-kb">⋮</td></tr>';
       });
       h+='</tbody></table>';
@@ -15410,7 +15410,6 @@ function blgPainelPix(x){
     '<div class="ln"><span>Total</span><b>R$ '+blgMoeda(x.total)+'</b></div>'+
     '<div class="ln"><span>A receber</span><b>R$ '+blgMoeda(x.aReceber)+'</b></div>'+
     '<div class="ln"><span>Forma</span><b>'+blgEsc(x.formaNome||((x.formas||[]).indexOf('pix')>=0?'PIX':'Crédito'))+'</b></div>'+
-    (x.vendedor?'<div class="ln"><span>Vendedor</span><b>'+blgEsc(x.vendedor)+'</b></div>':'')+
     (x.pago?'<div class="ln"><span>Pago por PIX</span><b style="color:#15803d">R$ '+blgMoeda(x.pago)+'</b></div>'+(x.pagos||[]).map(function(p){return '<div class="ln" style="font-size:11px"><span>'+blgEsc(String(p.horario||'').slice(0,16).replace('T',' '))+'</span><span>R$ '+blgMoeda(p.valor)+'</span></div>';}).join(''):'');
   if(!blgPag())h+=blgPainelTefHist(x);   // histórico de TEF/baixas é assunto da Conciliação
   if(!blgPag()){   // Conciliação: só consulta. Gerar/cancelar/enviar PIX fica na tela Pagamentos
