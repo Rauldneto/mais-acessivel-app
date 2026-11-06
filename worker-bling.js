@@ -778,6 +778,10 @@ async function executarContasPedido(env, reg, valor, data) {
     lancou = true; contas = await daOrigem();
   }
   if (!contas.length) throw new Error(nfId ? 'A nota do pedido não tem contas a receber no Bling.' : 'Contas do pedido não encontradas depois de lançar.');
+  // só parcelas de PIX (o pedido pode ter parte em boleto: essas não são baixadas por um PIX)
+  const ehPix = c => [17, 18, 20].includes(Number(c.formaPagamento && c.formaPagamento.codigoFiscal));
+  if (contas.some(ehPix)) contas = contas.filter(ehPix);
+  else if (contas.length > 1 || Math.abs(Number(contas[0].valor || 0) - valor) > 0.01) throw new Error('Nenhuma parcela em PIX ' + (nfId ? 'na nota' : 'no pedido') + ' para baixar este PIX — conferir à mão.');
   const abertas = contas.filter(c => [1, 3].includes(Number(c.situacao))).sort((a, b) => String(a.vencimento).localeCompare(String(b.vencimento)));
   if (!abertas.length) return 'já estava baixada no Bling (nada feito)';
   let resto = valor, feitas = 0;
