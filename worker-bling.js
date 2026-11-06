@@ -759,23 +759,35 @@ async function executarBaixa(env, contaId, valor, data, reg) {
 }
 
 async function executarContasPedido(env, reg, valor, data) {
-  // ativado só no modo "real": lança as contas do pedido no Bling e baixa a(s) parcela(s) com a data do pagamento
-  const tok = await tokenValido(env);
-  const r = await fetch(API + '/pedidos/vendas/' + reg.id + '/lancar-contas', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, Accept: 'application/json' } });
-  if (!r.ok && r.status !== 400) throw new Error('Bling ' + r.status + ' ao lançar contas: ' + (await r.text()).slice(0, 160));
+  // modo "real". Regras para nunca duplicar conta no Bling:
+  //  1) pedido já virou nota → baixa as contas em aberto DA NOTA (não lança nada no pedido);
+  //  2) pedido sem nota e já com contas lançadas → só baixa;
+  //  3) pedido sem nota e sem contas → lança as contas do pedido e baixa.
   const ped = (await bling(env, '/pedidos/vendas/' + reg.id)).data || {};
   const idContato = ped.contato && ped.contato.id;
-  const lista = await paginas(env, '/contas/receber?situacoes[]=1' + (idContato ? '&idContato=' + idContato : ''), 3);
-  const contas = lista.filter(c => String(c.idOrigem || (c.origem && c.origem.id)) === String(reg.id)).sort((a, b) => String(a.vencimento).localeCompare(String(b.vencimento)));
-  if (!contas.length) throw new Error('Contas do pedido não encontradas depois de lançar.');
+  const nfId = ped.notaFiscal && ped.notaFiscal.id;
+  const origemId = nfId || reg.id;
+  const daOrigem = async () => (await paginas(env, '/contas/receber?dataInicial=' + diasAtras(400) + '&dataFinal=' + isoDia(new Date()) + (idContato ? '&idContato=' + idContato : ''), 3))
+    .filter(c => String(c.idOrigem || (c.origem && c.origem.id)) === String(origemId));
+  let contas = await daOrigem();
+  let lancou = false;
+  if (!contas.length && !nfId) {
+    const tok = await tokenValido(env);
+    const r = await fetch(API + '/pedidos/vendas/' + reg.id + '/lancar-contas', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, Accept: 'application/json' } });
+    if (!r.ok && r.status !== 400) throw new Error('Bling ' + r.status + ' ao lançar contas: ' + (await r.text()).slice(0, 160));
+    lancou = true; contas = await daOrigem();
+  }
+  if (!contas.length) throw new Error(nfId ? 'A nota do pedido não tem contas a receber no Bling.' : 'Contas do pedido não encontradas depois de lançar.');
+  const abertas = contas.filter(c => [1, 3].includes(Number(c.situacao))).sort((a, b) => String(a.vencimento).localeCompare(String(b.vencimento)));
+  if (!abertas.length) return 'já estava baixada no Bling (nada feito)';
   let resto = valor, feitas = 0;
-  for (const c of contas) {
+  for (const c of abertas) {
     if (resto <= 0.009) break;
     const v = Math.min(resto, Number(c.valor || 0));
     await executarBaixa(env, c.id, v, data, reg);
     resto = Math.round((resto - v) * 100) / 100; feitas++;
   }
-  return 'ok (' + feitas + ' parcela(s))';
+  return 'ok (' + (lancou ? 'contas lançadas no pedido; ' : nfId ? 'na nota do pedido; ' : '') + feitas + ' parcela(s) baixada(s))';
 }
 
 // ---------------- pedido de compra (aba Compras › Cotação compra) ----------------
