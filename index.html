@@ -3435,19 +3435,11 @@ function iniCarregando(k,txt){return INI.carr[k]&&!INI.dados[k]?'<div class="ini
 
 function iniHtmlFrete(){
   var r=iniCalcFrete();
-  var corpo='<div class="ini-ks">'+
-    iniK(r.abertas,'em aberto<br>(sem lançar no financeiro)',r.abertas?'dest':'','frete','salvas')+
-    iniK(r.hoje,'salvas hoje','', 'frete','salvas')+
-    iniK(r.enviadas,'já enviadas ao financeiro','ok')+
-  '</div>'+
-  (r.abertas?'<div class="ini-sec2"><div><div class="ini-h5">Em aberto por estado</div>'+iniBarras(r.uf,8)+'</div>'+
-    '<div><div class="ini-h5">Por solicitante</div>'+iniBarras(r.sol,6)+'</div></div>'+
-    '<div class="ini-h5">Valor de NF em aberto</div><div style="font-size:18px;font-weight:800">'+iniBRL(r.valor)+'</div>'+
-    '<div class="ini-h5">Últimas em aberto</div>'+r.ult.map(function(c){
-      return '<div class="ini-li"><div style="min-width:0"><div class="t">Nº '+iniEsc(c.id)+' · '+iniEsc(c.destCity||'—')+' / '+iniEsc(c.destUF||'—')+'</div><div class="s">'+iniEsc(c.solicitante||'')+(c.dataHora?' · '+iniEsc(String(c.dataHora).slice(0,10)):'')+'</div></div><div class="v">'+iniBRL(c.valorNF)+'</div></div>';
-    }).join('')
-  :'<div class="ini-vz">Nenhuma cotação de frete em aberto nos últimos 30 dias. 🎉</div>');
-  return iniCard('#ff9500','ti-truck','🚛','Frete','Cotações de frete salvas · últimos 30 dias','frete','salvas',corpo);
+  // Só o que interessa: fretes em aberto por estado e por solicitante
+  var corpo=r.abertas?'<div class="ini-sec2"><div><div class="ini-h5">Em aberto por estado</div>'+iniBarras(r.uf,27)+'</div>'+
+    '<div><div class="ini-h5">Por solicitante</div>'+iniBarras(r.sol,20)+'</div></div>'
+  :'<div class="ini-vz">Nenhuma cotação de frete em aberto nos últimos 30 dias. 🎉</div>';
+  return iniCard('#ff9500','ti-truck','🚛','Frete',(r.abertas?'<b style="color:#1c1c1e">'+r.abertas+' em aberto</b> · ':'')+'últimos 30 dias','frete','salvas',corpo);
 }
 function iniHtmlCotacoes(){
   var r=iniCalcCotacoes(),corpo;
