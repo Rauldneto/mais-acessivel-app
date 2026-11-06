@@ -15433,14 +15433,11 @@ function blgPainelPix(x){
     var outros=(x.pixAtivos||[]).filter(function(v){return v.txid!==pg.txid;});
     if(outros.length)h+='<div class="blg-msg" style="margin-top:8px;font-size:11.5px">⚠️ <b>Há mais '+outros.length+' PIX ativo(s)</b> para '+(x.tipo==='nota'?'esta nota':'este pedido')+' (o cliente pode pagar duas vezes):'+
       outros.map(function(v){return '<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;margin-top:4px">R$ '+blgMoeda(v.valor)+' · '+blgDataHora(v.criado)+' <button class="blg-btn sec" style="height:24px;width:auto;margin:0;padding:0 8px" data-a="cancelarOutro" data-k="'+blgEsc(v.txid)+'">Cancelar</button></div>';}).join('')+'</div>';
-    h+='<div class="qr" id="blgQr"></div><label>PIX copia e cola</label><textarea readonly id="blgCopia">'+blgEsc(pg.copia)+'</textarea>'+
-       '<div class="nota" style="margin-top:12px;color:#111"><b>Para mandar ao cliente:</b> copie e cole na conversa do WhatsApp (Ctrl+V): primeiro a mensagem (já vai com o código), depois a imagem.</div>'+
-       '<label for="blgMsg">Mensagem (pode editar antes de copiar)</label><textarea id="blgMsg" style="height:150px;font-family:arial,sans-serif;font-size:11px">'+blgEsc(pg.msg!=null?pg.msg:blgMsgPix(x,pg))+'</textarea>'+
-       '<button class="blg-btn" data-a="copiarMsg" title="Copia a mensagem acima (já com o código PIX Copia e Cola) para colar no WhatsApp com Ctrl+V">💬 1. Copiar mensagem com o código PIX</button>'+
-       '<button class="blg-btn" data-a="copiarImg" title="Copia a imagem do QR Code (com valor e pedido/nota) para colar no WhatsApp com Ctrl+V">🖼️ 2. Copiar imagem do QR Code</button>'+
-       '<button class="blg-btn sec" data-a="copiar" title="Copia só o código PIX Copia e Cola, sem a mensagem">'+BLG_IC.copiar+' Copiar só o código</button>'+
+    h+='<div class="qr" id="blgQr"></div>'+
+       '<label for="blgMsg">Mensagem para o cliente (já com o código PIX)</label><textarea id="blgMsg" style="height:150px;font-family:arial,sans-serif;font-size:11px">'+blgEsc(pg.msg!=null?pg.msg:blgMsgPix(x,pg))+'</textarea>'+
+       '<button class="blg-btn" data-a="copiarMsg" title="Copia a mensagem com o código PIX para colar no WhatsApp (Ctrl+V)">'+BLG_IC.copiar+' Copiar mensagem</button>'+
        (pg.avisoCopia?'<div class="nota" style="color:#15803d">'+pg.avisoCopia+'</div>':'')+
-       '<button class="blg-btn sec" data-a="baixarQr" title="Salva a imagem do QR Code (PNG) no computador/celular">⬇️ Baixar imagem</button>'+
+       '<button class="blg-btn sec" data-a="copiarImg" title="Opcional: copia a imagem do QR Code para colar no WhatsApp">🖼️ Copiar imagem do QR Code (opcional)</button>'+
        '<div class="nota">Valor: <b style="color:#111">R$ '+blgMoeda(pg.valor)+'</b> · vale até '+blgEsc(pg.validade||'hoje 23:59')+'.'+(BLG.demo?'<br><b style="color:#b45309">Prévia: código de exemplo, não paga nada.</b>':'')+'</div>'+
        (pg.pagoAgora?'':'<button class="blg-btn sec" data-a="novoPix" style="margin-top:12px" title="Cancela este PIX (o QR Code para de aceitar pagamento) e abre o campo para gerar um PIX novo com outro valor — ex.: o cliente vai pagar só uma parte">↺ Cancelar e mudar valor</button>'+
        '<button class="blg-btn sec" data-a="cancelarPix" style="color:#dc2626;border-color:#f3c2bd" title="Cancela o PIX no Sicoob: o QR Code e o código param de aceitar pagamento e o app para de conferir">'+(pg.cancelando?'<span class="blg-spin"></span> Cancelando…':'🚫 Cancelar este PIX')+'</button>')+
@@ -15491,11 +15488,11 @@ function blgMsgPix(x,p){
     '💰 *Valor:* R$ '+blgMoeda(p.valor)+'\n'+
     '⏰ *Válido até:* '+String(p.validade||'hoje 23:59')+'\n\n'+
     '*Como pagar:*\n'+
-    '1️⃣ Abra o app do seu banco › *PIX*\n'+
-    '2️⃣ *Ler QR Code* (na imagem) ou *PIX Copia e Cola* (código abaixo)\n'+
-    '3️⃣ Confira o recebedor: *JDFER COMÉRCIO E SERVIÇOS LTDA*\n\n'+
-    '📋 *PIX Copia e Cola:*\n'+String(p.copia||'')+'\n\n'+
-    'Assim que o pagamento cair, já damos baixa por aqui. Qualquer dúvida, estamos à disposição. Obrigado! 🙏';
+    '1️⃣ Copie o código PIX abaixo\n'+
+    '2️⃣ No app do seu banco, entre em *PIX › Pix Copia e Cola*\n'+
+    '3️⃣ Cole o código, confira o recebedor *JDFER COMÉRCIO E SERVIÇOS LTDA* e confirme\n\n'+
+    '👇 *Código PIX:*\n'+String(p.copia||'')+'\n\n'+
+    'Qualquer dúvida, estamos à disposição. Obrigado! 🙏';
 }
 function blgNomeCliente(x){
   var n=String(x.cliente||'').trim(),d=String(x.doc||'').replace(/\D/g,'');
@@ -15685,7 +15682,7 @@ function blgAcao(a){
   if(a==='baixarQr'&&x){var pb=BLG.pix[BLG.sel];if(!pb)return;blgImagemPix(x,pb).then(function(bl){blgBaixarBlob(bl,blgNomeImg(x));});return;}
   if(a==='wppCodigo'&&x){var pw=BLG.pix[BLG.sel];if(!pw)return;blgEnviarTexto(pw.copia,'Código PIX');pw.falta2=false;pw.avisoWpp='✅ Código enviado.';blgDraw();return;}
   if(a==='copiarMsg'&&x){var pm=BLG.pix[BLG.sel],tm=BLG.root.querySelector('#blgMsg');if(!pm||!tm)return;
-    var feito=function(){pm.avisoCopia='✓ Mensagem com o código copiada. Cole na conversa do WhatsApp (<b>Ctrl+V</b>) e envie. Depois copie a imagem.';blgDraw();};
+    var feito=function(){pm.avisoCopia='✓ Copiada! Cole na conversa do WhatsApp (<b>Ctrl+V</b>) e envie.';blgDraw();};
     try{navigator.clipboard.writeText(tm.value).then(feito).catch(function(){tm.select();document.execCommand('copy');feito();});}catch(e){tm.select();document.execCommand('copy');feito();}return;}
   if(a==='copiarImg'&&x){var pi=BLG.pix[BLG.sel];if(!pi)return;blgCopiarImagem(x,pi);return;}
   if(a==='copiar'){var t=BLG.root.querySelector('#blgCopia');if(t){t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand('copy');}var bt=BLG.root.querySelector('[data-a="copiar"]');if(bt){bt.innerHTML='✓ Código copiado';setTimeout(function(){if(bt)bt.innerHTML=BLG_IC.copiar+' Copiar só o código';},1800);}}return;}
