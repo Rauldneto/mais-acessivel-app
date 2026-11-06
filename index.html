@@ -15438,12 +15438,12 @@ function blgPainelPix(x){
        (pg.avisoCopia?'<div class="nota" style="color:#15803d">'+pg.avisoCopia+'</div>':'')+
        '<button class="blg-btn sec" data-a="copiarImg" title="Opcional: copia a imagem do QR Code para colar no WhatsApp">🖼️ Copiar imagem do QR Code (opcional)</button>'+
        '<div class="nota">Valor: <b style="color:#111">R$ '+blgMoeda(pg.valor)+'</b> · vale até '+blgEsc(pg.validade||'hoje 23:59')+'.'+(BLG.demo?'<br><b style="color:#b45309">Prévia: código de exemplo, não paga nada.</b>':'')+'</div>'+
-       (pg.pagoAgora?'':'<button class="blg-btn sec" data-a="novoPix" style="margin-top:12px" title="Cancela este PIX (o QR Code para de aceitar pagamento) e abre o campo para gerar um PIX novo com outro valor — ex.: o cliente vai pagar só uma parte">↺ Cancelar e mudar valor</button>'+
-       '<button class="blg-btn sec" data-a="cancelarPix" style="color:#dc2626;border-color:#f3c2bd" title="Cancela o PIX no Sicoob: o QR Code e o código param de aceitar pagamento e o app para de conferir">'+(pg.cancelando?'<span class="blg-spin"></span> Cancelando…':'🚫 Cancelar este PIX')+'</button>')+
+       (pg.pagoAgora?'':'<button class="blg-btn sec" data-a="cancelarPix" style="color:#dc2626;border-color:#f3c2bd" title="Cancela o PIX no Sicoob: o QR Code e o código param de aceitar pagamento e o app para de conferir">'+(pg.cancelando?'<span class="blg-spin"></span> Cancelando…':'🚫 Cancelar este PIX')+'</button>')+
        (pg.erroCancelar?'<div class="blg-msg err" style="margin-top:8px">'+blgEsc(pg.erroCancelar)+'</div>':'');
   }else{
-    h+='<label for="blgValor">Valor do PIX (R$)</label><input id="blgValor" inputmode="decimal" value="'+blgEsc(val)+'">'+
-       '<div class="nota">Pode cobrar só uma parte (pagamento parcial).</div>'+
+    var faltaG=Math.max(0,Number(x.aReceber||0)-Number(x.pago||0));
+    h+='<div class="ln" style="margin-top:10px;font-size:13px"><span>Valor do PIX</span><b>R$ '+blgMoeda(faltaG)+'</b></div>'+
+       '<div class="nota">É sempre o valor '+(x.pago>0?'que falta pagar d':'d')+(x.tipo==='nota'?'a nota fiscal':'o pedido')+'.</div>'+
        '<button class="blg-btn" data-a="gerarPix"'+(pixAtivo&&!pg.gerando?'':' disabled')+'>'+(pg.gerando?'<span class="blg-spin"></span> Gerando…':BLG_IC.pix+' Gerar PIX')+'</button>'+
        '<button class="blg-btn sec" data-a="credSel" disabled>'+BLG_IC.card+' Link de crédito</button>'+
        (pixAtivo?'':'<div class="nota">⏳ O PIX pelo Sicoob é ativado na próxima etapa (certificado no Worker). Por enquanto você já confere a lista.</div>')+
@@ -15687,8 +15687,8 @@ function blgAcao(a){
   if(a==='copiar'){var t=BLG.root.querySelector('#blgCopia');if(t){t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand('copy');}var bt=BLG.root.querySelector('[data-a="copiar"]');if(bt){bt.innerHTML='✓ Código copiado';setTimeout(function(){if(bt)bt.innerHTML=BLG_IC.copiar+' Copiar só o código';},1800);}}return;}
   if(a==='wpp'&&x){var p=BLG.pix[BLG.sel];if(!p)return;blgWhatsPix(x,p);return;}
   if(a==='gerarPix'&&x){
-    var falta=Math.max(0,Number(x.aReceber||0)-Number(x.pago||0));var val=blgValorNum(BLG.valorEdit[BLG.sel]!=null?BLG.valorEdit[BLG.sel]:falta);
-    if(!(val>0)){BLG.pix[BLG.sel]={erro:'Valor inválido.'};blgDraw();return;}
+    var falta=Math.max(0,Number(x.aReceber||0)-Number(x.pago||0));var val=Math.round(falta*100)/100;   // valor fixo: sempre o que falta do pedido/nota (sem edição)
+    if(!(val>0)){BLG.pix[BLG.sel]={erro:'Não há valor a receber neste pedido/nota.'};blgDraw();return;}
     if(val>falta+0.009){BLG.pix[BLG.sel]={erro:'O valor passa do que falta receber (R$ '+blgMoeda(falta)+').'};blgDraw();return;}
     if(BLG.demo){BLG.pix[BLG.sel]={valor:val,copia:'00020101021226870014br.gov.bcb.pix2565pix.exemplo.com.br/qr/v3/PREVIA-'+x.numero+'-SEM-VALOR-REAL5204000053039865802BR5915MAIS ACESSIVEL6007GOIANIA62070503***6304ABCD',validade:'hoje 23:59'};blgDraw();return;}
     var k=BLG.sel;BLG.pix[k]={gerando:true};blgDraw();
