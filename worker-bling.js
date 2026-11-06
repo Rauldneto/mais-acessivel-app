@@ -112,6 +112,22 @@ export default {
         const ult = await env.BLING_KV.get('pix:ultimaVerificacao');
         return resp({ ok: true, modo, ultimaVerificacao: ult ? Number(ult) : 0, acoes: acoes.slice(-100).reverse() });
       }
+      if (url.pathname === '/modo' && req.method === 'POST') {
+        const b = (await req.json().catch(() => ({}))) || {};
+        const modo = b.modo === 'real' ? 'real' : 'simulacao';
+        await env.BLING_KV.put('modo', modo);
+        await logAcao(env, { acao: 'modo', modo, detalhe: 'Baixa automática no Bling: ' + (modo === 'real' ? 'MODO REAL (executa no Bling)' : 'SIMULAÇÃO') + (b.usuario ? ' — por ' + String(b.usuario).slice(0, 60) : '') });
+        return resp({ ok: true, modo });
+      }
+      if (url.pathname === '/diag/bling-escrita') {
+        // testa a permissão de escrita com IDs que não existem (não altera nada): 403 = falta permissão; 404/400 = permissão ok
+        const tok = await tokenValido(env), out = {};
+        for (const [nome, cam] of [['baixar_conta', '/contas/receber/1/baixar'], ['lancar_contas_pedido', '/pedidos/vendas/1/lancar-contas'], ['situacao_pedido', '/pedidos/vendas/1/situacoes/9']]) {
+          const r = await fetch(API + cam, { method: nome === 'situacao_pedido' ? 'PATCH' : 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Accept: 'application/json' }, body: nome === 'baixar_conta' ? '{}' : undefined });
+          out[nome] = { status: r.status, corpo: (await r.text()).slice(0, 220) };
+        }
+        return resp({ ok: true, testes: out });
+      }
       if (url.pathname === '/pagamentos/verificar' && req.method === 'POST') {
         const r = await verificarPagamentos(env);
         let boletos = null;
@@ -400,6 +416,31 @@ async function listarAbertos(env) {
   }
   itens.push(...Object.values(porNota));
 
+  // 3) Pedidos/notas já pagos pelo app que saíram do "em aberto" do Bling (ex.: conta baixada) — continuam na lista como "pago"
+  const ja = new Set(itens.map(it => it.tipo + ':' + it.id));
+  let acoesLog = null, cur;
+  do {
+    const l = await env.BLING_KV.list({ prefix: 'pagosdoc:', cursor: cur });
+    for (const k of l.keys) {
+      const [, tipo, id] = k.name.split(':');
+      if (ja.has(tipo + ':' + id)) continue;
+      let m = await env.BLING_KV.get('docmeta:' + tipo + ':' + id, 'json');
+      if (!m) {
+        if (!acoesLog) acoesLog = (await env.BLING_KV.get('acoes', 'json')) || [];
+        const a = acoesLog.slice().reverse().find(x => x.tipo === tipo && String(x.id) === String(id) && x.numero);
+        const nf = tipo === 'nota' ? await env.BLING_KV.get('nfdados:' + id, 'json') : null;
+        m = { numero: (a && a.numero) || (nf && nf.numero) || String(id), cliente: (a && a.cliente) || '', doc: '', total: nf ? Number(nf.valor || 0) : 0, aReceber: 0, data: (nf && nf.emissao) || '' };
+      }
+      const pg = (await env.BLING_KV.get(k.name, 'json')) || [];
+      const pago = Math.round(pg.reduce((t, x) => t + Number(x.valor || 0), 0) * 100) / 100;
+      const ultimo = pg.map(x => diaLocal(x.horario)).sort().pop() || '';
+      if (ultimo && ultimo < diasAtras(DIAS_CONTAS)) continue;
+      itens.push({ tipo, id: Number(id), numero: String(m.numero || id), data: m.data || ultimo, prevista: '', cliente: m.cliente || (pg[0] && pg[0].pagador) || '', doc: m.doc || '',
+        total: Number(m.total || pago), aReceber: Math.max(Number(m.aReceber || 0), pago), formas: ['pix'], formaNome: 'PIX', vendedor: '', situacao: 'Pago', fora: true });
+    }
+    cur = l.list_complete ? null : l.cursor;
+  } while (cur);
+
   const ctxTef = {};
   for (const it of itens) {
     const pg = (await env.BLING_KV.get('pagosdoc:' + it.tipo + ':' + it.id, 'json')) || [];
@@ -572,6 +613,8 @@ async function registrarPagamento(env, reg, p, origem) {
     await env.BLING_KV.put('pix:' + reg.txid, JSON.stringify(reg), { expirationTtl: 180 * 86400 });
   }
   const kd = 'pagosdoc:' + reg.tipo + ':' + reg.id;
+  // dados do pedido/nota guardados para a lista continuar mostrando o documento depois de baixado no Bling
+  await env.BLING_KV.put('docmeta:' + reg.tipo + ':' + reg.id, JSON.stringify({ numero: reg.numero || '', cliente: reg.cliente || '', doc: reg.doc || '', total: Number(reg.total || 0), aReceber: Number(reg.aReceber || reg.total || 0), data: reg.data || '' }), { expirationTtl: 365 * 86400 });
   const pd = (await env.BLING_KV.get(kd, 'json')) || [];
   pd.push({ txid: reg.txid || '', e2e: p.endToEndId, valor, horario: p.horario, pagador: (p.pagador && p.pagador.nome) || '', origem });
   await env.BLING_KV.put(kd, JSON.stringify(pd), { expirationTtl: 365 * 86400 });
@@ -587,7 +630,7 @@ async function itensAbertos(env, ctx) {
 }
 
 function regDeItem(it) {
-  return { txid: '', tipo: it.tipo, id: it.id, numero: it.numero, cliente: it.cliente, doc: it.doc || '', total: it.total, aReceber: it.aReceber,
+  return { txid: '', tipo: it.tipo, id: it.id, numero: it.numero, cliente: it.cliente, data: it.data || '', doc: it.doc || '', total: it.total, aReceber: it.aReceber,
     contas: (it.contas || []).map(c => ({ id: c.id, valor: c.valor, venc: c.venc })) };
 }
 
