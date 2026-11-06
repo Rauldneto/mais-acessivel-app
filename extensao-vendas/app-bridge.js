@@ -2,7 +2,21 @@
 // O app manda window.postMessage({source:'ma-app', ...}) e recebe {source:'ma-ext', ...}.
 (function() {
   var versao = chrome.runtime.getManifest().version;
-  document.documentElement.setAttribute('data-ma-ext', versao);
+  // v2.1.9: a mesma extensão pode estar instalada pela loja do Chrome (instalação automática) ou pelo
+  // modo desenvolvedor (pasta C:\MaisAcessivel). Se a da loja estiver presente, a do modo desenvolvedor
+  // para de atender o app e se desinstala sozinha (background.js), para não haver duas fazendo a mesma coisa.
+  var LOJA_ID = 'ojhkakepmgbmhnfoabkmmjbpilmhhmpj';
+  var souLoja = chrome.runtime.id === LOJA_ID;
+  var html = document.documentElement;
+  function lojaPresente() { return !souLoja && html.hasAttribute('data-ma-ext-loja'); }
+  function marcar() {
+    if (souLoja) { html.setAttribute('data-ma-ext-loja', versao); html.setAttribute('data-ma-ext', versao); }
+    else if (!lojaPresente()) html.setAttribute('data-ma-ext', versao);
+    else { try { chrome.runtime.sendMessage({ action: 'sairDevPorLoja' }, function() { void chrome.runtime.lastError; }); } catch (e) {} }
+  }
+  marcar();
+  setTimeout(marcar, 3000);
+  setInterval(marcar, 20000);
   // guarda quem está logado no app neste computador (usado para mostrar/esconder botões do popup)
   function salvarUsuarioApp() {
     try {
@@ -20,10 +34,11 @@
   salvarUsuarioApp();
   setInterval(salvarUsuarioApp, 20000);
   window.addEventListener('storage', salvarUsuarioApp);
-  window.postMessage({ source: 'ma-ext', type: 'pronta', versao: versao }, '*');
+  if (!lojaPresente()) window.postMessage({ source: 'ma-ext', type: 'pronta', versao: versao }, '*');
 
   window.addEventListener('message', function(e) {
     if (e.source !== window || !e.data || e.data.source !== 'ma-app') return;
+    if (lojaPresente()) return; // a da loja responde; esta (modo desenvolvedor) está saindo
     var req = e.data;
     if (req.type === 'ping') {
       window.postMessage({ source: 'ma-ext', type: 'pronta', versao: versao, reqId: req.reqId }, '*');

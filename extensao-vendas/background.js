@@ -1,5 +1,28 @@
 importScripts('fb-auth.js'); // todo acesso ao banco leva o token do usuário logado no app
 
+// ── Loja do Chrome x modo desenvolvedor (v2.1.9) ──
+// A versão da loja (instalada automaticamente pela política do Windows) responde "estou aqui".
+// A do modo desenvolvedor pergunta ao abrir e a cada minuto; se a da loja responder, ela se desinstala
+// sozinha (a pasta C:\MaisAcessivel fica, só sai da lista do Chrome). Loja antiga (sem resposta) = nada muda.
+var LOJA_ID = 'ojhkakepmgbmhnfoabkmmjbpilmhhmpj';
+if (chrome.runtime.id === LOJA_ID) {
+  chrome.runtime.onMessageExternal.addListener(function(msg, sender, responder) {
+    if (msg && msg.tipo === 'maLojaPresente') responder({ loja: true, versao: chrome.runtime.getManifest().version });
+  });
+} else {
+  var sairSeLojaPresente = function() {
+    try {
+      chrome.runtime.sendMessage(LOJA_ID, { tipo: 'maLojaPresente' }, function(r) {
+        if (chrome.runtime.lastError || !r || !r.loja) return;
+        try { chrome.management.uninstallSelf({ showConfirmDialog: false }); } catch (e) {}
+      });
+    } catch (e) {}
+  };
+  sairSeLojaPresente();
+  chrome.alarms.onAlarm.addListener(function(a) { if (a.name === 'waAlerta') sairSeLojaPresente(); });
+  chrome.runtime.onMessage.addListener(function(msg) { if (msg && msg.action === 'sairDevPorLoja') sairSeLojaPresente(); return false; });
+}
+
 // Service worker: faz a ponte entre o app (aba Cotações) e o Bling para a
 // conferência em lote. O app fala com app-bridge.js, que abre uma porta
 // "auditoria" aqui; daqui as consultas são feitas DENTRO de uma aba do Bling
