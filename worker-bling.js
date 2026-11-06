@@ -279,6 +279,10 @@ export default {
         }
         return resp({ ok: true, produtos: out });
       }
+      if (url.pathname === '/pix/cancelar' && req.method === 'POST') {
+        const b = (await req.json().catch(() => ({}))) || {};
+        return resp(await cancelarPix(env, String(b.txid || '').replace(/[^A-Za-z0-9]/g, ''), String(b.usuario || '').slice(0, 60)));
+      }
       if (url.pathname === '/pix/status') {
         const txid = (url.searchParams.get('txid') || '').replace(/[^A-Za-z0-9]/g, '');
         if (!txid) return resp({ ok: false, erro: 'Faltou txid' }, 400);
@@ -577,6 +581,26 @@ async function gerarPix(env, b) {
   await env.BLING_KV.put(k, JSON.stringify(lista.slice(-20)), { expirationTtl: 90 * 86400 });
   const ate = new Date(Date.now() + 86400e3 - 3 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');
   return { ok: true, txid, copiaECola: c.brcode || '', validade: ate.slice(8, 10) + '/' + ate.slice(5, 7) + ' ' + ate.slice(11) };
+}
+
+// cancela a cobrança no Sicoob (o QR Code para de aceitar pagamento). Padrão do Banco Central: PATCH /cob/{txid} status REMOVIDA_PELO_USUARIO_RECEBEDOR
+async function cancelarPix(env, txid, usuario) {
+  if (!txid) return { ok: false, erro: 'Faltou o txid.' };
+  const atual = await sicoob(env, 'GET', '/cob/' + txid);
+  if (atual.status === 'CONCLUIDA') return { ok: false, pago: true, erro: 'Este PIX já foi pago — não dá para cancelar.' };
+  if (atual.status !== 'ATIVA') return { ok: true, status: atual.status, jaEstava: true };
+  const c = await sicoob(env, 'PATCH', '/cob/' + txid, { status: 'REMOVIDA_PELO_USUARIO_RECEBEDOR' });
+  const reg = await env.BLING_KV.get('pix:' + txid, 'json');
+  if (reg) {
+    reg.status = 'CANCELADA'; reg.canceladoEm = Date.now(); reg.canceladoPor = usuario;
+    await env.BLING_KV.put('pix:' + txid, JSON.stringify(reg), { expirationTtl: 90 * 86400 });
+    const k = 'pixdoc:' + reg.tipo + ':' + reg.id;
+    const lista = ((await env.BLING_KV.get(k, 'json')) || []).map(x => x.txid === txid ? Object.assign({}, x, { cancelado: Date.now() }) : x);
+    await env.BLING_KV.put(k, JSON.stringify(lista), { expirationTtl: 90 * 86400 });
+    await logAcao(env, { acao: 'pix_cancelado', tipo: reg.tipo, id: reg.id, numero: reg.numero, cliente: reg.cliente, txid, valor: reg.valor,
+      detalhe: 'PIX de R$ ' + Number(reg.valor || 0).toFixed(2) + ' cancelado' + (usuario ? ' por ' + usuario : '') + ' (QR Code não aceita mais pagamento).' });
+  }
+  return { ok: true, status: c.status || 'REMOVIDA_PELO_USUARIO_RECEBEDOR' };
 }
 
 // ---------------- Pagamentos: confere PIX recebidos e planeja/executa as ações no Bling ----------------

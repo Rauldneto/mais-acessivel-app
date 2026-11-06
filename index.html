@@ -14789,7 +14789,7 @@ function blgTelaPag(){
   if(p.erro)return h+'<div class="blg-msg err">'+blgEsc(p.erro)+'</div>';
   var ac=p.acoes||[];
   if(!ac.length)return h+'<div class="blg-vazio">Nenhum pagamento (PIX ou boleto) tratado ainda.</div>';
-  var nome={pix_pago:'💰 PIX pago',boleto_pago:'📄 Boleto pago',tef_alerta:'⚠️ TEF',econf:'📨 ECONF',baixa:'✅ Baixa',tarifa:'🏦 Tarifa bancária',situacao:'🏷️ Situação',sobra:'⚠️ Conferir',erro:'❌ Erro'};
+  var nome={pix_pago:'💰 PIX pago',boleto_pago:'📄 Boleto pago',tef_alerta:'⚠️ TEF',pix_cancelado:'🚫 PIX cancelado',econf:'📨 ECONF',baixa:'✅ Baixa',tarifa:'🏦 Tarifa bancária',situacao:'🏷️ Situação',sobra:'⚠️ Conferir',erro:'❌ Erro'};
   h+='<table class="blg-tb"><thead><tr><th>Quando</th><th>Pedido/NF</th><th>Cliente</th><th>Ação</th><th>Detalhe</th></tr></thead><tbody>';
   ac.forEach(function(a){h+='<tr style="cursor:default"><td>'+new Date(a.quando).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</td><td>'+(a.tipo==='nota'?'NF ':'')+blgEsc(a.numero||'')+'</td><td title="'+blgEsc(a.cliente||'')+'">'+blgEsc(a.cliente||'')+'</td><td>'+(nome[a.acao]||blgEsc(a.acao))+(a.modo==='simulacao'&&a.acao!=='pix_pago'?' <span class="blg-pill">simulação</span>':'')+'</td><td style="white-space:normal;max-width:520px">'+blgEsc(a.detalhe||'')+(a.resultado?' — '+blgEsc(a.resultado):'')+'</td></tr>';});
   return h+'</tbody></table>';
@@ -15174,14 +15174,23 @@ function blgPainelPix(x){
   if(blgSit(x)==='pago'&&!pg.copia){
     return h+'<div class="blg-msg ok" style="margin-top:12px">✅ <b>Já está pago</b> (R$ '+blgMoeda(x.pago)+'). Não dá para gerar outro PIX para '+(x.tipo==='nota'?'esta nota':'este pedido')+'.</div></div>';
   }
-  if(pg.copia){
+  if(pg.cancelado){
+    h+='<div class="blg-msg" style="margin-top:12px">🚫 <b>PIX de R$ '+blgMoeda(pg.valor)+' cancelado.</b> O QR Code não aceita mais pagamento e o app parou de conferir.</div>'+
+       '<button class="blg-btn" data-a="novoPix">'+BLG_IC.pix+' Gerar um PIX novo</button>';
+  }else if(pg.copia){
     if(pg.pagoAgora)h+='<div class="blg-msg ok" style="margin-top:10px">✅ <b>PIX pago!</b> R$ '+blgMoeda(pg.valor)+' confirmado pelo Sicoob.</div>';
     else h+='<div class="nota" style="margin-top:8px"><span class="blg-spin"></span> Aguardando pagamento… (confere sozinho a cada 10 s)</div>';
     h+='<div class="qr" id="blgQr"></div><label>PIX copia e cola</label><textarea readonly id="blgCopia">'+blgEsc(pg.copia)+'</textarea>'+
        '<button class="blg-btn" data-a="copiar">'+BLG_IC.copiar+' Copiar código</button>'+
-       '<button class="blg-btn sec" data-a="wpp">'+BLG_IC.wpp+' Mandar no WhatsApp</button>'+
+       '<div class="nota" style="margin-top:12px;color:#111"><b>Mandar para o cliente no WhatsApp</b> (2 mensagens):</div>'+
+       '<button class="blg-btn sec" data-a="wpp" title="Envia a imagem com o QR Code e uma mensagem explicando como pagar">'+BLG_IC.wpp+' 1. Imagem + mensagem</button>'+
+       '<button class="blg-btn sec'+(pg.passo2?' marcado':'')+'" data-a="wppCodigo" title="Envia só o código Copia e Cola, sozinho numa mensagem: o cliente toca, segura e copia">'+BLG_IC.copiar+' 2. Código Copia e Cola</button>'+
+       (pg.avisoWpp?'<div class="nota" style="color:#b45309">'+pg.avisoWpp+'</div>':'')+
+       '<button class="blg-btn sec" data-a="baixarQr" title="Salva a imagem do QR Code (PNG) no computador/celular">🖼️ Baixar imagem</button>'+
        '<div class="nota">Valor: <b style="color:#111">R$ '+blgMoeda(pg.valor)+'</b> · vale até '+blgEsc(pg.validade||'hoje 23:59')+'.'+(BLG.demo?'<br><b style="color:#b45309">Prévia: código de exemplo, não paga nada.</b>':'')+'</div>'+
-       '<button class="blg-btn sec" data-a="novoPix" style="margin-top:12px">Gerar outro valor</button>';
+       (pg.pagoAgora?'':'<button class="blg-btn sec" data-a="novoPix" style="margin-top:12px" title="Cancela este PIX (o QR Code para de aceitar pagamento) e abre o campo para gerar um PIX novo com outro valor — ex.: o cliente vai pagar só uma parte">↺ Cancelar e mudar valor</button>'+
+       '<button class="blg-btn sec" data-a="cancelarPix" style="color:#dc2626;border-color:#f3c2bd" title="Cancela o PIX no Sicoob: o QR Code e o código param de aceitar pagamento e o app para de conferir">'+(pg.cancelando?'<span class="blg-spin"></span> Cancelando…':'🚫 Cancelar este PIX')+'</button>')+
+       (pg.erroCancelar?'<div class="blg-msg err" style="margin-top:8px">'+blgEsc(pg.erroCancelar)+'</div>':'');
   }else{
     h+='<label for="blgValor">Valor do PIX (R$)</label><input id="blgValor" inputmode="decimal" value="'+blgEsc(val)+'">'+
        '<div class="nota">Pode cobrar só uma parte (pagamento parcial).</div>'+
@@ -15207,6 +15216,101 @@ function blgAcompanhar(k,txid){
   },10000);
 }
 function blgValorNum(s){s=String(s||'').trim().replace(/\s|R\$/g,'');if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');var n=Number(s);return isFinite(n)?Math.round(n*100)/100:NaN;}
+
+// ---- PIX: cancelar, imagem do QR Code e envio no WhatsApp ----
+function blgCancelarPix(k,cb){
+  var p=BLG.pix[k];if(!p)return;
+  if(BLG.demo||!p.txid){p.cancelado=true;blgDraw();if(cb)cb(true);return;}
+  p.cancelando=true;p.erroCancelar='';blgDraw();
+  blgApi('/pix/cancelar',{method:'POST',body:{txid:p.txid,usuario:STATE.usuarioLogado||''}}).then(function(r){
+    p.cancelando=false;
+    if(r&&r.ok){p.cancelado=true;p.txidCancelado=p.txid;p.txid=null;blgDraw();if(cb)cb(true);return;}   // sem txid o acompanhamento para
+    if(r&&r.pago){p.pagoAgora=true;blgCarregar(true);}
+    p.erroCancelar=(r&&r.erro)||'Não consegui cancelar.';blgDraw();if(cb)cb(false);
+  }).catch(function(e){p.cancelando=false;p.erroCancelar='Sem conexão: '+(e&&e.message||e);blgDraw();if(cb)cb(false);});
+}
+function blgNomeCliente(x){
+  var n=String(x.cliente||'').trim(),d=String(x.doc||'').replace(/\D/g,'');
+  var tc=function(t){return t.toLowerCase().replace(/(^|[\s\/(-])([a-zà-ú])/g,function(m,a,b){return a+b.toUpperCase();}).replace(/\b(De|Da|Do|Das|Dos|E)\b/g,function(m){return m.toLowerCase();}).replace(/\b(Ltda|Eireli|Me|Epp|S\/A|Sa)\b/gi,function(m){return m.toUpperCase().replace('LTDA','Ltda');});};
+  if(d.length===11||(!d&&n.split(/\s+/).length<=4&&!/ltda|eireli|s\/a|engenharia|constru/i.test(n)))return tc(n.split(/\s+/)[0]||'');   // pessoa física: primeiro nome
+  return '';   // empresa: cumprimento sem nome
+}
+function blgMsgPix(x,p){
+  var nome=blgNomeCliente(x),ref=x.tipo==='nota'?'da *nota fiscal nº '+x.numero+'*':'do *pedido nº '+x.numero+'*';
+  return 'Olá'+(nome?', '+nome:'')+'! 👋\n\n'+
+    'Aqui é da *Mais Acessível*. Segue o PIX para pagamento '+ref+(nome?'':' ('+x.cliente+')')+':\n\n'+
+    '💰 *Valor:* R$ '+blgMoeda(p.valor)+'\n'+
+    '⏰ *Válido até:* '+String(p.validade||'hoje 23:59')+'\n\n'+
+    '*Como pagar:*\n'+
+    '1️⃣ Abra o app do seu banco e entre em *PIX*\n'+
+    '2️⃣ Escolha *Ler QR Code* (use a imagem) ou *PIX Copia e Cola*\n'+
+    '3️⃣ Confira o recebedor: *JDFER COMÉRCIO E SERVIÇOS LTDA*\n\n'+
+    'O código *Copia e Cola* vai na próxima mensagem — é só tocar, segurar e copiar. 👇\n\n'+
+    'Qualquer dúvida, estamos à disposição. Obrigado! 🙏';
+}
+function blgNomeImg(x){return 'PIX-'+(x.tipo==='nota'?'NF-':'pedido-')+String(x.numero).replace(/[^\w-]/g,'')+'.png';}
+function blgCarregarQrLib(){return new Promise(function(ok){if(window.qrcode)return ok();var sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';sc.onload=function(){ok();};sc.onerror=function(){ok();};document.head.appendChild(sc);});}
+// imagem do PIX (cartão com logo, valor, QR Code e instruções) → Blob PNG
+function blgImagemPix(x,p){
+  return blgCarregarQrLib().then(function(){return new Promise(function(fim){
+    var W=900,H=1240,c=document.createElement('canvas');c.width=W;c.height=H;var g=c.getContext('2d');
+    var font=function(px,w){return (w||'400')+' '+px+'px Arial, Helvetica, sans-serif';};
+    var centro=function(t,y,px,w,cor){g.font=font(px,w);g.fillStyle=cor||'#1c1c1e';g.textAlign='center';g.fillText(t,W/2,y);};
+    var desenhar=function(logo){
+      g.fillStyle='#f2f5f4';g.fillRect(0,0,W,H);
+      g.fillStyle='#fff';g.beginPath();if(g.roundRect)g.roundRect(40,40,W-80,H-80,36);else g.rect(40,40,W-80,H-80);g.fill();
+      g.fillStyle='#0a7d6b';g.beginPath();if(g.roundRect)g.roundRect(40,40,W-80,170,[36,36,0,0]);else g.rect(40,40,W-80,170);g.fill();
+      if(logo){var lh=130,lw=Math.min(300,logo.width*lh/logo.height);lh=logo.height*lw/logo.width;g.fillStyle='#fff';g.beginPath();if(g.roundRect)g.roundRect(70,60+(150-lh)/2-5,lw+20,lh+10,18);else g.rect(70,60,lw+20,lh+10);g.fill();g.drawImage(logo,80,60+(150-lh)/2,lw,lh);
+        g.font=font(42,'700');g.fillStyle='#fff';g.textAlign='left';g.fillText('Pagamento',130+lw,118);g.fillText('via PIX',130+lw,168);}
+      else{centro('Pagamento via PIX',120,46,'700','#fff');centro('Mais Acessível',165,28,'400','#e6f3f1');}
+      centro(x.tipo==='nota'?'Nota fiscal nº '+x.numero:'Pedido nº '+x.numero,265,30,'700','#3a3a3c');
+      var cli=String(x.cliente||'');if(cli.length>44)cli=cli.slice(0,42)+'…';centro(cli,305,24,'400','#636366');
+      centro('R$ '+blgMoeda(p.valor),385,64,'700','#0a7d6b');
+      // QR Code
+      var tam=520,x0=(W-tam)/2,y0=420;
+      try{var q=qrcode(0,'M');q.addData(p.copia);q.make();var n=q.getModuleCount(),cel=tam/(n+4);
+        g.fillStyle='#fff';g.fillRect(x0,y0,tam,tam);g.fillStyle='#000';
+        for(var r=0;r<n;r++)for(var cc=0;cc<n;cc++)if(q.isDark(r,cc))g.fillRect(Math.floor(x0+(cc+2)*cel),Math.floor(y0+(r+2)*cel),Math.ceil(cel),Math.ceil(cel));
+      }catch(e){centro('QR Code indisponível — use o código Copia e Cola',y0+tam/2,24,'400','#b91c1c');}
+      g.strokeStyle='#e5e5ea';g.lineWidth=3;g.strokeRect(x0-10,y0-10,tam+20,tam+20);
+      centro('Válido até '+String(p.validade||'hoje 23:59'),y0+tam+60,26,'700','#b45309');
+      centro('Abra o app do seu banco › PIX › Ler QR Code',y0+tam+110,26,'400','#3a3a3c');
+      centro('ou use o código PIX Copia e Cola enviado na mensagem',y0+tam+148,24,'400','#636366');
+      centro('Recebedor: JDFER COMÉRCIO E SERVIÇOS LTDA · CNPJ 35.017.646/0001-66',H-80,20,'400','#8e8e93');
+      c.toBlob(function(b){fim(b);},'image/png');
+    };
+    var im=new Image();im.onload=function(){desenhar(im);};im.onerror=function(){desenhar(null);};im.src='logo.jpg';
+  });});
+}
+function blgBaixarBlob(bl,nome){var a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download=nome;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},2000);}
+function blgEnviarTexto(texto,titulo){
+  // celular / Windows: menu de compartilhar (escolhe o WhatsApp e o contato); senão abre o WhatsApp Web com o texto
+  if(navigator.share&&/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)){navigator.share({text:texto}).catch(function(){});return;}
+  window.open('https://wa.me/?text='+encodeURIComponent(texto),'_blank');
+}
+function blgWhatsPix(x,p,k){
+  var msg=blgMsgPix(x,p);
+  blgImagemPix(x,p).then(function(bl){
+    var arq=null;try{arq=new File([bl],blgNomeImg(x),{type:'image/png'});}catch(e){}
+    if(arq&&navigator.canShare&&navigator.canShare({files:[arq]})){
+      // celular (e Windows com o app do WhatsApp): imagem + mensagem juntas, escolhendo o contato
+      navigator.share({files:[arq],text:msg}).then(function(){p.passo2=true;p.avisoWpp='Agora toque em <b>2. Código Copia e Cola</b> e mande para o mesmo contato.';blgDraw();}).catch(function(){});
+      return;
+    }
+    // computador: copia a imagem e abre o WhatsApp com a mensagem — é só colar (Ctrl+V) a imagem na conversa
+    var abrir=function(copiou){
+      p.passo2=true;
+      p.avisoWpp=copiou?'📋 A <b>imagem do QR Code foi copiada</b>. No WhatsApp, escolha o contato, envie a mensagem e depois aperte <b>Ctrl+V</b> para colar a imagem. Por fim, toque em <b>2. Código Copia e Cola</b>.'
+        :'A imagem do QR Code foi <b>baixada</b>. No WhatsApp, envie a mensagem e anexe a imagem (📎). Por fim, toque em <b>2. Código Copia e Cola</b>.';
+      blgDraw();window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+    };
+    try{
+      if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write)
+        navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).then(function(){abrir(true);}).catch(function(){blgBaixarBlob(bl,blgNomeImg(x));abrir(false);});
+      else{blgBaixarBlob(bl,blgNomeImg(x));abrir(false);}
+    }catch(e){blgBaixarBlob(bl,blgNomeImg(x));abrir(false);}
+  });
+}
 
 function blgQr(el,texto){
   var go=function(){try{var q=qrcode(0,'M');q.addData(texto);q.make();el.innerHTML=q.createSvgTag({cellSize:4,margin:2});}catch(e){el.textContent='QR indisponível';}};
@@ -15288,9 +15392,19 @@ function blgAcao(a){
   }
   if(a==='abrirBling'&&x){window.open(x.tipo==='nota'?'https://www.bling.com.br/notas.fiscais.php#edit/'+x.id:'https://www.bling.com.br/vendas.php#edit/'+x.id,'_blank');return;}
   if(a==='pixSel'){if(!x)return;blgDraw();var i=BLG.root.querySelector('#blgValor');if(i){i.focus();i.select();}return;}
-  if(a==='novoPix'&&x){delete BLG.pix[BLG.sel];blgDraw();return;}
+  if(a==='novoPix'&&x){
+    var pn=BLG.pix[BLG.sel];
+    if(!pn||pn.cancelado||!pn.txid||pn.pagoAgora){delete BLG.pix[BLG.sel];blgDraw();return;}
+    if(!confirm('Cancelar este PIX de R$ '+blgMoeda(pn.valor)+' e gerar outro com valor diferente?\n\nO QR Code atual deixa de aceitar pagamento (se o cliente já recebeu, avise que vai mandar um novo).'))return;
+    blgCancelarPix(BLG.sel,function(ok){if(ok){delete BLG.pix[BLG.sel];blgDraw();var i=BLG.root.querySelector('#blgValor');if(i){i.focus();i.select();}}});return;}
+  if(a==='cancelarPix'&&x){
+    var pc=BLG.pix[BLG.sel];if(!pc)return;
+    if(!confirm('Cancelar este PIX de R$ '+blgMoeda(pc.valor)+'?\n\nO QR Code e o código Copia e Cola param de aceitar pagamento e o app para de conferir.'))return;
+    blgCancelarPix(BLG.sel);return;}
+  if(a==='baixarQr'&&x){var pb=BLG.pix[BLG.sel];if(!pb)return;blgImagemPix(x,pb).then(function(bl){blgBaixarBlob(bl,blgNomeImg(x));});return;}
+  if(a==='wppCodigo'&&x){var pw=BLG.pix[BLG.sel];if(!pw)return;blgEnviarTexto(pw.copia,'Código PIX');pw.passo2=false;blgDraw();return;}
   if(a==='copiar'){var t=BLG.root.querySelector('#blgCopia');if(t){t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand('copy');}var bt=BLG.root.querySelector('[data-a="copiar"]');if(bt){bt.innerHTML='✓ Copiado';setTimeout(function(){if(bt)bt.innerHTML=BLG_IC.copiar+' Copiar código';},1800);}}return;}
-  if(a==='wpp'&&x){var p=BLG.pix[BLG.sel];if(!p)return;var msg='Olá! Segue o PIX '+(x.tipo==='nota'?'da nota fiscal ':'do pedido ')+x.numero+' — Mais Acessível.\nValor: R$ '+blgMoeda(p.valor)+'\n\nPIX copia e cola:\n'+p.copia;window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');return;}
+  if(a==='wpp'&&x){var p=BLG.pix[BLG.sel];if(!p)return;blgWhatsPix(x,p,BLG.sel);return;}
   if(a==='gerarPix'&&x){
     var falta=Math.max(0,Number(x.aReceber||0)-Number(x.pago||0));var val=blgValorNum(BLG.valorEdit[BLG.sel]!=null?BLG.valorEdit[BLG.sel]:falta);
     if(!(val>0)){BLG.pix[BLG.sel]={erro:'Valor inválido.'};blgDraw();return;}
