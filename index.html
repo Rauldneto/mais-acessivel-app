@@ -14739,7 +14739,7 @@ function blgPainelTefHist(x){
     h+='</div>';
   }
   var ac=((BLG.pag&&BLG.pag.acoes)||[]).filter(function(a){return a.tipo===x.tipo&&String(a.id)===String(x.id);});
-  var pendSim=ac.filter(function(a){return a.modo==='simulacao'&&!a.executado&&(a.acao==='baixa'||a.acao==='contas_pedido');}).length;
+  var pendSim=ac.filter(function(a){return a.modo==='simulacao'&&(!a.executado||/^ERRO/.test(a.executado))&&(a.acao==='baixa'||a.acao==='contas_pedido');}).length;
   if(pendSim&&blgAdmin())h+='<button class="blg-btn" style="margin-top:10px;width:100%" data-a="executarSim"'+(BLG.execCarr?' disabled':'')+'>'+(BLG.execCarr?'<span class="blg-spin"></span> Executando…':'✅ Dar baixa no Bling agora')+'</button><div style="font-size:11px;color:#6f6f6f;margin-top:4px">O pagamento foi identificado quando a baixa ainda estava em simulação. Se alguém já baixou à mão no Bling, o sistema percebe e não baixa de novo.</div>';
   if(ac.length){
     var nome={pix_pago:'💰 PIX pago',boleto_pago:'📄 Boleto pago',baixa:'✅ Baixa',contas_pedido:'✅ Contas/baixa',tarifa:'🏦 Tarifa',situacao:'🏷️ Situação',sobra:'⚠️ Conferir',erro:'❌ Erro'};
