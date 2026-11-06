@@ -14812,11 +14812,14 @@ function blgSit(x){var a=Number(x.aReceber||0),p=Number(x.pago||0);return p>0&&p
 function blgFiltrados(){
   var f=BLG.f,b=(f.busca||'').toLowerCase().trim(),bd=b.replace(/\D/g,'');
   return (BLG.dados||[]).filter(function(x){
-    var st=blgSit(x);
-    if(f.sit==='aberto'&&st==='pago')return false;
+    var st=blgSit(x),porBaixa=f.baixa==='auto'||!!f.diaBaixa;
+    if(f.sit==='aberto'&&st==='pago'&&!porBaixa)return false;
     if(f.sit==='parcial'&&st!=='parcial')return false;
     if(f.sit==='pago'&&st!=='pago')return false;
     if(f.tipo!=='todos'&&x.tipo!==f.tipo)return false;
+    var ba=x.baixasAuto||[];
+    if(f.baixa==='auto'&&!ba.length)return false;if(f.baixa==='sem'&&ba.length)return false;
+    if(f.diaBaixa&&!ba.some(function(b){return b.dia===f.diaBaixa;}))return false;
     if(f.tef&&f.tef!=='todos'){var tt=x.tef,tok=!!(tt&&tt.total&&tt.informados>=tt.total&&!tt.erros),ter=!!(tt&&tt.erros);
       if(f.tef==='ok'&&!tok)return false;if(f.tef==='sem'&&tok)return false;if(f.tef==='erro'&&!ter)return false;}
     if(f.forma!=='todos'&&(x.formas||[]).indexOf(f.forma)<0)return false;
@@ -14993,6 +14996,8 @@ function blgDraw(){
   // filtros (coluna esquerda)
   h+='<aside class="blg-fil"><h3><svg width="12" height="12" viewBox="0 0 512 512" fill="#2b2b2b"><path d="M487.976 0H24.028C2.71 0-8.047 25.866 7.058 40.971L192 225.941V432c0 7.831 3.821 15.17 10.237 19.662l80 55.98C298.02 518.69 320 507.493 320 487.98V225.941l184.947-184.97C520.021 25.896 509.338 0 487.976 0z"/></svg> Filtrar<span class="x" data-a="limpar">✕</span></h3>'+
      '<label>Situação</label><select data-f="sit"><option value="aberto"'+(BLG.f.sit==='aberto'?' selected':'')+'>Em aberto (inclui parciais)</option><option value="parcial"'+(BLG.f.sit==='parcial'?' selected':'')+'>Parcialmente pagos</option><option value="pago"'+(BLG.f.sit==='pago'?' selected':'')+'>Pagos</option><option value="todos"'+(BLG.f.sit==='todos'?' selected':'')+'>Todos</option></select>'+
+     '<label>Baixa automática no Bling</label><select data-f="baixa"><option value="todos">Todas</option><option value="auto"'+(BLG.f.baixa==='auto'?' selected':'')+'>Com baixa automática</option><option value="sem"'+(BLG.f.baixa==='sem'?' selected':'')+'>Sem baixa automática</option></select>'+
+     '<label>Dia da baixa automática</label><input type="date" data-fd="diaBaixa" value="'+blgEsc(BLG.f.diaBaixa||'')+'" style="width:100%;height:36px;border:1px solid #d6d6d6;border-radius:6px;padding:0 8px;font:inherit;box-sizing:border-box">'+
      '<label>TEF (Sefaz)</label><select data-f="tef"><option value="todos">Todos</option><option value="ok"'+(BLG.f.tef==='ok'?' selected':'')+'>Com TEF ✓ (informado)</option><option value="sem"'+(BLG.f.tef==='sem'?' selected':'')+'>Sem TEF</option><option value="erro"'+(BLG.f.tef==='erro'?' selected':'')+'>TEF com erro ✕</option></select>'+
      '<label>Tipo</label><select data-f="tipo"><option value="todos">Pedidos e notas</option><option value="pedido"'+(BLG.f.tipo==='pedido'?' selected':'')+'>Só pedidos de venda</option><option value="nota"'+(BLG.f.tipo==='nota'?' selected':'')+'>Só notas fiscais</option></select>'+
      '<label>Forma de pagamento</label><select data-f="forma"><option value="todos">PIX e link de crédito</option><option value="pix"'+(BLG.f.forma==='pix'?' selected':'')+'>PIX</option><option value="credito"'+(BLG.f.forma==='credito'?' selected':'')+'>Link de crédito</option></select>'+
@@ -15004,7 +15009,7 @@ function blgDraw(){
      '<span class="blg-date">'+BLG_IC.cal+' '+({aberto:'Em aberto',parcial:'Parcialmente pagos',pago:'Pagos',todos:'Todos'}[BLG.f.sit||'aberto'])+' · '+(BLG.demo?'dados de exemplo':(BLG.ts?'atualizado '+new Date(BLG.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'—'))+'</span>'+
      '<span style="flex:1"></span><button class="blg-ib" data-a="recarregar" title="Atualizar: confere pagamentos no Sicoob e recarrega do Bling">'+BLG_IC.rec+'</button><button class="blg-ib gray" data-a="imprimir" title="Imprimir">'+BLG_IC.imp+'</button></div>';
   var nomeSit={aberto:'Em aberto',parcial:'Parcialmente pagos',pago:'Pagos',todos:'Todos'}[BLG.f.sit||'aberto'];
-  if(!BLG.view)h+='<div class="blg-fsit">Situação: '+nomeSit+(BLG.f.sit!=='aberto'||BLG.f.tipo!=='todos'||BLG.f.forma!=='todos'||BLG.f.vendedor||BLG.f.busca||(BLG.f.tef&&BLG.f.tef!=='todos')?'<a data-a="limpar">Limpar</a>':'')+'</div>';
+  if(!BLG.view)h+='<div class="blg-fsit">Situação: '+nomeSit+(BLG.f.diaBaixa?' · baixa automática em '+blgData(BLG.f.diaBaixa):BLG.f.baixa==='auto'?' · com baixa automática':'')+(BLG.f.sit!=='aberto'||BLG.f.tipo!=='todos'||BLG.f.forma!=='todos'||BLG.f.vendedor||BLG.f.busca||(BLG.f.tef&&BLG.f.tef!=='todos')||(BLG.f.baixa&&BLG.f.baixa!=='todos')||BLG.f.diaBaixa?'<a data-a="limpar">Limpar</a>':'')+'</div>';
   h+=blgAvisos();
   if(BLG.view==='conc'){h+=blgTelaConc()+'</section><aside class="blg-act">'+blgAcoes()+'</aside></div>';w.innerHTML=h;blgLigar(w);return;}
   if(BLG.view==='econf'){h+=blgTelaEconf()+'</section><aside class="blg-act">'+blgAcoes()+'</aside></div>';w.innerHTML=h;blgLigar(w);return;}
@@ -15027,7 +15032,7 @@ function blgDraw(){
            '<td><span class="blg-sit"><span class="clk"></span><span class="blg-bd'+(pagoTot?' pago':parcial?' parc':'')+'">'+(pagoTot?'Pago':parcial?'Parcialmente pago':'Em aberto')+'</span></span></td>'+
            '<td class="hm"><span class="blg-tags">'+(x.tipo==='pedido'?'<span class="blg-tg p" title="P = Pedido de venda (ainda sem nota fiscal ligada)">P</span>':'<span class="blg-tg n" title="N = Nota fiscal com conta a receber em aberto">N</span>')+
              (x.formas||[]).map(function(f){return f==='pix'?'<span class="blg-pill pix" title="Forma de pagamento: PIX">PIX</span>':'<span class="blg-pill cr" title="Forma de pagamento: link de cartão de crédito">Crédito</span>';}).join('')+
-             blgTefTag(x)+
+             blgTefTag(x)+blgBaixaTag(x)+
              (pg&&pg.copia?'<span class="blg-pill" title="Já foi gerado um PIX (QR Code / copia e cola) para este pedido/nota">PIX gerado</span>':'')+(x.vendedor?'<span class="blg-pill" title="Vendedor: '+blgEsc(x.vendedor)+'">'+blgEsc(x.vendedor)+'</span>':'')+'</span></td>'+
            '<td class="blg-kb">⋮</td></tr>';
       });
@@ -15046,6 +15051,11 @@ function blgDraw(){
 
 // Etiqueta TEF: verde quando todos os PIX recebidos deste pedido/nota já foram informados à Sefaz-GO pelo ECONF (evento 110750);
 // vermelha quando a Sefaz recusou ou o envio não foi possível. Enquanto só está aguardando o envio, não aparece nada.
+function blgBaixaTag(x){
+  var ba=x.baixasAuto||[];if(!ba.length)return '';
+  var t='Baixa automática no Bling: '+ba.map(function(b){return new Date(b.quando).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' — R$ '+blgMoeda(b.valor);}).join('; ');
+  return '<span class="blg-pill" style="background:#dbeafe;color:#1d4ed8;border-color:#bfdbfe" title="'+blgEsc(t)+'">Baixa auto</span>';
+}
 function blgTefTag(x){
   var t=x.tef;if(!t||!t.total)return '';
   if(t.erros)return '<span class="blg-pill tef err" title="'+blgEsc('TEF recusado/não enviado: '+t.erros+' de '+t.total+' pagamento(s) PIX'+(t.ultimoErro?' — '+t.ultimoErro:'')+'. Veja a sub-aba 📨 ECONF Sefaz.')+'">TEF ✕</span>';
@@ -15208,6 +15218,7 @@ function blgLigar(w){
   var b=w.querySelector('#blgBusca');
   if(b){b.oninput=function(){BLG.f.busca=b.value;var pos=b.selectionStart;blgDraw();var nb=BLG.root.querySelector('#blgBusca');if(nb){nb.focus();try{nb.setSelectionRange(pos,pos);}catch(e){}}};}
   w.querySelectorAll('select[data-f]').forEach(function(s){s.onchange=function(){BLG.f[s.getAttribute('data-f')]=s.value;blgDraw();};});
+  w.querySelectorAll('input[data-fd]').forEach(function(s){s.onchange=function(){BLG.f[s.getAttribute('data-fd')]=s.value;blgDraw();};});
   w.querySelectorAll('select[data-sel]').forEach(function(s){s.onchange=function(){var pp=(BLG.pend||[])[s.getAttribute('data-sel')];if(!pp)return;if(s.value)BLG.stage[pp.e2e]=s.value;else delete BLG.stage[pp.e2e];blgDraw();};});
   w.querySelectorAll('tbody tr[data-k]').forEach(function(tr){tr.onclick=function(){var k=tr.getAttribute('data-k');BLG.sel=BLG.sel===k?null:k;blgDraw();};});
   var vi=w.querySelector('#blgValor');if(vi)vi.oninput=function(){BLG.valorEdit[BLG.sel]=vi.value;};
@@ -15222,7 +15233,7 @@ function blgSelecionado(){return BLG.sel&&(BLG.dados||[]).filter(function(x){ret
 
 function blgAcao(a){
   var x=blgSelecionado();
-  if(a==='limpar'){BLG.f={busca:'',tipo:'todos',forma:'todos',vendedor:'',sit:'aberto',tef:'todos'};blgDraw();return;}
+  if(a==='limpar'){BLG.f={busca:'',tipo:'todos',forma:'todos',vendedor:'',sit:'aberto',tef:'todos',baixa:'todos',diaBaixa:''};blgDraw();return;}
   if(a==='tefVisto'){tefMarcarVistos();return;}
   if(a.indexOf('econf')===0&&blgEconfAcao(a,BLG._k))return;
   if(a==='tefEnviar'){var nP=((BLG.ecPend&&BLG.ecPend.itens)||[]).filter(function(q){return q.status==='pronto';}).length;

@@ -480,6 +480,14 @@ async function listarAbertos(env) {
       it.tef = t;
     }
   }
+  // baixas automáticas feitas no Bling (para o filtro "Baixa automática" / dia da baixa)
+  const log = (await env.BLING_KV.get('acoes', 'json')) || [];
+  const baixas = {};
+  for (const a of log) {
+    if (a.modo !== 'real' || !['baixa', 'contas_pedido'].includes(a.acao) || !/^ok/.test(String(a.resultado || ''))) continue;
+    (baixas[a.tipo + ':' + a.id] = baixas[a.tipo + ':' + a.id] || []).push({ quando: a.quando, dia: new Date(a.quando - 3 * 3600e3).toISOString().slice(0, 10), valor: Number(a.valorBaixa || a.valor || 0), resultado: a.resultado });
+  }
+  for (const it of itens) if (baixas[it.tipo + ':' + it.id]) it.baixasAuto = baixas[it.tipo + ':' + it.id];
   itens.sort((a, b) => String(b.data).localeCompare(String(a.data)) || Number(b.numero) - Number(a.numero));
   return { itens, faltaram };
 }
