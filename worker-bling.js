@@ -468,6 +468,16 @@ async function listarAbertos(env) {
 
   const ctxTef = {};
   for (const it of itens) {
+    // PIX gerados pelo app que continuam valendo (não pagos, não cancelados, dentro das 24 h): o app mostra de novo ao reabrir
+    const pd = (await env.BLING_KV.get('pixdoc:' + it.tipo + ':' + it.id, 'json')) || [];
+    const vivos = [];
+    for (const x of pd) {
+      if (x.cancelado || Date.now() - Number(x.criado || 0) > 86400e3) continue;
+      const reg = await env.BLING_KV.get('pix:' + x.txid, 'json');
+      if (!reg || reg.status === 'PAGO' || reg.status === 'CANCELADA') continue;
+      vivos.push({ txid: x.txid, valor: reg.valor, criado: reg.criado, copia: reg.copia, usuario: reg.usuario || '', validoAte: Number(reg.criado || 0) + 86400e3 });
+    }
+    if (vivos.length) it.pixAtivos = vivos.sort((a, b) => b.criado - a.criado);
     const pg = (await env.BLING_KV.get('pagosdoc:' + it.tipo + ':' + it.id, 'json')) || [];
     if (pg.length) { it.pago = Math.round(pg.reduce((s, x) => s + Number(x.valor || 0), 0) * 100) / 100; it.pagos = pg; }
     // TEF/ECONF (evento 110750): quantos PIX recebidos deste pedido/nota já foram informados à Sefaz
@@ -579,6 +589,7 @@ async function gerarPix(env, b) {
   const lista = (await env.BLING_KV.get(k, 'json')) || [];
   lista.push({ txid, valor, criado: reg.criado });
   await env.BLING_KV.put(k, JSON.stringify(lista.slice(-20)), { expirationTtl: 90 * 86400 });
+  await env.BLING_KV.delete('cache:abertos');
   const ate = new Date(Date.now() + 86400e3 - 3 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');
   return { ok: true, txid, copiaECola: c.brcode || '', validade: ate.slice(8, 10) + '/' + ate.slice(5, 7) + ' ' + ate.slice(11) };
 }
@@ -600,6 +611,7 @@ async function cancelarPix(env, txid, usuario) {
     await logAcao(env, { acao: 'pix_cancelado', tipo: reg.tipo, id: reg.id, numero: reg.numero, cliente: reg.cliente, txid, valor: reg.valor,
       detalhe: 'PIX de R$ ' + Number(reg.valor || 0).toFixed(2) + ' cancelado' + (usuario ? ' por ' + usuario : '') + ' (QR Code não aceita mais pagamento).' });
   }
+  await env.BLING_KV.delete('cache:abertos');
   return { ok: true, status: c.status || 'REMOVIDA_PELO_USUARIO_RECEBEDOR' };
 }
 

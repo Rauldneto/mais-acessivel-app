@@ -15033,7 +15033,7 @@ function blgDraw(){
            '<td class="hm"><span class="blg-tags">'+(x.tipo==='pedido'?'<span class="blg-tg p" title="P = Pedido de venda (ainda sem nota fiscal ligada)">P</span>':'<span class="blg-tg n" title="N = Nota fiscal com conta a receber em aberto">N</span>')+
              (x.formas||[]).map(function(f){return f==='pix'?'<span class="blg-pill pix" title="Forma de pagamento: PIX">PIX</span>':'<span class="blg-pill cr" title="Forma de pagamento: link de cartão de crédito">Crédito</span>';}).join('')+
              blgTefTag(x)+blgBaixaTag(x)+
-             (pg&&pg.copia?'<span class="blg-pill" title="Já foi gerado um PIX (QR Code / copia e cola) para este pedido/nota">PIX gerado</span>':'')+(x.vendedor?'<span class="blg-pill" title="Vendedor: '+blgEsc(x.vendedor)+'">'+blgEsc(x.vendedor)+'</span>':'')+'</span></td>'+
+             ((pg&&pg.copia&&!pg.cancelado)||(x.pixAtivos&&x.pixAtivos.length)?'<span class="blg-pill" title="Já existe um PIX gerado e ainda valendo para este pedido/nota (QR Code / copia e cola)'+(x.pixAtivos&&x.pixAtivos.length>1?' — são '+x.pixAtivos.length+' PIX ativos':'')+'">PIX gerado'+(x.pixAtivos&&x.pixAtivos.length>1?' ('+x.pixAtivos.length+')':'')+'</span>':'')+(x.vendedor?'<span class="blg-pill" title="Vendedor: '+blgEsc(x.vendedor)+'">'+blgEsc(x.vendedor)+'</span>':'')+'</span></td>'+
            '<td class="blg-kb">⋮</td></tr>';
       });
       h+='</tbody></table>';
@@ -15160,7 +15160,16 @@ function blgAcoes(){
     (blgAdmin()&&blgUrl()?'<div class="grp">Administrador</div>'+blgAdminStatus()+it('conectar',BLG_IC.rec,'Reconectar ao Bling')+it('demo',BLG_IC.olho,BLG.demo?'Prévia ligada':'Ver prévia com dados de exemplo')+it('trocarWk',BLG_IC.copiar,'Trocar endereço do Worker'):'');
 }
 
+function blgDataHora(ms){var d=new Date(ms);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
+// PIX já gerado (de outra vez/tela/aparelho) que ainda vale: volta a aparecer com o QR Code e o acompanhamento
+function blgRestaurarPix(x){
+  var k=blgChave(x);if(BLG.pix[k]||!x.pixAtivos||!x.pixAtivos.length||BLG.demo)return;
+  var v=x.pixAtivos[0];
+  BLG.pix[k]={valor:v.valor,copia:v.copia,txid:v.txid,validade:blgDataHora(v.validoAte),restaurado:true,criado:v.criado,usuario:v.usuario};
+  blgAcompanhar(k,v.txid);
+}
 function blgPainelPix(x){
+  blgRestaurarPix(x);
   var k=blgChave(x),pg=BLG.pix[k]||{},falta=Math.max(0,Number(x.aReceber||0)-Number(x.pago||0)),val=BLG.valorEdit[k]!=null?BLG.valorEdit[k]:blgMoeda(falta);
   var pixAtivo=!!BLG.pixAtivo||BLG.demo;
   var h='<div class="blg-pix"><span class="voltar" data-a="desmarcar">‹ Voltar às ações</span>'+
@@ -15180,6 +15189,10 @@ function blgPainelPix(x){
   }else if(pg.copia){
     if(pg.pagoAgora)h+='<div class="blg-msg ok" style="margin-top:10px">✅ <b>PIX pago!</b> R$ '+blgMoeda(pg.valor)+' confirmado pelo Sicoob.</div>';
     else h+='<div class="nota" style="margin-top:8px"><span class="blg-spin"></span> Aguardando pagamento… (confere sozinho a cada 10 s)</div>';
+    if(pg.restaurado)h+='<div class="nota" style="color:#111">ℹ️ Este PIX foi gerado em <b>'+blgDataHora(pg.criado)+'</b>'+(pg.usuario?' por '+blgEsc(pg.usuario):'')+' e <b>continua valendo</b> — pode reenviar o mesmo.</div>';
+    var outros=(x.pixAtivos||[]).filter(function(v){return v.txid!==pg.txid;});
+    if(outros.length)h+='<div class="blg-msg" style="margin-top:8px;font-size:11.5px">⚠️ <b>Há mais '+outros.length+' PIX ativo(s)</b> para '+(x.tipo==='nota'?'esta nota':'este pedido')+' (o cliente pode pagar duas vezes):'+
+      outros.map(function(v){return '<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;margin-top:4px">R$ '+blgMoeda(v.valor)+' · '+blgDataHora(v.criado)+' <button class="blg-btn sec" style="height:24px;width:auto;margin:0;padding:0 8px" data-a="cancelarOutro" data-k="'+blgEsc(v.txid)+'">Cancelar</button></div>';}).join('')+'</div>';
     h+='<div class="qr" id="blgQr"></div><label>PIX copia e cola</label><textarea readonly id="blgCopia">'+blgEsc(pg.copia)+'</textarea>'+
        '<button class="blg-btn" data-a="copiar">'+BLG_IC.copiar+' Copiar código</button>'+
        '<div class="nota" style="margin-top:12px;color:#111"><b>Mandar para o cliente no WhatsApp</b> (2 mensagens):</div>'+
@@ -15224,7 +15237,7 @@ function blgCancelarPix(k,cb){
   p.cancelando=true;p.erroCancelar='';blgDraw();
   blgApi('/pix/cancelar',{method:'POST',body:{txid:p.txid,usuario:STATE.usuarioLogado||''}}).then(function(r){
     p.cancelando=false;
-    if(r&&r.ok){p.cancelado=true;p.txidCancelado=p.txid;p.txid=null;blgDraw();if(cb)cb(true);return;}   // sem txid o acompanhamento para
+    if(r&&r.ok){var sx=blgSelecionado();if(sx&&sx.pixAtivos)sx.pixAtivos=sx.pixAtivos.filter(function(v){return v.txid!==p.txid;});p.cancelado=true;p.txidCancelado=p.txid;p.txid=null;blgDraw();if(cb)cb(true);return;}   // sem txid o acompanhamento para
     if(r&&r.pago){p.pagoAgora=true;blgCarregar(true);}
     p.erroCancelar=(r&&r.erro)||'Não consegui cancelar.';blgDraw();if(cb)cb(false);
   }).catch(function(e){p.cancelando=false;p.erroCancelar='Sem conexão: '+(e&&e.message||e);blgDraw();if(cb)cb(false);});
@@ -15394,9 +15407,12 @@ function blgAcao(a){
   if(a==='pixSel'){if(!x)return;blgDraw();var i=BLG.root.querySelector('#blgValor');if(i){i.focus();i.select();}return;}
   if(a==='novoPix'&&x){
     var pn=BLG.pix[BLG.sel];
-    if(!pn||pn.cancelado||!pn.txid||pn.pagoAgora){delete BLG.pix[BLG.sel];blgDraw();return;}
+    if(!pn||pn.cancelado||!pn.txid||pn.pagoAgora){if(pn&&pn.txid&&x.pixAtivos)x.pixAtivos=x.pixAtivos.filter(function(v){return v.txid!==pn.txid;});delete BLG.pix[BLG.sel];blgDraw();return;}
     if(!confirm('Cancelar este PIX de R$ '+blgMoeda(pn.valor)+' e gerar outro com valor diferente?\n\nO QR Code atual deixa de aceitar pagamento (se o cliente já recebeu, avise que vai mandar um novo).'))return;
     blgCancelarPix(BLG.sel,function(ok){if(ok){delete BLG.pix[BLG.sel];blgDraw();var i=BLG.root.querySelector('#blgValor');if(i){i.focus();i.select();}}});return;}
+  if(a==='cancelarOutro'&&x){var tx=BLG._k;if(!tx||!confirm('Cancelar este outro PIX? O QR Code dele para de aceitar pagamento.'))return;
+    blgApi('/pix/cancelar',{method:'POST',body:{txid:tx,usuario:STATE.usuarioLogado||''}}).then(function(r){if(!r||!r.ok)alert((r&&r.erro)||'Não consegui cancelar.');
+      x.pixAtivos=(x.pixAtivos||[]).filter(function(v){return v.txid!==tx;});blgDraw();blgCarregar(true);});return;}
   if(a==='cancelarPix'&&x){
     var pc=BLG.pix[BLG.sel];if(!pc)return;
     if(!confirm('Cancelar este PIX de R$ '+blgMoeda(pc.valor)+'?\n\nO QR Code e o código Copia e Cola param de aceitar pagamento e o app para de conferir.'))return;
