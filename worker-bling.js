@@ -395,6 +395,7 @@ function tipoForma(f) {
   if (!f) return '';
   if (f.codigo === COD_PIX || /pix/i.test(f.nome)) return 'pix';
   if (f.codigo === COD_CREDITO || /cr[eé]dito|link/i.test(f.nome)) return 'credito';
+  if (f.codigo === 15 || /boleto/i.test(f.nome)) return 'boleto';
   return '';
 }
 
@@ -476,7 +477,7 @@ async function listarAbertos(env) {
       const ultimo = pg.map(x => diaLocal(x.horario)).sort().pop() || '';
       if (ultimo && ultimo < diasAtras(DIAS_CONTAS)) continue;
       itens.push({ tipo, id: Number(id), numero: String(m.numero || id), data: m.data || ultimo, prevista: '', cliente: m.cliente || (pg[0] && pg[0].pagador) || '', doc: m.doc || '',
-        total: Number(m.total || pago), aReceber: Math.max(Number(m.aReceber || 0), pago), formas: ['pix'], formaNome: 'PIX', vendedor: '', situacao: 'Pago', fora: true });
+        total: Number(m.total || pago), aReceber: Math.max(Number(m.aReceber || 0), pago), formas: [...new Set(pg.map(x => x.boleto ? 'boleto' : 'pix'))], formaNome: pg.some(x => x.boleto) ? 'Boleto' : 'PIX', vendedor: '', situacao: 'Pago', fora: true });
     }
     cur = l.list_complete ? null : l.cursor;
   } while (cur);
@@ -746,7 +747,8 @@ async function conciliarDireto(env, p, ctx) {
   const itens = await itensAbertos(env, ctx);
   const restante = it => Math.round((Number(it.aReceber || 0) - Number(it.pago || 0)) * 100) / 100;
   const docOk = it => { const d = String(it.doc || '').replace(/\D/g, ''); return d && (d === doc || d === alias); };
-  const exatos = itens.filter(it => docOk(it) && Math.abs(restante(it) - valor) <= 0.01)
+  const aceitaPix = it => (it.formas || []).some(f => f === 'pix' || f === 'credito');
+  const exatos = itens.filter(it => aceitaPix(it) && docOk(it) && Math.abs(restante(it) - valor) <= 0.01)
     .sort((a, b) => String(a.data).localeCompare(String(b.data)));
   await env.BLING_KV.put('visto:' + p.endToEndId, '1', { expirationTtl: 365 * 86400 });
   if (exatos.length) {
