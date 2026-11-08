@@ -15040,14 +15040,14 @@ function blgSit(x){var a=Number(x.aReceber||0),p=Number(x.pago||0);return p>0&&p
 function blgFiltrados(){
   var f=BLG.f,b=(f.busca||'').toLowerCase().trim(),bd=b.replace(/\D/g,'');
   return (BLG.dados||[]).filter(function(x){
-    var st=blgSit(x),porBaixa=f.baixa==='auto'||!!f.diaBaixa;
+    var st=blgSit(x),porBaixa=f.baixa==='auto'||!!f.baixaDe||!!f.baixaAte;
     if(f.sit==='aberto'&&st==='pago'&&!porBaixa)return false;
     if(f.sit==='parcial'&&st!=='parcial')return false;
     if(f.sit==='pago'&&st!=='pago')return false;
     if(f.tipo!=='todos'&&x.tipo!==f.tipo)return false;
     var ba=x.baixasAuto||[];
     if(f.baixa==='auto'&&!ba.length)return false;if(f.baixa==='sem'&&ba.length)return false;
-    if(f.diaBaixa&&!ba.some(function(b){return b.dia===f.diaBaixa;}))return false;
+    if((f.baixaDe||f.baixaAte)&&!ba.some(function(b){return (!f.baixaDe||b.dia>=f.baixaDe)&&(!f.baixaAte||b.dia<=f.baixaAte);}))return false;
     if(f.tef&&f.tef!=='todos'){var tt=x.tef,tok=!!(tt&&tt.total&&tt.informados>=tt.total&&!tt.erros),ter=!!(tt&&tt.erros);
       if(f.tef==='ok'&&!tok)return false;if(f.tef==='sem'&&tok)return false;if(f.tef==='erro'&&!ter)return false;}
     if(f.forma!=='todos'&&(x.formas||[]).indexOf(f.forma)<0)return false;
@@ -15232,7 +15232,10 @@ function blgDraw(){
   h+='<aside class="blg-fil"><h3><svg width="12" height="12" viewBox="0 0 512 512" fill="#2b2b2b"><path d="M487.976 0H24.028C2.71 0-8.047 25.866 7.058 40.971L192 225.941V432c0 7.831 3.821 15.17 10.237 19.662l80 55.98C298.02 518.69 320 507.493 320 487.98V225.941l184.947-184.97C520.021 25.896 509.338 0 487.976 0z"/></svg> Filtrar<span class="x" data-a="limpar">✕</span></h3>'+
      '<label>Situação</label><select data-f="sit"><option value="aberto"'+(BLG.f.sit==='aberto'?' selected':'')+'>Em aberto (inclui parciais)</option><option value="parcial"'+(BLG.f.sit==='parcial'?' selected':'')+'>Parcialmente pagos</option><option value="pago"'+(BLG.f.sit==='pago'?' selected':'')+'>Pagos</option><option value="todos"'+(BLG.f.sit==='todos'?' selected':'')+'>Todos</option></select>'+
      (blgPag()?'':'<label>Baixa automática no Bling</label><select data-f="baixa"><option value="todos">Todas</option><option value="auto"'+(BLG.f.baixa==='auto'?' selected':'')+'>Com baixa automática</option><option value="sem"'+(BLG.f.baixa==='sem'?' selected':'')+'>Sem baixa automática</option></select>'+
-     '<label>Dia da baixa automática</label><input type="date" data-fd="diaBaixa" value="'+blgEsc(BLG.f.diaBaixa||'')+'" style="width:100%;height:36px;border:1px solid #d6d6d6;border-radius:6px;padding:0 8px;font:inherit;box-sizing:border-box">'+
+     '<label>Período da baixa automática</label>'+
+     '<div style="display:grid;grid-template-columns:28px 1fr;gap:4px 6px;align-items:center;font-size:12px;color:#6f6f6f"><span>De</span><input type="date" data-fd="baixaDe" value="'+blgEsc(BLG.f.baixaDe||'')+'" style="width:100%;height:34px;border:1px solid #d6d6d6;border-radius:6px;padding:0 6px;font:inherit;font-size:13px;box-sizing:border-box">'+
+     '<span>Até</span><input type="date" data-fd="baixaAte" value="'+blgEsc(BLG.f.baixaAte||'')+'" style="width:100%;height:34px;border:1px solid #d6d6d6;border-radius:6px;padding:0 6px;font:inherit;font-size:13px;box-sizing:border-box"></div>'+
+     '<div style="display:flex;gap:10px;font-size:12px;margin-top:4px"><a style="cursor:pointer;color:#15803d" data-a="baixaPer" data-k="hoje">Hoje</a><a style="cursor:pointer;color:#15803d" data-a="baixaPer" data-k="ontem">Ontem</a><a style="cursor:pointer;color:#15803d" data-a="baixaPer" data-k="7">7 dias</a><a style="cursor:pointer;color:#15803d" data-a="baixaPer" data-k="mes">Este mês</a></div>'+
      '<label>TEF (Sefaz)</label><select data-f="tef"><option value="todos">Todos</option><option value="ok"'+(BLG.f.tef==='ok'?' selected':'')+'>Com TEF ✓ (informado)</option><option value="sem"'+(BLG.f.tef==='sem'?' selected':'')+'>Sem TEF</option><option value="erro"'+(BLG.f.tef==='erro'?' selected':'')+'>TEF com erro ✕</option></select>')+
      '<label>Tipo</label><select data-f="tipo"><option value="todos">Pedidos e notas</option><option value="pedido"'+(BLG.f.tipo==='pedido'?' selected':'')+'>Só pedidos de venda</option><option value="nota"'+(BLG.f.tipo==='nota'?' selected':'')+'>Só notas fiscais</option></select>'+
      '<label>Forma de pagamento</label><select data-f="forma"><option value="todos">PIX e link de crédito</option><option value="pix"'+(BLG.f.forma==='pix'?' selected':'')+'>PIX</option><option value="credito"'+(BLG.f.forma==='credito'?' selected':'')+'>Link de crédito</option></select>'+
@@ -15244,7 +15247,7 @@ function blgDraw(){
      '<span class="blg-date">'+BLG_IC.cal+' '+({aberto:'Em aberto',parcial:'Parcialmente pagos',pago:'Pagos',todos:'Todos'}[BLG.f.sit||'aberto'])+' · '+(BLG.demo?'dados de exemplo':(BLG.ts?'atualizado '+new Date(BLG.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'—'))+'</span>'+
      '<span style="flex:1"></span><button class="blg-ib" data-a="recarregar" title="Atualizar: confere pagamentos no Sicoob e recarrega do Bling">'+BLG_IC.rec+'</button><button class="blg-ib gray" data-a="imprimir" title="Imprimir">'+BLG_IC.imp+'</button></div>';
   var nomeSit={aberto:'Em aberto',parcial:'Parcialmente pagos',pago:'Pagos',todos:'Todos'}[BLG.f.sit||'aberto'];
-  if(!BLG.view)h+='<div class="blg-fsit">Situação: '+nomeSit+(BLG.f.diaBaixa?' · baixa automática em '+blgData(BLG.f.diaBaixa):BLG.f.baixa==='auto'?' · com baixa automática':'')+(BLG.f.sit!=='aberto'||BLG.f.tipo!=='todos'||BLG.f.forma!=='todos'||BLG.f.vendedor||BLG.f.busca||(BLG.f.tef&&BLG.f.tef!=='todos')||(BLG.f.baixa&&BLG.f.baixa!=='todos')||BLG.f.diaBaixa?'<a data-a="limpar">Limpar</a>':'')+'</div>';
+  if(!BLG.view)h+='<div class="blg-fsit">Situação: '+nomeSit+(BLG.f.baixaDe||BLG.f.baixaAte?' · baixa automática '+(BLG.f.baixaDe===BLG.f.baixaAte?'em '+blgData(BLG.f.baixaDe):(BLG.f.baixaDe?'de '+blgData(BLG.f.baixaDe)+' ':'')+(BLG.f.baixaAte?'até '+blgData(BLG.f.baixaAte):'')):BLG.f.baixa==='auto'?' · com baixa automática':'')+(BLG.f.sit!=='aberto'||BLG.f.tipo!=='todos'||BLG.f.forma!=='todos'||BLG.f.vendedor||BLG.f.busca||(BLG.f.tef&&BLG.f.tef!=='todos')||(BLG.f.baixa&&BLG.f.baixa!=='todos')||BLG.f.baixaDe||BLG.f.baixaAte?'<a data-a="limpar">Limpar</a>':'')+'</div>';
   h+=blgAvisos();
   if(BLG.view==='conc'){h+=blgTelaConc()+'</section><aside class="blg-act">'+blgAcoes()+'</aside></div>';w.innerHTML=h;blgLigar(w);return;}
   if(BLG.view==='econf'){h+=blgTelaEconf()+'</section><aside class="blg-act">'+blgAcoes()+'</aside></div>';w.innerHTML=h;blgLigar(w);return;}
@@ -15671,7 +15674,7 @@ function blgSelecionado(){return BLG.sel&&(BLG.dados||[]).filter(function(x){ret
 
 function blgAcao(a){
   var x=blgSelecionado();
-  if(a==='limpar'){BLG.f={busca:'',tipo:'todos',forma:'todos',vendedor:'',sit:'aberto',tef:'todos',baixa:'todos',diaBaixa:''};blgDraw();return;}
+  if(a==='limpar'){BLG.f={busca:'',tipo:'todos',forma:'todos',vendedor:'',sit:'aberto',tef:'todos',baixa:'todos',baixaDe:'',baixaAte:''};blgDraw();return;}
   if(a==='tefVisto'){tefMarcarVistos();return;}
   if(a.indexOf('econf')===0&&blgEconfAcao(a,BLG._k))return;
   if(a==='tefEnviar'){var nP=((BLG.ecPend&&BLG.ecPend.itens)||[]).filter(function(q){return q.status==='pronto';}).length;
@@ -15680,6 +15683,9 @@ function blgAcao(a){
     blgApi('/econf/enviar',{method:'POST',body:{ambiente:'producao',usuario:STATE.usuarioLogado||''}}).then(function(r){BLG.ecEnv=false;
       alert(r&&r.ok?('TEF: '+r.aceitos+' aceito(s) pela Sefaz'+(r.recusados?', '+r.recusados+' recusado(s)':'')+(r.restantes?'. Faltam '+r.restantes+' — clique de novo.':'.')):('Não enviou: '+((r&&r.erro)||'falhou')));
       blgCarregarTefInfo(true);blgCarregar(true);}).catch(function(e){BLG.ecEnv=false;alert(String(e));blgDraw();});return;}
+  if(a==='baixaPer'){var hj=new Date(Date.now()-3*3600e3),iso=function(d){return d.toISOString().slice(0,10);},k=BLG._k,de,ate=iso(hj);
+    if(k==='hoje')de=ate;else if(k==='ontem'){de=ate=iso(new Date(hj.getTime()-864e5));}else if(k==='7')de=iso(new Date(hj.getTime()-6*864e5));else de=ate.slice(0,8)+'01';
+    BLG.f.baixaDe=de;BLG.f.baixaAte=ate;blgDraw();return;}
   if(a==='tefIgnorar'){var lst=String(BLG._k||'').split(',').filter(Boolean);if(!lst.length)return;
     var xs2=blgSelecionado();
     if(!confirm('Marcar '+(lst.length>1?'estes '+lst.length+' pagamentos':'este pagamento')+' como TESTE?\n\nEle nunca será informado à Sefaz (ECONF) e sai da fila do TEF.'))return;
