@@ -237,6 +237,19 @@ export default {
         try { const a1 = await econfCarregarA1(env); out.certificado = a1 ? { ok: true, validade: a1.validade } : { ok: false }; } catch (e) { out.certificado = { erro: String(e.message || e) }; }
         return resp({ ok: true, diag: out });
       }
+      if (url.pathname === '/econf/ignorar' && req.method === 'POST') {
+        // pagamento de teste (ou que não é venda): nunca informar à Sefaz
+        const b = (await req.json().catch(() => ({}))) || {};
+        const lista = [].concat(b.e2e || []).filter(Boolean);
+        for (const e2e of lista) {
+          const atual = await env.BLING_KV.get('econf:' + e2e, 'json');
+          if (atual && atual.ok && !atual.ignorado) continue; // já informado de verdade: não mexe
+          await env.BLING_KV.put('econf:' + e2e, JSON.stringify({ ok: true, ignorado: true, motivo: String(b.motivo || 'teste').slice(0, 120), por: String(b.usuario || '').slice(0, 60), quando: Date.now() }), { expirationTtl: 5 * 365 * 86400 });
+        }
+        await env.BLING_KV.delete('cache:abertos');
+        await logAcao(env, { acao: 'econf', modo: 'real', tipo: b.tipo, id: b.id, numero: b.numero, detalhe: 'TEF: ' + lista.length + ' pagamento(s) marcado(s) para NÃO informar à Sefaz (' + String(b.motivo || 'teste') + ')' + (b.usuario ? ' — ' + String(b.usuario).slice(0, 60) : '') });
+        return resp({ ok: true, ignorados: lista.length });
+      }
       if (url.pathname === '/econf/registrar' && req.method === 'POST') {
         const b = await req.json();
         return resp(await econfRegistrar(env, b || {}));
@@ -489,7 +502,8 @@ async function listarAbertos(env) {
       const t = { total: pix.length, informados: 0, erros: 0, protocolos: [], ultimoErro: '' };
       for (const x of pix) {
         const r = await env.BLING_KV.get('econf:' + x.e2e, 'json');
-        if (r && r.ok) { t.informados++; if (r.nProt) t.protocolos.push(r.nProt); }
+        if (r && r.ignorado) { t.total--; t.ignorados = (t.ignorados || 0) + 1; }
+        else if (r && r.ok) { t.informados++; if (r.nProt) t.protocolos.push(r.nProt); }
         else if (r && r.ambiente === 'producao') { t.erros++; t.ultimoErro = ((r.cStat || '') + ' ' + (r.xMotivo || '')).trim(); }
         else { const al = ctxTef.alertas.find(a => a.e2e === x.e2e); if (al) { t.erros++; t.ultimoErro = al.motivo; } }
       }
@@ -849,7 +863,9 @@ async function executarContasPedido(env, reg, valor, data) {
     const tok = await tokenValido(env);
     const r = await fetch(API + '/pedidos/vendas/' + reg.id + '/lancar-contas', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, Accept: 'application/json' } });
     if (!r.ok && r.status !== 400) throw new Error('Bling ' + r.status + ' ao lançar contas: ' + (await r.text()).slice(0, 160));
-    lancou = true; contas = await daOrigem();
+    lancou = r.ok;
+    for (let i = 0; i < 4 && !contas.length; i++) { await new Promise(x => setTimeout(x, 1500 * (i + 1))); contas = await daOrigem(); }
+    if (!contas.length && !r.ok) throw new Error('Bling não lançou as contas do pedido (' + r.status + '): ' + (await r.text().catch(() => '')).slice(0, 160));
   }
   if (!contas.length) throw new Error(nfId ? 'A nota do pedido não tem contas a receber no Bling.' : 'Contas do pedido não encontradas depois de lançar.');
   // só parcelas de PIX (o pedido pode ter parte em boleto: essas não são baixadas por um PIX)
@@ -1030,6 +1046,8 @@ async function econfPendentes(env, maxChamadas) {
 
 async function econfRegistrar(env, b) {
   if (!b.e2e || !b.chave) return { ok: false, erro: 'Faltou e2e/chave' };
+  const ant = await env.BLING_KV.get('econf:' + b.e2e, 'json');
+  if (ant && ant.ignorado) return { ok: true, registrado: false, ignorado: true };
   const reg = { quando: Date.now(), chave: b.chave, nSeq: b.nSeq, ambiente: b.ambiente, cStat: String(b.cStat || ''), xMotivo: String(b.xMotivo || '').slice(0, 300), nProt: b.nProt || '' };
   // 135 = evento registrado e vinculado; 136 = registrado sem vínculo; 573 = duplicidade (já existe)
   reg.ok = b.ambiente === 'producao' && ['135', '136', '573'].includes(reg.cStat);
