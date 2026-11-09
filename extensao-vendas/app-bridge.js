@@ -60,7 +60,7 @@
       }
       return;
     }
-    if (req.type === 'auditar' || req.type === 'relacionados' || req.type === 'perdas' || req.type === 'situacao') {
+    if (req.type === 'auditar' || req.type === 'relacionados' || req.type === 'perdas' || req.type === 'situacao' || req.type === 'reativacao') {
       var port;
       try { port = chrome.runtime.connect({ name: 'auditoria' }); }
       catch (err) {

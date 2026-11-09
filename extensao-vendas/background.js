@@ -107,6 +107,19 @@ chrome.runtime.onConnect.addListener(function(port) {
       finally { if (ab2 && ab2.criada) { try { chrome.tabs.remove(ab2.id); } catch (e) {} } }
       return;
     }
+    if (msg.type === 'reativacao') {
+      var ab3 = null;
+      try {
+        post({ type: 'status', texto: 'Conectando ao Bling...' });
+        ab3 = await obterAbaBling();
+        post({ type: 'status', texto: 'Lendo contatos e vendas do Bling (pode levar alguns minutos)...' });
+        var r3 = await enviar(ab3.id, { action: 'reativacaoBling', meses: (msg.filtro || {}).meses || 24 });
+        if (!r3 || r3.erro) throw new Error((r3 && r3.erro) || 'Falha ao ler o Bling');
+        post({ type: 'fim', dados: r3 });
+      } catch (e) { var m4 = String(e.message || e); post({ type: 'erro', msg: m4 === 'SESSAO' ? 'Você não está logado no Bling. Abra o Bling, faça login e tente de novo.' : m4 }); }
+      finally { if (ab3 && ab3.criada) { try { chrome.tabs.remove(ab3.id); } catch (e) {} } }
+      return;
+    }
     if (msg.type !== 'auditar') return;
     var aba = null;
     try {

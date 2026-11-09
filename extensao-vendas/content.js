@@ -623,6 +623,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       .catch(function(e) { sendResponse({ ok: false, erro: e.message === 'SESSAO' ? 'SESSAO' : String(e.message || e) }); });
     return true;
   }
+  if (request.action === 'reativacaoBling') {
+    reativacaoBling(request.meses || 24).then(sendResponse)
+      .catch(function(e) { sendResponse({ erro: e.message === 'SESSAO' ? 'SESSAO' : String(e.message || e) }); });
+    return true;
+  }
   if (request.action === 'auditarProposta') {
     auditarProposta(request.id).then(sendResponse)
       .catch(function(e) { sendResponse({ id: request.id, falha: e.message === 'SESSAO' ? 'Sessão do Bling expirada' : String(e.message || e) }); });
@@ -839,4 +844,79 @@ async function finBling(op, d) {
   if (op === 'baixar') return finBaixar(d);
   if (op === 'listas') return finListas();
   return { ok: false, erro: 'Operação desconhecida' };
+}
+
+
+// ====================== REATIVAÇÃO (aba Lead › Reativação WhatsApp do app) — v2.2.0 ======================
+// Lê os contatos (telefones/CNPJ) e as vendas dos últimos N meses com a sessão do Bling já logada e devolve,
+// por cliente: última compra (data e valor), nº de compras, total e vendedor. O app guarda no Firebase.
+async function reativacaoBling(meses) {
+  function dig(t) { return String(t == null ? '' : t).replace(/\D/g, ''); }
+  function nrm(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\b(ltda|me|epp|eireli|sa|s a)\b/g, ' ').replace(/\s+/g, ' ').trim(); }
+  function br(d) { return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear(); }
+  function isoData(t) { var s = String(t || ''); var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[0]; m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/); return m ? m[3] + '-' + m[2] + '-' + m[1] : ''; }
+  // qualquer campo com cara de telefone (o formato da API interna muda de tempos em tempos)
+  function fones(c) {
+    var out = [];
+    (function vai(o, prof) {
+      if (!o || typeof o !== 'object' || prof > 2) return;
+      Object.keys(o).forEach(function(k) {
+        var v = o[k];
+        if (v && typeof v === 'object') { vai(v, prof + 1); return; }
+        if (!/fone|celular|telefone|whats|mobile/i.test(k)) return;
+        String(v == null ? '' : v).split(/[\/,;|]| e /).forEach(function(x) { var d = dig(x); if (d.length >= 10 && d.length <= 13 && out.indexOf(d) === -1) out.push(d); });
+      });
+    })(c, 0);
+    return out.slice(0, 4);
+  }
+  var con = {}, porNome = {}, nCon = 0;
+  for (var pg = 1; pg <= 400; pg++) {
+    var r = await finJson('/Api/v3/contatos?limite=100&pagina=' + pg);
+    if (!r.ok) { if (pg === 1) throw new Error('O Bling recusou a lista de contatos (HTTP ' + r.status + ')'); break; }
+    var l = (r.json && r.json.data) || [];
+    l.forEach(function(c) {
+      if (!c || !c.id) return;
+      con[c.id] = { n: c.nome || c.fantasia || '', d: dig(c.cpf_cnpj || c.numeroDocumento || c.cnpj || c.documento || ''), f: fones(c) };
+      var k = nrm(c.nome); if (k && !porNome[k]) porNome[k] = c.id;
+      nCon++;
+    });
+    if (l.length < 100) break;
+  }
+  // contatos da lista às vezes vêm sem telefone: completa só os que compraram (abaixo)
+  var fim = new Date(), ini = new Date(); ini.setMonth(ini.getMonth() - Math.max(1, Math.min(60, +meses || 24)));
+  var base = '/Api/v3/vendasinternal/list?pesquisa=&idContatoConsulta=0&unidadesNegocioSelect=0&toggleDefinirSituacaoPadrao=false&fatura=T&idPsqVendedor=0&psqVendedor=&idProduto=0&nomePsqProduto=' +
+    '&lojasVinculadas=todas&criterio=periodo&criterioPeriod=' + encodeURIComponent('Período customizado') + '&idVendedor=0&idTransportador=0&idLoja=todas&idConfUnidadeNegocio=0&situacaoEnvioFatura=T&idContato=0&view=default' +
+    '&dataIni=' + encodeURIComponent(br(ini)) + '&dataFim=' + encodeURIComponent(br(fim));
+  var cli = {}, vistos = {}, nV = 0, semVinc = 0, campos = null;
+  for (var p = 1; p <= 300; p++) {
+    var j = await blingGet(base + '&pagina=' + p);
+    var vs = (j && j.data) || [], novos = 0;
+    vs.forEach(function(v) {
+      if (vistos[v.id]) return; vistos[v.id] = 1; novos++;
+      if (!campos) campos = Object.keys(v).slice(0, 40);
+      if (String(v.idSituacao) === '12') return; // cancelado
+      var cid = v.idContato || (v.contato && v.contato.id) || v.idCliente || '';
+      if (!cid || !con[cid]) { var pn = porNome[nrm(v.nome || (v.contato && v.contato.nome))]; if (pn) cid = pn; }
+      var k = cid ? 'c' + cid : 'n' + nrm(v.nome).slice(0, 60).replace(/ /g, '_');
+      if (!cid) semVinc++;
+      if (k === 'n') return;
+      var dt = isoData(v.data || v.dataEmissao), tot = numX(v.totalVenda != null ? v.totalVenda : v.total);
+      var o = cli[k] || (cli[k] = { n: (cid && con[cid] && con[cid].n) || v.nome || '', d: (cid && con[cid] && con[cid].d) || '', f: (cid && con[cid] && con[cid].f) || [], cid: cid || '', uc: '', uv: 0, q: 0, tot: 0, vd: '' });
+      o.q++; o.tot = Math.round((o.tot + (tot || 0)) * 100) / 100; nV++;
+      if (dt && dt >= o.uc) { o.uc = dt; o.uv = tot || 0; var vd = v.vendedor && typeof v.vendedor === 'object' ? v.vendedor.nome : (v.nomeVendedor || v.vendedor || ''); o.vd = String(vd || '').slice(0, 40); }
+    });
+    if (vs.length < 100 || !novos) break;
+  }
+  // quem comprou mas veio sem telefone na lista: abre o cadastro (no máximo 400, 4 por vez)
+  var falta = Object.keys(cli).filter(function(k) { return cli[k].cid && !cli[k].f.length; }).slice(0, 400);
+  async function w() {
+    while (falta.length) {
+      var k = falta.shift();
+      try { var c = (await blingGet('/Api/v3/contatos/' + cli[k].cid)).data || {}; cli[k].f = fones(c); if (!cli[k].d) cli[k].d = dig(c.numeroDocumento || c.cpf_cnpj || ''); }
+      catch (e) { if (e.message === 'SESSAO') throw e; }
+    }
+  }
+  await Promise.all([w(), w(), w(), w()]);
+  Object.keys(cli).forEach(function(k) { delete cli[k].cid; });
+  return { ok: true, cli: cli, contatos: nCon, vendas: nV, clientes: Object.keys(cli).length, semVinculo: semVinc, campos: campos || [], meses: +meses || 24 };
 }

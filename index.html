@@ -1,5 +1,5 @@
 <!-- v5.4-1785154153 -->
-<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material | fin-sem-nro-documento | fin-sem-ocorrencia | energia-solar-mod11-renderEnergiaSolar | leilao-imoveis-mod12-renderLeilaoImoveis | bling-mod17-renderBling | relatorio-despesas-mod19-renderRelDespesas | conciliacao-receber-boletos-dentro-do-mod17 | pagamentos-mod22-renderBling-pag | conciliacao-pagar-mod23-renderConcPagar | frete-compra-mod24-fcAtivo -->
+<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material | fin-sem-nro-documento | fin-sem-ocorrencia | energia-solar-mod11-renderEnergiaSolar | leilao-imoveis-mod12-renderLeilaoImoveis | bling-mod17-renderBling | relatorio-despesas-mod19-renderRelDespesas | conciliacao-receber-boletos-dentro-do-mod17 | pagamentos-mod22-renderBling-pag | conciliacao-pagar-mod23-renderConcPagar | frete-compra-mod24-fcAtivo | lead-reativacao-whatsapp-renderDisparo -->
 <!-- ANTES DE PUBLICAR QUALQUER MUDANCA NESTE ARQUIVO: busque a versao atual em producao via GitHub API,
      confirme que os marcadores acima (nomes de funcao) ainda existem, e aplique a mudanca por cima dela -
      NUNCA sobrescreva com uma copia local antiga. Um commit em 21/08/2026 (f0ebfff) reverteu por engano
@@ -13205,10 +13205,551 @@ function lcCss(){
   document.head.appendChild(st);
 }
 
+// ===================== 📣 LEAD › REATIVAÇÃO WHATSAPP =====================
+// Clientes que não falam com a gente / não compram há um tempo. Junta:
+//  • todas as conversas do WhatsApp (waChats, sincronizadas pela extensão no computador do WhatsApp)
+//  • compras do Bling (lidas pela extensão v2.2.0+ e guardadas em reativacao/bling)
+// Envio ASSISTIDO (uma pessoa aperta enviar em cada conversa), com limite diário, intervalo aleatório,
+// opt-out ("SAIR") e acompanhamento da taxa de resposta — o que mais pesa para o número não ser bloqueado.
+// Firebase: reativacao/{bling, campanhas/{id}, envios/{id}/{chave}, optout/{chave}}
+var RV={view:'clientes',wa:null,waMeta:null,bl:null,camps:null,env:null,opt:null,carregando:false,err:'',
+  F:{q:'',sc:'90',sv:'30',orig:'todos',wa:'com',etq:'',tier:'',rec:true},sel:{},ord:'score',pg:1,
+  blReq:null,blStatus:'',meses:'24',camp:null,edit:null,sess:null,timer:null,arte:null,iaBusy:false,toast:''};
+var RV_P='reativacao',RV_EXT_MIN='2.2.0',RV_PG=100;
+function rvFb(path,method,body){
+  return fetch(FIREBASE_DB+'/'+RV_P+'/'+path+'.json',{method:method||'GET',headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)})
+    .then(function(r){if(!r.ok)throw new Error('Firebase '+r.status);return r.json();});
+}
+function rvMe(){return STATE.usuarioLogado||'desconhecido';}
+function rvGestor(){return STATE.roleLogado==='admin'||STATE.roleLogado==='gestor';}
+function rvHoje(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function rvDias(iso){if(!iso)return null;var t=new Date(iso+'T12:00:00').getTime();return isNaN(t)?null:Math.max(0,Math.floor((Date.now()-t)/86400000));}
+function rvDataBr(iso){var p=String(iso||'').split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:'';}
+function rvMoeda(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});}
+function rvFone(d){d=String(d||'').replace(/\D/g,'');if(d.length>=12&&d.indexOf('55')===0)d=d.slice(2);return d.length===11?'('+d.slice(0,2)+') '+d.slice(2,7)+'-'+d.slice(7):d.length===10?'('+d.slice(0,2)+') '+d.slice(2,6)+'-'+d.slice(6):d;}
+function rvExtOk(){try{var v=extVerAtual();return !!v&&extVerNum(v)>=extVerNum(RV_EXT_MIN);}catch(e){var a=document.documentElement.getAttribute('data-ma-ext');return !!a&&a>=RV_EXT_MIN;}}
+
+function rvCss(){
+  if(document.getElementById('rvCss'))return;var st=document.createElement('style');st.id='rvCss';
+  st.textContent='.rv-wrap{max-width:1480px;margin:18px auto;padding:0 20px 40px;box-sizing:border-box;font-size:13px;color:#1c1917}'+
+  '.rv-sub{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}.rv-sub button{border:1px solid #d6d3d1;background:#fff;border-radius:999px;padding:7px 14px;font:inherit;font-weight:700;cursor:pointer;color:#44403c}.rv-sub button.on{background:#007aff;border-color:#007aff;color:#fff}'+
+  '.rv-card{background:#fff;border:1px solid #e7e5e4;border-radius:12px;padding:14px 16px;margin-bottom:12px}'+
+  '.rv-k{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}.rv-k div{background:#f8fafc;border-radius:10px;padding:8px 11px}.rv-k b{display:block;font-size:19px}.rv-k span{font-size:11.5px;color:#64748b}'+
+  '.rv-f{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end}.rv-f label{display:block;font-size:11px;font-weight:800;color:#57534e;margin-bottom:3px;text-transform:uppercase;letter-spacing:.3px}'+
+  '.rv-f input,.rv-f select,.rv-in{width:100%;box-sizing:border-box;border:1px solid #d6d3d1;border-radius:8px;padding:7px 9px;font:inherit;background:#fff}'+
+  '.rv-btn{background:#fff;border:1px solid #d6d3d1;border-radius:8px;padding:7px 12px;font:inherit;font-weight:700;cursor:pointer;color:#292524;display:inline-flex;gap:5px;align-items:center;white-space:nowrap}'+
+  '.rv-btn:disabled{opacity:.45;cursor:not-allowed}.rv-btn.pri{background:#007aff;border-color:#007aff;color:#fff}.rv-btn.ok{background:#16a34a;border-color:#16a34a;color:#fff}.rv-btn.red{color:#b91c1c;border-color:#fca5a5}.rv-btn.sm{padding:4px 9px;font-size:12px}'+
+  '.rv-t{width:100%;border-collapse:collapse}.rv-t th{font-size:11px;text-transform:uppercase;color:#78716c;text-align:left;padding:7px 8px;border-bottom:2px solid #e7e5e4;position:sticky;top:0;background:#fff;cursor:pointer;white-space:nowrap}'+
+  '.rv-t td{padding:8px;border-bottom:1px solid #f1f0ee;vertical-align:top}.rv-t tr:hover td{background:#fafaf9}.rv-mut{color:#78716c;font-size:11.5px}'+
+  '.rv-tag{display:inline-block;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:800;margin:1px 2px 1px 0;background:#f1f5f9;color:#334155}'+
+  '.rv-p1{background:#fee2e2;color:#b91c1c}.rv-p2{background:#fef3c7;color:#92400e}.rv-p3{background:#e2e8f0;color:#475569}'+
+  '.rv-warn{background:#fffbeb;border:1.5px solid #fcd34d;color:#78350f;border-radius:10px;padding:10px 14px;margin-bottom:12px}'+
+  '.rv-bad{background:#fef2f2;border:1.5px solid #fca5a5;color:#991b1b;border-radius:10px;padding:10px 14px;margin-bottom:12px}'+
+  '.rv-good{background:#f0fdf4;border:1.5px solid #86efac;color:#166534;border-radius:10px;padding:10px 14px;margin-bottom:12px}'+
+  '.rv-g2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}.rv-msg{white-space:pre-wrap;background:#dcf8c6;border-radius:10px 10px 2px 10px;padding:10px 12px;font-size:13.5px;line-height:1.45;max-width:460px}'+
+  '.rv-li{margin:0;padding-left:18px}.rv-li li{margin:5px 0;line-height:1.45}'+
+  '@media(max-width:820px){.rv-g2{grid-template-columns:1fr}.rv-hide-m{display:none}}';
+  document.head.appendChild(st);
+}
+
+// ── carregar ──
+function rvCarregar(forcar){
+  if(RV.carregando)return;RV.carregando=true;RV.err='';
+  var fb=function(p){return fetch(FIREBASE_DB+'/'+p+'.json').then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});};
+  Promise.all([fb('waChats'),fb('waMeta'),fb(RV_P+'/bling'),fb(RV_P+'/campanhas'),fb(RV_P+'/envios'),fb(RV_P+'/optout')]).then(function(a){
+    RV.wa=a[0]||{};RV.waMeta=a[1];RV.bl=a[2];if(!RV._fIni){RV._fIni=true;if(!RV.bl||!RV.bl.ts)RV.F.sc='0';}RV.camps=a[3]||{};RV.env=a[4]||{};RV.opt=a[5]||{};RV.carregando=false;RV.rows=null;rvDraw();
+  }).catch(function(e){RV.carregando=false;RV.err='Não consegui carregar ('+e.message+').';rvDraw();});
+}
+
+// ── cruzamento WhatsApp × Bling ──
+function rvMontar(){
+  if(RV.rows)return RV.rows;
+  var waIdx={},nomeIdx={};
+  Object.keys(RV.wa||{}).forEach(function(p){var k=cqWaChave(p);if(!k)return;var o=RV.wa[p]||{};
+    if(waIdx[k]&&(waIdx[k].t||0)>(o.t||0))return;waIdx[k]={p:String(p).replace(/\D/g,''),n:o.n||'',e:o.e||[],uc:o.uc||0,un:o.un||0,t:o.t||0};});
+  Object.keys(waIdx).forEach(function(k){String(waIdx[k].n||'').split(/\s[-–|\/]\s|\s*[|\/]\s*/).forEach(function(seg){var s=cqNorm(seg);if(s.length>=5)(nomeIdx[s]=nomeIdx[s]||[]).push(k);});});
+  var rows=[],usados={},cli=(RV.bl&&RV.bl.cli)||{};
+  Object.keys(cli).forEach(function(id){var c=cli[id],ks=(c.f||[]).map(cqWaChave).filter(Boolean),wk='',via='';
+    for(var i=0;i<ks.length;i++)if(waIdx[ks[i]]){wk=ks[i];via='telefone';break;}
+    if(!wk){var cn=cqNorm(c.n);if(cn.length>=5&&nomeIdx[cn]){wk=nomeIdx[cn].filter(function(k){return !usados[k];})[0]||'';if(wk)via='nome';}}
+    var cel='';(c.f||[]).some(function(f){var d=String(f).replace(/\D/g,'');if(d.length>=12&&d.indexOf('55')===0)d=d.slice(2);if(d.length>=11&&d[0]==='0')d=d.slice(1);
+      if((d.length===11&&d[2]==='9')||(d.length===10&&/[6-9]/.test(d[2]))){cel=cqWaChave(d);return true;}return false;});
+    if(!wk&&cel)wk=cel;// celular do cadastro, mesmo sem conversa no WhatsApp ainda
+    if(wk&&waIdx[wk])usados[wk]=1;
+    rows.push({id:'b'+id,k:wk,nome:c.n||'(sem nome)',doc:c.d||'',fone:(c.f||[])[0]||'',w:waIdx[wk]||null,via:via,uc:c.uc||'',uv:c.uv||0,q:c.q||0,tot:c.tot||0,vd:c.vd||'',orig:'bling'});
+  });
+  Object.keys(waIdx).forEach(function(k){if(usados[k])return;var w=waIdx[k];rows.push({id:'w'+k,k:k,nome:w.n||rvFone(w.p),doc:'',fone:w.p,w:w,via:'',uc:'',uv:0,q:0,tot:0,vd:'',orig:'wa'});});
+  // prioridade: valor (percentil) 40% · frequência 25% · tempo sem comprar na "faixa boa" 35%
+  var tots=rows.filter(function(r){return r.q;}).map(function(r){return r.tot;}).sort(function(a,b){return a-b;});
+  function pct(v){if(!tots.length)return 0;var lo=0,hi=tots.length;while(lo<hi){var m=(lo+hi)>>1;if(tots[m]<v)lo=m+1;else hi=m;}return lo/tots.length;}
+  var agora=Date.now()/1000;
+  rows.forEach(function(r){
+    r.dc=rvDias(r.uc);var w=r.w,ult=w?Math.max(w.uc||0,w.un||0,w.t||0):0;r.dv=ult?Math.floor((agora-ult)/86400):null;r.ultCli=w&&w.uc?Math.floor((agora-w.uc)/86400):null;
+    var s;
+    if(r.q){var d=r.dc==null?999:r.dc,rec=d<45?0.15:d<90?0.6:d<=365?1:d<=730?0.7:0.45;s=100*(0.4*pct(r.tot)+0.25*Math.min(1,r.q/6)+0.35*rec);}
+    else s=18+(w&&w.uc?12:0);
+    if(r.dv!=null&&r.dv<15)s*=0.5;// conversou há pouco: não é reativação
+    if(!r.k)s*=0.5;
+    r.sc=Math.round(s);r.tier=r.sc>=65?1:r.sc>=40?2:3;
+  });
+  RV.rows=rows;RV.waIdx=waIdx;return rows;
+}
+function rvContato(r){var n=String((r.w&&r.w.n)||'').trim();if(!n)return '';var p=n.split(/\s[-–|\/]\s/)[0].trim().split(/\s+/)[0]||'';
+  if(!/^[A-Za-zÀ-ÿ]{3,15}$/.test(p)||cqNorm(r.nome).indexOf(cqNorm(p))===0)return '';return p.charAt(0).toUpperCase()+p.slice(1).toLowerCase();}
+function rvUltEnvio(k){var u=0,uu='',cid='';Object.keys(RV.env||{}).forEach(function(c){var e=(RV.env[c]||{})[k];if(e&&e.st==='env'&&e.ts>u){u=e.ts;uu=e.u||'';cid=c;}});return u?{ts:u,u:uu,c:cid}:null;}
+function rvOptout(k){return !!(k&&RV.opt&&RV.opt[k]);}
+function rvFiltrar(){
+  var F=RV.F,q=cqNorm(F.q),qd=String(F.q||'').replace(/\D/g,''),lim30=Date.now()-30*86400000;
+  var L=rvMontar().filter(function(r){
+    if(rvOptout(r.k))return false;
+    if(F.orig==='bling'&&r.orig!=='bling')return false;if(F.orig==='wa'&&r.orig!=='wa')return false;
+    if(F.wa==='com'&&!r.k)return false;if(F.wa==='conv'&&!r.w)return false;if(F.wa==='sem'&&r.k)return false;
+    if(F.sc==='nunca'){if(r.q)return false;}else if(+F.sc>0){if(!r.q||r.dc==null||r.dc<+F.sc)return false;}
+    if(+F.sv>0&&r.dv!=null&&r.dv<+F.sv)return false;
+    if(F.etq){var et=(r.w&&r.w.e)||[];if(F.etq==='__sem'?et.length:et.indexOf(F.etq)===-1)return false;}
+    if(F.tier&&String(r.tier)!==F.tier)return false;
+    if(F.rec){var ue=rvUltEnvio(r.k);if(ue&&ue.ts>lim30)return false;}
+    if(q||qd.length>=4){var hay=cqNorm(r.nome+' '+r.vd+' '+((r.w&&r.w.n)||''));if(!(q&&hay.indexOf(q)!==-1)&&!(qd.length>=4&&(String(r.doc).indexOf(qd)!==-1||String(r.fone).indexOf(qd)!==-1||String(r.k).indexOf(qd)!==-1)))return false;}
+    return true;
+  });
+  var o=RV.ord;
+  L.sort(function(a,b){
+    if(o==='compra')return (b.dc==null?-1:b.dc)-(a.dc==null?-1:a.dc);
+    if(o==='conversa')return (b.dv==null?99999:b.dv)-(a.dv==null?99999:a.dv);
+    if(o==='total')return b.tot-a.tot;
+    if(o==='nome')return a.nome.localeCompare(b.nome);
+    return b.sc-a.sc||b.tot-a.tot;
+  });
+  return L;
+}
+
+// ── tela ──
+function renderDisparo(){
+  rvCss();
+  var wrap=document.createElement('div');wrap.className='rv-wrap';wrap.id='rvRoot';
+  wrap.addEventListener('click',rvClick);wrap.addEventListener('change',rvChange);wrap.addEventListener('input',rvInput);
+  setTimeout(function(){if(RV.wa)rvDraw();else wrap.innerHTML='<div class="rv-card" style="text-align:center;color:#78716c">Carregando conversas do WhatsApp e compras do Bling…</div>';rvCarregar();},0);
+  return wrap;
+}
+function rvDraw(){
+  var root=document.getElementById('rvRoot');if(!root)return;
+  if(RV.timer&&RV.view!=='envio'){clearInterval(RV.timer);RV.timer=null;}
+  var foco=document.activeElement&&document.activeElement.id,sel=foco&&document.activeElement.selectionStart;
+  var tb=document.getElementById('rvTbl'),tbS=tb?tb.scrollTop:0,pgY=window.scrollY;
+  var V=[['clientes','👥 Clientes para reativar'],['campanhas','📣 Campanhas'+(RV.camps?' ('+Object.keys(RV.camps).length+')':'')],['arte','🎨 Criar arte'],['regras','🛡️ Regras anti-bloqueio']];
+  var h='<div class="rv-sub">'+V.map(function(v){return '<button data-a="view" data-v="'+v[0]+'" class="'+((RV.view===v[0]||(RV.view==='envio'&&v[0]==='campanhas')||(RV.view==='editar'&&v[0]==='campanhas'))?'on':'')+'">'+v[1]+'</button>';}).join('')+
+    '<span style="flex:1"></span><button class="rv-btn sm" data-a="recarregar">🔄 Atualizar</button></div>';
+  if(RV.toast){h+='<div class="rv-good">'+RV.toast+'</div>';setTimeout(function(){RV.toast='';},4000);}
+  if(RV.err)h+='<div class="rv-bad">'+cqEsc(RV.err)+'</div>';
+  if(!RV.wa){root.innerHTML=h+'<div class="rv-card" style="text-align:center;color:#78716c">Carregando…</div>';return;}
+  if(RV.view==='clientes')h+=rvHtmlClientes();
+  else if(RV.view==='campanhas')h+=rvHtmlCampanhas();
+  else if(RV.view==='editar')h+=rvHtmlEditar();
+  else if(RV.view==='envio')h+=rvHtmlEnvio();
+  else if(RV.view==='arte')h+=rvHtmlArte();
+  else h+=rvHtmlRegras();
+  root.innerHTML=h;
+  if(RV.view==='arte')rvArteDesenhar();
+  var tb2=document.getElementById('rvTbl');if(tb2&&tbS)tb2.scrollTop=tbS;if(Math.abs(window.scrollY-pgY)>2)window.scrollTo(0,pgY);
+  if(foco){var el=document.getElementById(foco);if(el&&el.focus){el.focus();try{if(sel!=null)el.setSelectionRange(sel,sel);}catch(e){}}}
+}
+function rvSelOpt(id,label,opts,val){return '<div><label>'+label+'</label><select id="rvF_'+id+'" data-f="'+id+'">'+opts.map(function(o){return '<option value="'+cqEsc(o[0])+'"'+(String(val)===String(o[0])?' selected':'')+'>'+cqEsc(o[1])+'</option>';}).join('')+'</select></div>';}
+
+function rvHtmlClientes(){
+  var h='',bl=RV.bl,wm=RV.waMeta,ag=Date.now();
+  // situação das fontes
+  var avisos=[];
+  if(!wm||!wm.ts)avisos.push('o WhatsApp ainda não foi sincronizado — deixe o WhatsApp Web aberto no computador do WhatsApp com a extensão');
+  else if(ag-wm.ts>6*3600000)avisos.push('as conversas do WhatsApp são de '+new Date(wm.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' (confira o computador do WhatsApp)');
+  if(!bl||!bl.ts)avisos.push('as compras do Bling ainda não foram lidas — clique em <b>Ler compras do Bling</b>');
+  h+='<div class="rv-card" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">'+
+    '<div style="flex:1;min-width:260px"><div style="font-weight:900;font-size:15px">Fontes</div><div class="rv-mut" style="margin-top:3px">'+
+    '💬 WhatsApp: '+(wm&&wm.ts?'<b>'+(wm.conversas||Object.keys(RV.wa).length)+'</b> conversas, atualizado há '+cqTempo((ag-wm.ts)/1000):'não sincronizado')+
+    ' · 🧾 Bling: '+(bl&&bl.ts?'<b>'+(bl.clientes||Object.keys(bl.cli||{}).length)+'</b> clientes com compra em '+(bl.meses||24)+' meses ('+(bl.vendas||0)+' vendas), lido em '+new Date(bl.ts).toLocaleDateString('pt-BR')+(bl.u?' por '+cqEsc(bl.u):''):'nunca lido')+'</div>'+
+    (RV.blStatus?'<div style="margin-top:6px;font-weight:700;color:#1d4ed8">'+cqEsc(RV.blStatus)+'</div>':'')+'</div>'+
+    '<select id="rvMeses" class="rv-in" style="width:auto">'+[['12','12 meses'],['24','24 meses'],['36','36 meses'],['60','5 anos']].map(function(o){return '<option value="'+o[0]+'"'+(RV.meses===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>'+
+    '<button class="rv-btn pri" data-a="lerBling"'+(RV.blReq?' disabled':'')+'>🧾 '+(RV.blReq?'Lendo o Bling…':'Ler compras do Bling')+'</button></div>';
+  if(!rvExtOk())h+='<div class="rv-warn">Para ler as compras do Bling, este computador precisa da extensão <b>Mais Acessível — Vendas e Atendimento v'+RV_EXT_MIN+'</b> ou mais nova e do Bling logado no Chrome (a loja do Chrome atualiza sozinha em até 1–2 dias).'+(bl&&bl.ts?' A lista usa a última leitura salva pela equipe.':' Enquanto isso, a lista mostra só os contatos do WhatsApp.')+'</div>';
+  if(avisos.length)h+='<div class="rv-warn">⚠️ '+avisos.join('; ')+'.</div>';
+
+  var all=rvMontar(),L=rvFiltrar(),F=RV.F;
+  var n1=L.filter(function(r){return r.tier===1;}).length,n2=L.filter(function(r){return r.tier===2;}).length,nOpt=Object.keys(RV.opt||{}).length,nSel=Object.keys(RV.sel).length;
+  h+='<div class="rv-card"><div class="rv-k">'+
+    '<div><b>'+all.length+'</b><span>contatos (Bling + WhatsApp)</span></div>'+
+    '<div><b>'+L.length+'</b><span>no filtro atual</span></div>'+
+    '<div><b style="color:#b91c1c">'+n1+'</b><span>🔥 prioridade alta</span></div>'+
+    '<div><b style="color:#92400e">'+n2+'</b><span>prioridade média</span></div>'+
+    '<div><b>'+nOpt+'</b><span>pediram para não receber</span></div>'+
+    '<div><b style="color:#007aff">'+nSel+'</b><span>selecionados</span></div></div>';
+  var etqs=(wm&&wm.etiquetas)||[];
+  h+='<div class="rv-f" style="margin-top:12px">'+
+    '<div style="grid-column:span 2"><label>Buscar</label><input id="rvQ" data-f="q" placeholder="Empresa, CNPJ, telefone, vendedor…" value="'+cqEsc(F.q)+'"></div>'+
+    rvSelOpt('sc','Sem comprar há',[['0','Qualquer'],['60','60+ dias'],['90','90+ dias'],['180','6+ meses'],['365','1+ ano'],['nunca','Nunca comprou']],F.sc)+
+    rvSelOpt('sv','Sem conversar há',[['0','Qualquer'],['15','15+ dias'],['30','30+ dias'],['60','60+ dias'],['90','90+ dias'],['180','6+ meses']],F.sv)+
+    rvSelOpt('orig','Origem',[['todos','Bling + WhatsApp'],['bling','Comprou (Bling)'],['wa','Só WhatsApp']],F.orig)+
+    rvSelOpt('wa','WhatsApp',[['com','Com número de WhatsApp'],['conv','Com conversa salva'],['todos','Todos'],['sem','Sem celular']],F.wa)+
+    rvSelOpt('tier','Prioridade',[['','Todas'],['1','🔥 Alta'],['2','Média'],['3','Baixa']],F.tier)+
+    (etqs.length?rvSelOpt('etq','Etiqueta WhatsApp',[['','Todas'],['__sem','Sem etiqueta']].concat(etqs.map(function(e){return [e,e];})),F.etq):'')+
+    '<div><label>&nbsp;</label><label style="text-transform:none;font-weight:600;font-size:12.5px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="rvF_rec" data-f="rec" style="width:auto"'+(F.rec?' checked':'')+'> Esconder quem recebeu disparo nos últimos 30 dias</label></div></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">'+
+    '<button class="rv-btn" data-a="selTop" data-n="50">☑️ Selecionar os 50 primeiros</button><button class="rv-btn" data-a="selTop" data-n="150">☑️ 150 primeiros</button>'+
+    (nSel?'<button class="rv-btn" data-a="selLimpar">✖ Limpar seleção</button>':'')+'<span style="flex:1"></span>'+
+    '<button class="rv-btn pri" data-a="novaCamp"'+(nSel?'':' disabled')+'>📣 Criar campanha com '+nSel+'</button>'+
+    (nSel&&Object.keys(RV.camps||{}).length?'<select id="rvAddCamp" class="rv-in" style="width:auto"><option value="">➕ Adicionar a uma campanha…</option>'+Object.keys(RV.camps).map(function(id){return '<option value="'+cqEsc(id)+'">'+cqEsc(RV.camps[id].nome||id)+'</option>';}).join('')+'</select>':'')+
+    '</div></div>';
+  // tabela
+  var tot=L.length,pgs=Math.max(1,Math.ceil(tot/RV_PG));if(RV.pg>pgs)RV.pg=pgs;var P=L.slice((RV.pg-1)*RV_PG,RV.pg*RV_PG);
+  var th=function(o,t){return '<th data-a="ord" data-o="'+o+'">'+t+(RV.ord===o?' ▾':'')+'</th>';};
+  h+='<div class="rv-card" id="rvTbl" style="padding:0;overflow:auto;max-height:70vh"><table class="rv-t"><tr><th style="width:26px"><input type="checkbox" data-a="selPag"'+(P.length&&P.every(function(r){return RV.sel[r.id];})?' checked':'')+'></th>'+
+    th('score','Prioridade')+th('nome','Cliente')+'<th>WhatsApp</th>'+th('conversa','Última conversa')+th('compra','Última compra')+th('total','Compras')+'<th class="rv-hide-m">Disparos</th></tr>';
+  if(!P.length)h+='<tr><td colspan="8" style="text-align:center;padding:30px;color:#78716c">Nenhum cliente neste filtro.</td></tr>';
+  P.forEach(function(r){
+    var w=r.w,ue=rvUltEnvio(r.k),tl=['','🔥 Alta','Média','Baixa'][r.tier];
+    h+='<tr><td><input type="checkbox" data-a="sel" data-id="'+cqEsc(r.id)+'"'+(RV.sel[r.id]?' checked':'')+(r.k?'':' disabled title="Sem celular"')+'></td>'+
+      '<td><span class="rv-tag rv-p'+r.tier+'">'+tl+'</span><div class="rv-mut">'+r.sc+' pts</div></td>'+
+      '<td><b>'+cqEsc(r.nome)+'</b>'+(r.doc?'<div class="rv-mut">'+cqEsc(lcFmtCnpj(r.doc))+'</div>':'')+(r.vd?'<div class="rv-mut">👤 '+cqEsc(r.vd)+'</div>':'')+(r.orig==='wa'?'<div><span class="rv-tag">só WhatsApp</span></div>':'')+'</td>'+
+      '<td>'+(r.k?'<a href="#" data-a="abrirWa" data-id="'+cqEsc(r.id)+'" style="color:#15803d;font-weight:700;text-decoration:none">'+cqEsc(rvFone(w?w.p:r.k))+'</a>':'<span class="rv-mut">sem celular'+(r.fone?' ('+cqEsc(rvFone(r.fone))+')':'')+'</span>')+
+        (w&&w.n&&r.orig==='bling'?'<div class="rv-mut">'+cqEsc(w.n)+(r.via==='nome'?' (achado pelo nome)':'')+'</div>':'')+
+        (r.k&&!w?'<div class="rv-mut">do cadastro do Bling — sem conversa</div>':'')+
+        ((w&&w.e&&w.e.length)?'<div>'+w.e.map(function(e){return '<span class="rv-tag">'+cqEsc(e)+'</span>';}).join('')+'</div>':'')+'</td>'+
+      '<td>'+(r.dv!=null?'há <b>'+r.dv+'</b> dias'+(r.ultCli!=null?'<div class="rv-mut">cliente falou há '+r.ultCli+' d</div>':''):'<span class="rv-mut">—</span>')+'</td>'+
+      '<td>'+(r.uc?rvDataBr(r.uc)+'<div class="rv-mut">há '+r.dc+' dias · '+rvMoeda(r.uv)+'</div>':'<span class="rv-mut">'+(r.orig==='wa'?'não achado no Bling':'—')+'</span>')+'</td>'+
+      '<td>'+(r.q?'<b>'+r.q+'</b>×<div class="rv-mut">'+rvMoeda(r.tot)+'</div>':'<span class="rv-mut">—</span>')+'</td>'+
+      '<td class="rv-hide-m">'+(ue?'<span class="rv-mut">'+new Date(ue.ts).toLocaleDateString('pt-BR')+' por '+cqEsc(ue.u)+'</span>':'')+'<div><a href="#" data-a="optout" data-k="'+cqEsc(r.k)+'" data-n="'+cqEsc(r.nome)+'" class="rv-mut" style="color:#b91c1c">🚫 não quer</a></div></td></tr>';
+  });
+  h+='</table></div>';
+  if(pgs>1)h+='<div style="display:flex;gap:8px;justify-content:center;align-items:center"><button class="rv-btn sm" data-a="pg" data-p="'+(RV.pg-1)+'"'+(RV.pg<=1?' disabled':'')+'>‹</button><span>Página '+RV.pg+' de '+pgs+' ('+tot+')</span><button class="rv-btn sm" data-a="pg" data-p="'+(RV.pg+1)+'"'+(RV.pg>=pgs?' disabled':'')+'>›</button></div>';
+  h+='<div class="rv-mut" style="margin-top:8px">Prioridade = quanto o cliente já comprou (40%), quantas vezes comprou (25%) e há quanto tempo parou de comprar (35% — o ponto ideal é entre 3 e 12 meses). Quem conversou nos últimos 15 dias cai pela metade: não precisa de reativação.</div>';
+  return h;
+}
+
+// ── campanhas ──
+function rvStats(cid){
+  rvMontar();var c=RV.camps[cid]||{},fila=c.fila||{},env=(RV.env&&RV.env[cid])||{},s={fila:0,env:0,pend:0,resp:0,opt:0,pul:0,inv:0,hojeMeu:0};
+  var hoje=rvHoje();
+  Object.keys(fila).forEach(function(k){s.fila++;var e=env[k];
+    if(rvOptout(k)&&(!e||e.st!=='env')){s.opt++;return;}
+    if(!e||e.st==='abrindo'){s.pend++;return;}
+    if(e.st==='env'){s.env++;var w=(RV.waIdx||{})[k];if(w&&w.uc&&w.uc*1000>e.ts)s.resp++;}
+    else if(e.st==='optout')s.opt++;else if(e.st==='invalido')s.inv++;else s.pul++;
+  });
+  s.taxa=s.env?Math.round(s.resp/s.env*100):null;
+  return s;
+}
+function rvEnviosHoje(u){var n=0,d0=new Date();d0.setHours(0,0,0,0);var t0=d0.getTime();Object.keys(RV.env||{}).forEach(function(c){var E=RV.env[c]||{};Object.keys(E).forEach(function(k){var e=E[k];if(e&&e.st==='env'&&e.ts>=t0&&(!u||e.u===u))n++;});});return n;}
+function rvHtmlCampanhas(){
+  var ids=Object.keys(RV.camps||{}).sort(function(a,b){return (RV.camps[b].ts||0)-(RV.camps[a].ts||0);});
+  var h='<div class="rv-card" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div style="flex:1"><b style="font-size:15px">Campanhas de reativação</b><div class="rv-mut">Selecione clientes na aba <b>Clientes para reativar</b> e crie a campanha. Cada colaborador envia pelo próprio WhatsApp, um por um.</div></div>'+
+    '<div class="rv-mut">Você enviou hoje: <b style="font-size:15px;color:#1c1917">'+rvEnviosHoje(rvMe())+'</b></div><button class="rv-btn pri" data-a="view" data-v="clientes">➕ Nova campanha</button></div>';
+  if(!ids.length)return h+'<div class="rv-card" style="text-align:center;color:#78716c;padding:30px">Nenhuma campanha ainda.</div>';
+  ids.forEach(function(id){var c=RV.camps[id],s=rvStats(id);
+    var alerta=s.env>=20&&s.taxa!=null&&s.taxa<15?'<div class="rv-bad" style="margin:10px 0 0">🛑 Taxa de resposta de <b>'+s.taxa+'%</b> — baixa demais. <b>Pause</b> esta campanha e mude a mensagem/arte ou o público antes de continuar: resposta baixa é o principal sinal que derruba o número.</div>':
+      s.env>=20&&s.taxa!=null&&s.taxa<30?'<div class="rv-warn" style="margin:10px 0 0">⚠️ Taxa de resposta de <b>'+s.taxa+'%</b>. Abaixo de 30% é sinal de alerta: personalize mais a mensagem.</div>':'';
+    h+='<div class="rv-card"><div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">'+
+      (c.img?'<img src="'+c.img+'" style="width:84px;height:84px;object-fit:cover;border-radius:10px;border:1px solid #e7e5e4">':'')+
+      '<div style="flex:1;min-width:220px"><div style="font-weight:900;font-size:15px">'+cqEsc(c.nome||'Campanha')+(c.pausada?' <span class="rv-tag rv-p2">pausada</span>':'')+'</div>'+
+      '<div class="rv-mut">criada por '+cqEsc(c.u||'')+' em '+new Date(c.ts||0).toLocaleDateString('pt-BR')+' · limite '+(c.lim||40)+'/dia por pessoa · intervalo '+(c.imin||60)+'–'+(c.imax||150)+' s</div>'+
+      '<div class="rv-k" style="margin-top:8px"><div><b>'+s.fila+'</b><span>na lista</span></div><div><b>'+s.env+'</b><span>enviados</span></div><div><b>'+s.pend+'</b><span>faltam</span></div>'+
+      '<div><b style="color:'+(s.taxa==null?'#1c1917':s.taxa>=30?'#15803d':s.taxa>=15?'#b45309':'#b91c1c')+'">'+(s.taxa==null?'—':s.taxa+'%')+'</b><span>responderam ('+s.resp+')</span></div><div><b>'+s.opt+'</b><span>não querem</span></div></div>'+alerta+'</div>'+
+      '<div style="display:flex;flex-direction:column;gap:6px"><button class="rv-btn ok" data-a="envio" data-c="'+cqEsc(id)+'"'+(s.pend&&!c.pausada?'':' disabled')+'>▶ Enviar</button>'+
+      '<button class="rv-btn sm" data-a="editar" data-c="'+cqEsc(id)+'">✏️ Editar</button>'+
+      '<button class="rv-btn sm" data-a="pausar" data-c="'+cqEsc(id)+'">'+(c.pausada?'▶ Retomar':'⏸ Pausar')+'</button>'+
+      ((rvGestor()||c.u===rvMe())?'<button class="rv-btn sm red" data-a="excluir" data-c="'+cqEsc(id)+'">🗑 Excluir</button>':'')+'</div></div></div>';
+  });
+  return h;
+}
+function rvNovaCamp(){
+  var rows=rvMontar(),fila={};rows.forEach(function(r){if(RV.sel[r.id]&&r.k&&!rvOptout(r.k))fila[r.k]={n:String(r.nome).slice(0,80),p:r.w?r.w.p:('55'+r.k),uc:r.uc||'',vd:r.vd||'',sc:r.sc||0,c:rvContato(r)};});
+  RV.edit={id:'',nome:'Reativação '+new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'}),
+    txt:['{Olá|Oi|Bom dia}, {contato}! Tudo bem? Aqui é {vendedor}, da Mais Acessível.\n\nFaz um tempo que não falamos com a {nome} e quis te mandar nossas novidades em piso tátil e acessibilidade. Tem alguma obra começando por aí?','',''],
+    sair:true,img:'',lim:40,imin:60,imax:150,fila:fila};
+  RV.view='editar';rvDraw();
+}
+function rvHtmlEditar(){
+  var e=RV.edit;if(!e){RV.view='campanhas';return rvHtmlCampanhas();}
+  var nf=Object.keys(e.fila||{}).length,ex=rvMsgPara(e,{n:'Construtora Exemplo LTDA',c:'João',uc:'2026-03-10'},0);
+  return '<div class="rv-card"><div style="font-weight:900;font-size:15px;margin-bottom:10px">'+(e.id?'Editar campanha':'Nova campanha')+' · '+nf+' contato(s)</div><div class="rv-g2"><div>'+
+    '<div class="rv-f" style="grid-template-columns:1fr"><div><label>Nome da campanha</label><input id="rvENome" class="rv-in" value="'+cqEsc(e.nome)+'"></div></div>'+
+    '<div style="margin-top:10px"><label style="font-size:11px;font-weight:800;color:#57534e;text-transform:uppercase">Mensagem (até 3 versões — o app alterna entre elas)</label>'+
+    e.txt.map(function(t,i){return '<textarea id="rvETxt'+i+'" class="rv-in" rows="'+(i?4:6)+'" style="margin-top:6px;resize:vertical" placeholder="Versão '+(i+1)+(i?' (opcional)':'')+'">'+cqEsc(t)+'</textarea>';}).join('')+
+    '<div class="rv-mut" style="margin-top:4px">Campos: <b>{contato}</b> (nome da pessoa no WhatsApp; se não tiver, a empresa), <b>{nome}</b> (empresa), <b>{vendedor}</b> (quem envia), <b>{ultima_compra}</b> (mês/ano). Variações: <b>{Olá|Oi|Bom dia}</b> sorteia uma.</div>'+
+    '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="rv-btn sm" data-a="iaVar"'+(RV.iaBusy?' disabled':'')+'>✨ '+(RV.iaBusy?'Gerando…':'Gerar versões com IA')+'</button></div></div>'+
+    '<label style="display:flex;gap:6px;align-items:center;margin-top:10px;font-weight:600"><input type="checkbox" id="rvESair"'+(e.sair?' checked':'')+'> Terminar com "Se não quiser receber, responda SAIR" (recomendado)</label>'+
+    '<div class="rv-f" style="margin-top:12px"><div><label>Limite por pessoa/dia</label><input id="rvELim" type="number" min="5" max="200" value="'+e.lim+'"></div>'+
+    '<div><label>Intervalo mín. (s)</label><input id="rvEImin" type="number" min="30" value="'+e.imin+'"></div><div><label>Intervalo máx. (s)</label><input id="rvEImax" type="number" min="45" value="'+e.imax+'"></div></div>'+
+    '<div style="margin-top:12px"><label style="font-size:11px;font-weight:800;color:#57534e;text-transform:uppercase">Imagem</label><div style="display:flex;gap:8px;align-items:center;margin-top:5px;flex-wrap:wrap">'+
+      (e.img?'<img src="'+e.img+'" style="width:90px;height:90px;object-fit:cover;border-radius:10px;border:1px solid #e7e5e4"><button class="rv-btn sm red" data-a="tirarImg">Tirar</button>':'')+
+      '<label class="rv-btn sm" style="cursor:pointer">📁 Enviar imagem<input type="file" id="rvEImg" accept="image/*" style="display:none"></label>'+
+      (RV.arte&&RV.arte.png?'<button class="rv-btn sm" data-a="usarArte">🎨 Usar a arte criada</button>':'<button class="rv-btn sm" data-a="view" data-v="arte">🎨 Criar arte</button>')+'</div></div>'+
+    '<div style="display:flex;gap:8px;margin-top:16px"><button class="rv-btn pri" data-a="salvarCamp">💾 Salvar campanha</button><button class="rv-btn" data-a="view" data-v="campanhas">Cancelar</button></div></div>'+
+    '<div><div style="font-size:11px;font-weight:800;color:#57534e;text-transform:uppercase;margin-bottom:6px">Prévia</div><div style="background:#efeae2;border-radius:12px;padding:14px">'+
+      (e.img?'<img src="'+e.img+'" style="max-width:280px;width:100%;border-radius:8px;display:block;margin-bottom:6px">':'')+'<div class="rv-msg">'+cqEsc(ex)+'</div></div>'+
+    '<div class="rv-warn" style="margin-top:12px;font-size:12.5px">💡 Mensagem que <b>gera resposta</b> protege o número: termine com uma pergunta simples, cite algo do cliente (última compra), evite link na primeira mensagem e não use só imagem sem texto.</div></div></div></div>';
+}
+function rvLerEditor(){var e=RV.edit;if(!e)return;var g=function(id){var x=document.getElementById(id);return x?x.value:null;};
+  if(g('rvENome')!=null)e.nome=g('rvENome');for(var i=0;i<3;i++){var t=g('rvETxt'+i);if(t!=null)e.txt[i]=t;}
+  var s=document.getElementById('rvESair');if(s)e.sair=s.checked;
+  if(g('rvELim')!=null)e.lim=Math.max(5,Math.min(200,+g('rvELim')||40));if(g('rvEImin')!=null)e.imin=Math.max(30,+g('rvEImin')||60);if(g('rvEImax')!=null)e.imax=Math.max(e.imin+15,+g('rvEImax')||150);}
+function rvSpin(t){var n=0;while(/\{[^{}]*\|[^{}]*\}/.test(t)&&n++<50)t=t.replace(/\{([^{}]*\|[^{}]*)\}/g,function(m,a){var o=a.split('|');return o[Math.floor(Math.random()*o.length)];});return t;}
+function rvNomeCurto(n){var s=String(n||'').replace(/\s+(ltda|me|epp|eireli|s\/?a)\.?$/i,'').replace(/\s+-\s+.*/,'').trim();
+  if(s.length>3&&s===s.toUpperCase())s=s.toLowerCase().replace(/(^|\s)(\S)/g,function(m,a,b){return a+b.toUpperCase();}).replace(/\b(De|Da|Do|Das|Dos|E)\b/g,function(m){return m.toLowerCase();});
+  return s.length>40?s.slice(0,40).trim():s;}
+function rvMsgPara(c,f,i){
+  var vs=(c.txt||[]).filter(function(t){return String(t||'').trim();});if(!vs.length)return '';
+  var t=vs[(i||0)%vs.length];var uc=f.uc?f.uc.split('-'):null;
+  t=t.replace(/\{contato\}/gi,f.c||rvNomeCurto(f.n)||'tudo bem').replace(/\{nome\}/gi,rvNomeCurto(f.n)||'tudo bem').replace(/\{vendedor\}/gi,rvMe().charAt(0).toUpperCase()+rvMe().slice(1)).replace(/\{ultima_compra\}/gi,uc?uc[1]+'/'+uc[0]:'');
+  t=rvSpin(t).replace(/\n{3,}/g,'\n\n').trim();
+  if(c.sair)t+='\n\n'+rvSpin('{Se não quiser mais receber nossas mensagens, é só responder SAIR.|Caso não queira receber mais mensagens, responda SAIR.|Se preferir não receber, responda SAIR que tiramos seu número.}');
+  return t;
+}
+function rvSalvarCamp(){
+  rvLerEditor();var e=RV.edit;if(!e)return;
+  if(!String(e.txt[0]||'').trim()){alert('Escreva a mensagem (versão 1).');return;}
+  if(!Object.keys(e.fila||{}).length){alert('A campanha está sem contatos. Selecione clientes na aba Clientes para reativar.');return;}
+  var id=e.id||('c'+Date.now().toString(36)),o={nome:e.nome||'Campanha',txt:e.txt.filter(function(t){return String(t||'').trim();}),sair:!!e.sair,img:e.img||'',lim:e.lim,imin:e.imin,imax:e.imax,fila:e.fila,
+    u:(RV.camps[id]&&RV.camps[id].u)||rvMe(),ts:(RV.camps[id]&&RV.camps[id].ts)||Date.now(),pausada:!!(RV.camps[id]&&RV.camps[id].pausada)};
+  rvFb('campanhas/'+id,'PUT',o).then(function(){RV.camps[id]=o;RV.edit=null;RV.sel={};RV.view='campanhas';RV.toast='✅ Campanha salva com '+Object.keys(o.fila).length+' contato(s).';rvDraw();})
+    .catch(function(err){alert('Não consegui salvar: '+err.message+(o.img&&o.img.length>900000?' (imagem grande demais — use uma menor)':''));});
+}
+function rvIaVariar(){
+  rvLerEditor();var e=RV.edit;if(!e||!String(e.txt[0]||'').trim()){alert('Escreva a versão 1 primeiro.');return;}
+  RV.iaBusy=true;rvDraw();
+  var p='Você escreve mensagens de WhatsApp B2B para a Mais Acessível (Goiânia-GO), distribuidora de materiais de acessibilidade (piso tátil, sinalização, NBR 9050) cujos clientes são construtoras e empresas (CNPJ).\n'+
+    'Reescreva a mensagem abaixo em 2 versões diferentes para reativar clientes que não compram há um tempo. Regras: mesmo sentido; tom humano e direto, nada de propaganda exagerada; no máximo 5 linhas; sem link; termine com UMA pergunta fácil de responder; mantenha os campos {contato}, {nome}, {vendedor} e {ultima_compra} se existirem; pode usar variações no formato {Olá|Oi}; mude estrutura e tamanho entre as versões (o WhatsApp penaliza mensagens idênticas). Não inclua a frase de SAIR.\n'+
+    'Responda só com JSON: {"versoes":["...","..."]}\n\nMENSAGEM:\n'+e.txt[0];
+  fetch('https://soft-limit-b3a1.rauldias.workers.dev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:900,messages:[{role:'user',content:p}]})})
+    .then(function(r){return r.json();}).then(function(j){var t=(j&&j.content||[]).map(function(c){return c.text||'';}).join('');var m=t.match(/\{[\s\S]*\}/);if(!m)throw new Error('sem resposta');
+      var v=(JSON.parse(m[0]).versoes||[]).slice(0,2);if(v[0])e.txt[1]=v[0];if(v[1])e.txt[2]=v[1];RV.iaBusy=false;rvDraw();})
+    .catch(function(err){RV.iaBusy=false;rvDraw();alert('Não consegui gerar agora ('+err.message+').');});
+}
+function rvImgArquivo(f,cb){var rd=new FileReader();rd.onload=function(){var im=new Image();im.onload=function(){var mx=1080,s=Math.min(1,mx/Math.max(im.width,im.height)),cv=document.createElement('canvas');cv.width=Math.round(im.width*s);cv.height=Math.round(im.height*s);var cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);cx.drawImage(im,0,0,cv.width,cv.height);cb(cv.toDataURL('image/jpeg',0.84));};im.src=rd.result;};rd.readAsDataURL(f);}
+
+// ── envio assistido ──
+function rvProximo(cid){
+  var c=RV.camps[cid]||{},env=(RV.env[cid]=RV.env[cid]||{}),ag=Date.now(),lim30=ag-30*86400000;
+  var ks=Object.keys(c.fila||{}).sort(function(a,b){return ((c.fila[b]||{}).sc||0)-((c.fila[a]||{}).sc||0);});// maior prioridade primeiro
+  for(var i=0;i<ks.length;i++){var k=ks[i],e=env[k];
+    if(rvOptout(k))continue;
+    if(e&&e.st!=='abrindo')continue;
+    if(e&&e.st==='abrindo'&&e.u!==rvMe()&&ag-e.ts<15*60000)continue;// outro colaborador está com ele
+    var ue=rvUltEnvio(k);if(ue&&ue.ts>lim30)continue;// já recebeu de outra campanha há pouco
+    return k;}
+  return null;
+}
+function rvAbrirEnvio(cid){
+  var c=RV.camps[cid];if(!c)return;
+  var hr=new Date().getHours(),dw=new Date().getDay();
+  if((dw===0||dw===6||hr<8||hr>=18)&&!confirm('Fora do horário comercial (seg–sex, 8h–18h). Mensagem comercial fora de hora gera mais bloqueios. Enviar mesmo assim?'))return;
+  RV.camp=cid;RV.view='envio';RV.sess={k:null,i:Math.floor(Math.random()*3),aberto:false,ate:0,feitos:0};rvPegar();
+}
+function rvPegar(){
+  var s=RV.sess,cid=RV.camp;if(!s)return;s.k=rvProximo(cid);s.aberto=false;s.msg='';
+  if(s.k){var f=RV.camps[cid].fila[s.k];s.msg=rvMsgPara(RV.camps[cid],f,s.i++);RV.env[cid][s.k]={st:'abrindo',u:rvMe(),ts:Date.now()};rvFb('envios/'+cid+'/'+s.k,'PUT',RV.env[cid][s.k]).catch(function(){});}
+  rvDraw();
+}
+function rvHtmlEnvio(){
+  var cid=RV.camp,c=RV.camps[cid],s=RV.sess;if(!c||!s){RV.view='campanhas';return rvHtmlCampanhas();}
+  var st=rvStats(cid),hoje=rvEnviosHoje(rvMe()),lim=c.lim||40,ag=Date.now(),espera=Math.max(0,Math.ceil((s.ate-ag)/1000));
+  var h='<div class="rv-card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="rv-btn sm" data-a="view" data-v="campanhas">‹ Campanhas</button><b style="font-size:15px;flex:1">'+cqEsc(c.nome)+'</b>'+
+    '<span class="rv-mut">Hoje você enviou <b style="color:#1c1917">'+hoje+'</b> de '+lim+' · nesta sessão '+s.feitos+' · faltam '+st.pend+' · resposta '+(st.taxa==null?'—':st.taxa+'%')+'</span></div>';
+  if(st.env>=20&&st.taxa!=null&&st.taxa<15)h+='<div class="rv-bad">🛑 Só <b>'+st.taxa+'%</b> responderam. Recomendo parar e mudar a mensagem/arte antes de continuar.</div>';
+  if(hoje>=lim)return h+'<div class="rv-bad" style="font-size:14px">✋ Você chegou ao limite de <b>'+lim+'</b> mensagens hoje. Continue amanhã — subir o volume de uma vez é o que mais bloqueia número.</div>';
+  if(!s.k)return h+'<div class="rv-good" style="font-size:14px">✅ Não há mais contatos para enviar nesta campanha agora.</div>';
+  var f=c.fila[s.k],r=null;rvMontar().some(function(x){if(x.k===s.k){r=x;return true;}return false;});
+  h+='<div class="rv-card"><div class="rv-g2"><div>'+
+    '<div style="font-size:18px;font-weight:900">'+cqEsc(f.n)+'</div><div class="rv-mut" style="margin:3px 0 10px">📱 '+cqEsc(rvFone(f.p))+(f.uc?' · última compra '+rvDataBr(f.uc):'')+(r&&r.dv!=null?' · última conversa há '+r.dv+' dias':'')+(f.vd?' · vendedor '+cqEsc(f.vd):'')+'</div>'+
+    '<ol class="rv-li" style="font-size:13.5px"><li>Clique em <b>Abrir no WhatsApp</b> — a mensagem já vai escrita'+(c.img?' e a imagem fica copiada':'')+'.</li>'+(c.img?'<li>No WhatsApp, aperte <b>Ctrl+V</b> para colar a imagem e depois <b>Enter</b>.</li>':'')+'<li>Envie o texto (<b>Enter</b>). Se quiser, ajuste algo antes — mensagem personalizada responde mais.</li><li>Volte aqui e clique em <b>✅ Enviei</b>.</li></ol>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">'+
+      '<button class="rv-btn pri" data-a="abrirEnvio"'+(espera?' disabled':'')+' style="font-size:14px;padding:10px 16px">'+(espera?'⏳ Aguarde '+espera+' s':'💬 Abrir no WhatsApp')+'</button>'+
+      '<button class="rv-btn ok" data-a="marcar" data-st="env"'+(s.aberto?'':' disabled')+' style="font-size:14px;padding:10px 16px">✅ Enviei</button></div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="rv-btn sm" data-a="marcar" data-st="pulado">⏭ Pular</button><button class="rv-btn sm red" data-a="marcar" data-st="optout">🚫 Não quer receber</button><button class="rv-btn sm" data-a="marcar" data-st="invalido">❌ Número sem WhatsApp</button>'+
+      '<button class="rv-btn sm" data-a="copiarTxt">📋 Copiar só o texto</button><button class="rv-btn sm" data-a="novaVar">🎲 Outra versão</button></div>'+
+    '<div class="rv-mut" style="margin-top:10px">Abrir no: <select id="rvAbrirEm" class="rv-in" style="width:auto;padding:3px 6px">'+[['app','App do WhatsApp (computador)'],['web','WhatsApp Web'],['cel','Celular (wa.me)']].map(function(o){return '<option value="'+o[0]+'"'+(rvAbrirEm()===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>'+
+      ' <span title="O WhatsApp Web só funciona em uma aba: abrir outra desconecta a que sincroniza as conversas.">ⓘ No computador que sincroniza o WhatsApp, use o <b>App</b>.</span></div></div>'+
+    '<div><div style="background:#efeae2;border-radius:12px;padding:14px">'+(c.img?'<img src="'+c.img+'" style="max-width:260px;width:100%;border-radius:8px;display:block;margin-bottom:6px">':'')+'<div class="rv-msg">'+cqEsc(s.msg)+'</div></div></div></div></div>';
+  if(espera&&!RV.timer)RV.timer=setInterval(function(){if(RV.view!=='envio'||!document.getElementById('rvRoot')){clearInterval(RV.timer);RV.timer=null;return;}if(Date.now()>=RV.sess.ate){clearInterval(RV.timer);RV.timer=null;}rvDraw();},1000);
+  return h;
+}
+function rvAbrirEm(){try{return localStorage.getItem('rvAbrirEm')||'app';}catch(e){return 'app';}}
+function rvImgVariada(src){// muda 1–3 pixels de leve: a mesma imagem para muitos contatos vira "impressão digital" de spam
+  return new Promise(function(res,rej){var im=new Image();im.onload=function(){var cv=document.createElement('canvas');cv.width=im.width;cv.height=im.height;var cx=cv.getContext('2d');cx.drawImage(im,0,0);
+    for(var i=0;i<3;i++){var x=Math.floor(Math.random()*cv.width),y=Math.floor(Math.random()*cv.height),d=cx.getImageData(x,y,1,1);d.data[0]=Math.max(0,Math.min(255,d.data[0]+(Math.random()<.5?-2:2)));cx.putImageData(d,x,y);}
+    cv.toBlob(function(b){b?res(b):rej(new Error('imagem'));},'image/png');};im.onerror=function(){rej(new Error('imagem'));};im.src=src;});
+}
+function rvAbrir(){
+  var cid=RV.camp,c=RV.camps[cid],s=RV.sess;if(!s||!s.k)return;var f=c.fila[s.k],num=String(f.p||'').replace(/\D/g,'');if(num.length<=11)num='55'+num;
+  var t=encodeURIComponent(s.msg),modo=rvAbrirEm(),url=modo==='web'?'https://web.whatsapp.com/send?phone='+num+'&text='+t:modo==='cel'?'https://wa.me/'+num+'?text='+t:'whatsapp://send?phone='+num+'&text='+t;
+  var abrir=function(){if(modo==='app')location.href=url;else window.open(url,'maWA');};
+  if(c.img&&navigator.clipboard&&window.ClipboardItem){
+    try{navigator.clipboard.write([new ClipboardItem({'image/png':rvImgVariada(c.img)})]).then(abrir,function(){abrir();alert('Não consegui copiar a imagem automaticamente. Arraste a imagem da prévia para a conversa.');});}catch(e){abrir();}
+  }else abrir();
+  s.aberto=true;rvDraw();
+}
+function rvMarcar(st){
+  var cid=RV.camp,s=RV.sess;if(!s||!s.k)return;var k=s.k,o={st:st,u:rvMe(),ts:Date.now()};
+  RV.env[cid][k]=o;rvFb('envios/'+cid+'/'+k,'PUT',o).catch(function(){RV.err='Não consegui registrar no Firebase — confira a internet.';});
+  if(st==='optout'){var f=RV.camps[cid].fila[k]||{};RV.opt[k]={ts:o.ts,u:o.u,n:f.n||''};rvFb('optout/'+k,'PUT',RV.opt[k]).catch(function(){});}
+  if(st==='env'){s.feitos++;var c=RV.camps[cid],a=(c.imin||60)*1000,b=(c.imax||150)*1000;s.ate=Date.now()+a+Math.random()*(b-a);}
+  RV.rows=null;rvPegar();
+}
+
+// ── arte (1080×1080) ──
+function rvArteBase(){if(!RV.arte)RV.arte={lay:'destaque',cor:'#007aff',cor2:'#0f172a',tit:'Sua obra pede acessibilidade',sub:'Piso tátil, sinalização e soluções NBR 9050 com entrega para todo o Brasil',cta:'Peça seu orçamento',rod:'Mais Acessível · Goiânia-GO',foto:null,png:''};return RV.arte;}
+function rvHtmlArte(){
+  var a=rvArteBase();
+  var inp=function(id,l,v,ta){return '<div style="margin-bottom:9px"><label style="display:block;font-size:11px;font-weight:800;color:#57534e;text-transform:uppercase;margin-bottom:3px">'+l+'</label>'+(ta?'<textarea id="'+id+'" data-arte="1" class="rv-in" rows="3">'+cqEsc(v)+'</textarea>':'<input id="'+id+'" data-arte="1" class="rv-in" value="'+cqEsc(v)+'">')+'</div>';};
+  return '<div class="rv-card"><div class="rv-g2"><div>'+
+    '<div style="font-weight:900;font-size:15px;margin-bottom:10px">Criar arte para o WhatsApp</div>'+
+    '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+[['destaque','Destaque'],['produto','Produto em foco'],['simples','Simples']].map(function(o){return '<button class="rv-btn sm'+(a.lay===o[0]?' pri':'')+'" data-a="arteLay" data-v="'+o[0]+'">'+o[1]+'</button>';}).join('')+'</div>'+
+    inp('rvATit','Título',a.tit)+inp('rvASub','Texto',a.sub,1)+inp('rvACta','Chamada (botão)',a.cta)+inp('rvARod','Rodapé',a.rod)+
+    '<div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><div><label style="display:block;font-size:11px;font-weight:800;color:#57534e;text-transform:uppercase">Cor</label><input type="color" id="rvACor" data-arte="1" value="'+a.cor+'"></div>'+
+    '<div><label style="display:block;font-size:11px;font-weight:800;color:#57534e;text-transform:uppercase">Cor do fundo</label><input type="color" id="rvACor2" data-arte="1" value="'+a.cor2+'"></div>'+
+    '<label class="rv-btn sm" style="cursor:pointer">📷 Foto do produto/obra<input type="file" id="rvAFoto" accept="image/*" style="display:none"></label>'+(a.foto?'<button class="rv-btn sm red" data-a="arteSemFoto">Tirar foto</button>':'')+'</div>'+
+    '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="rv-btn" data-a="arteBaixar">⬇️ Baixar PNG</button><button class="rv-btn" data-a="arteCopiar">📋 Copiar imagem</button>'+
+      (Object.keys(RV.camps||{}).length||RV.edit?'<select id="rvArteCamp" class="rv-in" style="width:auto"><option value="">📣 Usar na campanha…</option>'+(RV.edit?'<option value="__edit">(campanha em edição)</option>':'')+Object.keys(RV.camps||{}).map(function(id){return '<option value="'+cqEsc(id)+'">'+cqEsc(RV.camps[id].nome||id)+'</option>';}).join('')+'</select>':'')+'</div>'+
+    '<div class="rv-mut" style="margin-top:10px">Dica: foto real da obra/produto funciona melhor que arte "propaganda". Pouco texto na imagem — a conversa fica no texto da mensagem.</div></div>'+
+    '<div><canvas id="rvCanvas" width="1080" height="1080" style="width:100%;max-width:520px;border-radius:12px;border:1px solid #e7e5e4;display:block"></canvas></div></div></div>';
+}
+function rvWrap(cx,t,x,y,mw,lh,max){var ws=String(t||'').split(/\s+/),l='',n=0;for(var i=0;i<ws.length;i++){var tt=l?l+' '+ws[i]:ws[i];if(cx.measureText(tt).width>mw&&l){cx.fillText(l,x,y);y+=lh;n++;l=ws[i];if(max&&n>=max-1){var r=ws.slice(i).join(' ');while(cx.measureText(r+'…').width>mw&&r.length)r=r.slice(0,-1);cx.fillText(r+(r.length<ws.slice(i).join(' ').length?'…':''),x,y);return y+lh;}}else l=tt;}if(l){cx.fillText(l,x,y);y+=lh;}return y;}
+function rvRound(cx,x,y,w,h,r){cx.beginPath();cx.moveTo(x+r,y);cx.arcTo(x+w,y,x+w,y+h,r);cx.arcTo(x+w,y+h,x,y+h,r);cx.arcTo(x,y+h,x,y,r);cx.arcTo(x,y,x+w,y,r);cx.closePath();}
+function rvArteDesenhar(){
+  var cv=document.getElementById('rvCanvas');if(!cv)return;var cx=cv.getContext('2d'),a=rvArteBase(),W=1080,H=1080,F='"Segoe UI",Arial,sans-serif';
+  var fim=function(logo,foto){
+    cx.clearRect(0,0,W,H);
+    var g=cx.createLinearGradient(0,0,W,H);g.addColorStop(0,a.cor2);g.addColorStop(1,a.lay==='simples'?a.cor2:a.cor);cx.fillStyle=g;cx.fillRect(0,0,W,H);
+    // textura de piso tátil (pontinhos) discreta
+    cx.fillStyle='rgba(255,255,255,0.06)';for(var px=60;px<W;px+=70)for(var py=60;py<H;py+=70){cx.beginPath();cx.arc(px,py,9,0,Math.PI*2);cx.fill();}
+    if(logo){cx.fillStyle='#fff';rvRound(cx,60,50,330,130,24);cx.fill();var sx=logo.width*0.075,sy=logo.height*0.335,sw=logo.width*0.85,sh=logo.height*0.32,s=Math.min(300/sw,110/sh);cx.drawImage(logo,sx,sy,sw,sh,60+(330-sw*s)/2,50+(130-sh*s)/2,sw*s,sh*s);}
+    var y=230;
+    if(foto&&a.lay!=='simples'){var fx=a.lay==='produto'?60:560,fy=a.lay==='produto'?200:230,fw=a.lay==='produto'?960:460,fh=a.lay==='produto'?470:560;
+      cx.save();rvRound(cx,fx,fy,fw,fh,28);cx.clip();var s2=Math.max(fw/foto.width,fh/foto.height);cx.drawImage(foto,fx+(fw-foto.width*s2)/2,fy+(fh-foto.height*s2)/2,foto.width*s2,foto.height*s2);cx.restore();
+      if(a.lay==='produto')y=740;}
+    var tw=(foto&&a.lay==='destaque')?460:960;
+    cx.fillStyle='#fff';cx.textBaseline='top';cx.font='900 '+(a.lay==='produto'?62:78)+'px '+F;y=rvWrap(cx,a.tit,60,y,tw,a.lay==='produto'?70:88,a.lay==='produto'?2:4);
+    cx.fillStyle='rgba(255,255,255,0.88)';cx.font='500 '+(a.lay==='produto'?34:40)+'px '+F;y=rvWrap(cx,a.sub,60,y+18,tw,a.lay==='produto'?44:52,a.lay==='produto'?2:5);
+    if(a.cta){cx.font='800 40px '+F;var cw=cx.measureText(a.cta).width+80,cy=Math.min(H-210,Math.max(y+30,a.lay==='produto'?0:720));cx.fillStyle='#fff';rvRound(cx,60,cy,cw,90,45);cx.fill();cx.fillStyle=a.lay==='simples'?a.cor:a.cor2;cx.textBaseline='middle';cx.fillText(a.cta,100,cy+46);cx.textBaseline='top';}
+    cx.fillStyle='rgba(255,255,255,0.75)';cx.font='600 30px '+F;cx.fillText(a.rod||'',60,H-80);
+    try{a.png=cv.toDataURL('image/jpeg',0.86);}catch(e){a.png='';}
+  };
+  var carregar=function(src){return new Promise(function(r){if(!src)return r(null);var i=new Image();i.onload=function(){r(i);};i.onerror=function(){r(null);};i.src=src;});};
+  if(!RV._logo)RV._logo=carregar('logo.jpg');
+  Promise.all([RV._logo,carregar(a.foto)]).then(function(x){fim(x[0],x[1]);});
+}
+function rvArteLer(){var a=rvArteBase(),g=function(id){var x=document.getElementById(id);return x?x.value:null;};
+  if(g('rvATit')!=null){a.tit=g('rvATit');a.sub=g('rvASub');a.cta=g('rvACta');a.rod=g('rvARod');a.cor=g('rvACor');a.cor2=g('rvACor2');}}
+
+// ── regras ──
+function rvHtmlRegras(){
+  var b=function(t,itens,cl){return '<div class="rv-card '+(cl||'')+'"><div style="font-weight:900;font-size:15px;margin-bottom:6px">'+t+'</div><ul class="rv-li">'+itens.map(function(i){return '<li>'+i+'</li>';}).join('')+'</ul></div>';};
+  return '<div class="rv-bad"><b>A verdade sobre "disparo em massa":</b> com o WhatsApp comum ou Business (app/Web), <b>nenhum</b> método garante que o número não seja bloqueado — o próprio envio automatizado em massa é proibido pelos termos do WhatsApp. Por isso esta aba faz <b>envio assistido</b>: uma pessoa aperta enviar em cada conversa, com ritmo humano. O único caminho 100% oficial para volume alto é a <b>API oficial (Cloud API)</b> com modelos de marketing aprovados, pagos por mensagem.</div>'+
+  b('📊 O que derruba o número',[
+    '<b>Gente bloqueando ou denunciando</b> a sua mensagem — é o sinal mais forte. Mire em menos de 1 bloqueio a cada 100 envios.',
+    '<b>Mensagem sem resposta.</b> Desde 2025 o WhatsApp conta as mensagens enviadas a quem não responde e limita isso por mês (vale para empresas e pessoas; aparece um aviso quando está chegando no limite).',
+    '<b>Muitas conversas novas de uma vez</b>, mensagens idênticas, mesmo arquivo de imagem para todos e intervalos certinhos (cara de robô).',
+    'Picos: ficar parado semanas e de repente mandar 200 mensagens.']) +
+  b('✅ Regras que o app já aplica',[
+    '<b>Limite diário por pessoa</b> (padrão 40). Comece com 20–40/dia na 1ª semana, suba para 50–100 só se a resposta estiver boa.',
+    '<b>Intervalo aleatório</b> entre envios (padrão 60–150 s, nunca menos de 30 s) — bem abaixo de 30 mensagens por hora.',
+    '<b>Até 3 versões da mensagem</b> + variações {Oi|Olá} + campos personalizados: nenhuma mensagem sai igual.',
+    '<b>Imagem com "impressão digital" diferente</b> a cada envio (muda pixels invisíveis).',
+    '<b>"Responda SAIR"</b> no fim e botão 🚫 que tira o número de todas as campanhas para sempre.',
+    'Ninguém recebe <b>mais de 1 disparo a cada 30 dias</b>, nem é chamado por dois colaboradores ao mesmo tempo.',
+    'Aviso fora do horário comercial e <b>alerta quando a taxa de resposta cai</b> (abaixo de 30% atenção; abaixo de 15% pare).'],'') +
+  b('🧠 Boas práticas da equipe',[
+    'Comece pelos clientes de <b>prioridade alta</b>: eles conhecem a empresa, respondem mais e "aquecem" o número.',
+    'Primeira mensagem <b>sem link</b>, curta, terminando com <b>uma pergunta</b> fácil ("Tem obra começando aí?").',
+    'Responda rápido quem responder — conversa de verdade melhora a reputação do número.',
+    'Peça para o cliente <b>salvar seu contato</b>; use foto de perfil, nome comercial e perfil Business completo (CNPJ, endereço, horário).',
+    'Divida a lista entre os vendedores: cada um envia pelo seu número, respeitando o limite.',
+    'Se o WhatsApp restringir a conta: <b>pare</b> de iniciar conversas e espere o prazo (normalmente 24–72 h). Não troque de número nem insista.']) +
+  b('⚖️ LGPD (clientes PJ)',[
+    'Mesmo sendo CNPJ, o celular costuma ser de uma pessoa: é dado pessoal. Para ex-clientes, a base mais usada é o <b>legítimo interesse</b> — vale se a mensagem é relacionada ao que ele já comprou e se é fácil sair.',
+    'Atenda o "SAIR" na hora e não volte a enviar. O app guarda quem pediu (data e quem registrou).',
+    'Não compre nem use listas de terceiros. Na dúvida sobre casos específicos, consulte o jurídico/contador.']) +
+  b('💸 Quando vale a API oficial',[
+    'Se a ideia for passar de algumas centenas por dia, o caminho seguro é a <b>WhatsApp Cloud API</b> (Meta) com modelo de marketing aprovado. No Brasil a mensagem de marketing custa cerca de <b>R$ 0,32 por mensagem entregue</b> (tabela vigente desde 1º/10/2026).',
+    'Ela usa um número separado (não o do WhatsApp atual) e pode ser ligada à mesma lista desta aba depois.']);
+}
+
+// ── eventos ──
+function rvClick(ev){
+  var b=ev.target.closest('[data-a]');if(!b)return;var a=b.getAttribute('data-a');
+  if(b.tagName==='A')ev.preventDefault();
+  if(a==='view'){if(RV.view==='editar')rvLerEditor();if(RV.view==='arte')rvArteLer();RV.view=b.getAttribute('data-v');RV.err='';rvDraw();return;}
+  if(a==='recarregar'){RV.wa=null;RV.rows=null;rvDraw();rvCarregar(true);return;}
+  if(a==='lerBling'){rvLerBling();return;}
+  if(a==='ord'){var o=b.getAttribute('data-o');RV.ord=o;RV.pg=1;rvDraw();return;}
+  if(a==='pg'){RV.pg=+b.getAttribute('data-p')||1;rvDraw();var r=document.getElementById('rvRoot');if(r)r.scrollIntoView();return;}
+  if(a==='sel'){var id=b.getAttribute('data-id');if(b.checked)RV.sel[id]=1;else delete RV.sel[id];rvDraw();return;}
+  if(a==='selPag'){var L=rvFiltrar().slice((RV.pg-1)*RV_PG,RV.pg*RV_PG);L.forEach(function(r){if(!r.k)return;if(b.checked)RV.sel[r.id]=1;else delete RV.sel[r.id];});rvDraw();return;}
+  if(a==='selTop'){var n=+b.getAttribute('data-n');rvFiltrar().filter(function(r){return r.k;}).slice(0,n).forEach(function(r){RV.sel[r.id]=1;});rvDraw();return;}
+  if(a==='selLimpar'){RV.sel={};rvDraw();return;}
+  if(a==='novaCamp'){rvNovaCamp();return;}
+  if(a==='abrirWa'){var id2=b.getAttribute('data-id'),r2=null;rvMontar().some(function(x){if(x.id===id2){r2=x;return true;}return false;});if(!r2)return;var num=r2.w?r2.w.p:('55'+r2.k);if(num.length<=11)num='55'+num;window.open('https://wa.me/'+num,'maWA');return;}
+  if(a==='optout'){var k=b.getAttribute('data-k');if(!k||!confirm('Marcar '+b.getAttribute('data-n')+' como "não quer receber"? Ele sai de todas as campanhas.'))return;RV.opt[k]={ts:Date.now(),u:rvMe(),n:b.getAttribute('data-n')};rvFb('optout/'+k,'PUT',RV.opt[k]).catch(function(){});RV.rows=null;rvDraw();return;}
+  if(a==='editar'){var c=RV.camps[b.getAttribute('data-c')];RV.edit={id:b.getAttribute('data-c'),nome:c.nome,txt:[(c.txt||[])[0]||'',(c.txt||[])[1]||'',(c.txt||[])[2]||''],sair:c.sair!==false,img:c.img||'',lim:c.lim||40,imin:c.imin||60,imax:c.imax||150,fila:c.fila||{}};RV.view='editar';rvDraw();return;}
+  if(a==='pausar'){var cid=b.getAttribute('data-c'),cc=RV.camps[cid];cc.pausada=!cc.pausada;rvFb('campanhas/'+cid+'/pausada','PUT',cc.pausada).catch(function(){});rvDraw();return;}
+  if(a==='excluir'){var cid2=b.getAttribute('data-c');if(!confirm('Excluir a campanha "'+(RV.camps[cid2].nome||'')+'"? O histórico de envios dela também sai.'))return;Promise.all([rvFb('campanhas/'+cid2,'DELETE'),rvFb('envios/'+cid2,'DELETE')]).then(function(){delete RV.camps[cid2];delete RV.env[cid2];rvDraw();}).catch(function(e){alert('Não consegui excluir: '+e.message);});return;}
+  if(a==='salvarCamp'){rvSalvarCamp();return;}
+  if(a==='iaVar'){rvIaVariar();return;}
+  if(a==='tirarImg'){rvLerEditor();RV.edit.img='';rvDraw();return;}
+  if(a==='usarArte'){rvLerEditor();RV.edit.img=RV.arte.png;rvDraw();return;}
+  if(a==='envio'){rvAbrirEnvio(b.getAttribute('data-c'));return;}
+  if(a==='abrirEnvio'){rvAbrir();return;}
+  if(a==='marcar'){rvMarcar(b.getAttribute('data-st'));return;}
+  if(a==='novaVar'){var s=RV.sess;if(s&&s.k){s.msg=rvMsgPara(RV.camps[RV.camp],RV.camps[RV.camp].fila[s.k],s.i++);rvDraw();}return;}
+  if(a==='copiarTxt'){try{navigator.clipboard.writeText(RV.sess.msg);b.textContent='✔ Copiado';}catch(e){}return;}
+  if(a==='arteLay'){rvArteLer();RV.arte.lay=b.getAttribute('data-v');rvDraw();return;}
+  if(a==='arteSemFoto'){rvArteLer();RV.arte.foto=null;rvDraw();return;}
+  if(a==='arteBaixar'){var cv=document.getElementById('rvCanvas');if(!cv)return;var l=document.createElement('a');l.download='arte-mais-acessivel-'+rvHoje()+'.png';l.href=cv.toDataURL('image/png');l.click();return;}
+  if(a==='arteCopiar'){var cv2=document.getElementById('rvCanvas');if(!cv2||!window.ClipboardItem)return;cv2.toBlob(function(bl){navigator.clipboard.write([new ClipboardItem({'image/png':bl})]).then(function(){b.textContent='✔ Copiada';}).catch(function(){alert('Não consegui copiar. Use Baixar PNG.');});},'image/png');return;}
+}
+function rvChange(ev){
+  var t=ev.target,f=t.getAttribute('data-f');
+  if(f){RV.F[f]=t.type==='checkbox'?t.checked:t.value;RV.pg=1;rvDraw();return;}
+  if(t.id==='rvMeses'){RV.meses=t.value;return;}
+  if(t.id==='rvAbrirEm'){try{localStorage.setItem('rvAbrirEm',t.value);}catch(e){}return;}
+  if(t.id==='rvAddCamp'&&t.value){var cid=t.value,c=RV.camps[cid],add={},n=0;rvMontar().forEach(function(r){if(RV.sel[r.id]&&r.k&&!rvOptout(r.k)&&!(c.fila||{})[r.k]){add[r.k]={n:String(r.nome).slice(0,80),p:r.w?r.w.p:('55'+r.k),uc:r.uc||'',vd:r.vd||'',sc:r.sc||0,c:rvContato(r)};n++;}});
+    if(!n){alert('Os selecionados já estão nessa campanha.');t.value='';return;}
+    rvFb('campanhas/'+cid+'/fila','PATCH',add).then(function(){c.fila=Object.assign(c.fila||{},add);RV.sel={};RV.toast='✅ '+n+' contato(s) adicionados em '+cqEsc(c.nome)+'.';rvDraw();}).catch(function(e){alert('Não consegui adicionar: '+e.message);});return;}
+  if(t.id==='rvEImg'&&t.files&&t.files[0]){rvLerEditor();rvImgArquivo(t.files[0],function(d){RV.edit.img=d;rvDraw();});return;}
+  if(t.id==='rvAFoto'&&t.files&&t.files[0]){rvArteLer();rvImgArquivo(t.files[0],function(d){RV.arte.foto=d;rvDraw();});return;}
+  if(t.id==='rvArteCamp'&&t.value){rvArteDesenhar();var v=t.value;setTimeout(function(){var png=RV.arte.png;if(!png){alert('Não consegui gerar a imagem.');return;}
+    if(v==='__edit'){RV.edit.img=png;RV.view='editar';rvDraw();return;}
+    rvFb('campanhas/'+v+'/img','PUT',png).then(function(){RV.camps[v].img=png;RV.toast='✅ Arte aplicada em '+cqEsc(RV.camps[v].nome);RV.view='campanhas';rvDraw();}).catch(function(e){alert('Não consegui salvar: '+e.message);});},400);return;}
+  if(t.getAttribute('data-arte')){rvArteLer();rvArteDesenhar();return;}
+}
+var rvIT=null;
+function rvInput(ev){
+  var t=ev.target;
+  if(t.getAttribute('data-f')==='q'){RV.F.q=t.value;RV.pg=1;clearTimeout(rvIT);rvIT=setTimeout(rvDraw,250);return;}
+  if(t.getAttribute('data-arte')){rvArteLer();clearTimeout(rvIT);rvIT=setTimeout(rvArteDesenhar,120);return;}
+}
+
+// ── Bling via extensão ──
+function rvLerBling(){
+  if(!rvExtOk()){alert('Precisa da extensão Mais Acessível v'+RV_EXT_MIN+' ou mais nova neste computador (e o Bling logado no Chrome).');return;}
+  RV.blReq='rv'+Date.now();RV.blStatus='Conectando ao Bling…';rvDraw();
+  window.postMessage({source:'ma-app',type:'reativacao',reqId:RV.blReq,filtro:{meses:+RV.meses||24}},'*');
+}
+window.addEventListener('message',function(e){
+  if(e.source!==window||!e.data||e.data.source!=='ma-ext'||!RV.blReq||e.data.reqId!==RV.blReq)return;var m=e.data;
+  if(m.type==='status'){RV.blStatus=m.texto;}
+  else if(m.type==='erro'){RV.blReq=null;RV.blStatus='❌ '+m.msg;}
+  else if(m.type==='fim'){RV.blReq=null;var d=m.dados||{},cli={};
+    Object.keys(d.cli||{}).forEach(function(k){cli[String(k).replace(/[.#$\/\[\]]/g,'_').slice(0,100)]=d.cli[k];});
+    var o={ts:Date.now(),u:rvMe(),meses:d.meses||+RV.meses,vendas:d.vendas||0,contatos:d.contatos||0,clientes:Object.keys(cli).length,semVinculo:d.semVinculo||0,campos:(d.campos||[]).slice(0,40),cli:cli};
+    RV.blStatus='Salvando '+o.clientes+' clientes…';
+    rvFb('bling','PUT',o).then(function(){RV.bl=o;RV.rows=null;RV.blStatus='✅ '+o.vendas+' vendas de '+o.clientes+' clientes lidas do Bling.';rvDraw();})
+      .catch(function(err){RV.bl=o;RV.rows=null;RV.blStatus='⚠️ Li o Bling, mas não consegui salvar para a equipe ('+err.message+').';rvDraw();});
+  }
+  if(STATE.modulo==='mod9'&&STATE.tabClientes==='disparo')rvDraw();
+});
+
 function renderNavClientes(){
   if(!STATE.tabClientes)STATE.tabClientes='licitacao';
   var nav=document.createElement('nav');
-  [{id:'licitacao',l:'🏛️ Licitação'}].forEach(function(t){
+  [{id:'licitacao',l:'🏛️ Licitação'},{id:'disparo',l:'📣 Reativação WhatsApp'}].forEach(function(t){
     var b=document.createElement('button');b.className='tab'+(STATE.tabClientes===t.id?' active':'');b.textContent=t.l;
     b.onclick=function(){STATE.tabClientes=t.id;render();};nav.appendChild(b);
   });
@@ -16181,7 +16722,7 @@ function renderApp(){
   } else if(STATE.modulo==='mod8'){
     main.appendChild(renderPesquisaProdutos());
   } else if(STATE.modulo==='mod9'){
-    main.appendChild(renderClientes());
+    main.appendChild(STATE.tabClientes==='disparo'?renderDisparo():renderClientes());
   } else if(STATE.modulo==='mod3'){
     main.appendChild(renderAceIA());
   } else if(STATE.modulo==='mod4'){
