@@ -605,7 +605,7 @@ const ESCOPO_PIX = 'cob.write cob.read pix.read';
 const ESCOPO_BOLETOS = 'boletos_consulta';
 
 // O extrato (Conta Corrente) pode vir de um 2º app do portal Sicoob: variável SICOOB_CLIENT_ID_CCO (opcional)
-function clientSicoob(env, escopo) { return (escopo === 'cco_extrato' && env.SICOOB_CLIENT_ID_CCO) || env.SICOOB_CLIENT_ID; }
+function clientSicoob(env, escopo) { return (/^cco_/.test(escopo || '') && env.SICOOB_CLIENT_ID_CCO) || env.SICOOB_CLIENT_ID; }
 function pedirTokenSicoob(env, escopo) {
   return env.SICOOB_MTLS.fetch(SICOOB_TOKEN, {
     method: 'POST',
@@ -1902,8 +1902,9 @@ async function econfPainel(env) {
 // PIX / Boleto / Crédito (fatura do cartão) / Taxas e tarifas / Outros e procura a conta a pagar correspondente no Bling.
 // Nada é baixado nem lançado sozinho: o app mostra a sugestão e o Raul confirma (POST /pagar/baixar e /pagar/lancar).
 // Configuração extra no Worker: SICOOB_CONTA = número da conta corrente (só dígitos, sem o dígito da cooperativa).
-const SICOOB_CCO = 'https://api.sicoob.com.br/conta-corrente/v3';
-const ESCOPO_EXTRATO = 'cco_extrato';
+const SICOOB_CCO = 'https://api.sicoob.com.br/conta-corrente/v4';      // app novo (v4, escopo cco_consulta); v3/cco_extrato fica de reserva
+const SICOOB_CCO_V3 = 'https://api.sicoob.com.br/conta-corrente/v3';
+const ESCOPO_EXTRATO = 'cco_consulta';
 const PAG_CAT = { tarifa: 14634451823, juros: 14634451825, taxas: 14634451828 };   // Tarifa bancária, Juros pagos, Taxas pagas
 const PAG_FORMA = { pix: 3639534, boleto: 3639541, credito: 6642716, taxa: 3457303, outro: 3457303 }; // PIX Info - Sicoob, Boleto Info Sicoob, Cartão Créd. Sicoob, Transferencia
 const semAcento = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
@@ -1931,12 +1932,18 @@ async function chaveDebito(t) { return (await sha256hex([t.data, t.valor.toFixed
 async function sicoobExtrato(env, mes, ano, d1, d2) {
   if (!env.SICOOB_MTLS || !env.SICOOB_CLIENT_ID) throw new Error('Sicoob ainda não ativado no Worker.');
   const conta = await contaSicoob(env);
-  let tok;
-  try { tok = await sicoobToken(env, ESCOPO_EXTRATO); }
-  catch (e) { throw new Error('O app do Sicoob ainda não tem a API "Conta Corrente – extrato" (escopo cco_extrato). Libere no portal developers.sicoob.com.br. Detalhe: ' + (e.message || e)); }
+  let tok, base = SICOOB_CCO, escopo = ESCOPO_EXTRATO;
+  try { tok = await sicoobToken(env, escopo); }
+  catch (e) {
+    try { escopo = 'cco_extrato'; base = SICOOB_CCO_V3; tok = await sicoobToken(env, escopo); }
+    catch (e2) { throw new Error((env.SICOOB_CLIENT_ID_CCO ? 'O app "JDFER Extrato" do Sicoob ainda não está liberado (aprovação no Sicoobnet pendente?). ' : 'Falta o app do Sicoob com a API Conta Corrente (variável SICOOB_CLIENT_ID_CCO). ') + 'Detalhe: ' + (e.message || e)); }
+  }
   const q = '?' + (conta ? 'numeroContaCorrente=' + encodeURIComponent(conta) + '&' : '') + 'diaInicial=' + d1 + '&diaFinal=' + d2 + '&agruparCNAB=true';
-  const r = await env.SICOOB_MTLS.fetch(SICOOB_CCO + '/extrato/' + mes + '/' + ano + q, {
-    headers: { Authorization: 'Bearer ' + tok, client_id: clientSicoob(env, ESCOPO_EXTRATO), Accept: 'application/json' },
+  let r = await env.SICOOB_MTLS.fetch(base + '/extrato/' + mes + '/' + ano + q, {
+    headers: { Authorization: 'Bearer ' + tok, client_id: clientSicoob(env, escopo), Accept: 'application/json' },
+  });
+  if (r.status === 404 && base !== SICOOB_CCO_V3) r = await env.SICOOB_MTLS.fetch(SICOOB_CCO_V3 + '/extrato/' + mes + '/' + ano + q, {
+    headers: { Authorization: 'Bearer ' + tok, client_id: clientSicoob(env, escopo), Accept: 'application/json' },
   });
   if (r.status === 204) return [];
   const txt = await r.text(); let j = {}; try { j = JSON.parse(txt); } catch (e) { j = { _texto: txt.slice(0, 300) }; }
