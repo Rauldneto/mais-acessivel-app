@@ -254,6 +254,30 @@ export default {
         const b = await req.json();
         return resp(await econfRegistrar(env, b || {}));
       }
+      if (url.pathname === '/pendentes/recasar' && req.method === 'POST') {
+        // tenta de novo casar os PIX sem vínculo (com as regras novas: contas já baixadas à mão, pedidos faturados)
+        const ids = (await env.BLING_KV.get('pendentes', 'json')) || [];
+        const ctx = {}; let casados = 0, abertos = 0; const lista = [];
+        for (const e of ids.slice(-80)) {
+          const x = await env.BLING_KV.get('pend:' + e, 'json');
+          if (!x || x.resolvido || (await env.BLING_KV.get('pago:' + e))) continue;
+          const p = { endToEndId: x.e2e, valor: x.valor, horario: x.horario, pagador: { nome: x.pagador } };
+          let reg = null;
+          const itens = await itensAbertos(env, ctx);
+          const restante = it => Math.round((Number(it.aReceber || 0) - Number(it.pago || 0)) * 100) / 100;
+          const alias = x.doc ? await env.BLING_KV.get('alias:' + x.doc) : null;
+          const ok = itens.filter(it => { const d = String(it.doc || '').replace(/\D/g, ''); return d && (d === x.doc || d === alias) && (it.formas || []).some(f => f === 'pix' || f === 'credito') && Math.abs(restante(it) - x.valor) <= 0.01; });
+          if (ok.length) { reg = regDeItem(ok[0]); await registrarPagamento(env, reg, p, 'direto'); abertos++; }
+          else reg = await casarRecebida(env, p, ctx, x.doc).catch(() => null);
+          if (!reg) continue;
+          if (!ok.length) casados++;
+          x.resolvido = 'vinculado'; x.vinculo = { tipo: reg.tipo, id: reg.id, numero: reg.numero }; x.por = 'automático (recasar)';
+          await env.BLING_KV.put('pend:' + e, JSON.stringify(x), { expirationTtl: 180 * 86400 });
+          lista.push((reg.tipo === 'nota' ? 'NF ' : 'Pedido ') + reg.numero + ' — R$ ' + Number(x.valor).toFixed(2) + ' — ' + x.pagador);
+        }
+        await env.BLING_KV.delete('cache:abertos');
+        return resp({ ok: true, vinculadosJaBaixados: casados, vinculadosEmAberto: abertos, lista });
+      }
       if (url.pathname === '/pendentes') {
         const ids = (await env.BLING_KV.get('pendentes', 'json')) || [];
         const out = [];
@@ -741,6 +765,30 @@ function regDeItem(it) {
     contas: (it.contas || []).map(c => ({ id: c.id, valor: c.valor, venc: c.venc })) };
 }
 
+// PIX que caiu para uma conta que alguém JÁ baixou à mão no Bling: casa pelo CNPJ/CPF + valor exato com as contas recebidas
+// (últimos 45 dias) para o pagamento ficar vinculado ao pedido/nota — e o TEF (ECONF) ser informado. Não baixa nada de novo.
+async function casarRecebida(env, p, ctx, docForcado) {
+  const valor = Math.round(Number(p.valor || 0) * 100) / 100;
+  const doc = docForcado || docPagador(p);
+  if (!doc) return null;
+  const alias = await env.BLING_KV.get('alias:' + doc);
+  if (!ctx.recebidas) ctx.recebidas = await paginas(env, '/contas/receber?situacoes[]=2&tipoFiltroData=E&dataInicial=' + diasAtras(60) + '&dataFinal=' + isoDia(new Date()), 5).catch(() => []);
+  const cands = ctx.recebidas.filter(c => {
+    const d = String((c.contato && c.contato.numeroDocumento) || '').replace(/\D/g, '');
+    const o = c.origem || {};
+    return d && (d === doc || d === alias) && Math.abs(Number(c.valor || 0) - valor) <= 0.01 && (o.tipoOrigem === 'notafiscal' || o.tipoOrigem === 'venda');
+  });
+  const livres = [];
+  for (const c of cands) if (!(await env.BLING_KV.get('contapix:' + c.id))) livres.push(c);
+  if (livres.length !== 1) return null;   // nenhuma ou mais de uma possível: fica para vincular à mão
+  const c = livres[0], o = c.origem;
+  const reg = { txid: '', tipo: o.tipoOrigem === 'venda' ? 'pedido' : 'nota', id: o.id, numero: String(o.numero || ''), cliente: (c.contato && c.contato.nome) || '', doc,
+    total: Number(o.valor || 0), aReceber: Number(c.valor || 0), data: o.dataEmissao || '', contas: [{ id: c.id, valor: Number(c.valor || 0), venc: c.vencimento }] };
+  await env.BLING_KV.put('contapix:' + c.id, p.endToEndId, { expirationTtl: 400 * 86400 });
+  await registrarPagamento(env, reg, p, 'direto-recebida');
+  return reg;
+}
+
 async function conciliarDireto(env, p, ctx) {
   const valor = Math.round(Number(p.valor || 0) * 100) / 100;
   const doc = docPagador(p);
@@ -759,6 +807,8 @@ async function conciliarDireto(env, p, ctx) {
     it.pago = Number(it.pago || 0) + valor;
     return 'auto';
   }
+  const jaBaixada = await casarRecebida(env, p, ctx).catch(() => null);
+  if (jaBaixada) return 'auto';
   const sug = [];
   itens.forEach(it => {
     const r = restante(it);
