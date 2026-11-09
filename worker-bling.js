@@ -123,7 +123,7 @@ export default {
         // executa no Bling as ações que ficaram só anotadas na simulação (de um pedido/nota)
         const b = (await req.json().catch(() => ({}))) || {};
         const acoes = (await env.BLING_KV.get('acoes', 'json')) || [];
-        const alvo = acoes.filter(a => a.tipo === b.tipo && String(a.id) === String(b.id) && a.modo === 'simulacao' && (!a.executado || /^ERRO/.test(a.executado)) && ['baixa', 'contas_pedido'].includes(a.acao));
+        const alvo = acoes.filter(a => a.tipo === b.tipo && String(a.id) === String(b.id) && ['baixa', 'contas_pedido'].includes(a.acao) && ((a.modo === 'simulacao' && (!a.executado || /^ERRO/.test(a.executado))) || (a.modo === 'real' && /^ERRO/.test(String(a.resultado || '')) && (!a.executado || /^ERRO/.test(a.executado)))));
         if (!alvo.length) return resp({ ok: false, erro: 'Nada pendente de executar para este ' + (b.tipo === 'nota' ? 'nota' : 'pedido') + '.' });
         const res = [];
         for (const a of alvo) {
