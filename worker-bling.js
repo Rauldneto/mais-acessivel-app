@@ -29,7 +29,7 @@
 //                             usados como pista para ligar a cotação do fornecedor aos itens do pedido. Cache de 1 dia.
 //   GET  /boletos, POST /boletos/verificar|vincular|ignorar|simular|simular/passo → boletos Sicoob liquidados (ver o fim do arquivo)
 //   Contas a Pagar: GET /pagar/conciliar?de=&ate=, GET /pagar/conta?id=, POST /pagar/baixar|lancar|marcar → extrato Sicoob × Contas a Pagar (fim do arquivo)
-//     Precisa: escopo cco_extrato liberado no app do portal Sicoob (o nº da conta é descoberto num boleto Sicoob; SICOOB_CONTA opcional) e permissão Contas a pagar (ler/gravar) no app do Bling.
+//     Precisa: escopo cco_extrato liberado no app do portal Sicoob (ou num 2º app: SICOOB_CLIENT_ID_CCO; o nº da conta é descoberto num boleto Sicoob; SICOOB_CONTA opcional) e permissão Contas a pagar (ler/gravar) no app do Bling.
 //   ECONF: GET /econf/pendentes|painel|diag|xml?k=, POST /econf/enviar|auto|certificado|registrar → evento de conciliação à Sefaz
 // Gatilho (Settings → Trigger Events → Cron): */5 * * * *  (PIX a cada 5 min; boletos a cada 30 min)
 // Modo: KV "modo" = "simulacao" (padrão: só anota o que faria) ou "real" (executa no Bling).
@@ -604,11 +604,13 @@ const SICOOB_PIX = 'https://api.sicoob.com.br/pix/api/v2';
 const ESCOPO_PIX = 'cob.write cob.read pix.read';
 const ESCOPO_BOLETOS = 'boletos_consulta';
 
+// O extrato (Conta Corrente) pode vir de um 2º app do portal Sicoob: variável SICOOB_CLIENT_ID_CCO (opcional)
+function clientSicoob(env, escopo) { return (escopo === 'cco_extrato' && env.SICOOB_CLIENT_ID_CCO) || env.SICOOB_CLIENT_ID; }
 function pedirTokenSicoob(env, escopo) {
   return env.SICOOB_MTLS.fetch(SICOOB_TOKEN, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-    body: 'grant_type=client_credentials&client_id=' + encodeURIComponent(env.SICOOB_CLIENT_ID) + '&scope=' + encodeURIComponent(escopo || ESCOPO_PIX),
+    body: 'grant_type=client_credentials&client_id=' + encodeURIComponent(clientSicoob(env, escopo)) + '&scope=' + encodeURIComponent(escopo || ESCOPO_PIX),
   });
 }
 
@@ -1934,7 +1936,7 @@ async function sicoobExtrato(env, mes, ano, d1, d2) {
   catch (e) { throw new Error('O app do Sicoob ainda não tem a API "Conta Corrente – extrato" (escopo cco_extrato). Libere no portal developers.sicoob.com.br. Detalhe: ' + (e.message || e)); }
   const q = '?' + (conta ? 'numeroContaCorrente=' + encodeURIComponent(conta) + '&' : '') + 'diaInicial=' + d1 + '&diaFinal=' + d2 + '&agruparCNAB=true';
   const r = await env.SICOOB_MTLS.fetch(SICOOB_CCO + '/extrato/' + mes + '/' + ano + q, {
-    headers: { Authorization: 'Bearer ' + tok, client_id: env.SICOOB_CLIENT_ID, Accept: 'application/json' },
+    headers: { Authorization: 'Bearer ' + tok, client_id: clientSicoob(env, ESCOPO_EXTRATO), Accept: 'application/json' },
   });
   if (r.status === 204) return [];
   const txt = await r.text(); let j = {}; try { j = JSON.parse(txt); } catch (e) { j = { _texto: txt.slice(0, 300) }; }
