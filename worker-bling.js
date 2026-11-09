@@ -189,6 +189,34 @@ export default {
       if (url.pathname === '/pagar/lancar' && req.method === 'POST') return resp(await pagarLancar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/pagar/marcar' && req.method === 'POST') return resp(await pagarMarcar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/pagar/conta') return resp(await pagarContaPorId(env, url.searchParams.get('id')));
+      if (url.pathname === '/push/chave') return resp({ ok: true, chave: (await vapid(env)).pub });
+      if (url.pathname === '/push/inscrever' && req.method === 'POST') {
+        const b = (await req.json().catch(() => ({}))) || {};
+        const sub = b.sub || {};
+        if (!/^https:\/\//.test(String(sub.endpoint || ''))) return resp({ ok: false, erro: 'Inscrição inválida' }, 400);
+        const subs = ((await env.BLING_KV.get('push:subs', 'json')) || []).filter(x => x.endpoint !== sub.endpoint);
+        subs.push({ endpoint: sub.endpoint, usuario: String(b.usuario || '').slice(0, 60), aparelho: String(b.aparelho || '').slice(0, 80), desde: Date.now() });
+        await env.BLING_KV.put('push:subs', JSON.stringify(subs.slice(-300)));
+        return resp({ ok: true });
+      }
+      if (url.pathname === '/push/sair' && req.method === 'POST') {
+        const b = (await req.json().catch(() => ({}))) || {};
+        const subs = ((await env.BLING_KV.get('push:subs', 'json')) || []).filter(x => x.endpoint !== b.endpoint);
+        await env.BLING_KV.put('push:subs', JSON.stringify(subs));
+        return resp({ ok: true });
+      }
+      if (url.pathname === '/push/ultimos') {
+        const fila = (await env.BLING_KV.get('push:fila', 'json')) || [];
+        return resp({ ok: true, avisos: fila.filter(a => Date.now() - a.quando < 30 * 60e3).slice(0, 5) });
+      }
+      if (url.pathname === '/push/inscritos') {
+        const subs = (await env.BLING_KV.get('push:subs', 'json')) || [];
+        return resp({ ok: true, inscritos: subs.map(x => ({ usuario: x.usuario, aparelho: x.aparelho, desde: x.desde, ultimoOk: x.ultimoOk || 0, ultimoErro: x.ultimoErro || 0 })) });
+      }
+      if (url.pathname === '/push/teste' && req.method === 'POST') {
+        const b = (await req.json().catch(() => ({}))) || {};
+        return resp(Object.assign({ ok: true }, await pushAvisar(env, { teste: true, numero: '', valor: 0, cliente: 'Teste de aviso enviado por ' + String(b.usuario || '?').slice(0, 40), forma: '' })));
+      }
       if (url.pathname === '/erros') {
         return resp(Object.assign({ ok: true }, (await env.BLING_KV.get('erros', 'json')) || {}));
       }
@@ -717,6 +745,60 @@ async function logAcao(env, a) {
   const lista = (await env.BLING_KV.get('acoes', 'json')) || [];
   lista.push(Object.assign({ quando: Date.now() }, a));
   await env.BLING_KV.put('acoes', JSON.stringify(lista.slice(-300)));
+  // pagamento confirmado → notificação no Chrome de todos os inscritos (mesmo com o app fechado)
+  if (a.acao === 'pix_pago' || a.acao === 'boleto_pago') {
+    const t = Date.parse(a.horario || '');
+    if (isNaN(t) || Date.now() - t < 2 * 86400e3) {   // não avisa pagamento antigo achado em conferência retroativa
+      try { await pushAvisar(env, { tipo: a.tipo, numero: a.numero || '', valor: Number(a.valor || 0), cliente: a.cliente || a.pagador || '', forma: a.acao === 'boleto_pago' ? 'boleto' : 'PIX' }); } catch (e) {}
+    }
+  }
+}
+
+// ---------------- Notificação no navegador (Web Push, sem custo) ----------------
+// O servidor cria sozinho o par de chaves VAPID (guardado no KV) e manda um "toque" vazio para cada navegador inscrito;
+// o sw.js do app busca /push/ultimos e mostra a notificação. Navegador inscrito que sumiu (404/410) sai da lista.
+const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+async function vapid(env) {
+  let v = await env.BLING_KV.get('push:vapid', 'json');
+  if (!v) {
+    const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+    v = { pub: b64u(await crypto.subtle.exportKey('raw', kp.publicKey)), jwk: await crypto.subtle.exportKey('jwk', kp.privateKey) };
+    await env.BLING_KV.put('push:vapid', JSON.stringify(v));
+  }
+  return v;
+}
+async function vapidJwt(env, aud) {
+  const v = await vapid(env);
+  const enc = o => b64u(new TextEncoder().encode(JSON.stringify(o)));
+  const corpo = enc({ typ: 'JWT', alg: 'ES256' }) + '.' + enc({ aud, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: 'https://rauldneto.github.io' });
+  const chave = await crypto.subtle.importKey('jwk', v.jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const ass = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, chave, new TextEncoder().encode(corpo));
+  return { jwt: corpo + '.' + b64u(ass), pub: v.pub };
+}
+async function pushTocar(env, subs) {
+  const vivos = [], porAud = {};
+  let ok = 0;
+  for (const s of subs) {
+    try {
+      const aud = new URL(s.endpoint).origin;
+      if (!porAud[aud]) porAud[aud] = await vapidJwt(env, aud);
+      const r = await fetch(s.endpoint, { method: 'POST', headers: { TTL: '86400', Urgency: 'high', Authorization: 'vapid t=' + porAud[aud].jwt + ', k=' + porAud[aud].pub, 'Content-Length': '0' } });
+      if (r.status === 404 || r.status === 410) continue;
+      if (r.ok) { ok++; s.ultimoOk = Date.now(); } else s.ultimoErro = r.status;
+      vivos.push(s);
+    } catch (e) { vivos.push(s); }
+  }
+  return { ok, vivos };
+}
+async function pushAvisar(env, aviso) {
+  const fila = (await env.BLING_KV.get('push:fila', 'json')) || [];
+  fila.unshift(Object.assign({ id: 'p' + Date.now() + Math.floor(Math.random() * 1000), quando: Date.now() }, aviso));
+  await env.BLING_KV.put('push:fila', JSON.stringify(fila.slice(0, 30)));
+  const subs = (await env.BLING_KV.get('push:subs', 'json')) || [];
+  if (!subs.length) return { ok: 0, total: 0 };
+  const r = await pushTocar(env, subs);
+  await env.BLING_KV.put('push:subs', JSON.stringify(r.vivos));
+  return { ok: r.ok, total: subs.length };
 }
 
 function isoSemMs(ms) { return new Date(ms).toISOString().replace(/\.\d+Z$/, 'Z'); }
@@ -768,7 +850,7 @@ async function registrarPagamento(env, reg, p, origem) {
   // dados do pedido/nota guardados para a lista continuar mostrando o documento depois de baixado no Bling
   await env.BLING_KV.put('docmeta:' + reg.tipo + ':' + reg.id, JSON.stringify({ numero: reg.numero || '', cliente: reg.cliente || '', doc: reg.doc || '', total: Number(reg.total || 0), aReceber: Number(reg.aReceber || reg.total || 0), data: reg.data || '' }), { expirationTtl: 365 * 86400 });
   const pd = (await env.BLING_KV.get(kd, 'json')) || [];
-  pd.push({ txid: reg.txid || '', e2e: p.endToEndId, valor, horario: p.horario, pagador: (p.pagador && p.pagador.nome) || '', origem });
+  pd.push({ txid: reg.txid || '', e2e: p.endToEndId, valor, horario: p.horario, pagador: (p.pagador && p.pagador.nome) || '', pagadorDoc: docPagador(p), origem });
   await env.BLING_KV.put(kd, JSON.stringify(pd), { expirationTtl: 365 * 86400 });
   await planejarAcoes(env, reg, valor, p, pd, origem);
 }
