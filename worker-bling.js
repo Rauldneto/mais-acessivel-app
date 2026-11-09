@@ -29,7 +29,7 @@
 //                             usados como pista para ligar a cotação do fornecedor aos itens do pedido. Cache de 1 dia.
 //   GET  /boletos, POST /boletos/verificar|vincular|ignorar|simular|simular/passo → boletos Sicoob liquidados (ver o fim do arquivo)
 //   Contas a Pagar: GET /pagar/conciliar?de=&ate=, GET /pagar/conta?id=, POST /pagar/baixar|lancar|marcar → extrato Sicoob × Contas a Pagar (fim do arquivo)
-//     Precisa: escopo cco_extrato liberado no app do portal Sicoob, variável SICOOB_CONTA (nº da conta corrente) e permissão Contas a pagar (ler/gravar) no app do Bling.
+//     Precisa: escopo cco_extrato liberado no app do portal Sicoob (o nº da conta é descoberto num boleto Sicoob; SICOOB_CONTA opcional) e permissão Contas a pagar (ler/gravar) no app do Bling.
 //   ECONF: GET /econf/pendentes|painel|diag|xml?k=, POST /econf/enviar|auto|certificado|registrar → evento de conciliação à Sefaz
 // Gatilho (Settings → Trigger Events → Cron): */5 * * * *  (PIX a cada 5 min; boletos a cada 30 min)
 // Modo: KV "modo" = "simulacao" (padrão: só anota o que faria) ou "real" (executa no Bling).
@@ -1928,19 +1928,39 @@ async function chaveDebito(t) { return (await sha256hex([t.data, t.valor.toFixed
 
 async function sicoobExtrato(env, mes, ano, d1, d2) {
   if (!env.SICOOB_MTLS || !env.SICOOB_CLIENT_ID) throw new Error('Sicoob ainda não ativado no Worker.');
-  if (!env.SICOOB_CONTA) throw new Error('Falta a variável SICOOB_CONTA (número da conta corrente Sicoob) no Worker.');
+  const conta = await contaSicoob(env);
   let tok;
   try { tok = await sicoobToken(env, ESCOPO_EXTRATO); }
   catch (e) { throw new Error('O app do Sicoob ainda não tem a API "Conta Corrente – extrato" (escopo cco_extrato). Libere no portal developers.sicoob.com.br. Detalhe: ' + (e.message || e)); }
-  const q = '?numeroContaCorrente=' + encodeURIComponent(env.SICOOB_CONTA) + '&diaInicial=' + d1 + '&diaFinal=' + d2 + '&agruparCNAB=true';
+  const q = '?' + (conta ? 'numeroContaCorrente=' + encodeURIComponent(conta) + '&' : '') + 'diaInicial=' + d1 + '&diaFinal=' + d2 + '&agruparCNAB=true';
   const r = await env.SICOOB_MTLS.fetch(SICOOB_CCO + '/extrato/' + mes + '/' + ano + q, {
     headers: { Authorization: 'Bearer ' + tok, client_id: env.SICOOB_CLIENT_ID, Accept: 'application/json' },
   });
   if (r.status === 204) return [];
   const txt = await r.text(); let j = {}; try { j = JSON.parse(txt); } catch (e) { j = { _texto: txt.slice(0, 300) }; }
+  if (!r.ok && !conta) throw new Error('Não achei o número da conta Sicoob sozinho (nenhum boleto Sicoob lido ainda) e o Sicoob exigiu o número (' + r.status + '). Crie a variável SICOOB_CONTA no Worker. Detalhe: ' + ((j.mensagens && j.mensagens.map(x => x.mensagem).join('; ')) || j.message || j._texto || '').slice(0, 160));
   if (!r.ok) throw new Error('Extrato Sicoob ' + r.status + ': ' + ((j.mensagens && j.mensagens.map(x => x.mensagem).join('; ')) || j.message || j.mensagem || j._texto || JSON.stringify(j).slice(0, 200)));
   const res = j.resultado || j;
   return res.transacoes || acharCampo(res, ['transacoes', 'lancamentos']) || [];
+}
+
+// Número da conta corrente: variável SICOOB_CONTA, ou descoberto sozinho num boleto Sicoob já lido
+// (a API de cobrança devolve numeroContaCorrente do beneficiário). Guardado no KV "sicoob:conta".
+async function contaSicoob(env) {
+  if (env.SICOOB_CONTA) return dig(env.SICOOB_CONTA);
+  const salvo = await env.BLING_KV.get('sicoob:conta'); if (salvo) return salvo;
+  const nns = new Set();
+  ((await env.BLING_KV.get('bolpendentes', 'json')) || []).slice(-10).forEach(n => nns.add(String(n)));
+  ((await env.BLING_KV.get('acoes', 'json')) || []).filter(a => a.nossoNumero).slice(-10).forEach(a => nns.add(String(a.nossoNumero)));
+  ((await env.BLING_KV.get('bolsim:rel', 'json')) || []).filter(a => a && a.nossoNumero).slice(-10).forEach(a => nns.add(String(a.nossoNumero)));
+  let tent = 0;
+  for (const nn of nns) {
+    if (!nn || ++tent > 4) break;
+    const j = await sicoobCob(env, 'GET', '/boletos?numeroCliente=' + SICOOB_NUM_CLIENTE + '&codigoModalidade=1&nossoNumero=' + encodeURIComponent(nn)).catch(() => null);
+    const c = dig(acharCampo(j, ['numeroContaCorrente', 'contaCorrente']));
+    if (c) { await env.BLING_KV.put('sicoob:conta', c); return c; }
+  }
+  return ''; // sem conta: tenta o extrato assim mesmo (o Sicoob pode usar a conta ligada ao certificado)
 }
 
 // lista contas a pagar do Bling por um filtro de datas (todas as situações)
