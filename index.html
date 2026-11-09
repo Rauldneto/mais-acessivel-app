@@ -14999,6 +14999,7 @@ function blgPainelTefHist(x){
     h+='</div>';
   }
   var ac=((BLG.pag&&BLG.pag.acoes)||[]).filter(function(a){return a.tipo===x.tipo&&String(a.id)===String(x.id);});
+  if(blgAdmin())h+='<div style="margin-top:10px;font-size:11.5px"><a style="cursor:pointer;color:#b91c1c" data-a="ocultarDoc" title="Tira esta linha da lista (ex.: teste). Não apaga nada no Bling.">🗑️ Excluir da lista (teste)</a></div>';
   var pendSim=ac.filter(function(a){return (a.acao==='baixa'||a.acao==='contas_pedido')&&((a.modo==='simulacao'&&(!a.executado||/^ERRO/.test(a.executado)))||(a.modo==='real'&&/^ERRO/.test(a.resultado||'')&&(!a.executado||/^ERRO/.test(a.executado))));}).length;
   if(pendSim&&blgAdmin())h+='<button class="blg-btn" style="margin-top:10px;width:100%" data-a="executarSim"'+(BLG.execCarr?' disabled':'')+'>'+(BLG.execCarr?'<span class="blg-spin"></span> Executando…':'✅ Dar baixa no Bling agora')+'</button><div style="font-size:11px;color:#6f6f6f;margin-top:4px">A baixa deste pagamento não foi feita (simulação ou erro). Se alguém já baixou à mão no Bling, o sistema percebe e não baixa de novo.</div>';
   if(ac.length){
@@ -15718,6 +15719,11 @@ function blgAcao(a){
     if(k0==='hoje'){d0.de=d0.ate=hoje0;}else if(k0==='ontem'){d0.de=d0.ate=iso0(new Date(hj0.getTime()-864e5));}else if(k0==='7'){d0.de=iso0(new Date(hj0.getTime()-6*864e5));d0.ate=hoje0;}
     else if(k0==='mes'){d0.de=hoje0.slice(0,8)+'01';d0.ate=hoje0;}else if(k0==='mesant'){var pm=new Date(Date.UTC(hj0.getUTCFullYear(),hj0.getUTCMonth(),0));d0.ate=iso0(pm);d0.de=d0.ate.slice(0,8)+'01';}else{d0.de=d0.ate='';}
     blgDraw();return;}
+  if(a==='ocultarDoc'){var xo=blgSelecionado();if(!xo)return;
+    if(!confirm('Excluir '+(xo.tipo==='nota'?'a NF ':'o pedido ')+xo.numero+' da lista?\n\nUse para testes. Não apaga nada no Bling.'))return;
+    var eo=(xo.pagos||[]).map(function(p){return p.e2e;}).filter(Boolean);
+    Promise.all([blgApi('/docs/ocultar',{method:'POST',body:{tipo:xo.tipo,id:xo.id,numero:xo.numero,usuario:STATE.usuarioLogado||''}})].concat(eo.length?[blgApi('/econf/ignorar',{method:'POST',body:{e2e:eo,motivo:'teste',usuario:STATE.usuarioLogado||'',tipo:xo.tipo,id:xo.id,numero:xo.numero}})]:[]))
+      .then(function(){BLG.sel=null;blgCarregar(true);});return;}
   if(a==='tefIgnorar'){var lst=String(BLG._k||'').split(',').filter(Boolean);if(!lst.length)return;
     var xs2=blgSelecionado();
     if(!confirm('Marcar '+(lst.length>1?'estes '+lst.length+' pagamentos':'este pagamento')+' como TESTE?\n\nEle nunca será informado à Sefaz (ECONF) e sai da fila do TEF.'))return;

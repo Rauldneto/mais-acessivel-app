@@ -254,6 +254,16 @@ export default {
         const b = await req.json();
         return resp(await econfRegistrar(env, b || {}));
       }
+      if (url.pathname === '/docs/ocultar' && req.method === 'POST') {
+        // tira um pedido/nota da lista (ex.: teste). Não apaga nada no Bling; dá para desfazer com {desfazer:true}
+        const b = (await req.json().catch(() => ({}))) || {};
+        if (!b.tipo || !b.id) return resp({ ok: false, erro: 'Faltou tipo/id' }, 400);
+        const k = 'oculto:' + b.tipo + ':' + b.id;
+        if (b.desfazer) await env.BLING_KV.delete(k); else await env.BLING_KV.put(k, JSON.stringify({ por: String(b.usuario || '').slice(0, 60), quando: Date.now(), motivo: String(b.motivo || 'teste').slice(0, 120) }));
+        await env.BLING_KV.delete('cache:abertos');
+        await logAcao(env, { acao: 'ocultar', tipo: b.tipo, id: b.id, numero: b.numero || '', detalhe: (b.desfazer ? 'Voltou para a lista' : 'Excluído da lista (' + String(b.motivo || 'teste') + ')') + (b.usuario ? ' — ' + String(b.usuario).slice(0, 60) : '') });
+        return resp({ ok: true });
+      }
       if (url.pathname === '/pendentes/recasar' && req.method === 'POST') {
         // tenta de novo casar os PIX sem vínculo (com as regras novas: contas já baixadas à mão, pedidos faturados)
         const ids = (await env.BLING_KV.get('pendentes', 'json')) || [];
@@ -506,6 +516,9 @@ async function listarAbertos(env) {
     }
     cur = l.list_complete ? null : l.cursor;
   } while (cur);
+
+  // linhas tiradas da lista à mão (ex.: pedidos de teste)
+  for (let i = itens.length - 1; i >= 0; i--) if (await env.BLING_KV.get('oculto:' + itens[i].tipo + ':' + itens[i].id)) itens.splice(i, 1);
 
   const ctxTef = {};
   for (const it of itens) {
