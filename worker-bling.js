@@ -773,11 +773,15 @@ async function casarRecebida(env, p, ctx, docForcado) {
   if (!doc) return null;
   const alias = await env.BLING_KV.get('alias:' + doc);
   if (!ctx.recebidas) ctx.recebidas = await paginas(env, '/contas/receber?situacoes[]=2&tipoFiltroData=E&dataInicial=' + diasAtras(60) + '&dataFinal=' + isoDia(new Date()), 5).catch(() => []);
-  const cands = ctx.recebidas.filter(c => {
+  // mesmo CNPJ/CPF; se não achar, mesma empresa (raiz do CNPJ: matriz paga a conta da filial e vice-versa)
+  const raiz = d => d.length === 14 ? d.slice(0, 8) : d;
+  const filtra = (cmp) => ctx.recebidas.filter(c => {
     const d = String((c.contato && c.contato.numeroDocumento) || '').replace(/\D/g, '');
     const o = c.origem || {};
-    return d && (d === doc || d === alias) && Math.abs(Number(c.valor || 0) - valor) <= 0.01 && (o.tipoOrigem === 'notafiscal' || o.tipoOrigem === 'venda');
+    return d && cmp(d) && Math.abs(Number(c.valor || 0) - valor) <= 0.01 && (o.tipoOrigem === 'notafiscal' || o.tipoOrigem === 'venda');
   });
+  let cands = filtra(d => d === doc || d === alias);
+  if (!cands.length && doc.length === 14) cands = filtra(d => d.length === 14 && raiz(d) === raiz(doc));
   const livres = [];
   for (const c of cands) if (!(await env.BLING_KV.get('contapix:' + c.id))) livres.push(c);
   if (livres.length !== 1) return null;   // nenhuma ou mais de uma possível: fica para vincular à mão
