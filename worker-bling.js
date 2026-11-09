@@ -991,6 +991,12 @@ async function pedidoCompra(env, numero) {
       forn.nome = c.nome || c.fantasia || '';
       forn.doc = c.numeroDocumento || '';
       forn.uf = (c.endereco && c.endereco.geral && c.endereco.geral.uf) || '';
+      // Frete compra (app): endereço de coleta e contato do fornecedor
+      const eg = (c.endereco && c.endereco.geral) || {};
+      forn.fantasia = c.fantasia || '';
+      forn.cep = eg.cep || ''; forn.cidade = eg.municipio || ''; forn.bairro = eg.bairro || '';
+      forn.endereco = [eg.endereco, eg.numero, eg.complemento].filter(Boolean).join(', ');
+      forn.fone = c.telefone || ''; forn.celular = c.celular || '';
     } catch (e) { forn.nome = 'Fornecedor ' + forn.id; }
   }
   const formas = {};
@@ -1015,6 +1021,9 @@ async function pedidoCompra(env, numero) {
       totalProdutos: Number(pc.totalProdutos || 0), total: Number(pc.total || 0),
       desconto: ds.unidade === 'PERCENTUAL' ? Number(pc.totalProdutos || 0) * Number(ds.valor || 0) / 100 : Number(ds.valor || 0),
       frete: Number(tr.frete || 0), transportador: tr.transportador || '',
+      // Frete compra (app): volumes, medidas e peso ficam nas observações internas
+      observacoesInternas: pc.observacoesInternas || '', observacoes: pc.observacoes || '',
+      pesoBruto: Number(tr.pesoBruto || 0), volumes: Number(tr.volumes || 0), fretePorConta: tr.fretePorConta == null ? null : tr.fretePorConta,
       totalIPI: Number(tb.totalIPI || 0), totalICMS: Number(tb.totalICMS || 0),
       parcelas: (pc.parcelas || []).map(pa => ({ vencimento: pa.dataVencimento, dias: dia(pa.dataVencimento), valor: Number(pa.valor || 0),
         forma: formas[pa.formaPagamento && pa.formaPagamento.id] || '' })),
