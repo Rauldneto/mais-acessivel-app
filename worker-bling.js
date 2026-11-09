@@ -1067,6 +1067,7 @@ async function econfPendentes(env, maxChamadas) {
         const reg = (await env.BLING_KV.get('econf:' + p.e2e, 'json')) || null;
         if (reg && reg.ok) continue;
         const dia = diaLocal(p.horario);
+        if (dia < ECONF_DESDE) continue;   // TEF/ECONF só para pagamentos a partir do início da obrigação
         const item = { e2e: p.e2e, valor: Number(p.valor || 0), dia, horario: p.horario, pagador: p.pagador || '', tipo, docId: id, tPag: p.txid ? '17' : '20',
           ultimaTentativa: reg };
         try {
@@ -1572,6 +1573,7 @@ const ECONF_NS = 'http://www.portalfiscal.inf.br/nfe';
 const ECONF_DS = 'http://www.w3.org/2000/09/xmldsig#';
 const ECONF_C14N = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
 const ECONF_HORAS = [13, 18];
+const ECONF_DESDE = '2026-11-01';   // pagamentos antes disso não entram no TEF automático
 const ECONF_SETUP_HASH = 'c01677557bd0bf979d52c8382407c8731637f628c9dcdd10b52082c508c4a2d8'; // sha256 do código do script de configuração
 const ECONF_CNPJ = '35017646000166', ECONF_UF = 'GO';
 
