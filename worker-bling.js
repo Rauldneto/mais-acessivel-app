@@ -28,6 +28,8 @@
 //   GET  /produtos-fornecedores?ids=1,2,3 → códigos que cada fornecedor usa para esses produtos (cadastro do Bling),
 //                             usados como pista para ligar a cotação do fornecedor aos itens do pedido. Cache de 1 dia.
 //   GET  /boletos, POST /boletos/verificar|vincular|ignorar|simular|simular/passo → boletos Sicoob liquidados (ver o fim do arquivo)
+//   Contas a Pagar: GET /pagar/conciliar?de=&ate=, GET /pagar/conta?id=, POST /pagar/baixar|lancar|marcar → extrato Sicoob × Contas a Pagar (fim do arquivo)
+//     Precisa: escopo cco_extrato liberado no app do portal Sicoob, variável SICOOB_CONTA (nº da conta corrente) e permissão Contas a pagar (ler/gravar) no app do Bling.
 //   ECONF: GET /econf/pendentes|painel|diag|xml?k=, POST /econf/enviar|auto|certificado|registrar → evento de conciliação à Sefaz
 // Gatilho (Settings → Trigger Events → Cron): */5 * * * *  (PIX a cada 5 min; boletos a cada 30 min)
 // Modo: KV "modo" = "simulacao" (padrão: só anota o que faria) ou "real" (executa no Bling).
@@ -181,6 +183,12 @@ export default {
         const sim = await env.BLING_KV.get('bolsim:estado', 'json');
         return resp({ ok: true, sim: sim ? resumoSim(sim) : null, rel: sim ? ((await env.BLING_KV.get('bolsim:rel', 'json')) || []) : [] });
       }
+      // Conciliação contas a Pagar: débitos do extrato Sicoob × Contas a Pagar do Bling (ver o fim do arquivo)
+      if (url.pathname === '/pagar/conciliar') return resp(await pagarConciliar(env, url.searchParams.get('de'), url.searchParams.get('ate')));
+      if (url.pathname === '/pagar/baixar' && req.method === 'POST') return resp(await pagarBaixar(env, (await req.json().catch(() => ({}))) || {}));
+      if (url.pathname === '/pagar/lancar' && req.method === 'POST') return resp(await pagarLancar(env, (await req.json().catch(() => ({}))) || {}));
+      if (url.pathname === '/pagar/marcar' && req.method === 'POST') return resp(await pagarMarcar(env, (await req.json().catch(() => ({}))) || {}));
+      if (url.pathname === '/pagar/conta') return resp(await pagarContaPorId(env, url.searchParams.get('id')));
       if (url.pathname === '/erros') {
         return resp(Object.assign({ ok: true }, (await env.BLING_KV.get('erros', 'json')) || {}));
       }
@@ -578,7 +586,7 @@ function pedirTokenSicoob(env, escopo) {
 
 async function sicoobToken(env, escopo) {
   escopo = escopo || ESCOPO_PIX;
-  const chave = escopo === ESCOPO_PIX ? 'sicoob:token' : 'sicoob:token:boletos';
+  const chave = escopo === ESCOPO_PIX ? 'sicoob:token' : escopo === ESCOPO_BOLETOS ? 'sicoob:token:boletos' : 'sicoob:token:' + escopo.replace(/\W+/g, '_');
   const c = await env.BLING_KV.get(chave, 'json');
   if (c && Date.now() < c.exp) return c.access;
   let r, txt = '', j = {};
@@ -1793,4 +1801,282 @@ async function econfPainel(env) {
   const a1 = await env.BLING_KV.get('econf:a1', 'json');
   const hist = (await env.BLING_KV.get('econf:execucoes', 'json')) || [];
   return { configurado: !!a1, validade: a1 ? a1.validade : null, auto: (await env.BLING_KV.get('econf:auto')) !== 'desligado', horas: ECONF_HORAS, execucoes: hist.slice(0, 40) };
+}
+
+// ======================================================================================================
+// ---------------- Conciliação contas a Pagar: débitos do extrato Sicoob × Contas a Pagar do Bling ----------------
+// Lê o extrato da conta corrente Sicoob (API Conta Corrente v3, escopo cco_extrato), separa os DÉBITOS em
+// PIX / Boleto / Crédito (fatura do cartão) / Taxas e tarifas / Outros e procura a conta a pagar correspondente no Bling.
+// Nada é baixado nem lançado sozinho: o app mostra a sugestão e o Raul confirma (POST /pagar/baixar e /pagar/lancar).
+// Configuração extra no Worker: SICOOB_CONTA = número da conta corrente (só dígitos, sem o dígito da cooperativa).
+const SICOOB_CCO = 'https://api.sicoob.com.br/conta-corrente/v3';
+const ESCOPO_EXTRATO = 'cco_extrato';
+const PAG_CAT = { tarifa: 14634451823, juros: 14634451825, taxas: 14634451828 };   // Tarifa bancária, Juros pagos, Taxas pagas
+const PAG_FORMA = { pix: 3639534, boleto: 3639541, credito: 6642716, taxa: 3457303, outro: 3457303 }; // PIX Info - Sicoob, Boleto Info Sicoob, Cartão Créd. Sicoob, Transferencia
+const semAcento = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+function numBR(v) { // "1234.56", "-1234.56", "1.234,56"
+  let s = String(v == null ? '' : v).trim(); if (!s) return 0;
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  return Math.abs(Number(s.replace(/[^\d.-]/g, '')) || 0);
+}
+function tipoDebito(desc) {
+  const d = semAcento(desc);
+  if (/^TAR\b|^TAR\.|TARIFA|\bIOF\b|JUROS|ENCARGO|\bMORA\b|ANUIDADE|CESTA|PACOTE|MANUT|CUSTAS|\bTAXA/.test(d)) return 'taxa';
+  if (/FATURA|CARTAO|CREDICARD|SIPAG|MASTERCARD|\bVISA\b|ELO\b/.test(d)) return 'credito';
+  if (/\bPIX\b|PIX\.|PIX /.test(d)) return 'pix';
+  if (/TIT|BOLETO|COMPE|CONV|PAGTO|PAGAMENTO|PAG\.|DARF|\bGPS\b|\bDAS\b|FGTS|TRIBUTO|GUIA|IPTU|IPVA|DETRAN/.test(d)) return 'boleto';
+  return 'outro';
+}
+function categoriaTaxa(desc) {
+  const d = semAcento(desc);
+  if (/JUROS|ENCARGO|\bMORA\b/.test(d)) return PAG_CAT.juros;
+  if (/\bIOF\b/.test(d)) return PAG_CAT.taxas;
+  return PAG_CAT.tarifa;
+}
+async function chaveDebito(t) { return (await sha256hex([t.data, t.valor.toFixed(2), t.doc, t.desc, t.ndoc, t.seq].join('|'))).slice(0, 20); }
+
+async function sicoobExtrato(env, mes, ano, d1, d2) {
+  if (!env.SICOOB_MTLS || !env.SICOOB_CLIENT_ID) throw new Error('Sicoob ainda não ativado no Worker.');
+  if (!env.SICOOB_CONTA) throw new Error('Falta a variável SICOOB_CONTA (número da conta corrente Sicoob) no Worker.');
+  let tok;
+  try { tok = await sicoobToken(env, ESCOPO_EXTRATO); }
+  catch (e) { throw new Error('O app do Sicoob ainda não tem a API "Conta Corrente – extrato" (escopo cco_extrato). Libere no portal developers.sicoob.com.br. Detalhe: ' + (e.message || e)); }
+  const q = '?numeroContaCorrente=' + encodeURIComponent(env.SICOOB_CONTA) + '&diaInicial=' + d1 + '&diaFinal=' + d2 + '&agruparCNAB=true';
+  const r = await env.SICOOB_MTLS.fetch(SICOOB_CCO + '/extrato/' + mes + '/' + ano + q, {
+    headers: { Authorization: 'Bearer ' + tok, client_id: env.SICOOB_CLIENT_ID, Accept: 'application/json' },
+  });
+  if (r.status === 204) return [];
+  const txt = await r.text(); let j = {}; try { j = JSON.parse(txt); } catch (e) { j = { _texto: txt.slice(0, 300) }; }
+  if (!r.ok) throw new Error('Extrato Sicoob ' + r.status + ': ' + ((j.mensagens && j.mensagens.map(x => x.mensagem).join('; ')) || j.message || j.mensagem || j._texto || JSON.stringify(j).slice(0, 200)));
+  const res = j.resultado || j;
+  return res.transacoes || acharCampo(res, ['transacoes', 'lancamentos']) || [];
+}
+
+// lista contas a pagar do Bling por um filtro de datas (todas as situações)
+async function pagarListar(env, filtro, de, ate, maxPag) {
+  return paginas(env, '/contas/pagar?' + filtro + 'Inicial=' + de + '&' + filtro + 'Final=' + ate, maxPag || 4).catch(e => { throw new Error('Contas a pagar do Bling: ' + e.message + ' (o app do Bling precisa da permissão "Contas a pagar").'); });
+}
+// nome e CPF/CNPJ dos fornecedores (cache no KV; busca no máx. N por chamada para não estourar o limite de chamadas do Worker)
+async function contatosInfo(env, ids, max) {
+  const cache = (await env.BLING_KV.get('cache:contatos', 'json')) || {};
+  const falta = [...new Set(ids.map(String))].filter(id => id && id !== '0' && !cache[id]);
+  let novos = 0;
+  for (const id of falta.slice(0, max || 12)) {
+    const c = ((await bling(env, '/contatos/' + id).catch(() => null)) || {}).data;
+    if (c) { cache[id] = { n: c.nome || c.fantasia || '', d: dig(c.numeroDocumento) }; novos++; }
+  }
+  if (novos) await env.BLING_KV.put('cache:contatos', JSON.stringify(cache));
+  return { cache, faltam: Math.max(0, falta.length - novos) };
+}
+
+async function pagarConciliar(env, de, ate) {
+  const hoje = hojeLocal();
+  de = soData(de) || hoje.slice(0, 8) + '01'; ate = soData(ate) || hoje;
+  if (ate > hoje) ate = hoje;
+  if (de > ate) return { ok: false, erro: 'Período inválido.' };
+  if ((Date.parse(ate) - Date.parse(de)) / 864e5 > 62) return { ok: false, erro: 'Escolha no máximo 2 meses por vez.' };
+  // 1) extrato Sicoob, mês a mês
+  const transacoes = [];
+  let cur = de;
+  while (cur <= ate) {
+    const [a, m] = cur.split('-');
+    const fimMes = new Date(Date.UTC(+a, +m, 0)).toISOString().slice(0, 10);
+    const fim = fimMes < ate ? fimMes : ate;
+    const lista = await sicoobExtrato(env, +m, +a, +cur.slice(8), +fim.slice(8));
+    lista.forEach(t => transacoes.push(t));
+    cur = somaDias(fimMes, 1);
+  }
+  const marcas = (await env.BLING_KV.get('pagar:marcas', 'json')) || {};
+  const debitos = [], vistos = {};
+  for (const t of transacoes) {
+    const ehDeb = /DEB/i.test(String(t.tipo || '')) || Number(String(t.valor).replace(',', '.')) < 0;
+    if (!ehDeb) continue;
+    const x = { data: soData(t.data || t.dataLote), valor: r2(numBR(t.valor)), desc: String(t.descricao || '').trim(), compl: String(t.descInfComplementar || '').trim(),
+      doc: dig(t.cpfCnpj), ndoc: String(t.numeroDocumento || '').trim() };
+    if (!x.data || x.data < de || x.data > ate || !x.valor) continue;
+    const base = [x.data, x.valor, x.desc, x.ndoc].join('|'); x.seq = vistos[base] = (vistos[base] || 0) + 1;
+    x.chave = await chaveDebito(x);
+    x.tipoAuto = tipoDebito(x.desc + ' ' + x.compl);
+    const mk = marcas[x.chave] || {};
+    x.tipo = mk.tipo || x.tipoAuto;
+    if (mk.ign) x.ignorado = { por: mk.por || '', em: mk.em };
+    if (mk.contaId) x.vinculo = mk.contaId;
+    if (mk.lancado) x.lancado = mk.lancado;
+    debitos.push(x);
+  }
+  // 2) contas a pagar do Bling: por vencimento (janela larga) + pagas dentro do período
+  const porVenc = await pagarListar(env, 'dataVencimento', somaDias(de, -40), somaDias(ate, 20), 5);
+  const porPag = await pagarListar(env, 'dataPagamento', somaDias(de, -3), somaDias(ate, 3), 3).catch(() => []);
+  const fp = await formas(env);
+  const contas = {}, pagasNoPeriodo = new Set(porPag.map(c => String(c.id)));
+  porVenc.concat(porPag).forEach(c => {
+    const f = fp[c.formaPagamento && c.formaPagamento.id] || null;
+    contas[c.id] = { id: c.id, valor: r2(c.valor), venc: soData(c.vencimento), situacao: Number(c.situacao), contatoId: String((c.contato && c.contato.id) || ''),
+      forma: f ? f.nome : '', formaId: (c.formaPagamento && c.formaPagamento.id) || 0, tipoForma: tipoForma(f) || (/sicoob.*d[eé]bito|debito/i.test(f && f.nome || '') ? 'outro' : ''),
+      pagaNoPeriodo: pagasNoPeriodo.has(String(c.id)) };
+  });
+  const lc = Object.values(contas).filter(c => c.situacao !== 5 && c.situacao !== 4);
+  const info = await contatosInfo(env, lc.map(c => c.contatoId), 14);
+  lc.forEach(c => { const k = info.cache[c.contatoId] || {}; c.fornecedor = k.n || (c.contatoId ? 'Fornecedor #' + c.contatoId : '(sem fornecedor)'); c.doc = k.d || ''; });
+  const usadas = new Set();
+  Object.values(marcas).forEach(m => { if (m.contaId) usadas.add(String(m.contaId)); if (m.lancado) usadas.add(String(m.lancado)); });
+
+  // 3) casamento débito → conta (um para um). Crédito (fatura) é tratado em grupo mais abaixo.
+  const pontuar = (x, c) => {
+    const dv = x.valor - c.valor;
+    const exato = Math.abs(dv) <= 0.01, comJuros = dv > 0.01 && dv <= c.valor * 0.15;
+    if (!exato && !comJuros) return null;
+    let p = exato ? 50 : 15;
+    const docOk = x.doc && c.doc && (x.doc === c.doc || (x.doc.length === 14 && c.doc.slice(0, 8) === x.doc.slice(0, 8)));
+    if (docOk) p += 40;
+    if (!exato && !docOk) return null;                        // juros só com mesmo CNPJ/CPF
+    const dias = Math.abs((Date.parse(x.data) - Date.parse(c.venc || x.data)) / 864e5);
+    p += dias <= 1 ? 15 : dias <= 5 ? 8 : dias <= 15 ? 2 : -10;
+    if (c.tipoForma && c.tipoForma === x.tipo) p += 10;
+    if (c.situacao === 2 && c.pagaNoPeriodo) p += 5;
+    if (c.situacao === 2 && !c.pagaNoPeriodo) p -= 30;         // paga em outra data: provavelmente outra conta
+    return { p, exato, docOk, juro: exato ? 0 : r2(dv), dias };
+  };
+  const ordem = debitos.filter(x => !x.ignorado && x.tipo !== 'credito').sort((a, b) => (b.doc ? 1 : 0) - (a.doc ? 1 : 0));
+  for (const x of ordem) {
+    if (x.vinculo) {
+      const c = contas[x.vinculo]; usadas.add(String(x.vinculo));
+      x.conta = c || { id: x.vinculo, fornecedor: 'Conta ' + x.vinculo, situacao: 0 };
+      x.status = c && c.situacao === 2 ? 'ok' : c && [1, 3].includes(c.situacao) ? 'baixar' : 'ok';
+      x.motivo = 'vinculado no app'; continue;
+    }
+    if (x.lancado) { x.status = 'ok'; x.motivo = 'lançado pelo app (conta ' + x.lancado + ')'; continue; }
+    const cands = lc.filter(c => !usadas.has(String(c.id))).map(c => ({ c, s: pontuar(x, c) })).filter(o => o.s && o.s.p >= 40).sort((a, b) => b.s.p - a.s.p);
+    x.cands = cands.slice(0, 5).map(o => Object.assign({}, o.c, { pontos: o.s.p, juro: o.s.juro, docOk: o.s.docOk }));
+    const m = cands[0];
+    const unico = m && (cands.length === 1 || m.s.p - cands[1].s.p >= 15);
+    if (m && unico && (m.s.docOk || m.s.p >= 65)) {
+      usadas.add(String(m.c.id)); x.conta = x.cands[0];
+      x.status = m.c.situacao === 2 ? 'ok' : 'baixar';
+      x.motivo = (m.s.exato ? 'mesmo valor' : 'valor + juros R$ ' + m.s.juro.toFixed(2).replace('.', ',')) + (m.s.docOk ? ' e mesmo CNPJ/CPF' : '') + (m.s.dias <= 5 ? ', vencimento próximo' : '');
+    } else if (cands.length) { x.status = 'escolher'; x.motivo = cands.length + ' contas possíveis'; }
+    else { x.status = x.tipo === 'taxa' ? 'lancar' : 'sem_conta'; x.motivo = x.tipo === 'taxa' ? 'tarifa/taxa sem lançamento no Bling' : 'nenhuma conta a pagar com esse valor'; x.catSug = x.tipo === 'taxa' ? categoriaTaxa(x.desc + ' ' + x.compl) : 0; }
+  }
+  // 4) Crédito: cada débito de fatura × contas do cartão com vencimento perto da data da fatura
+  const faturas = debitos.filter(x => !x.ignorado && x.tipo === 'credito');
+  for (const x of faturas) {
+    const doCartao = lc.filter(c => c.tipoForma === 'credito' && !usadas.has(String(c.id)) && c.venc && Math.abs((Date.parse(c.venc) - Date.parse(x.data)) / 864e5) <= 6);
+    doCartao.forEach(c => usadas.add(String(c.id)));
+    const soma = r2(doCartao.reduce((s, c) => s + c.valor, 0));
+    const abertas = doCartao.filter(c => [1, 3].includes(c.situacao));
+    x.cartao = { contas: doCartao.sort((a, b) => String(a.venc).localeCompare(String(b.venc))), soma, dif: r2(x.valor - soma), abertas: abertas.length };
+    x.status = x.lancado ? 'ok' : !doCartao.length ? 'sem_conta' : Math.abs(x.cartao.dif) > 0.01 ? 'diferenca' : abertas.length ? 'baixar' : 'ok';
+    x.motivo = !doCartao.length ? 'nenhuma compra no cartão com vencimento perto desta data' : Math.abs(x.cartao.dif) > 0.01 ? 'fatura ≠ soma das contas do cartão (diferença R$ ' + x.cartao.dif.toFixed(2).replace('.', ',') + ')' : 'fatura = soma das contas do cartão';
+  }
+  // 5) contas do Bling vencidas no período, em aberto, que nenhum débito explicou
+  const emAberto = lc.filter(c => [1, 3].includes(c.situacao) && !usadas.has(String(c.id)) && c.venc >= de && c.venc <= ate)
+    .sort((a, b) => String(a.venc).localeCompare(String(b.venc)));
+  const resumo = {};
+  debitos.forEach(x => { const t = x.tipo; resumo[t] = resumo[t] || { qtd: 0, total: 0, pend: 0 }; resumo[t].qtd++; resumo[t].total = r2(resumo[t].total + x.valor); if (!x.ignorado && x.status !== 'ok') resumo[t].pend++; });
+  return { ok: true, de, ate, debitos: debitos.sort((a, b) => b.data.localeCompare(a.data)), emAberto, resumo, faltamNomes: info.faltam,
+    totalDebitos: r2(debitos.reduce((s, x) => s + x.valor, 0)) };
+}
+
+async function pagarContaPorId(env, id) {
+  const c = ((await bling(env, '/contas/pagar/' + encodeURIComponent(id || '')).catch(() => null)) || {}).data;
+  if (!c || !c.id) return { ok: false, erro: 'Conta a pagar não encontrada no Bling.' };
+  const info = await contatosInfo(env, [String((c.contato && c.contato.id) || '')], 1);
+  const k = info.cache[String((c.contato && c.contato.id) || '')] || {};
+  return { ok: true, conta: { id: c.id, valor: r2(c.valor), venc: soData(c.vencimento), situacao: Number(c.situacao), fornecedor: k.n || '', doc: k.d || '', historico: c.historico || '' } };
+}
+
+async function blingPost(env, caminho, corpo) {
+  const tok = await tokenValido(env);
+  const r = await fetch(API + caminho, { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(corpo || {}) });
+  const t = await r.text(); let j = {}; try { j = JSON.parse(t); } catch (e) {}
+  if (!r.ok) {
+    const det = j.error && (j.error.fields ? j.error.fields.map(f => f.msg || f.message).join('; ') : (j.error.description || j.error.message));
+    throw new Error('Bling ' + r.status + ': ' + (det || t.slice(0, 200)));
+  }
+  return j;
+}
+async function baixarContaPagar(env, contaId, valor, data, historico, juro) {
+  const atual = ((await bling(env, '/contas/pagar/' + contaId).catch(() => null)) || {}).data;
+  if (atual && ![1, 3].includes(Number(atual.situacao))) return 'já estava paga no Bling (nada feito)';
+  await blingPost(env, '/contas/pagar/' + contaId + '/baixar', { data, usarDataVencimento: false, portador: { id: PORTADOR_SICOOB }, historico: historico || 'Pago pelo Sicoob - conciliado no app',
+    valorPago: r2(valor), juro: r2(juro || 0), desconto: 0, acrescimo: 0, taxa: 0 });
+  return 'ok';
+}
+async function salvarMarca(env, chave, dados) {
+  const m = (await env.BLING_KV.get('pagar:marcas', 'json')) || {};
+  m[chave] = Object.assign({}, m[chave] || {}, dados, { em: Date.now() });
+  const ks = Object.keys(m); if (ks.length > 3000) ks.sort((a, b) => (m[a].em || 0) - (m[b].em || 0)).slice(0, ks.length - 3000).forEach(k => delete m[k]);
+  await env.BLING_KV.put('pagar:marcas', JSON.stringify(m));
+}
+
+// POST /pagar/baixar {itens:[{chave?, contaId, valor, data, juro?, historico?}], usuario}
+async function pagarBaixar(env, b) {
+  const itens = (b.itens || []).slice(0, 20), out = [];
+  for (const it of itens) {
+    try {
+      const res = await baixarContaPagar(env, it.contaId, Number(it.valor), soData(it.data), (it.historico || '').slice(0, 200), Number(it.juro || 0));
+      if (it.chave) await salvarMarca(env, it.chave, { contaId: String(it.contaId), por: String(b.usuario || '').slice(0, 60) });
+      out.push({ contaId: it.contaId, ok: true, res });
+      await logAcao(env, { origem: 'pagar', acao: 'baixa_pagar', contaId: it.contaId, valor: it.valor, data: it.data, resultado: res, por: b.usuario || '' });
+    } catch (e) { out.push({ contaId: it.contaId, ok: false, erro: String(e.message || e) }); }
+  }
+  return { ok: out.every(x => x.ok), itens: out };
+}
+
+// fornecedor pelo CPF/CNPJ; sem documento (tarifas) usa o contato do próprio banco
+async function contatoPorDoc(env, doc) {
+  doc = dig(doc); if (!doc) return 0;
+  const k = 'cache:contatodoc:' + doc, c = await env.BLING_KV.get(k);
+  if (c) return Number(c);
+  const l = ((await bling(env, '/contatos?numeroDocumento=' + doc).catch(() => null)) || {}).data || [];
+  const id = l.length ? l[0].id : 0;
+  if (id) await env.BLING_KV.put(k, String(id), { expirationTtl: 90 * 86400 });
+  return id;
+}
+async function contatoBanco(env) {
+  const c = await env.BLING_KV.get('cache:contatobanco'); if (c) return Number(c);
+  let id = await contatoPorDoc(env, '02038232000164');  // Bancoob / Banco Sicoob
+  if (!id) { const l = ((await bling(env, '/contatos?pesquisa=SICOOB').catch(() => null)) || {}).data || []; id = l.length ? l[0].id : 0; }
+  if (id) await env.BLING_KV.put('cache:contatobanco', String(id), { expirationTtl: 180 * 86400 });
+  return id;
+}
+
+// POST /pagar/lancar {itens:[{chave, data, valor, categoriaId, formaId?, historico, doc?, contatoId?, tipo}], usuario}
+// Cria a conta a pagar (emissão e vencimento = dia do débito) e já baixa como paga no Sicoob.
+async function pagarLancar(env, b) {
+  const itens = (b.itens || []).slice(0, 12), out = [];
+  for (const it of itens) {
+    try {
+      if (!it.categoriaId) throw new Error('Escolha a categoria.');
+      const m = ((await env.BLING_KV.get('pagar:marcas', 'json')) || {})[it.chave] || {};
+      if (m.lancado) { out.push({ chave: it.chave, ok: true, contaId: m.lancado, res: 'já lançado antes' }); continue; }
+      let contato = Number(it.contatoId || 0) || await contatoPorDoc(env, it.doc);
+      if (!contato && (it.tipo === 'taxa' || !dig(it.doc))) contato = await contatoBanco(env);
+      if (!contato) throw new Error(dig(it.doc) ? 'Fornecedor ' + it.doc + ' não está cadastrado no Bling. Cadastre e tente de novo (ou informe o id do contato).' : 'Informe o fornecedor (id do contato no Bling).');
+      const data = soData(it.data), valor = r2(it.valor);
+      const j = await blingPost(env, '/contas/pagar', { vencimento: data, dataEmissao: data, competencia: data, valor, contato: { id: contato },
+        formaPagamento: { id: Number(it.formaId || PAG_FORMA[it.tipo] || PAG_FORMA.outro) }, categoria: { id: Number(it.categoriaId) }, portador: { id: PORTADOR_SICOOB },
+        historico: String(it.historico || 'Débito Sicoob').slice(0, 200), ocorrencia: { tipo: '1' } });
+      const id = (j.data && j.data.id) || j.id;
+      if (!id) throw new Error('Bling não devolveu o id da conta criada.');
+      await salvarMarca(env, it.chave, { lancado: String(id), por: String(b.usuario || '').slice(0, 60) });
+      let res = 'lançada';
+      try { res += ' e ' + ((await baixarContaPagar(env, id, valor, data, 'Débito Sicoob - lançado pelo app')) === 'ok' ? 'baixada' : 'já paga'); }
+      catch (e) { res += ', mas a BAIXA falhou: ' + (e.message || e); }
+      out.push({ chave: it.chave, ok: true, contaId: id, res });
+      await logAcao(env, { origem: 'pagar', acao: 'lancar_pagar', contaId: id, valor, data, categoria: it.categoriaId, resultado: res, por: b.usuario || '' });
+    } catch (e) { out.push({ chave: it.chave, ok: false, erro: String(e.message || e) }); }
+  }
+  return { ok: out.every(x => x.ok), itens: out };
+}
+
+// POST /pagar/marcar {chave, ignorar?:bool, tipo?:'pix'|'boleto'|'credito'|'taxa'|'outro'|'', contaId?:id|null, usuario}
+async function pagarMarcar(env, b) {
+  if (!b.chave) return { ok: false, erro: 'Falta a chave do débito.' };
+  const d = { por: String(b.usuario || '').slice(0, 60) };
+  if ('ignorar' in b) d.ign = !!b.ignorar;
+  if ('tipo' in b) d.tipo = b.tipo || undefined;
+  if ('contaId' in b) d.contaId = b.contaId ? String(b.contaId) : undefined;
+  await salvarMarca(env, b.chave, d);
+  return { ok: true };
 }
