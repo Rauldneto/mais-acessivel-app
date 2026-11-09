@@ -14902,12 +14902,13 @@ function blgTelaConc(){
     'Marque o pedido/nota de cada um (ou <b>Ignorar</b>) e no fim clique em <b>Salvar vínculos</b>. Quando o pagador for diferente do cliente, o sistema aprende para a próxima vez.'+
     (blgAdmin()?' <button class="blg-btn sec" style="height:26px;margin-left:8px" data-a="retroativo">'+(BLG.retroCarr?'<span class="blg-spin"></span>':'Buscar pagamentos dos últimos 10 dias')+'</button>':'')+(BLG.retroMsg?'<br>'+blgEsc(BLG.retroMsg):'')+'</div>';
   if(!L.length)return h+'<div class="blg-vazio">Nenhum PIX esperando vínculo. 🎉</div>';
-  var abertos=(BLG.dados||[]).filter(function(x){return Number(x.aReceber||0)-Number(x.pago||0)>0.009;});
+  var falta=function(x){return Number(x.aReceber||0)-Number(x.pago||0);};
+  var abertos=(BLG.dados||[]).filter(function(x){return falta(x)>0.009;}).sort(function(a,b){return falta(b)-falta(a);});
   h+='<table class="blg-tb"><thead><tr><th>Recebido</th><th>Pagador</th><th class="r">Valor (R$)</th><th>Sugestão</th><th>Vincular a</th><th></th></tr></thead><tbody>';
   L.forEach(function(p,i){
     var m=st[p.e2e]||'';
     var sug=(p.sugestoes||[]).map(function(s2){var k=s2.tipo+':'+s2.id;return '<button class="blg-btn sec'+(m===k?' marcado':'')+'" style="height:24px;font-size:11px;margin:2px 4px 2px 0" data-a="marcar" data-i="'+i+'" data-k="'+blgEsc(k)+'" title="'+blgEsc(s2.motivo)+'">'+(m===k?'✓ ':'')+(s2.tipo==='nota'?'NF ':'Pedido ')+blgEsc(s2.numero)+' · '+blgEsc((s2.cliente||'').slice(0,22))+'</button>';}).join('');
-    var opts='<option value="">Escolher…</option>'+abertos.map(function(x){var k=x.tipo+':'+x.id;return '<option value="'+blgEsc(k)+'"'+(m===k?' selected':'')+'>'+(x.tipo==='nota'?'NF ':'Pedido ')+blgEsc(x.numero)+' — '+blgEsc((x.cliente||'').slice(0,28))+' — R$ '+blgMoeda(Number(x.aReceber||0)-Number(x.pago||0))+'</option>';}).join('');
+    var opts='<option value="">Escolher…</option>'+abertos.map(function(x){var k=x.tipo+':'+x.id;return '<option value="'+blgEsc(k)+'"'+(m===k?' selected':'')+'>R$ '+blgMoeda(falta(x))+' — '+(x.tipo==='nota'?'NF ':'Pedido ')+blgEsc(x.numero)+' — '+blgEsc((x.cliente||'').slice(0,34))+'</option>';}).join('');
     h+='<tr class="'+(m&&m!=='ignorar'?'blg-conc-ok':'')+'" style="cursor:default'+(m==='ignorar'?';opacity:.55':'')+'"><td>'+blgData(p.dia)+' '+blgEsc(String(p.horario||'').slice(11,16))+'</td><td style="white-space:normal;max-width:240px">'+blgEsc(p.pagador)+(p.info?'<div style="font-size:10.5px;color:#777">'+blgEsc(p.info)+'</div>':'')+'</td>'+
        '<td class="r">'+blgMoeda(p.valor)+'</td><td style="white-space:normal;max-width:300px">'+(sug||'<span style="color:#999">—</span>')+'</td>'+
        '<td><select data-sel="'+i+'" style="height:28px;border-radius:8px;border:1px solid var(--bd);max-width:300px;font-size:11.5px;background:#fff">'+opts+'</select></td>'+
