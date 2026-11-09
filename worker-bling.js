@@ -438,13 +438,14 @@ async function listarAbertos(env) {
   const porNota = {};
   for (const c of contas) {
     const o = c.origem || {};
-    if (o.tipoOrigem !== 'notafiscal') continue;
+    if (o.tipoOrigem !== 'notafiscal' && o.tipoOrigem !== 'venda') continue;
     const f = fp[c.formaPagamento && c.formaPagamento.id] || { codigo: Number(c.formaPagamento && c.formaPagamento.codigoFiscal), nome: '' };
     const t = tipoForma(f);
     if (!t) continue;
-    const k = o.id;
+    if (o.tipoOrigem === 'venda' && itens.some(x => x.tipo === 'pedido' && String(x.id) === String(o.id))) continue; // pedido em aberto já está na lista
+    const k = (o.tipoOrigem === 'venda' ? 'p' : '') + o.id;
     if (!porNota[k]) porNota[k] = {
-      tipo: 'nota', id: o.id, numero: String(o.numero || ''), data: o.dataEmissao || c.dataEmissao, prevista: '',
+      tipo: o.tipoOrigem === 'venda' ? 'pedido' : 'nota', id: o.id, numero: String(o.numero || ''), data: o.dataEmissao || c.dataEmissao, prevista: '',
       cliente: (c.contato && c.contato.nome) || '', doc: (c.contato && c.contato.numeroDocumento) || '',
       total: Number(o.valor || 0), aReceber: 0, formas: [], formaNome: f.nome || '', vendedor: '', situacao: 'Em aberto',
       contas: [], link: o.url || '',
@@ -856,9 +857,10 @@ async function executarContasPedido(env, reg, valor, data) {
     const nf = await nfDados(env, nfId).catch(() => null);
     if (nf && ![5, 6, 7].includes(Number(nf.situacao))) { const sub = await nfSubstituta(env, reg.id, nf).catch(() => null); if (sub) nfId = sub; }
   }
-  const origemId = nfId || reg.id;
+  // as contas podem estar na nota OU no próprio pedido (quando foram lançadas no pedido antes de faturar)
+  const origens = [String(reg.id)].concat(nfId ? [String(nfId)] : []);
   const daOrigem = async () => (await paginas(env, '/contas/receber?dataInicial=' + diasAtras(360) + '&dataFinal=' + isoDia(new Date()) + (idContato ? '&idContato=' + idContato : ''), 3))
-    .filter(c => String(c.idOrigem || (c.origem && c.origem.id)) === String(origemId));
+    .filter(c => origens.includes(String(c.idOrigem || (c.origem && c.origem.id))));
   let contas = await daOrigem();
   let lancou = false;
   if (!contas.length && !nfId) {
@@ -869,7 +871,7 @@ async function executarContasPedido(env, reg, valor, data) {
     for (let i = 0; i < 4 && !contas.length; i++) { await new Promise(x => setTimeout(x, 1500 * (i + 1))); contas = await daOrigem(); }
     if (!contas.length && !r.ok) throw new Error('Bling não lançou as contas do pedido (' + r.status + '): ' + (await r.text().catch(() => '')).slice(0, 160));
   }
-  if (!contas.length) throw new Error(nfId ? 'A nota do pedido não tem contas a receber no Bling.' : 'Contas do pedido não encontradas depois de lançar.');
+  if (!contas.length) throw new Error(nfId ? 'Nem a nota nem o pedido têm contas a receber no Bling.' : 'Contas do pedido não encontradas depois de lançar.');
   // só parcelas de PIX (o pedido pode ter parte em boleto: essas não são baixadas por um PIX)
   const ehPix = c => [17, 18, 20].includes(Number(c.formaPagamento && c.formaPagamento.codigoFiscal));
   if (contas.some(ehPix)) contas = contas.filter(ehPix);
