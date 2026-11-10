@@ -831,7 +831,7 @@ async function finVerificarDuplicado(d) {
   var itens = Object.keys(achados).map(function(k) { return achados[k]; });
   for (var i = 0; i < itens.length && i < 6; i++) {
     try { var c = await finJson('/Api/v3/contatos/' + itens[i].contatoId); itens[i].contatoNome = (c.json && c.json.data && c.json.data.nome) || ''; } catch (e) {}
-    try { var dd = await finJson('/Api/v3/contas/pagar/' + itens[i].id); var o = dd.json && dd.json.data; if (o) { itens[i].historico = o.historico || ''; itens[i].dataEmissao = o.dataEmissao || ''; } } catch (e) {}
+    try { var dd = await finJson('/Api/v3/contas/pagar/' + itens[i].id); var o = dd.json && dd.json.data; if (o) { itens[i].historico = o.historico || ''; itens[i].numeroDocumento = o.numeroDocumento || ''; itens[i].dataEmissao = o.dataEmissao || ''; } } catch (e) {}
   }
   return { ok: true, itens: itens };
 }

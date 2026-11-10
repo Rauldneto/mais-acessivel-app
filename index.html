@@ -5148,7 +5148,11 @@ document.addEventListener('change',function(ev){var t=ev.target;if(!t||t.id!=='f
 function dspDuplicados(id){var d=DSP.desp[id];var lib=(d&&d.naoDup)||[];return ((d&&d.dupBling&&d.dupBling.itens)||[]).filter(function(x){return lib.indexOf(x.blingId)<0;});}
 async function dspChecarDupBling(id,f){
   var r=await dspBling('verificarDuplicado',{valor:f.valor,emissao:f.emissao,vencimento:f.vencimento});
-  var info={ts:Date.now(),itens:(r.itens||[]).map(function(x){return {blingId:String(x.id),valor:x.valor,vencimento:x.vencimento,emissao:x.dataEmissao||'',contato:x.contatoNome||'',contatoId:x.contatoId||'',situacao:x.situacao||1,historico:x.historico||''};})};
+  var info={ts:Date.now(),itens:(r.itens||[]).map(function(x){return {blingId:String(x.id),valor:x.valor,vencimento:x.vencimento,emissao:x.dataEmissao||'',contato:x.contatoNome||'',contatoId:x.contatoId||'',situacao:x.situacao||1,historico:x.historico||'',numeroDocumento:x.numeroDocumento||''};})};
+  // número de documento diferente = outra compra, não é duplicado (vale o que veio do Bling e o que o app lançou com aquele ID)
+  var meuDoc=String(f.numeroDocumento||'').replace(/\D/g,'');
+  if(meuDoc){var porBling={};Object.keys(DSP.desp).forEach(function(k){var x=DSP.desp[k];if(x&&x.blingId)porBling[String(x.blingId)]=x;});
+    info.itens=info.itens.filter(function(it){var doc=String(it.numeroDocumento||(porBling[it.blingId]&&porBling[it.blingId].numeroDocumento)||'').replace(/\D/g,'');return !(doc&&doc!==meuDoc);});}
   try{await dspFb('despesas/'+id,{method:'PATCH',body:{dupBling:info}});}catch(e){}
   if(DSP.desp[id])DSP.desp[id].dupBling=info;return info.itens;
 }
@@ -6382,7 +6386,11 @@ document.addEventListener('change',function(ev){var t=ev.target;if(!t||t.id!=='f
 function frtDuplicados(id){var d=FRT.desp[id];var lib=(d&&d.naoDup)||[];return ((d&&d.dupBling&&d.dupBling.itens)||[]).filter(function(x){return lib.indexOf(x.blingId)<0;});}
 async function frtChecarDupBling(id,f){
   var r=await frtBling('verificarDuplicado',{valor:f.valor,emissao:f.emissao,vencimento:f.vencimento});
-  var info={ts:Date.now(),itens:(r.itens||[]).map(function(x){return {blingId:String(x.id),valor:x.valor,vencimento:x.vencimento,emissao:x.dataEmissao||'',contato:x.contatoNome||'',contatoId:x.contatoId||'',situacao:x.situacao||1,historico:x.historico||''};})};
+  var info={ts:Date.now(),itens:(r.itens||[]).map(function(x){return {blingId:String(x.id),valor:x.valor,vencimento:x.vencimento,emissao:x.dataEmissao||'',contato:x.contatoNome||'',contatoId:x.contatoId||'',situacao:x.situacao||1,historico:x.historico||'',numeroDocumento:x.numeroDocumento||''};})};
+  // número de documento diferente = outra compra, não é duplicado (vale o que veio do Bling e o que o app lançou com aquele ID)
+  var meuDoc=String(f.numeroDocumento||'').replace(/\D/g,'');
+  if(meuDoc){var porBling={};Object.keys(FRT.desp).forEach(function(k){var x=FRT.desp[k];if(x&&x.blingId)porBling[String(x.blingId)]=x;});
+    info.itens=info.itens.filter(function(it){var doc=String(it.numeroDocumento||(porBling[it.blingId]&&porBling[it.blingId].numeroDocumento)||'').replace(/\D/g,'');return !(doc&&doc!==meuDoc);});}
   try{await frtFb('fretes/'+id,{method:'PATCH',body:{dupBling:info}});}catch(e){}
   if(FRT.desp[id])FRT.desp[id].dupBling=info;return info.itens;
 }
