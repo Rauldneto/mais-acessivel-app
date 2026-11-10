@@ -45,20 +45,36 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f5f5f7;color:#1c1c1e;di
 .comp .env:disabled{opacity:.6}
 .comp label{width:100%;font-size:12.5px;color:#92400e;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer}
 .info{margin:16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;color:#1e3a8a;line-height:1.5}
+.uso{background:#eef2ff;color:#3730a3;font-size:11.5px;padding:5px 10px;border-bottom:1px solid #c7d2fe;flex-shrink:0;line-height:1.35}
+.comp .clip{border:1.5px solid #d1d5db;background:#fff;border-radius:10px;width:38px;height:38px;font-size:17px;cursor:pointer}
+.comp .clip:hover{background:#f3f3ff}
+.img{display:block;max-width:230px;max-height:230px;border-radius:9px;cursor:zoom-in;margin:2px 0 4px;background:#eee}
+.arq{display:flex;gap:8px;align-items:center;background:rgba(0,0,0,.06);border-radius:9px;padding:8px 10px;margin:2px 0 4px;min-width:190px}
+.m.eu .arq{background:rgba(255,255,255,.18)}.arq .ic{font-size:24px}.arq .tx{display:flex;flex-direction:column;min-width:0}.arq b{font-size:13px;word-break:break-all}.arq small{font-size:11px;opacity:.7}
+.sv{display:block;width:100%;border:none;border-radius:8px;padding:6px 10px;font-weight:700;font-size:12.5px;cursor:pointer;background:#16a34a;color:#fff;margin:2px 0}
+.sv:hover{background:#15803d}
+body.arrastando .msgs{outline:3px dashed #5856d6;outline-offset:-6px}
+.termo{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10;display:flex;align-items:center;justify-content:center;padding:14px}
+.termo .cx{background:#fff;border-radius:14px;padding:18px;line-height:1.5;font-size:14px;color:#1f2937}
+.termo h3{font-size:17px;margin-bottom:8px}
+.termo button{margin-top:14px;width:100%;background:#5856d6;color:#fff;border:none;border-radius:10px;padding:11px;font-size:15px;font-weight:800;cursor:pointer}
 .oculto{display:none!important}
 </style>
 </head>
 <body>
 <div class="top"><button id="voltar" class="oculto" title="Voltar">‹</button><h1 id="titulo">💬 Chat<small id="sub">Mais Acessível</small></h1></div>
+<div class="uso">🔒 Uso exclusivo para trabalho. As conversas ficam registradas e podem ser monitoradas pela administração.</div>
 <div id="aviso" class="aviso oculto"></div>
 <input id="busca" class="busca" placeholder="🔎 Procurar pessoa...">
 <div id="lista" class="lista"></div>
 <div id="msgs" class="msgs oculto"></div>
 <div id="comp" class="comp oculto">
   <label id="lblAv" class="oculto"><input type="checkbox" id="chkAv"> 🔔 Aviso na tela (aparece na frente de tudo até ele clicar em Ciente)</label>
+  <button class="clip" id="clip" title="Mandar foto ou arquivo (até 5 MB). Também dá para colar um print (Ctrl+V) ou arrastar o arquivo para cá.">📎</button><input type="file" id="arq" multiple class="oculto">
   <textarea id="txt" rows="1" placeholder="Mensagem... (Enter envia)"></textarea>
   <button class="env" id="enviar">Enviar ➤</button>
 </div>
+<div id="termo" class="termo oculto"><div class="cx"><h3>🔒 Chat da empresa</h3>Este chat é de <b>uso exclusivo para assuntos de trabalho</b>. Evite conversas pessoais ou que não tenham relação com o serviço.<br><br>As conversas, fotos e arquivos ficam <b>registrados</b> e podem ser <b>monitorados pela administração</b> da empresa.<button id="termoOk">✔ Li e entendi</button></div></div>
 <script src="fb-auth.js"></script>
 <script src="chat.js"></script>
 </body>

@@ -118,6 +118,14 @@ try {
       return document.querySelector('.cht-m.eu') ? '' : 'mensagem enviada não apareceu';
     });
     if (ok) falhas.push('[admin] chat: ' + ok);
+    // anexo: foto vira miniatura com botão de salvar
+    const okArq = await adm.page.evaluate(async () => {
+      const c = document.createElement('canvas'); c.width = 40; c.height = 30; c.getContext('2d').fillRect(0, 0, 20, 20);
+      const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+      await chtEnviarArqs([new File([blob], 'print.png', { type: 'image/png' }), new File(['%PDF-1.4 teste'], 'orcamento.pdf', { type: 'application/pdf' })]);
+      return document.querySelector('.cht-img') && document.querySelectorAll('.cht-sv').length >= 2 ? '' : 'anexo não apareceu na conversa';
+    });
+    if (okArq) falhas.push('[admin] chat: ' + okArq);
     if (adm.erros.length > antes) falhas.push('[admin] chat: ' + adm.erros.slice(antes).join(' | '));
   }
 
