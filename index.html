@@ -5120,6 +5120,19 @@ function finAvisoBotao(btnId,txt,faltas,tipo){
     (faltas||[]).forEach(function(k){var id=FIN_CAMPO[k];var el=id&&document.getElementById(id);if(el){el.style.outline='3px solid #dc2626';el.style.outlineOffset='2px';el.style.boxShadow='0 0 0 6px rgba(220,38,38,.18)';var lb=el.id&&document.querySelector('label[for="'+el.id+'"]');if(lb){lb.style.color='#b91c1c';lb.style.fontWeight='800';}el.addEventListener('input',function(){el.style.boxShadow='';if(lb){lb.style.color='';lb.style.fontWeight='';}},{once:true});el.addEventListener('input',function(){el.style.outline='';},{once:true});el.addEventListener('change',function(){el.style.outline='';el.style.boxShadow='';},{once:true});}});
     d.scrollIntoView({behavior:'smooth',block:'center'});},30);
 }
+// Outro lançamento do app com o mesmo documento (mesmo fornecedor e mesmo nº) ou mesmo fornecedor+valor+data: não deixa lançar repetido
+function finRepetidoNoApp(lista,id,f,dig,sim){
+  var nm=(f.contato&&f.contato.nome)||(f.fornecedor&&f.fornecedor.nome)||'',doc=dig((f.contato&&f.contato.doc)||(f.fornecedor&&f.fornecedor.doc)),num=dig(f.numeroDocumento);
+  var out=null;Object.keys(lista).some(function(k){var d=lista[k];if(k===id||!d||['pendente','lancado'].indexOf(d.status)<0)return false;
+    if((d.naoRepetido||[]).indexOf(id)>=0||((lista[id]||{}).naoRepetido||[]).indexOf(k)>=0)return false;
+    var dDoc=dig((d.contato&&d.contato.doc)||(d.fornecedor&&d.fornecedor.doc));
+    var mesmoForn=(f.contato&&d.contato&&String(f.contato.id)===String(d.contato.id))||((doc&&dDoc)?doc===dDoc:sim((d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'',nm)>=0.5);
+    if(!mesmoForn)return false;
+    if(num&&dig(d.numeroDocumento)&&dig(d.numeroDocumento)===num){out={k:k,d:d,motivo:'o mesmo nº de documento ('+f.numeroDocumento+')'};return true;}
+    if(f.valor>0&&Math.abs((d.valor||0)-f.valor)<0.01&&f.emissao&&d.emissao===f.emissao){out={k:k,d:d,motivo:'o mesmo valor e a mesma data'};return true;}
+    return false;});
+  return out;
+}
 function dspListasOk(L){if(!L||!L.formas)return null;L=Object.assign({},L);['formas','contas','categorias'].forEach(function(k){if(!L[k]||!L[k].length)L[k]=DSP_LISTAS_PADRAO[k];});return L;}
 function dspListas(){return DSP.listas||DSP_LISTAS_PADRAO;}
 // formas de pagamento que servem para contas a pagar: ativas no Bling e de pagamento (as de venda/recebimento e as desativadas ficam de fora; a já escolhida sempre aparece)
@@ -5326,6 +5339,9 @@ async function dspEnviar(){
   if(!DSP.fotosNovas.length||DSP.enviando)return;
   var obs=(dspEl('dspObs')||{}).value||'';
   var item={fotos:DSP.fotosNovas.slice(),obs:obs.trim(),ts:Date.now()};
+  var hh=item.fotos[0]?await dspHash(item.fotos[0]):'';
+  var ja=hh&&Object.keys(DSP.desp).filter(function(k){var d=DSP.desp[k];return d&&d.fotoHash===hh&&d.status!=='ignorado';})[0];
+  if(ja){var dj=DSP.desp[ja];DSP.fotosNovas=[];DSP.msg='Este comprovante já foi enviado antes ('+((dj.fornecedor&&dj.fornecedor.nome)||'despesa')+(dj.valor>0?' · R$ '+dspMoney(dj.valor):'')+' · '+(dj.status==='lancado'?'já lançado no Bling':'está na conferência')+'). Não enviei de novo.';DSP.msgTipo='warn';dspDraw();return;}
   DSP.enviando=true;DSP.msg='Enviando…';DSP.msgTipo='info';dspDraw();
   try{var id=await dspSubir(item);DSP.fotosNovas=[];DSP.obsCompart='';DSP.ultimoEnvio=id;DSP.msg='';dspDraw();dspLerDespesa(id,item.fotos,item.obs);}
   catch(e){var f=dspFilaLer();f.push(item);if(dspFilaGravar(f)){DSP.fotosNovas=[];DSP.msg='Sem conexão agora. A foto ficou guardada neste celular e sobe sozinha quando a internet voltar.';DSP.msgTipo='warn';}
@@ -5469,6 +5485,10 @@ function dspRevFornHtml(f){
 async function dspRevisar(){try{return await dspRevisar2();}catch(e){var b=dspEl('fRevisar');if(b){b.disabled=false;b.textContent='Revisar e lançar';}finAvisoBotao('fRevisar','erro inesperado: '+(e.message||e)+'. Tente de novo; se continuar, me mande um print desta mensagem.');}}
 async function dspRevisar2(){
   var f=dspLerCampos();var falta=dspFaltas(f);if(falta.length){DSP.msg='';dspDraw();finAvisoBotao('fRevisar','falta preencher '+falta.join(', ')+'. Preencha o que está em vermelho e clique de novo.',falta);return;}
+  var rep=finRepetidoNoApp(DSP.desp,DSP.sel,f,dspDig,dspSimNome);
+  if(rep){var rd=rep.d;finAvisoBotao('fRevisar','já existe outro despesa com '+rep.motivo+': '+((rd.contato&&rd.contato.nome)||(rd.fornecedor&&rd.fornecedor.nome)||'')+' · R$ '+dspMoney(rd.valor)+' · '+(rd.status==='lancado'?'<b>já lançado no Bling</b>':'na conferência')+(rd.criadoPor?' (enviado por '+dspEsc(rd.criadoPor)+')':'')+'. Exclua este repetido. Se for mesmo outro despesa, <a href="#" id="finNaoRep" style="color:#b91c1c;font-weight:800">clique aqui para liberar</a>.');
+    setTimeout(function(){var a=document.getElementById('finNaoRep');if(a)a.onclick=async function(ev){ev.preventDefault();var me=DSP.desp[DSP.sel];var l=(me.naoRepetido||[]).concat([rep.k]);me.naoRepetido=l;try{await dspFb('despesas/'+DSP.sel,{method:'PATCH',body:{naoRepetido:l}});}catch(e){}var x=document.getElementById('finAvisoBtn');if(x)x.remove();dspRevisar();};},80);
+    return;}
   var b=dspEl('fRevisar');if(b){b.disabled=true;b.textContent='Conferindo no Bling…';}
   DSP.fornSt=DSP.fornSt||{};delete DSP.fornSt[DSP.sel];
   if(dspExtOk()){var sel=DSP.sel;try{await dspSalvarForm(true);}catch(e){}
@@ -6847,6 +6867,9 @@ async function frtEnviar(){
   var fts=FRT.fotosNovas.slice();var pdfs=(FRT.pdfsNovos||[]).filter(function(p){return p.imgs.some(function(x){return fts.indexOf(x)>=0;});});
   var item={fotos:fts,obs:obs.trim(),ts:Date.now(),pdfs:pdfs.map(function(p){return {nome:p.nome,b64:p.b64};}),
     fotosDoPdf:fts.map(function(x,i){return pdfs.some(function(p){return p.imgs.indexOf(x)>=0;})?i:-1;}).filter(function(i){return i>=0;})};
+  var hh=item.fotos[0]?await frtHash(item.fotos[0]):'';
+  var ja=hh&&Object.keys(FRT.desp).filter(function(k){var d=FRT.desp[k];return d&&d.fotoHash===hh&&d.status!=='ignorado';})[0];
+  if(ja){var dj=FRT.desp[ja];FRT.fotosNovas=[];FRT.pdfsNovos=[];FRT.msg='Este documento já foi enviado antes ('+((dj.fornecedor&&dj.fornecedor.nome)||'frete')+(dj.valor>0?' · R$ '+frtMoney(dj.valor):'')+' · '+(dj.status==='lancado'?'já lançado no Bling':'está na conferência')+'). Não enviei de novo.';FRT.msgTipo='warn';frtDraw();return;}
   FRT.enviando=true;FRT.msg='Enviando…';FRT.msgTipo='info';frtDraw();
   try{var id=await frtSubir(item);FRT.fotosNovas=[];FRT.pdfsNovos=[];FRT.obsCompart='';FRT.ultimoEnvio=id;FRT.msg='';frtDraw();frtLerDespesa(id,item.fotos,item.obs);}
   catch(e){var f=frtFilaLer();f.push(item);if(frtFilaGravar(f)){FRT.fotosNovas=[];FRT.pdfsNovos=[];FRT.msg='Sem conexão agora. A foto ficou guardada neste celular e sobe sozinha quando a internet voltar.';FRT.msgTipo='warn';}
@@ -6904,6 +6927,27 @@ async function frtLerDespesa(id,fotos,obs){
       if(o0.obs)upd.obs=o0.obs;}}
   catch(e){upd={leituraErro:'A leitura automática falhou ('+e.message+'). Preencha à mão ou toque em Ler de novo.'};}
   upd.status='pendente';upd.atualizadoEm=Date.now();
+  // o documento é de um frete que já veio da cotação (botão Lançar financeiro)? junta nele em vez de criar outro
+  try{var o1=FRT.desp[id]||{};if(!upd.leituraErro&&o1.origem!=='cotacao'&&upd.valor>0){
+    var docN=frtDig(upd.fornecedor&&upd.fornecedor.doc),nmN=(upd.fornecedor&&upd.fornecedor.nome)||'';
+    var nfsN=((upd.cte&&upd.cte.nfs)||[]).map(function(x){return frtDig(x.numero);}).filter(Boolean);
+    var cands=Object.keys(FRT.desp).filter(function(k){var d=FRT.desp[k];if(k===id||!d||d.status!=='pendente'||d.origem!=='cotacao'||d.nFotos>0)return false;
+      var docC=frtDig((d.contato&&d.contato.doc)||(d.fornecedor&&d.fornecedor.doc));var mesmoForn=(docN&&docC)?docN===docC:frtSimNome((d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'',nmN)>=0.5;
+      var mesmaNf=nfsN.length&&frtDig(d.numeroDocumento)&&nfsN.indexOf(frtDig(d.numeroDocumento))>=0;
+      return mesmoForn&&(Math.abs((d.valor||0)-upd.valor)<0.01||mesmaNf);});
+    if(cands.length===1){var cid=cands[0],c0=FRT.desp[cid];
+      var fts=await frtFb('fretesFotos/'+id);var pds=await frtFb('fretesPdf/'+id).catch(function(){return null;});
+      var uc=Object.assign({},upd,{nFotos:(fts||[]).length,nPdf:(pds||[]).length,fotosDoPdf:o1.fotosDoPdf||[],fotoHash:o1.fotoHash||'',juntouDocEm:Date.now(),juntouDocPor:STATE.usuarioLogado||''});
+      ['formaId','contaId','categoria','parcelas','historico','numeroDocumento','contato'].forEach(function(k){if(c0[k])uc[k]=c0[k];});
+      if(c0.vencimento&&!uc.vencimento)uc.vencimento=c0.vencimento;if(c0.obs)uc.obs=c0.obs;
+      if(fts&&fts.length)await frtFb('fretesFotos/'+cid,{method:'PUT',body:fts});if(pds&&pds.length)await frtFb('fretesPdf/'+cid,{method:'PUT',body:pds});
+      await frtFb('fretes/'+cid,{method:'PATCH',body:uc});FRT.desp[cid]=Object.assign({},c0,uc);
+      await frtFb('fretes/'+id,{method:'DELETE'});await frtFb('fretesFotos/'+id,{method:'DELETE'});await frtFb('fretesPdf/'+id,{method:'DELETE'}).catch(function(){});
+      delete FRT.desp[id];delete FRT.lendo[id];if(FRT.ultimoEnvio===id)FRT.ultimoEnvio=cid;if(FRT.sel===id){FRT.sel=cid;FRT.form=null;}
+      FRT.msg='Este documento é do frete que já estava na conferência (cotação Nº '+(c0.cotacaoId||'?')+(c0.criadoPor?', lançado por '+c0.criadoPor:'')+'): juntei nele, sem criar outro.';FRT.msgTipo='ok';
+      if(!frtMobile()&&frtExtOk()){try{await frtConferirUma(cid);}catch(e){}}
+      if(STATE.modulo==='mod16'){if(frtEditando())frtDrawLista();else frtDraw();}
+      return;}}}catch(e){}
   try{await frtFb('fretes/'+id,{method:'PATCH',body:upd});}catch(e){}
   FRT.desp[id]=Object.assign({},FRT.desp[id]||{},upd);delete FRT.lendo[id];
   if(FRT.sel===id&&FRT.form&&!FRT.form._editado){FRT.form=null;}
@@ -7126,6 +7170,10 @@ async function frtRevisar2(){
   var f=frtLerCampos();var falta=frtFaltas(f);if(falta.length){FRT.msg='';frtDraw();
     var ex=falta.map(function(k){return k==='Vencimento'?'Vencimento (o CT-e/fatura não traz; se já foi pago, coloque a data do pagamento)':k==='Imagem do documento'?'Imagem do documento (ela vai para a contabilidade)':k;});
     finAvisoBotao('fRevisar','falta preencher '+ex.join(', ')+'. Preencha o que está em vermelho e clique de novo.',falta);return;}
+  var rep=finRepetidoNoApp(FRT.desp,FRT.sel,f,frtDig,frtSimNome);
+  if(rep){var rd=rep.d;finAvisoBotao('fRevisar','já existe outro frete com '+rep.motivo+': '+((rd.contato&&rd.contato.nome)||(rd.fornecedor&&rd.fornecedor.nome)||'')+' · R$ '+frtMoney(rd.valor)+' · '+(rd.status==='lancado'?'<b>já lançado no Bling</b>':'na conferência')+(rd.criadoPor?' (enviado por '+frtEsc(rd.criadoPor)+')':'')+'. Exclua este repetido. Se for mesmo outro frete, <a href="#" id="finNaoRep" style="color:#b91c1c;font-weight:800">clique aqui para liberar</a>.');
+    setTimeout(function(){var a=document.getElementById('finNaoRep');if(a)a.onclick=async function(ev){ev.preventDefault();var me=FRT.desp[FRT.sel];var l=(me.naoRepetido||[]).concat([rep.k]);me.naoRepetido=l;try{await frtFb('fretes/'+FRT.sel,{method:'PATCH',body:{naoRepetido:l}});}catch(e){}var x=document.getElementById('finAvisoBtn');if(x)x.remove();frtRevisar();};},80);
+    return;}
   var b=frtEl('fRevisar');if(b){b.disabled=true;b.textContent='Conferindo no Bling…';}
   FRT.fornSt=FRT.fornSt||{};delete FRT.fornSt[FRT.sel];
   if(frtExtOk()){var sel=FRT.sel;try{await frtSalvarForm(true);}catch(e){}
