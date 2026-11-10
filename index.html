@@ -5165,7 +5165,7 @@ function dspDupHtml(id,curto){
     '<button type="button" class="fin-btn sm" style="margin-top:6px" data-naodup="'+dspEsc(id)+'">Não é duplicado — é outra compra</button></div>';
 }
 // Só o valor impede o lançamento. O resto é pendência: lança assim mesmo e fica lembrando o que falta.
-function dspFaltas(d){return (d&&d.valor>0)?[]:['Valor'];}
+function dspFaltas(d){if(!(d&&d.valor>0))return ['Valor'];var pg=d.pagamentos;if(pg&&pg.length>1&&pg.some(function(p){return !(p.valor>0)||!p.data;}))return ['Valor e data de cada pagamento'];return [];}
 var DSP_SEM_FORN='FORNECEDOR A IDENTIFICAR';
 function dspPendencias(d){var p=[];if(!d)return p;var fn=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'';
   if(d.fornCand&&d.fornCand.length&&!d.contato)p.push('Escolher fornecedor no Bling');
@@ -5363,11 +5363,43 @@ function dspLerCampos(){
   f.numeroDocumento=dspEl('fNum').value.trim();f.historico=dspEl('fHist').value.trim();
   f.formaId=dspEl('fForma').value;f.contaId=dspEl('fConta').value;f.categoria=dspEl('fCat').value;
   f.parcelas=dspEhCredito(f.formaId)?Math.max(1,parseInt(dspEl('fParc').value,10)||1):1;
+  if(f.pagamentos&&f.pagamentos.length>1){
+    f.pagamentos.forEach(function(p,i){var v=dspEl('pgV'+i),dd=dspEl('pgD'+i),fo=dspEl('pgF'+i),co=dspEl('pgC'+i);if(v)p.valor=dspParseMoney(v.value);if(dd)p.data=dd.value;if(fo)p.formaId=fo.value;if(co)p.contaId=co.value;});
+    f.valor=Math.round(f.pagamentos.reduce(function(s,p){return s+(Number(p.valor)||0);},0)*100)/100;
+    f.formaId=f.pagamentos[0].formaId||f.formaId;f.contaId=f.pagamentos[0].contaId||f.contaId;f.parcelas=1;
+    if(!f.vencimento)f.vencimento=f.pagamentos[0].data||'';
+  }
   return f;
+}
+// ---------- pago em mais de uma vez: cada pagamento com valor, data, forma e conta ----------
+function dspPagHtml(f){
+  var pg=f.pagamentos||[];
+  if(pg.length<2)return '<div style="margin-top:8px"><button type="button" class="fin-btn sm" id="fPagMult">➕ Pago em mais de uma vez (datas e formas diferentes)</button></div>';
+  var L=dspListas(),soma=pg.reduce(function(s,p){return s+(Number(p.valor)||0);},0);
+  return '<div class="fin-card" style="margin-top:10px;padding:10px 12px"><b>Pagamentos ('+pg.length+')</b><div class="fin-mu" style="margin:2px 0 6px">Cada pagamento com o seu valor, data, forma e conta. O total da despesa é a soma.</div>'+
+    pg.map(function(p,i){return '<div class="fin-g" style="align-items:end;border-top:1px solid #f0f0f3;padding-top:6px;margin-top:6px">'+
+      '<div class="fin-f fin-c2"><label for="pgV'+i+'">'+(i+1)+'º valor (R$)</label><input class="fin-in fin-money" id="pgV'+i+'" inputmode="decimal" value="'+dspEsc(p.valor>0?dspMoney(p.valor):'')+'" placeholder="0,00"></div>'+
+      '<div class="fin-f fin-c2"><label for="pgD'+i+'">Data</label><input class="fin-in" id="pgD'+i+'" type="date" value="'+dspEsc(p.data||'')+'"></div>'+
+      '<div class="fin-f fin-c3"><label for="pgF'+i+'">Forma</label><select id="pgF'+i+'">'+dspOpts(L.formas,p.formaId,'Selecione')+'</select></div>'+
+      '<div class="fin-f fin-c3"><label for="pgC'+i+'">Conta financeira</label><select id="pgC'+i+'">'+dspOpts(L.contas,p.contaId,'Selecione')+'</select></div>'+
+      '<div class="fin-f fin-c2"><button type="button" class="fin-btn sm dan" data-pgx="'+i+'" title="Tirar este pagamento">✕ Tirar</button></div></div>';}).join('')+
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px"><button type="button" class="fin-btn sm" id="fPagAdd">➕ Adicionar pagamento</button><span>Soma: <b id="pgSoma">R$ '+dspMoney(soma)+'</b> (vai como valor total)</span></div></div>';
+}
+function dspBindPag(){
+  var f=DSP.form;if(!f)return;
+  var m=dspEl('fPagMult');if(m)m.onclick=function(){dspLerCampos();f.pagamentos=[{valor:f.valor||0,data:f.emissao||dspHoje(),formaId:f.formaId||'',contaId:f.contaId||''},{valor:0,data:'',formaId:'',contaId:''}];f._editado=true;dspDraw();};
+  var ad=dspEl('fPagAdd');if(ad)ad.onclick=function(){dspLerCampos();f.pagamentos.push({valor:0,data:'',formaId:'',contaId:''});f._editado=true;dspDraw();};
+  DSP.root.querySelectorAll('[data-pgx]').forEach(function(b){b.onclick=function(){dspLerCampos();f.pagamentos.splice(+b.getAttribute('data-pgx'),1);
+    if(f.pagamentos.length<2){var p0=f.pagamentos[0];f.pagamentos=null;if(p0){f.formaId=p0.formaId||f.formaId;f.contaId=p0.contaId||f.contaId;}}f._editado=true;dspDraw();};});
+  (f.pagamentos||[]).forEach(function(p,i){
+    var v=dspEl('pgV'+i);if(v)v.addEventListener('input',function(){dspLerCampos();var sm=dspEl('pgSoma');if(sm)sm.textContent='R$ '+dspMoney(f.valor);var fv=dspEl('fValor');if(fv)fv.value=f.valor>0?dspMoney(f.valor):'';});
+    var fo=dspEl('pgF'+i),co=dspEl('pgC'+i);if(fo&&co)fo.addEventListener('change',function(){var c=dspContaSugerida(fo.value);if(c&&!co.value)co.value=c;});
+  });
+  if(f.pagamentos&&f.pagamentos.length>1){var fv=dspEl('fValor');if(fv){fv.readOnly=true;fv.title='Soma dos pagamentos';}}
 }
 async function dspSalvarForm(quieto){
   var f=dspLerCampos();if(!f||!DSP.sel)return false;
-  var campos=['fornecedor','contato','valor','emissao','vencimento','competencia','numeroDocumento','historico','formaId','contaId','categoria','parcelas'];
+  var campos=['fornecedor','contato','valor','emissao','vencimento','competencia','numeroDocumento','historico','formaId','contaId','categoria','parcelas','pagamentos'];
   var upd={atualizadoEm:Date.now(),editadoEm:Date.now()};campos.forEach(function(k){upd[k]=f[k]===undefined?null:f[k];});
   try{await dspFb('despesas/'+DSP.sel,{method:'PATCH',body:upd});DSP.desp[DSP.sel]=Object.assign({},DSP.desp[DSP.sel],upd);f._editado=false;
     if(!quieto){DSP.msg='Salvo. Continua em Pendentes.';DSP.msgTipo='ok';}return true;}
@@ -5499,9 +5531,17 @@ async function dspLancarCore2(id,f,passo){
   if(!f.contato&&!(f.fornecedor&&f.fornecedor.nome))f.fornecedor={nome:DSP_SEM_FORN,doc:''};
   if(!f.contato)await dspResolverFornecedor(id,f,true,passo);
   passo('Lançando no Bling…');
-  var r=await dspBling('lancar',{idContato:f.contato.id,contato:f.contato.nome,valor:f.valor,vencimento:f.vencimento,emissao:f.emissao,competencia:f.competencia,
+  var pgs=(f.pagamentos&&f.pagamentos.length>1)?f.pagamentos:null,separado=!!(pgs&&pgs.some(function(p){return String(p.formaId||f.formaId)!==String(pgs[0].formaId||f.formaId);})),r,ids=null;
+  if(separado){ // formas diferentes: o Bling só guarda 1 forma por conta -> 1 conta para cada pagamento (mesmo nº de documento)
+    ids=(DSP.desp[id]&&DSP.desp[id].blingIdsParc)||[];
+    for(var pi=ids.length;pi<pgs.length;pi++){var pp=pgs[pi];passo('Lançando pagamento '+(pi+1)+' de '+pgs.length+'…');
+      var rr=await dspBling('lancar',{idContato:f.contato.id,contato:f.contato.nome,valor:pp.valor,vencimento:pp.data||f.vencimento,emissao:f.emissao,competencia:f.competencia,
+        historico:(f.historico?f.historico+' ':'')+'(pagamento '+(pi+1)+'/'+pgs.length+')',numeroDocumento:f.numeroDocumento,categoria:f.categoria,portador:pp.contaId||f.contaId,forma:pp.formaId||f.formaId,parcelas:1});
+      ids.push(String(rr.id||''));try{await dspFb('despesas/'+id,{method:'PATCH',body:{blingIdsParc:ids}});}catch(e){}if(DSP.desp[id])DSP.desp[id].blingIdsParc=ids;}
+    r={id:ids[0]};
+  } else r=await dspBling('lancar',{idContato:f.contato.id,contato:f.contato.nome,valor:f.valor,vencimento:f.vencimento,emissao:f.emissao,competencia:f.competencia,
     historico:f.historico,numeroDocumento:f.numeroDocumento,categoria:f.categoria,portador:f.contaId,forma:f.formaId,parcelas:f.parcelas});
-  var upd={status:'lancado',blingId:String(r.id||''),lancadoEm:Date.now(),lancadoPor:STATE.usuarioLogado||'',atualizadoEm:Date.now(),pendencias:pend,precisaAtualizar:false,
+  var upd={status:'lancado',blingId:String(r.id||''),blingIds:ids,pagSeparados:separado||null,pagamentos:pgs||null,lancadoEm:Date.now(),lancadoPor:STATE.usuarioLogado||'',atualizadoEm:Date.now(),pendencias:pend,precisaAtualizar:false,
     vencimento:f.vencimento,competencia:f.competencia,contato:f.contato,lancando:null,autoErro:null};
   if(f._semContab)upd.semContab=true;
   if(!pend.length&&(!dspEmailAuto()||f._semContab)){try{await dspFb('fotos/'+id,{method:'DELETE'});upd.nFotos=0;}catch(e){}}
@@ -5516,7 +5556,7 @@ async function dspLancarCore2(id,f,passo){
   }else if(f.formaId&&f._baixaOff){var cfn=dspCfg();cfn.baixaPorForma=cfn.baixaPorForma||{};if(cfn.baixaPorForma[f.formaId]!==false){cfn.baixaPorForma[f.formaId]=false;DSP.cfg=cfn;dspSalvarCfg().catch(function(){});}}
   var em=null,emErro='';
   if(dspEmailAuto()&&!f._semContab&&!dspPrecisaNfe(DSP.desp[id])){passo('Enviando à contabilidade…');try{await dspEnviarEmail(id,false);em=true;}catch(e){em=false;emErro=e.message;}}
-  return {blingId:upd.blingId,pend:(DSP.desp[id]&&DSP.desp[id].pendencias)||pend,baixa:f._baixa?!upd.baixaErro:null,baixaErro:upd.baixaErro,email:em,emailErro:emErro};
+  return {blingId:(ids&&ids.length>1)?ids.join(', '):upd.blingId,pend:(DSP.desp[id]&&DSP.desp[id].pendencias)||pend,baixa:f._baixa?!upd.baixaErro:null,baixaErro:upd.baixaErro,email:em,emailErro:emErro};
 }
 // ---------- envio à contabilidade pelo Outlook (mesmo e-mail e conexão do Lançamento de frete) ----------
 function dspEmailPronto(){return typeof frtEmailPronto==='function'&&frtEmailPronto();}
@@ -5599,7 +5639,13 @@ async function dspBaixarCore(id,data){
   if(d.baixadoEm)return;
   var pgs=(d.pagamentos&&d.pagamentos.length>1)?d.pagamentos:null;
   try{
-    if(pgs){ // um pagamento por vez, cada um na sua data; os do meio deixam a conta "parcialmente paga"
+    if(pgs&&d.pagSeparados&&d.blingIds&&d.blingIds.length===pgs.length){ // uma conta por pagamento: baixa cada uma inteira na sua data
+      var fe=d.baixasFeitas||[];
+      for(var bi=0;bi<pgs.length;bi++){if(fe.indexOf(String(bi))>=0)continue;
+        await dspBling('baixar',{id:d.blingIds[bi],data:pgs[bi].data||data||d.emissao,portador:pgs[bi].contaId||d.contaId,categoria:d.categoria,valor:pgs[bi].valor,historico:d.historico});
+        fe.push(String(bi));await dspFb('despesas/'+id,{method:'PATCH',body:{baixasFeitas:fe}}).catch(function(){});d.baixasFeitas=fe;}
+      data=pgs[pgs.length-1].data||data;
+    } else if(pgs){ // um pagamento por vez, cada um na sua data; os do meio deixam a conta "parcialmente paga"
       var feitos=d.baixasFeitas||[];
       for(var i=0;i<pgs.length;i++){var pk=pgs[i].id||String(i);if(feitos.indexOf(pk)>=0)continue;
         try{await dspBling('baixar',{id:d.blingId,data:pgs[i].data||data||d.emissao,portador:pgs[i].contaId||d.contaId,categoria:d.categoria,valor:pgs[i].valor,historico:d.historico,parcial:i<pgs.length-1});}
@@ -5739,6 +5785,7 @@ function dspConfHtml(){
   return '';
 }
 async function dspAtualizarBling(){
+  if(DSP.sel&&DSP.desp[DSP.sel]&&DSP.desp[DSP.sel].pagSeparados){DSP.msg='Esta despesa virou '+DSP.desp[DSP.sel].blingIds.length+' contas no Bling (uma por pagamento). Corrija direto no Bling e clique em Já resolvi.';DSP.msgTipo='warn';dspDraw();return;}
   var f=dspLerCampos();if(!f||!f.blingId)return;var b=dspEl('fAtualizar');if(b){b.disabled=true;b.textContent='Atualizando no Bling…';}
   try{
     if(!f.contato&&f.fornecedor&&f.fornecedor.nome&&f.fornecedor.nome!==DSP_SEM_FORN)await dspResolverFornecedor(DSP.sel,f,true);
@@ -6003,7 +6050,7 @@ function dspHtmlFormCard(f,mob,ext){
     '<div class="fin-f fin-c3"><label for="fForma">Forma de pagamento '+(f.incertos&&!f.formaId?'<span class="fin-tag unc">escolher</span>':'')+'</label><select id="fForma">'+dspOpts(dspListas().formas,f.formaId,'Selecione')+'</select></div>'+
     '<div class="fin-f fin-c3"><label for="fConta">Conta financeira</label><select id="fConta">'+dspOpts(dspListas().contas,f.contaId,'Selecione')+'</select></div>'+
     '<div class="fin-f fin-c4"><label for="fCat">Categoria'+(catSug&&String(catSug)===String(f.categoria)?' <span class="fin-tag" id="fCatTag">última usada com este fornecedor</span>':'')+'</label><input class="fin-in" id="fCatBusca" type="search" autocomplete="off" placeholder="🔎 Buscar categoria pelo nome" style="margin-bottom:6px"><select id="fCat">'+dspOptsCat(f.categoria)+'</select></div>'+
-    '<div class="fin-f fin-c2" id="fParcW"'+(dspEhCredito(f.formaId)?'':' hidden')+'><label for="fParc">Parcelas</label><input class="fin-in" id="fParc" type="number" min="1" max="24" value="'+(f.parcelas||1)+'"></div></div></div>'+
+    '<div class="fin-f fin-c2" id="fParcW"'+(dspEhCredito(f.formaId)&&!(f.pagamentos&&f.pagamentos.length>1)?'':' hidden')+'><label for="fParc">Parcelas</label><input class="fin-in" id="fParc" type="number" min="1" max="24" value="'+(f.parcelas||1)+'"></div></div>'+(lan?'':dspPagHtml(f))+'</div>'+
    '<div class="fin-sec"><p class="fin-st">Valores e datas</p><div class="fin-g">'+
     '<div class="fin-f fin-c2"><label for="fValor">Valor (R$) '+tag('valor_total')+'</label><input class="fin-in fin-money'+rd()+'" id="fValor" inputmode="decimal" value="'+dspEsc(f.valor>0?dspMoney(f.valor):'')+'" placeholder="0,00"></div>'+
     '<div class="fin-f fin-c2 h"><label for="fEm">Data da compra '+tag('data_emissao')+'</label><input class="fin-in'+rd()+'" id="fEm" type="date" value="'+dspEsc(f.emissao)+'"></div>'+
@@ -6017,7 +6064,7 @@ function dspHtmlFormCard(f,mob,ext){
    '<button type="button" class="fin-btn" id="fSalvar">Salvar e terminar depois</button><button type="button" class="fin-btn pri" id="fRevisar">Revisar e lançar</button></div>'));
   if(DSP.revisao&&!mob){
     var catN=dspCatNome(f.categoria);
-    var rows=[['Valor','R$ '+dspMoney(f.valor)+(f.parcelas>1?' em '+f.parcelas+'x':'')+((f.pagamentos&&f.pagamentos.length>1)?' ('+f.pagamentos.length+' pagamentos: '+f.pagamentos.map(function(p){return 'R$ '+dspMoney(p.valor)+' em '+dspBr(p.data);}).join(', ')+')':'')],['Forma de pagamento',dspFormaNome(f.formaId)],['Conta financeira',dspContaNome(f.contaId)||'—'],['Categoria',catN||'Sem categoria'],
+    var rows=[['Valor','R$ '+dspMoney(f.valor)+(f.parcelas>1?' em '+f.parcelas+'x':'')+((f.pagamentos&&f.pagamentos.length>1)?' ('+f.pagamentos.length+' pagamentos: '+f.pagamentos.map(function(p){return 'R$ '+dspMoney(p.valor)+' em '+dspBr(p.data)+(p.formaId?' · '+dspFormaNome(p.formaId):'');}).join(', ')+')':'')],['Forma de pagamento',dspFormaNome(f.formaId)],['Conta financeira',dspContaNome(f.contaId)||'—'],['Categoria',catN||'Sem categoria'],
       ['Data da compra',dspBr(f.emissao)],['Vencimento',dspBr(f.vencimento)],['Competência',dspBr(f.competencia)],['Nº documento',f.numeroDocumento||'—'],['Histórico',f.historico]];
     h+='<div class="fin-rev" id="dspRev"><b style="font-size:16px">Confirme antes de lançar</b><div style="margin:8px 0"><div class="fin-mu" style="margin-bottom:4px">Fornecedor</div>'+dspRevFornHtml(f)+'</div><dl>'+rows.map(function(r){return '<dt>'+r[0]+'</dt><dd>'+dspEsc(r[1])+'</dd>';}).join('')+'</dl>'+
       (f.parcelas>1?'<p class="fin-mu" style="margin:0">Parcelado: o Bling divide o valor total nas parcelas a partir deste vencimento.</p>':'')+
@@ -6029,7 +6076,7 @@ function dspHtmlFormCard(f,mob,ext){
   return h;
 }
 function dspBindConferencia(){
-  dspBindAnexar();dspBindJuntar();
+  dspBindAnexar();dspBindJuntar();dspBindPag();
   DSP.root.querySelectorAll('[data-dup]').forEach(function(b){b.onclick=function(e){e.preventDefault();if(DSP.form&&DSP.form._editado)dspSalvarForm(true);if(DSP.mob)dspMobAbrir(b.dataset.dup);else dspAbrir(b.dataset.dup);};});
   dspBindLista();var cf=dspEl('dspConfNovo');if(cf)cf.onclick=dspConferirTudo;var ic=dspEl('dspIrCap');if(ic)ic.onclick=function(){DSP.tela='captura';dspDraw();};
   if(!DSP.sel||!dspEl('fNome'))return;var f=DSP.form;
@@ -6094,7 +6141,7 @@ function dspHtmlLancTabela(){
   if(!L.length)return '<div class="fin-empty"><b>Nada encontrado</b>Nenhuma despesa lançada com “'+dspEsc(DSP.lf.q)+'”.</div>';
   var ne=dspEmailPronto()?L.filter(function(d){return !d.emailEm&&d.nFotos&&!d.semContab;}).length:0;
   return '<p class="fin-mu" style="margin:0 0 6px">'+(tot>L.length?'Mostrando '+L.length+' de '+tot+'. Use a busca para achar as mais antigas.':tot+' despesa(s)')+'</p>'+(ne?'<div class="fin-msg warn">📧 '+ne+(ne>1?' despesas lançadas ainda não foram enviadas':' despesa lançada ainda não foi enviada')+' à contabilidade. Use o botão 📧 Enviar na linha.</div>':'')+'<div class="fin-card" style="overflow-x:auto"><table class="fin-tbl"><tr><th>Lançado em</th><th>Compra</th><th>Fornecedor</th><th>Nº doc.</th><th>Forma</th><th>Vencimento</th><th style="text-align:right">Valor</th><th>ID Bling</th><th>Pago</th><th>Contabilidade</th><th>Pendência</th></tr>'+
-    L.map(function(d){var p=dspLancadoPend(d);return '<tr'+(p?' data-lp="'+dspEsc(d.id)+'" style="cursor:pointer" title="Abrir para completar"':'')+'><td>'+new Date(d.lancadoEm).toLocaleDateString('pt-BR')+'</td><td>'+dspBr(d.emissao)+'</td><td>'+dspEsc((d.contato&&d.contato.nome)||'')+'</td><td>'+dspEsc(d.numeroDocumento||'')+'</td><td>'+dspEsc(dspFormaNome(d.formaId))+'</td><td>'+dspBr(d.vencimento)+'</td><td class="n">'+dspMoney(d.valor)+'</td><td>'+dspEsc(d.blingId||'')+'</td><td>'+(d.baixadoEm?'<span class="fin-chip ok">pago '+dspBr(d.baixaData)+'</span>':(d.parcelas>1?'<span class="fin-mu">parcelado</span>':'<button type="button" class="fin-btn sm" data-bx="'+dspEsc(d.id)+'"'+(dspExtBaixaOk()?'':' disabled title="Atualize a extensão para 2.1.2"')+'>💲 Dar baixa</button>'))+'</td><td>'+dspEmailChip(d)+'</td><td>'+(p?'<span class="fin-chip warn">falta: '+dspEsc(d.pendencias.join(', '))+'</span> <button type="button" class="fin-btn sm">Completar</button>':'<span class="fin-chip ok">ok</span>')+'</td></tr>';}).join('')+'</table></div>'+dspHtmlIgnoradas(false);
+    L.map(function(d){var p=dspLancadoPend(d);return '<tr'+(p?' data-lp="'+dspEsc(d.id)+'" style="cursor:pointer" title="Abrir para completar"':'')+'><td>'+new Date(d.lancadoEm).toLocaleDateString('pt-BR')+'</td><td>'+dspBr(d.emissao)+'</td><td>'+dspEsc((d.contato&&d.contato.nome)||'')+'</td><td>'+dspEsc(d.numeroDocumento||'')+'</td><td>'+dspEsc(dspFormaNome(d.formaId))+'</td><td>'+dspBr(d.vencimento)+'</td><td class="n">'+dspMoney(d.valor)+'</td><td>'+dspEsc((d.blingIds&&d.blingIds.length>1)?d.blingIds.join(', '):(d.blingId||''))+'</td><td>'+(d.baixadoEm?'<span class="fin-chip ok">pago '+dspBr(d.baixaData)+'</span>':(d.parcelas>1?'<span class="fin-mu">parcelado</span>':'<button type="button" class="fin-btn sm" data-bx="'+dspEsc(d.id)+'"'+(dspExtBaixaOk()?'':' disabled title="Atualize a extensão para 2.1.2"')+'>💲 Dar baixa</button>'))+'</td><td>'+dspEmailChip(d)+'</td><td>'+(p?'<span class="fin-chip warn">falta: '+dspEsc(d.pendencias.join(', '))+'</span> <button type="button" class="fin-btn sm">Completar</button>':'<span class="fin-chip ok">ok</span>')+'</td></tr>';}).join('')+'</table></div>'+dspHtmlIgnoradas(false);
 }
 function dspBindLancados(){
   dspBindLancBarra(function(){var tb=dspEl('lfTab');if(tb){tb.innerHTML=dspHtmlLancTabela();dspBindLancados();}});
