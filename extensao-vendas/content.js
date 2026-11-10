@@ -741,10 +741,17 @@ async function finBaixar(d) {
   return { ok: false, erro: 'O Bling aceitou o pedido mas a conta não ficou paga (situação ' + s + '). Confira no Contas a Pagar.' };
 }
 async function finListas() {
+  // API do Bling (formas de pagamento e contas financeiras), com ativa/pagamento; a tela antiga fica de reserva
+  try {
+    var fp = await finJson('/Api/v3/formas-pagamentos?limite=100'), cc = await finJson('/Api/v3/contas-contabeis?limite=100');
+    var F = ((fp.json && fp.json.data) || []).map(function(f) { return { id: String(f.id), nome: f.descricao, ativa: Number(f.situacao) === 1, pagar: [1, 3].indexOf(Number(f.finalidade)) >= 0 }; });
+    var C = ((cc.json && cc.json.data) || []).map(function(x) { return { id: String(x.id), nome: x.descricao }; });
+    if (F.length && C.length) return { ok: true, formas: F, contas: C };
+  } catch (e) { if (e.message === 'SESSAO') throw e; }
   var x = await fetch('/contas.pagar.php', { credentials: 'include' });
   if (/login/i.test(x.url)) throw new Error('SESSAO');
   var doc = new DOMParser().parseFromString(await x.text(), 'text/html');
-  function op(id) { var s = doc.getElementById(id); if (!s) return []; return Array.prototype.map.call(s.options, function(o) { return { id: o.value, nome: o.textContent.trim() }; }).filter(function(o) { return o.id && o.id !== '0' && o.id !== '-1'; }); }
+  function op(id) { var s = doc.getElementById(id); if (!s) return []; return Array.prototype.map.call(s.options, function(o) { return { id: o.value, nome: o.textContent.trim() }; }).filter(function(o) { return o.id && o.id !== '0'; }); }
   return { ok: true, formas: op('idFormaPagamento'), contas: op('idPortador') };
 }
 

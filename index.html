@@ -5103,7 +5103,10 @@ function dspTelaCel(){var sw=Math.min(screen.width||9999,screen.height||9999);re
 function dspMobile(){return (window.matchMedia&&window.matchMedia('(max-width: 760px)').matches)||dspTelaCel();}
 function dspFb(path,opt){opt=opt||{};if(opt.method&&opt.method!=='GET'&&/^fotos/.test(path)&&typeof DSP_FOTOS!=='undefined')DSP_FOTOS={};return fetch(FIREBASE_DB+'/financeiro/'+path+'.json',{method:opt.method||'GET',headers:opt.body?{'Content-Type':'application/json'}:undefined,body:opt.body?JSON.stringify(opt.body):undefined})
   .then(function(r){if(!r.ok)throw new Error('Firebase '+r.status);return r.json();});}
+function dspListasOk(L){if(!L||!L.formas)return null;L=Object.assign({},L);['formas','contas','categorias'].forEach(function(k){if(!L[k]||!L[k].length)L[k]=DSP_LISTAS_PADRAO[k];});return L;}
 function dspListas(){return DSP.listas||DSP_LISTAS_PADRAO;}
+// formas de pagamento que servem para contas a pagar: ativas no Bling e de pagamento (as de venda/recebimento e as desativadas ficam de fora; a já escolhida sempre aparece)
+function finFormasPagar(L,atual){return (L.formas||[]).filter(function(x){return (x.ativa!==false&&x.pagar!==false)||String(x.id)===String(atual||'');});}
 function dspCfg(){return DSP.cfg||DSP_CFG_PADRAO;}
 function dspFormaNome(id){var f=dspListas().formas.filter(function(x){return String(x.id)===String(id);})[0];return f?f.nome:'';}
 function dspContaNome(id){var f=dspListas().contas.filter(function(x){return String(x.id)===String(id);})[0];return f?f.nome:'';}
@@ -5209,7 +5212,7 @@ function dspCarregar(silencioso){
     var _mud=!!(_ant&&DSP.desp[_sel]&&JSON.stringify([DSP.desp[_sel].atualizadoEm||0,DSP.desp[_sel].status,DSP.desp[_sel].nFotos||0])!==_ant);
     if(_mud&&silencioso){if(!DSP.form||!DSP.form._editado){DSP.form=null;DSP.revisao=null;}else{DSP.msg='Esta despesa foi alterada em outro aparelho. Salve ou recarregue a página para ver a versão nova.';DSP.msgTipo='warn';}}DSP.cfg=r[1]?Object.assign({},DSP_CFG_PADRAO,r[1]):null;
     if(DSP.cfg&&!DSP.cfg.contaPorForma)DSP.cfg.contaPorForma={};
-    DSP.listas=(r[2]&&r[2].formas)?r[2]:null;DSP.carregado=true;
+    DSP.listas=dspListasOk(r[2]);DSP.carregado=true;
     if(!silencioso||(!dspEditando()&&(!DSP.sel||_mud)))dspDraw();else dspDrawLista();
     if(silencioso&&DSP_CONF.feita&&!DSP_CONF.rodando&&STATE.modulo==='mod14')dspConferirTudo(true); // chegou despesa nova (ex.: do celular): confere só ela
   }).catch(function(e){DSP.carregado=true;DSP.msg='Não consegui ler o Firebase: '+e.message;DSP.msgTipo='err';dspDraw();});
@@ -5380,7 +5383,7 @@ function dspPagHtml(f){
     pg.map(function(p,i){return '<div class="fin-g" style="align-items:end;border-top:1px solid #f0f0f3;padding-top:6px;margin-top:6px">'+
       '<div class="fin-f fin-c2"><label for="pgV'+i+'">'+(i+1)+'º valor (R$)</label><input class="fin-in fin-money" id="pgV'+i+'" inputmode="decimal" value="'+dspEsc(p.valor>0?dspMoney(p.valor):'')+'" placeholder="0,00"></div>'+
       '<div class="fin-f fin-c2"><label for="pgD'+i+'">Data</label><input class="fin-in" id="pgD'+i+'" type="date" value="'+dspEsc(p.data||'')+'"></div>'+
-      '<div class="fin-f fin-c3"><label for="pgF'+i+'">Forma</label><select id="pgF'+i+'">'+dspOpts(L.formas,p.formaId,'Selecione')+'</select></div>'+
+      '<div class="fin-f fin-c3"><label for="pgF'+i+'">Forma</label><select id="pgF'+i+'">'+dspOpts(finFormasPagar(L,p.formaId),p.formaId,'Selecione')+'</select></div>'+
       '<div class="fin-f fin-c3"><label for="pgC'+i+'">Conta financeira</label><select id="pgC'+i+'">'+dspOpts(L.contas,p.contaId,'Selecione')+'</select></div>'+
       '<div class="fin-f fin-c2"><button type="button" class="fin-btn sm dan" data-pgx="'+i+'" title="Tirar este pagamento">✕ Tirar</button></div></div>';}).join('')+
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px"><button type="button" class="fin-btn sm" id="fPagAdd">➕ Adicionar pagamento</button><span>Soma: <b id="pgSoma">R$ '+dspMoney(soma)+'</b> (vai como valor total)</span></div></div>';
@@ -6047,7 +6050,7 @@ function dspHtmlFormCard(f,mob,ext){
     '<div class="fin-f fin-c2"><label for="fDoc">CPF/CNPJ '+tag('fornecedor_documento')+(f.fornecedor.doc&&!dspDocValido(f.fornecedor.doc)?' <span class="fin-tag unc" title="Os dígitos verificadores não batem: provável erro de leitura">inválido</span>':'')+'</label><input class="fin-in'+rd()+'" id="fDoc" inputmode="numeric" value="'+dspEsc(dspDoc(f.fornecedor.doc))+'"></div></div>'+
     (ext?'<div><button type="button" class="fin-btn sm" id="fBuscar">'+(f.contato?'Trocar fornecedor':'Buscar no Bling')+'</button> <span id="fForStatus"></span></div>':(f.contato?'':'<p class="fin-mu" style="margin:0">O vínculo com o cadastro do Bling é feito no computador.</p>'))+'</div>'+
    '<div class="fin-sec"><p class="fin-st">Pagamento</p><div class="fin-g">'+
-    '<div class="fin-f fin-c3"><label for="fForma">Forma de pagamento '+(f.incertos&&!f.formaId?'<span class="fin-tag unc">escolher</span>':'')+'</label><select id="fForma">'+dspOpts(dspListas().formas,f.formaId,'Selecione')+'</select></div>'+
+    '<div class="fin-f fin-c3"><label for="fForma">Forma de pagamento '+(f.incertos&&!f.formaId?'<span class="fin-tag unc">escolher</span>':'')+'</label><select id="fForma">'+dspOpts(finFormasPagar(dspListas(),f.formaId),f.formaId,'Selecione')+'</select></div>'+
     '<div class="fin-f fin-c3"><label for="fConta">Conta financeira</label><select id="fConta">'+dspOpts(dspListas().contas,f.contaId,'Selecione')+'</select></div>'+
     '<div class="fin-f fin-c4"><label for="fCat">Categoria'+(catSug&&String(catSug)===String(f.categoria)?' <span class="fin-tag" id="fCatTag">última usada com este fornecedor</span>':'')+'</label><input class="fin-in" id="fCatBusca" type="search" autocomplete="off" placeholder="🔎 Buscar categoria pelo nome" style="margin-bottom:6px"><select id="fCat">'+dspOptsCat(f.categoria)+'</select></div>'+
     '<div class="fin-f fin-c2" id="fParcW"'+(dspEhCredito(f.formaId)&&!(f.pagamentos&&f.pagamentos.length>1)?'':' hidden')+'><label for="fParc">Parcelas</label><input class="fin-in" id="fParc" type="number" min="1" max="24" value="'+(f.parcelas||1)+'"></div></div>'+(lan?'':dspPagHtml(f))+'</div>'+
@@ -6164,14 +6167,14 @@ DSP.root.querySelectorAll('[data-lp]').forEach(function(r){r.onclick=function(){
 function dspHtmlConfig(){
   var cfg=dspCfg(),L=dspListas();var cred=function(f){var n=dspNorm(f.nome);return /credi/.test(n)&&!/debito/.test(n);};
   var h='<div class="fin-h" style="margin-top:0">Cartões de crédito</div><div class="fin-card"><p class="fin-mu" style="margin:0 0 4px">O cartão abre no dia seguinte ao fechamento. Compras a partir do dia do fechamento vão para a fatura seguinte.</p>';
-  (cfg.cartoes||[]).forEach(function(c,i){h+='<div class="fin-cardrow"><div class="fin-f"><label for="cc'+i+'">Cartão (forma de pagamento no Bling)</label><select id="cc'+i+'">'+dspOpts(L.formas,c.formaId,'Selecione',cred)+'</select></div>'+
+  (cfg.cartoes||[]).forEach(function(c,i){h+='<div class="fin-cardrow"><div class="fin-f"><label for="cc'+i+'">Cartão (forma de pagamento no Bling)</label><select id="cc'+i+'">'+dspOpts(finFormasPagar(L,c.formaId),c.formaId,'Selecione',cred)+'</select></div>'+
     '<div class="fin-f"><label for="cf'+i+'">Fecha no dia</label><input class="fin-in" id="cf'+i+'" type="number" min="1" max="31" value="'+dspEsc(c.fechamento||'')+'"></div>'+
     '<div class="fin-f"><label for="cv'+i+'">Vence no dia</label><input class="fin-in" id="cv'+i+'" type="number" min="1" max="31" value="'+dspEsc(c.vencimento||'')+'"></div>'+
     '<button type="button" class="fin-btn sm dan" data-rmc="'+i+'">Remover</button></div>';});
   h+='<div style="margin-top:10px"><button type="button" class="fin-btn sm" id="ccAdd">Adicionar cartão</button></div></div>'+
    '<div class="fin-h">Leitura automática</div><div class="fin-card"><div class="fin-g">'+
-   '<div class="fin-f fin-c3"><label for="cPix">Comprovante de Pix usa</label><select id="cPix">'+dspOpts(L.formas,cfg.padrao&&cfg.padrao.pix,'Escolher na hora')+'</select></div>'+
-   '<div class="fin-f fin-c3"><label for="cDin">Pagamento em dinheiro usa</label><select id="cDin">'+dspOpts(L.formas,cfg.padrao&&cfg.padrao.dinheiro,'Escolher na hora')+'</select></div></div>'+
+   '<div class="fin-f fin-c3"><label for="cPix">Comprovante de Pix usa</label><select id="cPix">'+dspOpts(finFormasPagar(L,cfg.padrao&&cfg.padrao.pix),cfg.padrao&&cfg.padrao.pix,'Escolher na hora')+'</select></div>'+
+   '<div class="fin-f fin-c3"><label for="cDin">Pagamento em dinheiro usa</label><select id="cDin">'+dspOpts(finFormasPagar(L,cfg.padrao&&cfg.padrao.dinheiro),cfg.padrao&&cfg.padrao.dinheiro,'Escolher na hora')+'</select></div></div>'+
    '<p class="fin-mu" style="margin:10px 0 0">Pix feito em sábado, domingo ou feriado vence no próximo dia útil.</p></div>'+
    '<div class="fin-h">Envio à contabilidade</div><div class="fin-card"><label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:600"><input type="checkbox" id="cEmail"'+(cfg.emailContab!==false?' checked':'')+'> Enviar à contabilidade logo depois de lançar no Bling</label>'+
    '<p class="fin-mu" style="margin:8px 0 0">Sai do seu e-mail rauldias@tendfer.com.br, com a imagem em PDF anexa e os dados no corpo, para o mesmo e-mail configurado em <b>Lançamento de frete → Configurações</b>'+(dspEmailPronto()?' ('+dspEsc(frtEmailCfg().para)+')':' — <b>ainda não configurado</b>')+'. A imagem é apagada do app depois que o e-mail sai.</p></div>'+
@@ -6515,7 +6518,7 @@ function frtCarregar(silencioso){
     var _mud=!!(_ant&&FRT.desp[_sel]&&JSON.stringify([FRT.desp[_sel].atualizadoEm||0,FRT.desp[_sel].status,FRT.desp[_sel].nFotos||0])!==_ant);
     if(_mud&&silencioso){if(!FRT.form||!FRT.form._editado){FRT.form=null;FRT.revisao=null;}else{FRT.msg='Este frete foi alterado em outro aparelho. Salve ou recarregue a página para ver a versão nova.';FRT.msgTipo='warn';}}FRT.cfg=r[1]?Object.assign({},FRT_CFG_PADRAO,r[1]):null;
     if(FRT.cfg&&!FRT.cfg.contaPorForma)FRT.cfg.contaPorForma={};
-    FRT.listas=(r[2]&&r[2].formas)?r[2]:null;FRT.carregado=true;
+    FRT.listas=dspListasOk(r[2]);FRT.carregado=true;
     if(!silencioso||(!frtEditando()&&(!FRT.sel||_mud)))frtDraw();else frtDrawLista();
   }).catch(function(e){FRT.carregado=true;FRT.msg='Não consegui ler o Firebase: '+e.message;FRT.msgTipo='err';frtDraw();});
 }
@@ -7498,7 +7501,7 @@ function frtHtmlFormCard(f,mob,ext){
     '<div class="fin-f fin-c2"><label for="fDoc">CPF/CNPJ '+tag('fornecedor_documento')+(f.fornecedor.doc&&!frtDocValido(f.fornecedor.doc)?' <span class="fin-tag unc" title="Os dígitos verificadores não batem: provável erro de leitura">inválido</span>':'')+'</label><input class="fin-in'+rd()+'" id="fDoc" inputmode="numeric" value="'+frtEsc(frtDoc(f.fornecedor.doc))+'"></div></div>'+
     (ext?'<div><button type="button" class="fin-btn sm" id="fBuscar">'+(f.contato?'Trocar fornecedor':'Buscar no Bling')+'</button> <span id="fForStatus"></span></div>':(f.contato?'':'<p class="fin-mu" style="margin:0">O vínculo com o cadastro do Bling é feito no computador.</p>'))+'</div>'+
    '<div class="fin-sec"><p class="fin-st">Pagamento</p><div class="fin-g">'+
-    '<div class="fin-f fin-c3"><label for="fForma">Forma de pagamento '+(f.incertos&&!f.formaId?'<span class="fin-tag unc">escolher</span>':'')+'</label><select id="fForma">'+frtOpts(frtListas().formas,f.formaId,'Selecione')+'</select></div>'+
+    '<div class="fin-f fin-c3"><label for="fForma">Forma de pagamento '+(f.incertos&&!f.formaId?'<span class="fin-tag unc">escolher</span>':'')+'</label><select id="fForma">'+frtOpts(finFormasPagar(frtListas(),f.formaId),f.formaId,'Selecione')+'</select></div>'+
     '<div class="fin-f fin-c3"><label for="fConta">Conta financeira</label><select id="fConta">'+frtOpts(frtListas().contas,f.contaId,'Selecione')+'</select></div>'+
     '<div class="fin-f fin-c4"><label for="fCat">Categoria'+(catSug&&String(catSug)===String(f.categoria)?' <span class="fin-tag" id="fCatTag">última usada com este fornecedor</span>':'')+'</label><select id="fCat">'+frtOptsCat(f.categoria)+'</select></div>'+
     '<div class="fin-f fin-c2" id="fParcW"'+(frtEhCredito(f.formaId)?'':' hidden')+'><label for="fParc">Parcelas</label><input class="fin-in" id="fParc" type="number" min="1" max="24" value="'+(f.parcelas||1)+'"></div></div></div>'+
@@ -7592,19 +7595,19 @@ FRT.root.querySelectorAll('[data-lp]').forEach(function(r){r.onclick=function(){
 function frtHtmlConfig(){
   var cfg=frtCfg(),L=frtListas();var cred=function(f){var n=frtNorm(f.nome);return /credi/.test(n)&&!/debito/.test(n);};
   var h='<div class="fin-msg info">Cartões, padrões de leitura e listas do Bling são os mesmos da aba Lançamento de despesas: o que mudar aqui vale lá também.</div><div class="fin-h" style="margin-top:0">Cartões de crédito</div><div class="fin-card"><p class="fin-mu" style="margin:0 0 4px">O cartão abre no dia seguinte ao fechamento. Compras a partir do dia do fechamento vão para a fatura seguinte.</p>';
-  (cfg.cartoes||[]).forEach(function(c,i){h+='<div class="fin-cardrow"><div class="fin-f"><label for="cc'+i+'">Cartão (forma de pagamento no Bling)</label><select id="cc'+i+'">'+frtOpts(L.formas,c.formaId,'Selecione',cred)+'</select></div>'+
+  (cfg.cartoes||[]).forEach(function(c,i){h+='<div class="fin-cardrow"><div class="fin-f"><label for="cc'+i+'">Cartão (forma de pagamento no Bling)</label><select id="cc'+i+'">'+frtOpts(finFormasPagar(L,c.formaId),c.formaId,'Selecione',cred)+'</select></div>'+
     '<div class="fin-f"><label for="cf'+i+'">Fecha no dia</label><input class="fin-in" id="cf'+i+'" type="number" min="1" max="31" value="'+frtEsc(c.fechamento||'')+'"></div>'+
     '<div class="fin-f"><label for="cv'+i+'">Vence no dia</label><input class="fin-in" id="cv'+i+'" type="number" min="1" max="31" value="'+frtEsc(c.vencimento||'')+'"></div>'+
     '<button type="button" class="fin-btn sm dan" data-rmc="'+i+'">Remover</button></div>';});
   h+='<div style="margin-top:10px"><button type="button" class="fin-btn sm" id="ccAdd">Adicionar cartão</button></div></div>'+
    '<div class="fin-h">Leitura automática</div><div class="fin-card"><div class="fin-g">'+
-   '<div class="fin-f fin-c3"><label for="cPix">Comprovante de Pix usa</label><select id="cPix">'+frtOpts(L.formas,cfg.padrao&&cfg.padrao.pix,'Escolher na hora')+'</select></div>'+
-   '<div class="fin-f fin-c3"><label for="cDin">Pagamento em dinheiro usa</label><select id="cDin">'+frtOpts(L.formas,cfg.padrao&&cfg.padrao.dinheiro,'Escolher na hora')+'</select></div></div>'+
+   '<div class="fin-f fin-c3"><label for="cPix">Comprovante de Pix usa</label><select id="cPix">'+frtOpts(finFormasPagar(L,cfg.padrao&&cfg.padrao.pix),cfg.padrao&&cfg.padrao.pix,'Escolher na hora')+'</select></div>'+
+   '<div class="fin-f fin-c3"><label for="cDin">Pagamento em dinheiro usa</label><select id="cDin">'+frtOpts(finFormasPagar(L,cfg.padrao&&cfg.padrao.dinheiro),cfg.padrao&&cfg.padrao.dinheiro,'Escolher na hora')+'</select></div></div>'+
    '<p class="fin-mu" style="margin:10px 0 0">Pix feito em sábado, domingo ou feriado vence no próximo dia útil.</p></div>'+
    '<div class="fin-h">Conferência no Bling</div><div class="fin-card"><p style="margin:0;font-size:13.5px">Nada é lançado sozinho. Ao abrir Fretes neste computador, o app confere no Bling o fornecedor e se já existe conta igual em aberto (mesmo valor e mesma data). O lançamento é sempre feito por você, em <b>Revisar e lançar</b>.</p></div>'+
    '<div class="fin-act"><button type="button" class="fin-btn pri" id="cSalvar">Salvar configurações</button></div>'+
    '<div class="fin-h">Pagamento dos fretes</div><div class="fin-card"><div class="fin-g">'+
-   '<div class="fin-f fin-c3"><label for="fcBol">Quando o documento for fatura/boleto, usar</label><select id="fcBol">'+frtOpts(L.formas,(FRT.fcfg||{}).formaBoleto,'Deixar em branco')+'</select></div></div>'+
+   '<div class="fin-f fin-c3"><label for="fcBol">Quando o documento for fatura/boleto, usar</label><select id="fcBol">'+frtOpts(finFormasPagar(L,(FRT.fcfg||{}).formaBoleto),(FRT.fcfg||{}).formaBoleto,'Deixar em branco')+'</select></div></div>'+
    '<p class="fin-mu" style="margin:10px 0 0">CT-e não traz vencimento nem boleto: o frete fica na Conferência até você informar o vencimento (e a forma de pagamento, se não estiver no documento). Só depois disso dá para lançar.</p>'+
    '<div style="margin-top:10px"><button type="button" class="fin-btn sm pri" id="fcSalvar">Salvar pagamento dos fretes</button></div></div>'+
    '<div class="fin-h">Envio à contabilidade (e-mail)</div><div class="fin-card"><p style="margin:0 0 10px;font-size:13.5px">Depois de lançar no Bling, o app envia <b>do seu e-mail rauldias@tendfer.com.br (Locaweb)</b> uma mensagem para a contabilidade com o documento em PDF anexo e todos os dados no corpo. Vale para fretes e despesas. A imagem/PDF é apagada do app assim que o e-mail sai.</p>'+
