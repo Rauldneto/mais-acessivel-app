@@ -636,7 +636,7 @@ function pedirTokenSicoob(env, escopo) {
 
 async function sicoobToken(env, escopo) {
   escopo = escopo || ESCOPO_PIX;
-  const chave = escopo === ESCOPO_PIX ? 'sicoob:token' : escopo === ESCOPO_BOLETOS ? 'sicoob:token:boletos' : 'sicoob:token:' + escopo.replace(/\W+/g, '_');
+  const chave = escopo === ESCOPO_PIX ? 'sicoob:token' : escopo === ESCOPO_BOLETOS ? 'sicoob:token:boletos' : 'sicoob:token:' + escopo.replace(/\W+/g, '_') + ':' + String(clientSicoob(env, escopo)).slice(0, 8); // troca de app = token novo
   const c = await env.BLING_KV.get(chave, 'json');
   if (c && Date.now() < c.exp) return c.access;
   let r, txt = '', j = {};
