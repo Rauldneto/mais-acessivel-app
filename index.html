@@ -5143,6 +5143,7 @@ document.addEventListener('change',async function(ev){var t=ev.target;if(!t||t.i
   d.semNfe55=t.checked;if(DSP.form)DSP.form.semNfe55=t.checked;var up={semNfe55:t.checked};
   if(d.status==='lancado'){var p=(d.pendencias||[]).filter(function(x){return x!==DSP_PEND_NFE;});if(!t.checked&&dspPrecisaNfe(d))p.push(DSP_PEND_NFE);up.pendencias=p;d.pendencias=p;}
   try{await dspFb('despesas/'+id,{method:'PATCH',body:up});}catch(e){}dspDraw();});
+document.addEventListener('change',function(ev){var t=ev.target;if(!t||t.id!=='fContab'||!DSP.sel)return;DSP.contabSel=DSP.contabSel||{};DSP.contabSel[DSP.sel]=t.checked;});
 document.addEventListener('change',function(ev){var t=ev.target;if(!t||t.id!=='fBaixar')return;DSP.baixaSel=DSP.baixaSel||{};DSP.baixaSel[DSP.sel]=t.checked;var w=dspEl('fBaixaW');if(w)w.style.display=t.checked?'flex':'none';});
 function dspDuplicados(id){var d=DSP.desp[id];var lib=(d&&d.naoDup)||[];return ((d&&d.dupBling&&d.dupBling.itens)||[]).filter(function(x){return lib.indexOf(x.blingId)<0;});}
 async function dspChecarDupBling(id,f){
@@ -5498,7 +5499,8 @@ async function dspLancarCore2(id,f,passo){
     historico:f.historico,numeroDocumento:f.numeroDocumento,categoria:f.categoria,portador:f.contaId,forma:f.formaId,parcelas:f.parcelas});
   var upd={status:'lancado',blingId:String(r.id||''),lancadoEm:Date.now(),lancadoPor:STATE.usuarioLogado||'',atualizadoEm:Date.now(),pendencias:pend,precisaAtualizar:false,
     vencimento:f.vencimento,competencia:f.competencia,contato:f.contato,lancando:null,autoErro:null};
-  if(!pend.length&&!dspEmailAuto()){try{await dspFb('fotos/'+id,{method:'DELETE'});upd.nFotos=0;}catch(e){}}
+  if(f._semContab)upd.semContab=true;
+  if(!pend.length&&(!dspEmailAuto()||f._semContab)){try{await dspFb('fotos/'+id,{method:'DELETE'});upd.nFotos=0;}catch(e){}}
   await dspFb('despesas/'+id,{method:'PATCH',body:upd});
   DSP.desp[id]=Object.assign({},DSP.desp[id]||{},upd);
   if(f.categoria){var cfc=dspCfg();cfc.catPorForn=cfc.catPorForn||{};var mud=false;dspChavesForn(f).forEach(function(k){if(cfc.catPorForn[k]!==f.categoria){cfc.catPorForn[k]=f.categoria;mud=true;}});if(mud){DSP.cfg=cfc;dspSalvarCfg().catch(function(){});}}
@@ -5509,13 +5511,13 @@ async function dspLancarCore2(id,f,passo){
     try{await dspBaixarCore(id,f._baixa.data);}catch(e){pend=DSP.desp[id].pendencias||pend;upd.baixaErro=e.message;}
   }else if(f.formaId&&f._baixaOff){var cfn=dspCfg();cfn.baixaPorForma=cfn.baixaPorForma||{};if(cfn.baixaPorForma[f.formaId]!==false){cfn.baixaPorForma[f.formaId]=false;DSP.cfg=cfn;dspSalvarCfg().catch(function(){});}}
   var em=null,emErro='';
-  if(dspEmailAuto()&&!dspPrecisaNfe(DSP.desp[id])){passo('Enviando à contabilidade…');try{await dspEnviarEmail(id,false);em=true;}catch(e){em=false;emErro=e.message;}}
+  if(dspEmailAuto()&&!f._semContab&&!dspPrecisaNfe(DSP.desp[id])){passo('Enviando à contabilidade…');try{await dspEnviarEmail(id,false);em=true;}catch(e){em=false;emErro=e.message;}}
   return {blingId:upd.blingId,pend:(DSP.desp[id]&&DSP.desp[id].pendencias)||pend,baixa:f._baixa?!upd.baixaErro:null,baixaErro:upd.baixaErro,email:em,emailErro:emErro};
 }
 // ---------- envio à contabilidade pelo Outlook (mesmo e-mail e conexão do Lançamento de frete) ----------
 function dspEmailPronto(){return typeof frtEmailPronto==='function'&&frtEmailPronto();}
 function dspEmailAuto(){return dspEmailPronto()&&dspCfg().emailContab!==false;}
-function dspPodeApagarFotos(d){return !d||!dspEmailPronto()||!!d.emailEm||dspCfg().emailContab===false;}
+function dspPodeApagarFotos(d){return !d||!dspEmailPronto()||!!d.emailEm||!!d.semContab||dspCfg().emailContab===false;}
 function dspTipoDocNome(t){return {nfe:'NF-e',nfce:'NFC-e',nfse:'NFS-e',cupom:'Cupom fiscal',comprovante_pix:'Comprovante de Pix',comprovante_cartao:'Comprovante de cartão',recibo:'Recibo'}[t]||'Documento';}
 function dspEmailAssunto(d){
   // Mais Acessível - Despesa NFC-e 4521 - POSTO SERRA DOURADA LTDA - R$ 187,40
@@ -5542,7 +5544,7 @@ async function dspEnviarEmail(id,interativo){
     if(!dspEmailPronto())throw new Error('Configure o envio à contabilidade em Lançamento de frete → Configurações.');
     var fotos=await dspFb('fotos/'+id);if(!fotos||!fotos.length)throw new Error('A imagem desta despesa não está mais guardada no app.');
     var j=await frtOutlookEnviar({rastreio:'d'+id,assunto:dspEmailAssunto(d),html:dspEmailHtml(d),anexos:[{nome:dspEmailNome(d)+'.pdf',tipo:'application/pdf',b64:await frtPdfDeFotos(fotos)}],interativo:!!interativo});
-    var up={emailEm:Date.now(),emailPor:STATE.usuarioLogado||'',emailPara:j.para||'',emailDe:j.de||'',emailErro:null};
+    var up={emailEm:Date.now(),emailPor:STATE.usuarioLogado||'',emailPara:j.para||'',emailDe:j.de||'',emailErro:null,semContab:null};
     if(d.status==='lancado'&&!(d.pendencias&&d.pendencias.length)){try{await dspFb('fotos/'+id,{method:'DELETE'});up.nFotos=0;}catch(e){}}
     await dspFb('despesas/'+id,{method:'PATCH',body:up});Object.assign(d,up);return j;
   }catch(e){try{await dspFb('despesas/'+id,{method:'PATCH',body:{emailErro:e.message}});if(DSP.desp[id])DSP.desp[id].emailErro=e.message;}catch(_e){}throw e;}
@@ -5567,7 +5569,7 @@ function dspAnexarDoc(id,modo,b){
       await dspFb('despesas/'+id,{method:'PATCH',body:up});Object.assign(d,up);if(modo==='nfe'){delete d.emailEm;delete d.emailErro;}
       var msg=modo==='nfe'?'NF-e 55 anexada. Pendência resolvida.':'';
       if(modo==='nfe'&&d.status!=='lancado'){DSP.form=null;msg='NF-e anexada na conferência'+(up.numeroDocumento?' (nº '+up.numeroDocumento+')':'')+'. Ela vai junto quando você lançar.'+(up.obsNfe?' ⚠️ '+up.obsNfe:'');}
-      else if(dspEmailPronto()&&(modo!=='nfe'||dspCfg().emailContab!==false)){await dspEnviarEmail(id,true);msg+=(msg?' ':'')+'📧 Enviado à contabilidade.';}
+      else if(dspEmailPronto()&&!(modo==='nfe'&&d.semContab)&&(modo!=='nfe'||dspCfg().emailContab!==false)){await dspEnviarEmail(id,true);msg+=(msg?' ':'')+'📧 Enviado à contabilidade.';}
       DSP.msg=msg||'Imagem anexada.';DSP.msgTipo='ok';}catch(e){DSP.msg='Não consegui: '+e.message;DSP.msgTipo='err';}
     dspDraw();};
   inp.click();
@@ -5579,6 +5581,7 @@ function dspBindAnexar(){
     try{await dspEnviarEmail(id,true);DSP.msg='Enviado à contabilidade.';DSP.msgTipo='ok';}catch(e){DSP.msg='Não enviei: '+e.message;DSP.msgTipo='err';}dspDraw();};});
 }
 function dspEmailChip(d){
+  if(d.semContab&&!d.emailEm)return '<span class="fin-mu" title="Você desmarcou o envio ao lançar">não enviar</span> '+(d.nFotos?'<button type="button" class="fin-btn sm" data-dem="'+dspEsc(d.id)+'"'+(dspEmailPronto()?'':' disabled')+'>📧 Enviar mesmo assim</button>':'<button type="button" class="fin-btn sm" data-danx="'+dspEsc(d.id)+'"'+(dspEmailPronto()?'':' disabled')+'>📎 Anexar e enviar</button>');
   if(d.status==='lancado'&&dspPrecisaNfe(d))return '<span class="fin-chip warn">aguardando NF-e 55</span> <button type="button" class="fin-btn sm" data-dnfe="'+dspEsc(d.id)+'">📎 Anexar NF-e 55</button>';
   if(d.emailEm){var l=(DSP.lidos||{})['d'+d.id];return '<span class="fin-chip ok" title="'+dspEsc(d.emailPara||'')+'">📧 enviado '+new Date(d.emailEm).toLocaleDateString('pt-BR')+'</span> '+
     (l?'<span class="fin-chip ok" title="Aberto '+(l.vezes||1)+'x">📬 aberto '+new Date(l.primeiro).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</span>':'<span class="fin-mu" title="A contabilidade ainda não abriu (ou o leitor bloqueia imagens)">não aberto ainda</span>');}
@@ -5596,6 +5599,12 @@ async function dspBaixarCore(id,data){
   var up={baixadoEm:Date.now(),baixaData:data||d.emissao||d.vencimento,baixaErro:null,pendencias:p};
   await dspFb('despesas/'+id,{method:'PATCH',body:up});Object.assign(d,up);
 }
+function dspContabHtml(f){
+  if(!dspEmailPronto()||dspCfg().emailContab===false)return '';
+  DSP.contabSel=DSP.contabSel||{};var on=DSP.contabSel[DSP.sel]!==undefined?DSP.contabSel[DSP.sel]:true;
+  return '<div class="fin-card" style="margin:0;padding:10px 12px"><label style="display:flex;gap:8px;align-items:center;font-weight:700;cursor:pointer"><input type="checkbox" id="fContab"'+(on?' checked':'')+'> 📧 Enviar à contabilidade</label>'+
+    (dspPrecisaNfe(f)?'<div class="fin-mu" style="margin-top:4px">Sai quando você anexar a NF-e 55.</div>':'')+'</div>';
+}
 function dspBaixaHtml(f){
   if(f.parcelas>1)return '<div class="fin-mu" style="margin:4px 0">Parcelado: a baixa de cada parcela é feita quando ela for paga.</div>';
   if(!dspExtBaixaOk())return '<div class="fin-msg warn" style="margin:0">Para dar baixa junto com o lançamento, atualize a extensão para a versão 2.1.2 (botão 🧩 Extensão).</div>';
@@ -5607,12 +5616,13 @@ function dspBaixaHtml(f){
 }
 async function dspLancar(){
   var f=dspLerCampos();if(dspFaltas(f).length)return;
+  var cct=dspEl('fContab');if(cct&&!cct.checked)f._semContab=true;
   var cbx=dspEl('fBaixar');if(cbx&&cbx.checked){if(!f.contaId){DSP.msg='Para dar baixa, escolha a conta financeira (ou desmarque "Dar baixa").';DSP.msgTipo='warn';dspDraw();return;}f._baixa={data:(dspEl('fBaixaData')||{}).value||f.emissao||dspHoje()};}else if(cbx)f._baixaOff=true;
   var b=dspEl('fLancar');if(b){b.disabled=true;b.textContent='Lançando no Bling…';}
   await dspSalvarForm(true);var id=DSP.sel;
   try{
     var r=await dspLancarCore(id,f,function(t){if(b)b.textContent=t;});
-    DSP.msg='Lançado no Contas a Pagar do Bling (ID '+(r.blingId||'?')+')'+(r.baixa===true?' e baixado (pago).':r.baixa===false?'. ⚠️ A baixa não foi feita: '+r.baixaErro+' Use "Dar baixa" na aba Lançados.':'.')+(r.pend.length?' Ficou pendente: '+r.pend.join(', ')+'. Fica na aba Lançados para você completar.':'');if(r.email===true)DSP.msg+=' 📧 Enviado à contabilidade.';else if(r.email===null&&dspPrecisaNfe(DSP.desp[id])&&dspEmailPronto())DSP.msg+=' O e-mail à contabilidade sai quando você anexar a NF-e 55 (aba Lançados).';else if(r.email===false)DSP.msg+=' ⚠️ Não enviei à contabilidade: '+r.emailErro+' Use "📧 Enviar" na aba Lançados.';
+    DSP.msg='Lançado no Contas a Pagar do Bling (ID '+(r.blingId||'?')+')'+(r.baixa===true?' e baixado (pago).':r.baixa===false?'. ⚠️ A baixa não foi feita: '+r.baixaErro+' Use "Dar baixa" na aba Lançados.':'.')+(r.pend.length?' Ficou pendente: '+r.pend.join(', ')+'. Fica na aba Lançados para você completar.':'');if(f._semContab)DSP.msg+=' Não enviado à contabilidade (você desmarcou).';else if(r.email===true)DSP.msg+=' 📧 Enviado à contabilidade.';else if(r.email===null&&dspPrecisaNfe(DSP.desp[id])&&dspEmailPronto())DSP.msg+=' O e-mail à contabilidade sai quando você anexar a NF-e 55 (aba Lançados).';else if(r.email===false)DSP.msg+=' ⚠️ Não enviei à contabilidade: '+r.emailErro+' Use "📧 Enviar" na aba Lançados.';
     DSP.msgTipo=(r.pend.length||r.baixa===false||r.email===false)?'warn':'ok';
     var prox=dspLista('pend').filter(function(x){return x.id!==id&&x.status!=='lancado';})[0];DSP.sel=prox?prox.id:null;DSP.form=null;DSP.revisao=null;dspDraw();
   }catch(e){DSP.msg='Não lancei: '+e.message+' A despesa continua em Pendentes.';DSP.msgTipo='err';DSP.revisao=null;dspDraw();}
@@ -5933,7 +5943,7 @@ function dspHtmlFormCard(f,mob,ext){
       (f.parcelas>1?'<p class="fin-mu" style="margin:0">Parcelado: o Bling divide o valor total nas parcelas a partir deste vencimento.</p>':'')+
       (dspPendencias(f).length?'<div class="fin-msg warn" style="margin:0">Vai lançar com pendência: <b>'+dspEsc(dspPendencias(f).join(', '))+'</b>. Depois fica na lista para você completar.'+(!f.vencimento?' Sem vencimento: uso a data da compra.':'')+((!f.contato&&!(f.fornecedor&&f.fornecedor.nome))?' Sem fornecedor: lanço como "'+DSP_SEM_FORN+'".':'')+'</div>':'')+
       (dspDuplicados(DSP.sel).length?'<div class="fin-msg err" style="margin:0">⚠️ Esta despesa parece duplicada. Confira o aviso no topo antes de lançar.</div>':'')+
-      dspBaixaHtml(f)+
+      dspBaixaHtml(f)+dspContabHtml(f)+
       '<div class="fin-act" style="margin-top:0"><button type="button" class="fin-btn" id="fVoltar">Voltar e editar</button><button type="button" class="fin-btn pri" id="fLancar"'+(ext&&!dspDuplicados(DSP.sel).length&&!(DSP.desp[DSP.sel].fornCand&&DSP.desp[DSP.sel].fornCand.length&&!f.contato)?'':' disabled')+'>'+(dspDuplicados(DSP.sel).length?'Bloqueado: possível duplicidade':(DSP.desp[DSP.sel].fornCand&&DSP.desp[DSP.sel].fornCand.length&&!f.contato)?'Escolha o fornecedor acima':f.contato?'Confirmar e lançar no Contas a Pagar':'Cadastrar fornecedor e lançar')+'</button></div></div>';
   }
   return h;
@@ -6002,7 +6012,7 @@ function dspHtmlLancados(){
 function dspHtmlLancTabela(){
   var Lt=dspLancFiltrados(),tot=Lt.length,lim=(DSP.lf&&DSP.lf.q)?300:60,L=Lt.slice(0,lim);
   if(!L.length)return '<div class="fin-empty"><b>Nada encontrado</b>Nenhuma despesa lançada com “'+dspEsc(DSP.lf.q)+'”.</div>';
-  var ne=dspEmailPronto()?L.filter(function(d){return !d.emailEm&&d.nFotos;}).length:0;
+  var ne=dspEmailPronto()?L.filter(function(d){return !d.emailEm&&d.nFotos&&!d.semContab;}).length:0;
   return '<p class="fin-mu" style="margin:0 0 6px">'+(tot>L.length?'Mostrando '+L.length+' de '+tot+'. Use a busca para achar as mais antigas.':tot+' despesa(s)')+'</p>'+(ne?'<div class="fin-msg warn">📧 '+ne+(ne>1?' despesas lançadas ainda não foram enviadas':' despesa lançada ainda não foi enviada')+' à contabilidade. Use o botão 📧 Enviar na linha.</div>':'')+'<div class="fin-card" style="overflow-x:auto"><table class="fin-tbl"><tr><th>Lançado em</th><th>Compra</th><th>Fornecedor</th><th>Nº doc.</th><th>Forma</th><th>Vencimento</th><th style="text-align:right">Valor</th><th>ID Bling</th><th>Pago</th><th>Contabilidade</th><th>Pendência</th></tr>'+
     L.map(function(d){var p=dspLancadoPend(d);return '<tr'+(p?' data-lp="'+dspEsc(d.id)+'" style="cursor:pointer" title="Abrir para completar"':'')+'><td>'+new Date(d.lancadoEm).toLocaleDateString('pt-BR')+'</td><td>'+dspBr(d.emissao)+'</td><td>'+dspEsc((d.contato&&d.contato.nome)||'')+'</td><td>'+dspEsc(d.numeroDocumento||'')+'</td><td>'+dspEsc(dspFormaNome(d.formaId))+'</td><td>'+dspBr(d.vencimento)+'</td><td class="n">'+dspMoney(d.valor)+'</td><td>'+dspEsc(d.blingId||'')+'</td><td>'+(d.baixadoEm?'<span class="fin-chip ok">pago '+dspBr(d.baixaData)+'</span>':(d.parcelas>1?'<span class="fin-mu">parcelado</span>':'<button type="button" class="fin-btn sm" data-bx="'+dspEsc(d.id)+'"'+(dspExtBaixaOk()?'':' disabled title="Atualize a extensão para 2.1.2"')+'>💲 Dar baixa</button>'))+'</td><td>'+dspEmailChip(d)+'</td><td>'+(p?'<span class="fin-chip warn">falta: '+dspEsc(d.pendencias.join(', '))+'</span> <button type="button" class="fin-btn sm">Completar</button>':'<span class="fin-chip ok">ok</span>')+'</td></tr>';}).join('')+'</table></div>'+dspHtmlIgnoradas(false);
 }
