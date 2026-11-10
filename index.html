@@ -5756,14 +5756,14 @@ function dspBaixaHtml(f){
   if(!dspExtBaixaOk())return '<div class="fin-msg warn" style="margin:0">Para dar baixa junto com o lançamento, atualize a extensão para a versão 2.1.2 (botão 🧩 Extensão).</div>';
   DSP.baixaSel=DSP.baixaSel||{};var on=DSP.baixaSel[DSP.sel]!==undefined?DSP.baixaSel[DSP.sel]:dspBaixaPadrao(f);
   return '<div class="fin-card" style="margin:0;padding:10px 12px;background:var(--fin-bg2,rgba(10,125,107,.06))"><label style="display:flex;gap:8px;align-items:center;font-weight:700;cursor:pointer"><input type="checkbox" id="fBaixar"'+(on?' checked':'')+'> 💲 Dar baixa (já está pago)</label>'+
-    '<div id="fBaixaW" style="display:'+(on?'flex':'none')+';gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px"><label for="fBaixaData" class="fin-mu">Data do pagamento</label><input class="fin-in" id="fBaixaData" type="date" style="max-width:170px" value="'+dspEsc(f.emissao||dspHoje())+'">'+
+    '<div id="fBaixaW" style="display:'+(on?'flex':'none')+';gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px"><label for="fBaixaData" class="fin-mu">Data do pagamento</label><input class="fin-in" id="fBaixaData" type="date" style="max-width:170px" value="'+dspEsc(f.vencimento||f.emissao||dspHoje())+'">'+
     (f.contaId?'<span class="fin-mu">sai da conta: '+dspEsc(dspContaNome(f.contaId))+'</span>':'<span class="fin-chip warn">escolha a conta financeira para dar baixa</span>')+'</div>'+
     (dspEhCredito(f.formaId)?'<div class="fin-mu" style="margin-top:4px">Cartão de crédito: normalmente a baixa é quando a fatura é paga.</div>':'')+'</div>';
 }
 async function dspLancar(){
   var f=dspLerCampos();if(dspFaltas(f).length)return;
   var cct=dspEl('fContab');if(cct&&!cct.checked)f._semContab=true;
-  var cbx=dspEl('fBaixar');if(cbx&&cbx.checked){if(!f.contaId){DSP.msg='Para dar baixa, escolha a conta financeira (ou desmarque "Dar baixa").';DSP.msgTipo='warn';dspDraw();return;}f._baixa={data:(dspEl('fBaixaData')||{}).value||f.emissao||dspHoje()};}else if(cbx)f._baixaOff=true;
+  var cbx=dspEl('fBaixar');if(cbx&&cbx.checked){if(!f.contaId){DSP.msg='Para dar baixa, escolha a conta financeira (ou desmarque "Dar baixa").';DSP.msgTipo='warn';dspDraw();return;}f._baixa={data:(dspEl('fBaixaData')||{}).value||f.vencimento||f.emissao||dspHoje()};}else if(cbx)f._baixaOff=true;
   var b=dspEl('fLancar');if(b){b.disabled=true;b.textContent='Lançando no Bling…';}
   await dspSalvarForm(true);var id=DSP.sel;
   try{
@@ -6174,7 +6174,7 @@ function dspBindLancados(){
 
   DSP.root.querySelectorAll('[data-bx]').forEach(function(b){b.onclick=async function(ev){ev.stopPropagation();var id=b.getAttribute('data-bx'),d=DSP.desp[id];if(!d)return;
     if(!d.contaId){DSP.msg='Para dar baixa, abra a despesa e escolha a conta financeira.';DSP.msgTipo='warn';dspDraw();return;}
-    var dt=prompt('Dar baixa (pago) em '+((d.contato&&d.contato.nome)||'')+' — R$ '+dspMoney(d.valor)+'\nConta: '+dspContaNome(d.contaId)+'\n\nData do pagamento (dd/mm/aaaa):',dspBr(d.emissao||d.vencimento));
+    var dt=prompt('Dar baixa (pago) em '+((d.contato&&d.contato.nome)||'')+' — R$ '+dspMoney(d.valor)+'\nConta: '+dspContaNome(d.contaId)+'\n\nData do pagamento (dd/mm/aaaa):',dspBr(d.vencimento||d.emissao));
     if(dt===null)return;var m=String(dt).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);if(!m){alert('Data inválida. Use dd/mm/aaaa.');return;}
     b.disabled=true;b.textContent='Dando baixa…';
     try{await dspBaixarCore(id,m[3]+'-'+m[2]+'-'+m[1]);DSP.msg='Baixa feita no Bling (pago em '+dt+').';DSP.msgTipo='ok';}catch(e){DSP.msg='Não consegui dar baixa: '+e.message;DSP.msgTipo='err';}
@@ -7244,13 +7244,13 @@ function frtBaixaHtml(f){
   if(!frtExtBaixaOk())return '<div class="fin-msg warn" style="margin:0">Para dar baixa junto com o lançamento, atualize a extensão para a versão 2.1.2 (botão 🧩 Extensão).</div>';
   FRT.baixaSel=FRT.baixaSel||{};var on=FRT.baixaSel[FRT.sel]!==undefined?FRT.baixaSel[FRT.sel]:frtBaixaPadrao(f);
   return '<div class="fin-card" style="margin:0;padding:10px 12px;background:var(--fin-bg2,rgba(10,125,107,.06))"><label style="display:flex;gap:8px;align-items:center;font-weight:700;cursor:pointer"><input type="checkbox" id="fBaixar"'+(on?' checked':'')+'> 💲 Dar baixa (já está pago)</label>'+
-    '<div id="fBaixaW" style="display:'+(on?'flex':'none')+';gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px"><label for="fBaixaData" class="fin-mu">Data do pagamento</label><input class="fin-in" id="fBaixaData" type="date" style="max-width:170px" value="'+frtEsc(f.emissao||frtHoje())+'">'+
+    '<div id="fBaixaW" style="display:'+(on?'flex':'none')+';gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px"><label for="fBaixaData" class="fin-mu">Data do pagamento</label><input class="fin-in" id="fBaixaData" type="date" style="max-width:170px" value="'+frtEsc(f.vencimento||f.emissao||frtHoje())+'">'+
     (f.contaId?'<span class="fin-mu">sai da conta: '+frtEsc(frtContaNome(f.contaId))+'</span>':'<span class="fin-chip warn">escolha a conta financeira para dar baixa</span>')+'</div>'+
     (frtEhCredito(f.formaId)?'<div class="fin-mu" style="margin-top:4px">Cartão de crédito: normalmente a baixa é quando a fatura é paga.</div>':'')+'</div>';
 }
 async function frtLancar(){
   var f=frtLerCampos();if(frtFaltas(f).length)return;
-  var cbx=frtEl('fBaixar');if(cbx&&cbx.checked){if(!f.contaId){FRT.msg='Para dar baixa, escolha a conta financeira (ou desmarque "Dar baixa").';FRT.msgTipo='warn';frtDraw();return;}f._baixa={data:(frtEl('fBaixaData')||{}).value||f.emissao||frtHoje()};}else if(cbx)f._baixaOff=true;
+  var cbx=frtEl('fBaixar');if(cbx&&cbx.checked){if(!f.contaId){FRT.msg='Para dar baixa, escolha a conta financeira (ou desmarque "Dar baixa").';FRT.msgTipo='warn';frtDraw();return;}f._baixa={data:(frtEl('fBaixaData')||{}).value||f.vencimento||f.emissao||frtHoje()};}else if(cbx)f._baixaOff=true;
   var b=frtEl('fLancar');if(b){b.disabled=true;b.textContent='Lançando no Bling…';}
   await frtSalvarForm(true);var id=FRT.sel;
   try{
@@ -7600,7 +7600,7 @@ function frtHtmlLancados(){
 function frtBindLancados(){
   FRT.root.querySelectorAll('[data-bx]').forEach(function(b){b.onclick=async function(ev){ev.stopPropagation();var id=b.getAttribute('data-bx'),d=FRT.desp[id];if(!d)return;
     if(!d.contaId){FRT.msg='Para dar baixa, abra o frete e escolha a conta financeira.';FRT.msgTipo='warn';frtDraw();return;}
-    var dt=prompt('Dar baixa (pago) em '+((d.contato&&d.contato.nome)||'')+' — R$ '+frtMoney(d.valor)+'\nConta: '+frtContaNome(d.contaId)+'\n\nData do pagamento (dd/mm/aaaa):',frtBr(d.emissao||d.vencimento));
+    var dt=prompt('Dar baixa (pago) em '+((d.contato&&d.contato.nome)||'')+' — R$ '+frtMoney(d.valor)+'\nConta: '+frtContaNome(d.contaId)+'\n\nData do pagamento (dd/mm/aaaa):',frtBr(d.vencimento||d.emissao));
     if(dt===null)return;var m=String(dt).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);if(!m){alert('Data inválida. Use dd/mm/aaaa.');return;}
     b.disabled=true;b.textContent='Dando baixa…';
     try{await frtBaixarCore(id,m[3]+'-'+m[2]+'-'+m[1]);FRT.msg='Baixa feita no Bling (pago em '+dt+').';FRT.msgTipo='ok';}catch(e){FRT.msg='Não consegui dar baixa: '+e.message;FRT.msgTipo='err';}
