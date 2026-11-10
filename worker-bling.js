@@ -1962,9 +1962,11 @@ async function contaSicoob(env) {
   ((await env.BLING_KV.get('bolpendentes', 'json')) || []).slice(-10).forEach(n => nns.add(String(n)));
   ((await env.BLING_KV.get('acoes', 'json')) || []).filter(a => a.nossoNumero).slice(-10).forEach(a => nns.add(String(a.nossoNumero)));
   ((await env.BLING_KV.get('bolsim:rel', 'json')) || []).filter(a => a && a.nossoNumero).slice(-10).forEach(a => nns.add(String(a.nossoNumero)));
+  // sem boleto lido ainda: os primeiros nossoNumero emitidos pela empresa (numeração sequencial do Sicoob)
+  if (nns.size < 4) for (let i = 1; i <= 6; i++) nns.add(String(i));
   let tent = 0;
   for (const nn of nns) {
-    if (!nn || ++tent > 4) break;
+    if (!nn || ++tent > 8) break;
     const j = await sicoobCob(env, 'GET', '/boletos?numeroCliente=' + SICOOB_NUM_CLIENTE + '&codigoModalidade=1&nossoNumero=' + encodeURIComponent(nn)).catch(() => null);
     const c = dig(acharCampo(j, ['numeroContaCorrente', 'contaCorrente']));
     if (c) { await env.BLING_KV.put('sicoob:conta', c); return c; }
