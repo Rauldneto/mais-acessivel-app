@@ -5199,10 +5199,13 @@ function dspCarregar(silencioso){
   dspFb('emailLidos').then(function(e){DSP.lidos=e||{};}).catch(function(){});
   if(typeof FRT!=='undefined'&&!FRT.email)dspFb('fretesEmail').then(function(e){if(!FRT.email)FRT.email=e||{};}).catch(function(){});
   return Promise.all([dspFb('despesas'),dspFb('config'),dspFb('listas')]).then(function(r){
-    DSP.desp=r[0]||{};DSP.cfg=r[1]?Object.assign({},DSP_CFG_PADRAO,r[1]):null;
+    var _sel=DSP.sel,_ant=_sel&&DSP.desp[_sel]?JSON.stringify([DSP.desp[_sel].atualizadoEm||0,DSP.desp[_sel].status,DSP.desp[_sel].nFotos||0]):'';
+    DSP.desp=r[0]||{};
+    var _mud=!!(_ant&&DSP.desp[_sel]&&JSON.stringify([DSP.desp[_sel].atualizadoEm||0,DSP.desp[_sel].status,DSP.desp[_sel].nFotos||0])!==_ant);
+    if(_mud&&silencioso){if(!DSP.form||!DSP.form._editado){DSP.form=null;DSP.revisao=null;}else{DSP.msg='Esta despesa foi alterada em outro aparelho. Salve ou recarregue a página para ver a versão nova.';DSP.msgTipo='warn';}}DSP.cfg=r[1]?Object.assign({},DSP_CFG_PADRAO,r[1]):null;
     if(DSP.cfg&&!DSP.cfg.contaPorForma)DSP.cfg.contaPorForma={};
     DSP.listas=(r[2]&&r[2].formas)?r[2]:null;DSP.carregado=true;
-    if(!silencioso||(!dspEditando()&&!DSP.sel))dspDraw();else dspDrawLista();
+    if(!silencioso||(!dspEditando()&&(!DSP.sel||_mud)))dspDraw();else dspDrawLista();
     if(silencioso&&DSP_CONF.feita&&!DSP_CONF.rodando&&STATE.modulo==='mod14')dspConferirTudo(true); // chegou despesa nova (ex.: do celular): confere só ela
   }).catch(function(e){DSP.carregado=true;DSP.msg='Não consegui ler o Firebase: '+e.message;DSP.msgTipo='err';dspDraw();});
 }
@@ -5320,10 +5323,12 @@ async function dspFilaEnviar(){
 window.addEventListener('online',function(){dspFilaEnviar();});
 async function dspLerDespesa(id,fotos,obs){
   DSP.lendo[id]=true;if(STATE.modulo==='mod14')dspDraw();
-  var upd;
+  var upd,inicio=Date.now();
   try{if(!fotos)fotos=await dspFb('fotos/'+id);var r=await dspLerIA(fotos||[],obs);upd=await dspEnriquecer(dspAplicarLeitura(r));}
   catch(e){upd={leituraErro:'A leitura automática falhou ('+e.message+'). Preencha à mão ou toque em Ler de novo.'};}
   upd.status='pendente';upd.atualizadoEm=Date.now();
+  // o que você já preencheu à mão (em qualquer aparelho) enquanto a IA lia não é sobrescrito pela leitura
+  try{var atual=await dspFb('despesas/'+id);if(atual&&atual.editadoEm&&atual.editadoEm>=inicio-600000)['fornecedor','contato','valor','emissao','vencimento','competencia','numeroDocumento','historico','formaId','contaId','categoria','parcelas'].forEach(function(k){var v=atual[k];if(v!==undefined&&v!==null&&v!==''&&!(k==='fornecedor'&&!(v&&v.nome)))delete upd[k];});}catch(e){}
   try{await dspFb('despesas/'+id,{method:'PATCH',body:upd});}catch(e){}
   DSP.desp[id]=Object.assign({},DSP.desp[id]||{},upd);delete DSP.lendo[id];
   if(DSP.sel===id&&DSP.form&&!DSP.form._editado){DSP.form=null;}
@@ -5358,7 +5363,7 @@ function dspLerCampos(){
 async function dspSalvarForm(quieto){
   var f=dspLerCampos();if(!f||!DSP.sel)return false;
   var campos=['fornecedor','contato','valor','emissao','vencimento','competencia','numeroDocumento','historico','formaId','contaId','categoria','parcelas'];
-  var upd={atualizadoEm:Date.now()};campos.forEach(function(k){upd[k]=f[k]===undefined?null:f[k];});
+  var upd={atualizadoEm:Date.now(),editadoEm:Date.now()};campos.forEach(function(k){upd[k]=f[k]===undefined?null:f[k];});
   try{await dspFb('despesas/'+DSP.sel,{method:'PATCH',body:upd});DSP.desp[DSP.sel]=Object.assign({},DSP.desp[DSP.sel],upd);f._editado=false;
     if(!quieto){DSP.msg='Salvo. Continua em Pendentes.';DSP.msgTipo='ok';}return true;}
   catch(e){DSP.msg='Não consegui salvar: '+e.message;DSP.msgTipo='err';return false;}
@@ -6364,10 +6369,13 @@ function frtBling(op,dados){
 function frtCarregar(silencioso){
   frtFb('fretesEmail').then(function(e){FRT.email=e||{};}).catch(function(){});frtFb('emailLidos').then(function(e){FRT.lidos=e||{};}).catch(function(){});frtFb('fretesConfig').then(function(e){FRT.fcfg=e||{};}).catch(function(){});
   return Promise.all([frtFb('fretes'),frtFb('config'),frtFb('listas')]).then(function(r){
-    FRT.desp=r[0]||{};FRT.cfg=r[1]?Object.assign({},FRT_CFG_PADRAO,r[1]):null;
+    var _sel=FRT.sel,_ant=_sel&&FRT.desp[_sel]?JSON.stringify([FRT.desp[_sel].atualizadoEm||0,FRT.desp[_sel].status,FRT.desp[_sel].nFotos||0]):'';
+    FRT.desp=r[0]||{};
+    var _mud=!!(_ant&&FRT.desp[_sel]&&JSON.stringify([FRT.desp[_sel].atualizadoEm||0,FRT.desp[_sel].status,FRT.desp[_sel].nFotos||0])!==_ant);
+    if(_mud&&silencioso){if(!FRT.form||!FRT.form._editado){FRT.form=null;FRT.revisao=null;}else{FRT.msg='Este frete foi alterado em outro aparelho. Salve ou recarregue a página para ver a versão nova.';FRT.msgTipo='warn';}}FRT.cfg=r[1]?Object.assign({},FRT_CFG_PADRAO,r[1]):null;
     if(FRT.cfg&&!FRT.cfg.contaPorForma)FRT.cfg.contaPorForma={};
     FRT.listas=(r[2]&&r[2].formas)?r[2]:null;FRT.carregado=true;
-    if(!silencioso||(!frtEditando()&&!FRT.sel))frtDraw();else frtDrawLista();
+    if(!silencioso||(!frtEditando()&&(!FRT.sel||_mud)))frtDraw();else frtDrawLista();
   }).catch(function(e){FRT.carregado=true;FRT.msg='Não consegui ler o Firebase: '+e.message;FRT.msgTipo='err';frtDraw();});
 }
 function frtEditando(){var a=document.activeElement;return !!(a&&FRT.root&&FRT.root.contains(a)&&/INPUT|TEXTAREA|SELECT/.test(a.tagName));}
