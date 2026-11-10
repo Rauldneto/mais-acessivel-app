@@ -5101,7 +5101,7 @@ function dspBr(iso){return iso?String(iso).split('-').reverse().join('/'):'';}
 function dspDoc(d){d=dspDig(d);if(d.length===14)return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');if(d.length===11)return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4');return d;}
 function dspTelaCel(){var sw=Math.min(screen.width||9999,screen.height||9999);return (navigator.maxTouchPoints>0||'ontouchstart' in window)&&sw<=760;}
 function dspMobile(){return (window.matchMedia&&window.matchMedia('(max-width: 760px)').matches)||dspTelaCel();}
-function dspFb(path,opt){opt=opt||{};return fetch(FIREBASE_DB+'/financeiro/'+path+'.json',{method:opt.method||'GET',headers:opt.body?{'Content-Type':'application/json'}:undefined,body:opt.body?JSON.stringify(opt.body):undefined})
+function dspFb(path,opt){opt=opt||{};if(opt.method&&opt.method!=='GET'&&/^fotos/.test(path)&&typeof DSP_FOTOS!=='undefined')DSP_FOTOS={};return fetch(FIREBASE_DB+'/financeiro/'+path+'.json',{method:opt.method||'GET',headers:opt.body?{'Content-Type':'application/json'}:undefined,body:opt.body?JSON.stringify(opt.body):undefined})
   .then(function(r){if(!r.ok)throw new Error('Firebase '+r.status);return r.json();});}
 function dspListas(){return DSP.listas||DSP_LISTAS_PADRAO;}
 function dspCfg(){return DSP.cfg||DSP_CFG_PADRAO;}
@@ -5202,7 +5202,7 @@ function dspCarregar(silencioso){
     DSP.desp=r[0]||{};DSP.cfg=r[1]?Object.assign({},DSP_CFG_PADRAO,r[1]):null;
     if(DSP.cfg&&!DSP.cfg.contaPorForma)DSP.cfg.contaPorForma={};
     DSP.listas=(r[2]&&r[2].formas)?r[2]:null;DSP.carregado=true;
-    if(!silencioso||!dspEditando())dspDraw();else dspDrawLista();
+    if(!silencioso||(!dspEditando()&&!DSP.sel))dspDraw();else dspDrawLista();
     if(silencioso&&DSP_CONF.feita&&!DSP_CONF.rodando&&STATE.modulo==='mod14')dspConferirTudo(true); // chegou despesa nova (ex.: do celular): confere só ela
   }).catch(function(e){DSP.carregado=true;DSP.msg='Não consegui ler o Firebase: '+e.message;DSP.msgTipo='err';dspDraw();});
 }
@@ -5632,7 +5632,7 @@ async function dspConferirTudo(soNovas,tent){
   if(soNovas&&!ks.length)return;
   DSP_CONF.rodando=true;DSP_CONF.erro='';
   DSP_CONF.total=ks.length;DSP_CONF.feitos=0;if(!dspEditando())dspDraw();else dspDrawLista();
-  try{for(var i=0;i<ks.length;i++){await dspConferirUma(ks[i]);DSP_CONF.feitos++;if(!dspEditando())dspDraw();else dspDrawLista();}}
+  try{for(var i=0;i<ks.length;i++){await dspConferirUma(ks[i]);DSP_CONF.feitos++;if(!dspEditando()&&!DSP.sel)dspDraw();else dspDrawLista();}}
   catch(e){DSP_CONF.erro=e.message||'A extensão não respondeu.';}
   DSP_CONF.rodando=false;DSP_CONF.feita=true;DSP_CONF.ts=Date.now();if(!dspEditando())dspDraw();else dspDrawLista();
 }
@@ -5685,12 +5685,16 @@ async function dspExcluir(){
   var id=DSP.sel;try{await dspFb('despesas/'+id,{method:'DELETE'});await dspFb('fotos/'+id,{method:'DELETE'});}catch(e){}
   delete DSP.desp[id];DSP.sel=null;DSP.form=null;if(DSP.mob)DSP.mtela='pend';DSP.msg='Despesa excluída do app.';DSP.msgTipo='ok';dspDraw();
 }
+var DSP_FOTOS={}; // imagens já baixadas: a tela pode se redesenhar sem a foto sumir e voltar
 async function dspVerFotos(id,alvo){
-  alvo.innerHTML='<div class="fin-mu">Carregando fotos…</div>';
-  try{var f=await dspFb('fotos/'+id);if(!f||!f.length){alvo.innerHTML='<div class="fin-mu">Sem fotos guardadas.</div>';return;}
-    alvo.innerHTML=f.map(function(b,i){return '<img src="data:image/jpeg;base64,'+b+'" alt="Comprovante '+(i+1)+'" data-i="'+i+'">';}).join('');
-    alvo.querySelectorAll('img').forEach(function(im){im.onclick=function(){DSP.mostrarFoto=im.src;dspDrawZoom();};});
-  }catch(e){alvo.innerHTML='<div class="fin-mu">Não consegui carregar as fotos.</div>';}
+  var d=DSP.desp[id]||{},ch=id+'|'+(d.nFotos||0)+'|'+(d.nfe55Em||0)+'|'+(d.fotosEm||0);
+  function mostra(f){alvo.innerHTML=f.map(function(b,i){return '<img src="data:image/jpeg;base64,'+b+'" alt="Comprovante '+(i+1)+'" data-i="'+i+'">';}).join('');
+    alvo.querySelectorAll('img').forEach(function(im){im.onclick=function(){DSP.mostrarFoto=im.src;dspDrawZoom();};});}
+  if(DSP_FOTOS[ch]){mostra(DSP_FOTOS[ch]);return;}
+  alvo.style.minHeight='200px';alvo.innerHTML='<div class="fin-mu">Carregando fotos…</div>';
+  try{var f=await dspFb('fotos/'+id);alvo.style.minHeight='';if(!f||!f.length){alvo.innerHTML='<div class="fin-mu">Sem fotos guardadas.</div>';return;}
+    DSP_FOTOS[ch]=f;mostra(f);
+  }catch(e){alvo.style.minHeight='';alvo.innerHTML='<div class="fin-mu">Não consegui carregar as fotos.</div>';}
 }
 function dspDrawZoom(){var z=dspEl('dspZoom');if(!z)return;if(!DSP.mostrarFoto){z.hidden=true;z.innerHTML='';return;}
   z.hidden=false;z.innerHTML='<img src="'+DSP.mostrarFoto+'" alt="Comprovante ampliado"><button type="button" class="fin-btn">Fechar</button>';
@@ -6245,7 +6249,7 @@ function frtBr(iso){return iso?String(iso).split('-').reverse().join('/'):'';}
 function frtDoc(d){d=frtDig(d);if(d.length===14)return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');if(d.length===11)return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4');return d;}
 function frtTelaCel(){var sw=Math.min(screen.width||9999,screen.height||9999);return (navigator.maxTouchPoints>0||'ontouchstart' in window)&&sw<=760;}
 function frtMobile(){return (window.matchMedia&&window.matchMedia('(max-width: 760px)').matches)||frtTelaCel();}
-function frtFb(path,opt){opt=opt||{};return fetch(FIREBASE_DB+'/financeiro/'+path+'.json',{method:opt.method||'GET',headers:opt.body?{'Content-Type':'application/json'}:undefined,body:opt.body?JSON.stringify(opt.body):undefined})
+function frtFb(path,opt){opt=opt||{};if(opt.method&&opt.method!=='GET'&&/^fretesFotos/.test(path)&&typeof FRT_FOTOS!=='undefined')FRT_FOTOS={};return fetch(FIREBASE_DB+'/financeiro/'+path+'.json',{method:opt.method||'GET',headers:opt.body?{'Content-Type':'application/json'}:undefined,body:opt.body?JSON.stringify(opt.body):undefined})
   .then(function(r){if(!r.ok)throw new Error('Firebase '+r.status);return r.json();});}
 function frtListas(){return FRT.listas||DSP_LISTAS_PADRAO;}
 function frtCfg(){return FRT.cfg||FRT_CFG_PADRAO;}
@@ -6363,7 +6367,7 @@ function frtCarregar(silencioso){
     FRT.desp=r[0]||{};FRT.cfg=r[1]?Object.assign({},FRT_CFG_PADRAO,r[1]):null;
     if(FRT.cfg&&!FRT.cfg.contaPorForma)FRT.cfg.contaPorForma={};
     FRT.listas=(r[2]&&r[2].formas)?r[2]:null;FRT.carregado=true;
-    if(!silencioso||!frtEditando())frtDraw();else frtDrawLista();
+    if(!silencioso||(!frtEditando()&&!FRT.sel))frtDraw();else frtDrawLista();
   }).catch(function(e){FRT.carregado=true;FRT.msg='Não consegui ler o Firebase: '+e.message;FRT.msgTipo='err';frtDraw();});
 }
 function frtEditando(){var a=document.activeElement;return !!(a&&FRT.root&&FRT.root.contains(a)&&/INPUT|TEXTAREA|SELECT/.test(a.tagName));}
@@ -7097,7 +7101,7 @@ async function frtConferirTudo(){
   FRT_CONF.rodando=true;
   var ks=Object.keys(FRT.desp).filter(function(k){var d=FRT.desp[k];return d&&d.status==='pendente'&&!FRT.lendo[k];});
   FRT_CONF.total=ks.length;FRT_CONF.feitos=0;if(!frtEditando())frtDraw();
-  for(var i=0;i<ks.length;i++){await frtConferirUma(ks[i]);FRT_CONF.feitos++;if(!frtEditando())frtDraw();else frtDrawLista();}
+  for(var i=0;i<ks.length;i++){await frtConferirUma(ks[i]);FRT_CONF.feitos++;if(!frtEditando()&&!FRT.sel)frtDraw();else frtDrawLista();}
   FRT_CONF.rodando=false;FRT_CONF.feita=true;FRT_CONF.ts=Date.now();if(!frtEditando())frtDraw();else frtDrawLista();
 }
 function frtConfHtml(){
@@ -7129,12 +7133,16 @@ async function frtExcluir(){
   var id=FRT.sel;try{await frtFb('fretes/'+id,{method:'DELETE'});await frtFb('fretesFotos/'+id,{method:'DELETE'});await frtFb('fretesPdf/'+id,{method:'DELETE'});}catch(e){}
   delete FRT.desp[id];FRT.sel=null;FRT.form=null;if(FRT.mob)FRT.mtela='pend';FRT.msg='Frete excluído do app.';FRT.msgTipo='ok';frtDraw();
 }
+var FRT_FOTOS={}; // imagens já baixadas: a tela pode se redesenhar sem a foto sumir e voltar
 async function frtVerFotos(id,alvo){
-  alvo.innerHTML='<div class="fin-mu">Carregando fotos…</div>';
-  try{var f=await frtFb('fretesFotos/'+id);if(!f||!f.length){alvo.innerHTML='<div class="fin-mu">Sem fotos guardadas.</div>';return;}
-    alvo.innerHTML=f.map(function(b,i){return '<img src="data:image/jpeg;base64,'+b+'" alt="Documento '+(i+1)+'" data-i="'+i+'">';}).join('');
-    alvo.querySelectorAll('img').forEach(function(im){im.onclick=function(){FRT.mostrarFoto=im.src;frtDrawZoom();};});
-  }catch(e){alvo.innerHTML='<div class="fin-mu">Não consegui carregar as fotos.</div>';}
+  var d=FRT.desp[id]||{},ch=id+'|'+(d.nFotos||0)+'|'+(d.nfe55Em||0)+'|'+(d.fotosEm||0);
+  function mostra(f){alvo.innerHTML=f.map(function(b,i){return '<img src="data:image/jpeg;base64,'+b+'" alt="Documento '+(i+1)+'" data-i="'+i+'">';}).join('');
+    alvo.querySelectorAll('img').forEach(function(im){im.onclick=function(){FRT.mostrarFoto=im.src;frtDrawZoom();};});}
+  if(FRT_FOTOS[ch]){mostra(FRT_FOTOS[ch]);return;}
+  alvo.style.minHeight='200px';alvo.innerHTML='<div class="fin-mu">Carregando fotos…</div>';
+  try{var f=await frtFb('fretesFotos/'+id);alvo.style.minHeight='';if(!f||!f.length){alvo.innerHTML='<div class="fin-mu">Sem fotos guardadas.</div>';return;}
+    FRT_FOTOS[ch]=f;mostra(f);
+  }catch(e){alvo.style.minHeight='';alvo.innerHTML='<div class="fin-mu">Não consegui carregar as fotos.</div>';}
 }
 function frtDrawZoom(){var z=frtEl('frtZoom');if(!z)return;if(!FRT.mostrarFoto){z.hidden=true;z.innerHTML='';return;}
   z.hidden=false;z.innerHTML='<img src="'+FRT.mostrarFoto+'" alt="Documento ampliado"><button type="button" class="fin-btn">Fechar</button>';
