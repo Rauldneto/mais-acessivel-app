@@ -964,12 +964,23 @@ async function chatJanela(conv, com, aviso) {
       }
     } catch (e) {}
   }
-  var larg = 430, alt = 640, left, top;
-  try { var ult = await chrome.windows.getLastFocused(); if (ult && ult.width) { left = Math.max(0, (ult.left || 0) + ult.width - larg - 20); top = Math.max(0, (ult.top || 0) + 60); } } catch (e) {}
+  // Abre no canto SUPERIOR DIREITO da tela. Se a pessoa mudar a janela de lugar ou de tamanho, da próxima vez abre onde ela deixou.
+  var larg = 430, alt = 660, left, top;
+  var pos = (await chrome.storage.local.get(['chatPos'])).chatPos;
+  if (pos && pos.width) { larg = pos.width; alt = pos.height; left = pos.left; top = pos.top; }
+  else {
+    try {
+      var ult = await chrome.windows.getLastFocused();
+      if (ult && ult.width) { left = Math.max(0, (ult.left || 0) + ult.width - larg - 8); top = Math.max(0, (ult.top || 0) + 8); alt = Math.min(alt, Math.max(420, (ult.height || alt) - 60)); }
+    } catch (e) {}
+  }
   var nova = await chrome.windows.create({ url: url, type: 'popup', width: larg, height: alt, left: left, top: top, focused: true });
   await chrome.storage.local.set({ chatWin: nova.id });
 }
 chrome.windows.onRemoved.addListener(function(id) { chrome.storage.local.get(['chatWin'], function(s) { if (s.chatWin === id) chrome.storage.local.remove('chatWin'); }); });
+if (chrome.windows.onBoundsChanged) chrome.windows.onBoundsChanged.addListener(function(w) {
+  chrome.storage.local.get(['chatWin'], function(s) { if (s.chatWin === w.id && w.width) chrome.storage.local.set({ chatPos: { left: w.left, top: w.top, width: w.width, height: w.height } }); });
+});
 
 async function chatVerificar() {
   var st = await chrome.storage.local.get(['appUsuario', 'fbAuth', 'chatVistos', 'chatAvisoMostrado']);
