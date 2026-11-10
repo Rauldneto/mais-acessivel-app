@@ -29,7 +29,7 @@ function partes(url) { return new URL(url).pathname.replace(/\.json$/, '').split
 function ler(db, ps) { let d = db; for (const k of ps) { if (!d || typeof d !== 'object' || !(k in d)) return null; d = d[k]; } return d; }
 function gravar(db, ps, v) { let d = db; ps.slice(0, -1).forEach(k => { d = d[k] = d[k] || {}; }); d[ps[ps.length - 1]] = v; }
 
-const ABAS = ['inicio', 'frete', 'mod10', 'mod2', 'mod7', 'mod8', 'mod9', 'mod3', 'mod4', 'mod5', 'mod11', 'mod12', 'mod13', 'mod20', 'mod14', 'mod15', 'mod16', 'mod17', 'mod18', 'mod19', 'mod22'];
+const ABAS = ['inicio', 'frete', 'mod10', 'mod2', 'mod7', 'mod8', 'mod9', 'mod3', 'mod4', 'mod5', 'mod11', 'mod12', 'mod13', 'mod20', 'mod14', 'mod15', 'mod16', 'mod17', 'mod18', 'mod19', 'mod22', 'mod25'];
 const falhas = [];
 
 async function sessao(browser, usuario, role, abas) {
@@ -107,8 +107,22 @@ try {
     if (adm.erros.length > antes) falhas.push('[admin] conciliação sub-aba ' + (v || 'vendas') + ': ' + adm.erros.slice(antes).join(' | '));
   }
 
+  // Chat: admin abre a conversa com o colaborador e envia uma mensagem
+  {
+    const antes = adm.erros.length;
+    const ok = await adm.page.evaluate(async () => {
+      irParaModulo('mod25'); await new Promise(r => setTimeout(r, 600));
+      const it = document.querySelector('.cht-it[data-com="teste"]'); if (!it) return 'colaborador não aparece na lista';
+      it.click(); await new Promise(r => setTimeout(r, 600));
+      document.querySelector('#chtTxt').value = 'Teste de mensagem'; await chtEnviar(); await new Promise(r => setTimeout(r, 300));
+      return document.querySelector('.cht-m.eu') ? '' : 'mensagem enviada não apareceu';
+    });
+    if (ok) falhas.push('[admin] chat: ' + ok);
+    if (adm.erros.length > antes) falhas.push('[admin] chat: ' + adm.erros.slice(antes).join(' | '));
+  }
+
   const col = await sessao(browser, 'teste', 'user', ['frete', 'mod10', 'mod8']);
-  await conferirAbas('colaborador', col, ['inicio', 'frete', 'mod10', 'mod8', 'mod18']);
+  await conferirAbas('colaborador', col, ['inicio', 'frete', 'mod10', 'mod8', 'mod18', 'mod25']);
   const temForm = await col.page.evaluate(() => { rppAbrir(); return !!document.querySelector('#rppTela') && !!document.querySelector('#rppAconteceu'); });
   if (!temForm) falhas.push('[colaborador] formulário Reportar Problema não abriu');
   const vePrivado = await col.page.evaluate(() => !!document.querySelector('[data-aba=chamados]'));
