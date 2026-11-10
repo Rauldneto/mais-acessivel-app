@@ -5531,8 +5531,8 @@ async function dspLancarCore2(id,f,passo){
   if(!f.contato&&!(f.fornecedor&&f.fornecedor.nome))f.fornecedor={nome:DSP_SEM_FORN,doc:''};
   if(!f.contato)await dspResolverFornecedor(id,f,true,passo);
   passo('Lançando no Bling…');
-  var pgs=(f.pagamentos&&f.pagamentos.length>1)?f.pagamentos:null,separado=!!(pgs&&pgs.some(function(p){return String(p.formaId||f.formaId)!==String(pgs[0].formaId||f.formaId);})),r,ids=null;
-  if(separado){ // formas diferentes: o Bling só guarda 1 forma por conta -> 1 conta para cada pagamento (mesmo nº de documento)
+  var pgs=(f.pagamentos&&f.pagamentos.length>1)?f.pagamentos:null,separado=!!pgs,r,ids=null; // sempre 1 conta por pagamento (decisão do Raul)
+  if(separado){ // 1 conta para cada pagamento (mesmo nº de documento), cada uma com o seu valor, data, forma e conta
     ids=(DSP.desp[id]&&DSP.desp[id].blingIdsParc)||[];
     for(var pi=ids.length;pi<pgs.length;pi++){var pp=pgs[pi];passo('Lançando pagamento '+(pi+1)+' de '+pgs.length+'…');
       var rr=await dspBling('lancar',{idContato:f.contato.id,contato:f.contato.nome,valor:pp.valor,vencimento:pp.data||f.vencimento,emissao:f.emissao,competencia:f.competencia,
@@ -5666,7 +5666,7 @@ function dspJuntarHtml(f,lan){
   if(pg.length>1)h+='<div class="fin-msg info" style="display:block;margin-top:8px"><b>🔗 '+pg.length+' pagamentos desta NF</b> (total R$ '+dspMoney(f.valor)+'):'+
     pg.map(function(p){return '<div>• R$ '+dspMoney(p.valor)+' em '+dspBr(p.data)+(p.formaId?' · '+dspEsc(dspFormaNome(p.formaId)):'')+'</div>';}).join('')+
     (f.obsJuntar?'<div style="color:#b45309;font-weight:700;margin-top:4px">⚠️ '+dspEsc(f.obsJuntar)+'</div>':'')+
-    '<div class="fin-mu" style="margin-top:4px">Lança 1 conta com o total no Bling e dá baixa de cada pagamento na sua data.</div>'+
+    '<div class="fin-mu" style="margin-top:4px">Lança 1 conta no Bling para cada pagamento (mesmo nº de documento) e dá baixa de cada um na sua data.</div>'+
     (lan?'':'<button type="button" class="fin-btn sm" id="fDesjuntar" style="margin-top:6px">↩ Desfazer junção</button>')+'</div>';
   if(lan)return h;
   if(DSP.juntarAberto!==id)return h+'<div style="margin-top:8px"><button type="button" class="fin-btn sm" id="fJuntar">🔗 Juntar com outra despesa (mesma NF, pagamentos em dias diferentes)</button></div>';
