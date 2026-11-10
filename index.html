@@ -5103,6 +5103,16 @@ function dspTelaCel(){var sw=Math.min(screen.width||9999,screen.height||9999);re
 function dspMobile(){return (window.matchMedia&&window.matchMedia('(max-width: 760px)').matches)||dspTelaCel();}
 function dspFb(path,opt){opt=opt||{};if(opt.method&&opt.method!=='GET'&&/^fotos/.test(path)&&typeof DSP_FOTOS!=='undefined')DSP_FOTOS={};return fetch(FIREBASE_DB+'/financeiro/'+path+'.json',{method:opt.method||'GET',headers:opt.body?{'Content-Type':'application/json'}:undefined,body:opt.body?JSON.stringify(opt.body):undefined})
   .then(function(r){if(!r.ok)throw new Error('Firebase '+r.status);return r.json();});}
+// Aviso de por que não deu para seguir: aparece logo acima do botão, a tela rola até ele e os campos que faltam ficam em vermelho
+var FIN_CAMPO={'Valor':'fValor','Vencimento':'fVenc','Forma de pagamento':'fForma','Conta financeira':'fConta','Imagem do documento':null,'Valor e data de cada pagamento':'pgV0'};
+function finAvisoBotao(btnId,txt,faltas,tipo){
+  setTimeout(function(){var b=document.getElementById(btnId);if(!b)return;var box=b.closest('.fin-act')||b.parentNode;
+    var old=document.getElementById('finAvisoBtn');if(old)old.remove();
+    var d=document.createElement('div');d.id='finAvisoBtn';d.className='fin-msg '+(tipo||'err');d.style.display='block';d.style.marginBottom='8px';d.innerHTML='<b>⚠️ Não deu para seguir:</b> '+txt;
+    box.parentNode.insertBefore(d,box);
+    (faltas||[]).forEach(function(k){var id=FIN_CAMPO[k];var el=id&&document.getElementById(id);if(el){el.style.outline='2px solid #dc2626';el.style.outlineOffset='1px';el.addEventListener('input',function(){el.style.outline='';},{once:true});el.addEventListener('change',function(){el.style.outline='';},{once:true});}});
+    d.scrollIntoView({behavior:'smooth',block:'center'});},30);
+}
 function dspListasOk(L){if(!L||!L.formas)return null;L=Object.assign({},L);['formas','contas','categorias'].forEach(function(k){if(!L[k]||!L[k].length)L[k]=DSP_LISTAS_PADRAO[k];});return L;}
 function dspListas(){return DSP.listas||DSP_LISTAS_PADRAO;}
 // formas de pagamento que servem para contas a pagar: ativas no Bling e de pagamento (as de venda/recebimento e as desativadas ficam de fora; a já escolhida sempre aparece)
@@ -5449,8 +5459,9 @@ function dspRevFornHtml(f){
     (f.fornecedor.dados?'<div class="fin-mu">Dados da Receita: '+dspEsc(f.fornecedor.dados.cidade||'')+'/'+dspEsc(f.fornecedor.dados.uf||'')+'</div>':'')+
     '<div style="margin-top:6px"><button type="button" class="fin-btn sm pri" id="fCadAgora">Cadastrar agora no Bling</button></div></div>';
 }
-async function dspRevisar(){
-  var f=dspLerCampos();var falta=dspFaltas(f);if(falta.length){DSP.msg='Para lançar ainda falta: '+falta.join(', ')+'.';DSP.msgTipo='warn';dspDraw();return;}
+async function dspRevisar(){try{return await dspRevisar2();}catch(e){var b=dspEl('fRevisar');if(b){b.disabled=false;b.textContent='Revisar e lançar';}finAvisoBotao('fRevisar','erro inesperado: '+(e.message||e)+'. Tente de novo; se continuar, me mande um print desta mensagem.');}}
+async function dspRevisar2(){
+  var f=dspLerCampos();var falta=dspFaltas(f);if(falta.length){DSP.msg='';dspDraw();finAvisoBotao('fRevisar','falta preencher '+falta.join(', ')+'. Preencha o que está em vermelho e clique de novo.',falta);return;}
   var b=dspEl('fRevisar');if(b){b.disabled=true;b.textContent='Conferindo no Bling…';}
   DSP.fornSt=DSP.fornSt||{};delete DSP.fornSt[DSP.sel];
   if(dspExtOk()){var sel=DSP.sel;try{await dspSalvarForm(true);}catch(e){}
@@ -7103,8 +7114,11 @@ function frtRevFornHtml(f){
     (f.fornecedor.dados?'<div class="fin-mu">Dados da Receita: '+frtEsc(f.fornecedor.dados.cidade||'')+'/'+frtEsc(f.fornecedor.dados.uf||'')+'</div>':'')+
     '<div style="margin-top:6px"><button type="button" class="fin-btn sm pri" id="fCadAgora">Cadastrar agora no Bling</button></div></div>';
 }
-async function frtRevisar(){
-  var f=frtLerCampos();var falta=frtFaltas(f);if(falta.length){FRT.msg='Para lançar ainda falta: '+falta.join(', ')+'.';FRT.msgTipo='warn';frtDraw();return;}
+async function frtRevisar(){try{return await frtRevisar2();}catch(e){var b=frtEl('fRevisar');if(b){b.disabled=false;b.textContent='Revisar e lançar';}finAvisoBotao('fRevisar','erro inesperado: '+(e.message||e)+'. Tente de novo; se continuar, me mande um print desta mensagem.');}}
+async function frtRevisar2(){
+  var f=frtLerCampos();var falta=frtFaltas(f);if(falta.length){FRT.msg='';frtDraw();
+    var ex=falta.map(function(k){return k==='Vencimento'?'Vencimento (o CT-e/fatura não traz; se já foi pago, coloque a data do pagamento)':k==='Imagem do documento'?'Imagem do documento (ela vai para a contabilidade)':k;});
+    finAvisoBotao('fRevisar','falta preencher '+ex.join(', ')+'. Preencha o que está em vermelho e clique de novo.',falta);return;}
   var b=frtEl('fRevisar');if(b){b.disabled=true;b.textContent='Conferindo no Bling…';}
   FRT.fornSt=FRT.fornSt||{};delete FRT.fornSt[FRT.sel];
   if(frtExtOk()){var sel=FRT.sel;try{await frtSalvarForm(true);}catch(e){}
