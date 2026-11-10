@@ -5212,7 +5212,7 @@ function dspCarregar(silencioso){
 }
 function dspEditando(){var a=document.activeElement;return !!(a&&DSP.root&&DSP.root.contains(a)&&/INPUT|TEXTAREA|SELECT/.test(a.tagName));}
 function dspSalvarCfg(){return dspFb('config',{method:'PUT',body:dspCfg()});}
-function dspLista(status){return Object.keys(DSP.desp).map(function(k){return Object.assign({id:k},DSP.desp[k]);}).filter(function(d){return status==='lancado'?d.status==='lancado':status==='ignorado'?d.status==='ignorado':(d.status!=='lancado'&&d.status!=='ignorado');})
+function dspLista(status){return Object.keys(DSP.desp).map(function(k){return Object.assign({id:k},DSP.desp[k]);}).filter(function(d){return status==='lancado'?d.status==='lancado':status==='ignorado'?d.status==='ignorado':(d.status!=='lancado'&&d.status!=='ignorado'&&d.status!=='juntado');})
   .sort(function(a,b){return status==='lancado'?(b.lancadoEm||0)-(a.lancadoEm||0):status==='ignorado'?(b.ignoradoEm||0)-(a.ignoradoEm||0):(b.criadoEm||0)-(a.criadoEm||0);});}
 
 // ---------- imagens ----------
@@ -5529,6 +5529,7 @@ function dspEmailLinhas(d){
   return [['Fornecedor',(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||''],['CNPJ/CPF',dspDoc((d.contato&&d.contato.doc)||(d.fornecedor&&d.fornecedor.doc)||'')],
     ['Documento',dspTipoDocNome(d.tipoDoc)+(d.numeroDocumento?' nº '+d.numeroDocumento:'')],['Data da compra',dspBr(d.emissao)],['Vencimento',dspBr(d.vencimento)],
     ['Valor','R$ '+dspMoney(d.valor)+(d.parcelas>1?' em '+d.parcelas+'x':'')],['Forma de pagamento',dspFormaNome(d.formaId)],['Conta financeira',dspContaNome(d.contaId)],
+    ['Pagamentos',(d.pagamentos&&d.pagamentos.length>1)?d.pagamentos.map(function(p){return 'R$ '+dspMoney(p.valor)+' em '+dspBr(p.data)+(p.formaId?' ('+dspFormaNome(p.formaId)+')':'');}).join('; '):''],
     ['Categoria',dspCatNome(d.categoria)],['Pago em',d.baixaData?dspBr(d.baixaData):''],['Lançado no Bling',d.blingId?'ID '+d.blingId:''],['Histórico',d.historico||''],
     ['Itens',(d.itens||[]).map(function(i){return i.descricao+(i.quantidade?' ('+i.quantidade+')':'')+' R$ '+dspMoney(i.valor);}).join('; ')]].filter(function(r){return r[1];});
 }
@@ -5592,12 +5593,83 @@ function dspEmailChip(d){
 async function dspBaixarCore(id,data){
   var d=DSP.desp[id];if(!d||!d.blingId)throw new Error('Esta despesa ainda não foi lançada no Bling.');
   if(d.baixadoEm)return;
-  try{await dspBling('baixar',{id:d.blingId,data:data||d.emissao||d.vencimento,portador:d.contaId,categoria:d.categoria,valor:d.valor,historico:d.historico});}
+  var pgs=(d.pagamentos&&d.pagamentos.length>1)?d.pagamentos:null;
+  try{
+    if(pgs){ // um pagamento por vez, cada um na sua data; os do meio deixam a conta "parcialmente paga"
+      var feitos=d.baixasFeitas||[];
+      for(var i=0;i<pgs.length;i++){var pk=pgs[i].id||String(i);if(feitos.indexOf(pk)>=0)continue;
+        try{await dspBling('baixar',{id:d.blingId,data:pgs[i].data||data||d.emissao,portador:pgs[i].contaId||d.contaId,categoria:d.categoria,valor:pgs[i].valor,historico:d.historico,parcial:i<pgs.length-1});}
+        catch(e){if(!(i<pgs.length-1&&/situação 3/.test(e.message)))throw e;}
+        feitos.push(pk);await dspFb('despesas/'+id,{method:'PATCH',body:{baixasFeitas:feitos}}).catch(function(){});d.baixasFeitas=feitos;}
+      data=pgs[pgs.length-1].data||data;
+    } else await dspBling('baixar',{id:d.blingId,data:data||d.emissao||d.vencimento,portador:d.contaId,categoria:d.categoria,valor:d.valor,historico:d.historico});}
   catch(e){var p0=(d.pendencias||[]).filter(function(x){return x!=='Dar baixa no Bling';}).concat(['Dar baixa no Bling']);
     await dspFb('despesas/'+id,{method:'PATCH',body:{pendencias:p0,baixaErro:e.message}}).catch(function(){});d.pendencias=p0;d.baixaErro=e.message;throw e;}
   var p=(d.pendencias||[]).filter(function(x){return x!=='Dar baixa no Bling';});
   var up={baixadoEm:Date.now(),baixaData:data||d.emissao||d.vencimento,baixaErro:null,pendencias:p};
   await dspFb('despesas/'+id,{method:'PATCH',body:up});Object.assign(d,up);
+}
+// ---------- juntar despesas: vários pagamentos (dias diferentes) de uma NF só -> 1 conta no Bling com o total, baixada em partes ----------
+function dspJuntarHtml(f,lan){
+  var id=DSP.sel,h='';if(!id)return '';
+  var pg=f.pagamentos||[];
+  if(pg.length>1)h+='<div class="fin-msg info" style="display:block;margin-top:8px"><b>🔗 '+pg.length+' pagamentos desta NF</b> (total R$ '+dspMoney(f.valor)+'):'+
+    pg.map(function(p){return '<div>• R$ '+dspMoney(p.valor)+' em '+dspBr(p.data)+(p.formaId?' · '+dspEsc(dspFormaNome(p.formaId)):'')+'</div>';}).join('')+
+    (f.obsJuntar?'<div style="color:#b45309;font-weight:700;margin-top:4px">⚠️ '+dspEsc(f.obsJuntar)+'</div>':'')+
+    '<div class="fin-mu" style="margin-top:4px">Lança 1 conta com o total no Bling e dá baixa de cada pagamento na sua data.</div>'+
+    (lan?'':'<button type="button" class="fin-btn sm" id="fDesjuntar" style="margin-top:6px">↩ Desfazer junção</button>')+'</div>';
+  if(lan)return h;
+  if(DSP.juntarAberto!==id)return h+'<div style="margin-top:8px"><button type="button" class="fin-btn sm" id="fJuntar">🔗 Juntar com outra despesa (mesma NF, pagamentos em dias diferentes)</button></div>';
+  var forn=dspTokens((f.contato&&f.contato.nome)||(f.fornecedor&&f.fornecedor.nome)||'').join(' ');
+  var L=dspLista('pend').filter(function(d){return d.id!==id&&d.status==='pendente';}).sort(function(a,b){
+    var sa=dspSimNome((a.contato&&a.contato.nome)||(a.fornecedor&&a.fornecedor.nome)||'',forn),sb=dspSimNome((b.contato&&b.contato.nome)||(b.fornecedor&&b.fornecedor.nome)||'',forn);return sb-sa;});
+  return h+'<div class="fin-card" style="margin-top:8px;padding:10px 12px"><b>Juntar com qual despesa?</b><div class="fin-mu" style="margin:2px 0 6px">Marque os outros pagamentos desta mesma NF. Vira 1 despesa só, com o valor somado e todas as imagens.</div>'+
+    (L.length?L.map(function(d){var nm=(d.contato&&d.contato.nome)||(d.fornecedor&&d.fornecedor.nome)||'—';
+      return '<label style="display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid #f0f0f3;cursor:pointer"><input type="checkbox" data-jt="'+dspEsc(d.id)+'"><span><b>'+dspEsc(nm)+'</b> · R$ '+dspMoney(d.valor)+' · '+dspBr(d.emissao)+(d.tipoDoc?' · '+dspEsc(dspTipoDocNome(d.tipoDoc)):'')+'</span></label>';}).join(''):'<div class="fin-mu">Não há outra despesa pendente para juntar.</div>')+
+    '<div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="fin-btn sm pri" id="fJuntarOk"'+(L.length?'':' disabled')+'>Juntar</button><button type="button" class="fin-btn sm" id="fJuntarX">Cancelar</button></div></div>';
+}
+async function dspJuntar(pid,outros){
+  var P=DSP.desp[pid];if(!P||!outros.length)return;
+  var grupo=[Object.assign({id:pid},P)].concat(outros.map(function(k){return Object.assign({id:k},DSP.desp[k]);}));
+  // a NF-e é o documento, não um pagamento: só os comprovantes (Pix, cartão…) viram pagamentos. Se todos forem NF-e, todos contam.
+  var pagadores=grupo.filter(function(d){return d.tipoDoc!=='nfe'||(d.pagamentos&&d.pagamentos.length);});if(!pagadores.length)pagadores=grupo;
+  var pgs=[];pagadores.forEach(function(d){(d.pagamentos&&d.pagamentos.length?d.pagamentos:[{id:d.id,valor:d.valor,data:d.emissao,formaId:d.formaId,contaId:d.contaId,tipoDoc:d.tipoDoc,numeroDocumento:d.numeroDocumento}]).forEach(function(p){pgs.push(p);});});
+  pgs.sort(function(a,b){return String(a.data||'').localeCompare(String(b.data||''));});
+  var fotos=[];for(var i=0;i<grupo.length;i++){var fo=await dspFb('fotos/'+grupo[i].id).catch(function(){return null;});(fo||[]).forEach(function(b){fotos.push(b);});}
+  // a NF-e (se alguma for) manda no fornecedor, número e data; as imagens da NF vão primeiro
+  var nf=grupo.filter(function(d){return d.tipoDoc==='nfe';})[0];
+  var tot=Math.round(pgs.reduce(function(s,p){return s+(Number(p.valor)||0);},0)*100)/100;
+  var up={valor:tot,pagamentos:pgs,juntou:outros,antesJuntar:P.antesJuntar||{valor:P.valor,emissao:P.emissao||null,vencimento:P.vencimento||null,tipoDoc:P.tipoDoc||null,numeroDocumento:P.numeroDocumento||null,fornecedor:P.fornecedor||null,nFotos:P.nFotos||0},
+    vencimento:pgs[0].data||P.vencimento||null,atualizadoEm:Date.now(),dupBling:null,
+    historico:[P.historico].concat(outros.map(function(k){return DSP.desp[k].historico;})).filter(function(x,i,a){return x&&a.indexOf(x)===i;}).join(' / ').slice(0,200)||P.historico||''};
+  if(nf&&pagadores.indexOf(nf)<0&&nf.valor>0&&Math.abs(nf.valor-tot)>0.01)up.obsJuntar='Atenção: a NF-e é de R$ '+dspMoney(nf.valor)+' e os pagamentos somam R$ '+dspMoney(tot)+'.';else up.obsJuntar=null;
+  if(nf){up.tipoDoc='nfe';up.numeroDocumento=nf.numeroDocumento||P.numeroDocumento||'';up.emissao=nf.emissao||P.emissao;if(nf.fornecedor&&nf.fornecedor.doc)up.fornecedor=nf.fornecedor;if(nf.contato)up.contato=nf.contato;}
+  if(nf&&nf.id!==pid){var fnf=await dspFb('fotos/'+nf.id).catch(function(){return null;})||[];fotos=fnf.concat(fotos.filter(function(b){return fnf.indexOf(b)<0;}));if(!P.antesJuntar)up.antesJuntar.ofsFotos=fnf.length;}
+  fotos=fotos.slice(0,8);
+  await dspFb('fotos/'+pid,{method:'PUT',body:fotos});up.nFotos=fotos.length;up.fotosEm=Date.now();
+  await dspFb('despesas/'+pid,{method:'PATCH',body:up});Object.assign(P,up);
+  for(var j=0;j<outros.length;j++){var u2={status:'juntado',juntadoA:pid,juntadoEm:Date.now()};await dspFb('despesas/'+outros[j],{method:'PATCH',body:u2});Object.assign(DSP.desp[outros[j]],u2);}
+}
+async function dspDesjuntar(pid){
+  var P=DSP.desp[pid];if(!P||!P.antesJuntar)return;var a=P.antesJuntar;
+  var up={valor:a.valor,emissao:a.emissao,vencimento:a.vencimento,tipoDoc:a.tipoDoc,numeroDocumento:a.numeroDocumento,fornecedor:a.fornecedor,pagamentos:null,juntou:null,antesJuntar:null,obsJuntar:null,atualizadoEm:Date.now(),fotosEm:Date.now()};
+  // imagens: só as do próprio pagamento (as dos outros continuam guardadas neles)
+  var fo=await dspFb('fotos/'+pid).catch(function(){return null;})||[];var o=a.ofsFotos||0,ft=fo.slice(o,o+(a.nFotos||1));if(!ft.length)ft=fo.slice(0,1);await dspFb('fotos/'+pid,{method:'PUT',body:ft});up.nFotos=ft.length;
+  await dspFb('despesas/'+pid,{method:'PATCH',body:up});Object.assign(P,up);['pagamentos','juntou','antesJuntar'].forEach(function(k){delete P[k];});
+  var outros=Object.keys(DSP.desp).filter(function(k){return DSP.desp[k].juntadoA===pid&&DSP.desp[k].status==='juntado';});
+  for(var i=0;i<outros.length;i++){var u2={status:'pendente',juntadoA:null,juntadoEm:null};await dspFb('despesas/'+outros[i],{method:'PATCH',body:u2});DSP.desp[outros[i]].status='pendente';delete DSP.desp[outros[i]].juntadoA;}
+}
+function dspBindJuntar(){
+  var b=dspEl('fJuntar');if(b)b.onclick=function(){DSP.juntarAberto=DSP.sel;dspDraw();};
+  var x=dspEl('fJuntarX');if(x)x.onclick=function(){DSP.juntarAberto=null;dspDraw();};
+  var ok=dspEl('fJuntarOk');if(ok)ok.onclick=async function(){var ids=[].map.call(DSP.root.querySelectorAll('[data-jt]:checked'),function(c){return c.getAttribute('data-jt');});
+    if(!ids.length){alert('Marque pelo menos uma despesa para juntar.');return;}
+    ok.disabled=true;ok.textContent='Juntando…';if(DSP.form&&DSP.form._editado)await dspSalvarForm(true);
+    try{await dspJuntar(DSP.sel,ids);DSP.msg='Despesas juntadas: agora é 1 despesa com R$ '+dspMoney(DSP.desp[DSP.sel].valor)+' e '+DSP.desp[DSP.sel].pagamentos.length+' pagamentos.';DSP.msgTipo='ok';}
+    catch(e){DSP.msg='Não consegui juntar: '+e.message;DSP.msgTipo='err';}
+    DSP.juntarAberto=null;DSP.form=null;dspDraw();};
+  var dj=dspEl('fDesjuntar');if(dj)dj.onclick=async function(){if(!confirm('Desfazer a junção? Cada pagamento volta a ser uma despesa separada.'))return;dj.disabled=true;
+    try{await dspDesjuntar(DSP.sel);DSP.msg='Junção desfeita.';DSP.msgTipo='ok';}catch(e){DSP.msg='Não consegui: '+e.message;DSP.msgTipo='err';}DSP.form=null;dspDraw();};
 }
 function dspContabHtml(f){
   if(!dspEmailPronto()||dspCfg().emailContab===false)return '';
@@ -5606,6 +5678,9 @@ function dspContabHtml(f){
     (dspPrecisaNfe(f)?'<div class="fin-mu" style="margin-top:4px">Sai quando você anexar a NF-e 55.</div>':'')+'</div>';
 }
 function dspBaixaHtml(f){
+  if(f.pagamentos&&f.pagamentos.length>1&&dspExtBaixaOk()){DSP.baixaSel=DSP.baixaSel||{};var on2=DSP.baixaSel[DSP.sel]!==undefined?DSP.baixaSel[DSP.sel]:true;
+    return '<div class="fin-card" style="margin:0;padding:10px 12px"><label style="display:flex;gap:8px;align-items:center;font-weight:700;cursor:pointer"><input type="checkbox" id="fBaixar"'+(on2?' checked':'')+'> 💲 Dar baixa dos '+f.pagamentos.length+' pagamentos (cada um na sua data)</label>'+
+      '<div class="fin-mu" style="margin-top:4px">'+f.pagamentos.map(function(p){return 'R$ '+dspMoney(p.valor)+' em '+dspBr(p.data);}).join(' · ')+(f.contaId?' · sai da conta: '+dspEsc(dspContaNome(f.contaId)):'')+'</div><div id="fBaixaW" style="display:none"></div></div>';}
   if(f.parcelas>1)return '<div class="fin-mu" style="margin:4px 0">Parcelado: a baixa de cada parcela é feita quando ela for paga.</div>';
   if(!dspExtBaixaOk())return '<div class="fin-msg warn" style="margin:0">Para dar baixa junto com o lançamento, atualize a extensão para a versão 2.1.2 (botão 🧩 Extensão).</div>';
   DSP.baixaSel=DSP.baixaSel||{};var on=DSP.baixaSel[DSP.sel]!==undefined?DSP.baixaSel[DSP.sel]:dspBaixaPadrao(f);
@@ -5913,6 +5988,7 @@ function dspHtmlFormCard(f,mob,ext){
    (f.obs?'<div class="fin-msg info">Observação de quem enviou: '+dspEsc(f.obs)+'</div>':'')+
    (f.obsNfe&&f.nfe55Em?'<div class="fin-msg warn">'+dspEsc(f.obsNfe)+'</div>':'')+
    '<div class="fin-sec"><p class="fin-st">Comprovante <span class="fin-mu">'+(f.nFotos?f.nFotos+' imagem(ns) · toque para ampliar':'')+'</span></p><div class="fin-fotos" id="dspFotos"></div>'+
+    dspJuntarHtml(f,lan)+
     ((f.tipoDoc&&['nfe','nfse'].indexOf(f.tipoDoc)<0&&!f.nfe55Em)?'<div class="fin-msg '+(f.semNfe55?'info':'warn')+'" style="display:block;margin-top:8px">'+(f.semNfe55?'Dispensada a NF-e modelo 55 para esta despesa.':'⚠️ Este documento é <b>'+dspEsc(dspTipoDocNome(f.tipoDoc))+'</b>, não NF-e modelo 55. Fica pendente até você anexar a NF-e'+(lan?' (botão 📎 Anexar NF-e 55 em Lançados)':': anexe aqui quando tiver, ou lance e anexe depois em Lançados')+'.'+(DSP.sel?'<div style="margin-top:6px"><button type="button" class="fin-btn sm pri" data-dnfe="'+dspEsc(DSP.sel)+'">📎 Incluir a NF-e 55'+(lan?'':' na conferência')+'</button></div>':''))+
       '<label style="display:flex;gap:8px;align-items:center;margin-top:6px;font-weight:600;cursor:pointer"><input type="checkbox" id="fSemNfe"'+(f.semNfe55?' checked':'')+'> Esta compra não tem NF-e 55 (não precisa)</label></div>':'')+'</div>'+
    '<div class="fin-sec"><p class="fin-st">Fornecedor '+(f.contato?'<span class="fin-chip ok">No Bling: '+dspEsc(f.contato.nome)+'</span>':'<span class="fin-chip">Se não existir no Bling, é cadastrado ao lançar</span>')+'</p>'+
@@ -5937,7 +6013,7 @@ function dspHtmlFormCard(f,mob,ext){
    '<button type="button" class="fin-btn" id="fSalvar">Salvar e terminar depois</button><button type="button" class="fin-btn pri" id="fRevisar">Revisar e lançar</button></div>'));
   if(DSP.revisao&&!mob){
     var catN=dspCatNome(f.categoria);
-    var rows=[['Valor','R$ '+dspMoney(f.valor)+(f.parcelas>1?' em '+f.parcelas+'x':'')],['Forma de pagamento',dspFormaNome(f.formaId)],['Conta financeira',dspContaNome(f.contaId)||'—'],['Categoria',catN||'Sem categoria'],
+    var rows=[['Valor','R$ '+dspMoney(f.valor)+(f.parcelas>1?' em '+f.parcelas+'x':'')+((f.pagamentos&&f.pagamentos.length>1)?' ('+f.pagamentos.length+' pagamentos: '+f.pagamentos.map(function(p){return 'R$ '+dspMoney(p.valor)+' em '+dspBr(p.data);}).join(', ')+')':'')],['Forma de pagamento',dspFormaNome(f.formaId)],['Conta financeira',dspContaNome(f.contaId)||'—'],['Categoria',catN||'Sem categoria'],
       ['Data da compra',dspBr(f.emissao)],['Vencimento',dspBr(f.vencimento)],['Competência',dspBr(f.competencia)],['Nº documento',f.numeroDocumento||'—'],['Histórico',f.historico]];
     h+='<div class="fin-rev" id="dspRev"><b style="font-size:16px">Confirme antes de lançar</b><div style="margin:8px 0"><div class="fin-mu" style="margin-bottom:4px">Fornecedor</div>'+dspRevFornHtml(f)+'</div><dl>'+rows.map(function(r){return '<dt>'+r[0]+'</dt><dd>'+dspEsc(r[1])+'</dd>';}).join('')+'</dl>'+
       (f.parcelas>1?'<p class="fin-mu" style="margin:0">Parcelado: o Bling divide o valor total nas parcelas a partir deste vencimento.</p>':'')+
@@ -5949,7 +6025,7 @@ function dspHtmlFormCard(f,mob,ext){
   return h;
 }
 function dspBindConferencia(){
-  dspBindAnexar();
+  dspBindAnexar();dspBindJuntar();
   DSP.root.querySelectorAll('[data-dup]').forEach(function(b){b.onclick=function(e){e.preventDefault();if(DSP.form&&DSP.form._editado)dspSalvarForm(true);if(DSP.mob)dspMobAbrir(b.dataset.dup);else dspAbrir(b.dataset.dup);};});
   dspBindLista();var cf=dspEl('dspConfNovo');if(cf)cf.onclick=dspConferirTudo;var ic=dspEl('dspIrCap');if(ic)ic.onclick=function(){DSP.tela='captura';dspDraw();};
   if(!DSP.sel||!dspEl('fNome'))return;var f=DSP.form;
@@ -6070,7 +6146,7 @@ function dspBindConfig(){
 // Aviso flutuante em outras telas: há despesas para conferir (só no computador, admin)
 function dspAvisoGlobal(){
   if(DSP.avisoVisto||STATE.roleLogado!=='admin'||dspMobile())return;DSP.avisoVisto=true;
-  dspFb('despesas').then(function(d){d=d||{};var n=Object.keys(d).filter(function(k){return d[k]&&d[k].status!=='ignorado'&&(d[k].status!=='lancado'||(d[k].pendencias&&d[k].pendencias.length));}).length;
+  dspFb('despesas').then(function(d){d=d||{};var n=Object.keys(d).filter(function(k){return d[k]&&d[k].status!=='ignorado'&&d[k].status!=='juntado'&&(d[k].status!=='lancado'||(d[k].pendencias&&d[k].pendencias.length));}).length;
     if(!n||STATE.modulo==='mod14'||dspEl('dspAviso'))return;
     var b=document.createElement('button');b.id='dspAviso';b.type='button';b.textContent='🧾 '+n+(n>1?' despesas com pendência':' despesa com pendência');
     b.onclick=function(){b.remove();STATE.modulo='mod14';DSP.tela='conferencia';render();};
