@@ -5551,10 +5551,18 @@ function dspAnexarDoc(id,modo,b){
   inp.onchange=async function(){if(!inp.files||!inp.files.length)return;var d=DSP.desp[id];if(!d)return;if(b){b.disabled=true;b.textContent=modo==='nfe'?'Anexando…':'Enviando…';}
     try{var fotos=[];for(var i=0;i<inp.files.length;i++){var fl=inp.files[i];if(fl.type==='application/pdf'||/\.pdf$/i.test(fl.name))(await dspPdf(fl)).forEach(function(x){fotos.push(x);});else fotos.push(await dspJpeg(fl));}
       fotos=fotos.slice(0,4);await dspFb('fotos/'+id,{method:'PUT',body:fotos});var up={nFotos:fotos.length};
-      if(modo==='nfe'){up.tipoDoc='nfe';up.nfe55Em=Date.now();up.emailEm=null;up.emailErro=null;up.pendencias=(d.pendencias||[]).filter(function(x){return x!==DSP_PEND_NFE;});}
+      if(modo==='nfe'){up.tipoDoc='nfe';up.nfe55Em=Date.now();up.emailEm=null;up.emailErro=null;up.pendencias=(d.pendencias||[]).filter(function(x){return x!==DSP_PEND_NFE;});
+        if(d.status!=='lancado'){ // ainda na conferência: lê a NF para pegar o número e o CNPJ (o resto que você já conferiu fica como está)
+          if(b)b.textContent='Lendo a NF-e…';
+          try{var r=await dspLerIA(fotos,'Esta é a NF-e modelo 55 (DANFE) da mesma compra que já estava lançada com cupom/comprovante.');
+            if(r.numero_documento)up.numeroDocumento=String(r.numero_documento).slice(0,50);
+            var dc=dspDig(r.fornecedor_documento);if((dc.length===14||dc.length===11)&&dspDocValido(dc)&&!d.contato)up.fornecedor={nome:r.fornecedor_nome||(d.fornecedor&&d.fornecedor.nome)||'',doc:dc};
+            if(r.valor_total>0&&d.valor>0&&Math.abs(r.valor_total-d.valor)>0.01)up.obsNfe='Valor na NF-e: R$ '+dspMoney(r.valor_total)+' (no cupom: R$ '+dspMoney(d.valor)+')';
+          }catch(e){up.obsNfe='Não consegui ler a NF-e ('+e.message+'). Confira o número do documento.';}}}
       await dspFb('despesas/'+id,{method:'PATCH',body:up});Object.assign(d,up);if(modo==='nfe'){delete d.emailEm;delete d.emailErro;}
       var msg=modo==='nfe'?'NF-e 55 anexada. Pendência resolvida.':'';
-      if(dspEmailPronto()&&(modo!=='nfe'||dspCfg().emailContab!==false)){await dspEnviarEmail(id,true);msg+=(msg?' ':'')+'📧 Enviado à contabilidade.';}
+      if(modo==='nfe'&&d.status!=='lancado'){DSP.form=null;msg='NF-e anexada na conferência'+(up.numeroDocumento?' (nº '+up.numeroDocumento+')':'')+'. Ela vai junto quando você lançar.'+(up.obsNfe?' ⚠️ '+up.obsNfe:'');}
+      else if(dspEmailPronto()&&(modo!=='nfe'||dspCfg().emailContab!==false)){await dspEnviarEmail(id,true);msg+=(msg?' ':'')+'📧 Enviado à contabilidade.';}
       DSP.msg=msg||'Imagem anexada.';DSP.msgTipo='ok';}catch(e){DSP.msg='Não consegui: '+e.message;DSP.msgTipo='err';}
     dspDraw();};
   inp.click();
@@ -5884,8 +5892,9 @@ function dspHtmlFormCard(f,mob,ext){
    (lendo?'<div class="fin-msg info">⏳ A IA está lendo este comprovante. Os campos se preenchem sozinhos em alguns segundos.</div>':'')+
    (f.leituraErro?'<div class="fin-msg warn">'+dspEsc(f.leituraErro)+'</div>':'')+
    (f.obs?'<div class="fin-msg info">Observação de quem enviou: '+dspEsc(f.obs)+'</div>':'')+
+   (f.obsNfe&&f.nfe55Em?'<div class="fin-msg warn">'+dspEsc(f.obsNfe)+'</div>':'')+
    '<div class="fin-sec"><p class="fin-st">Comprovante <span class="fin-mu">'+(f.nFotos?f.nFotos+' imagem(ns) · toque para ampliar':'')+'</span></p><div class="fin-fotos" id="dspFotos"></div>'+
-    ((f.tipoDoc&&['nfe','nfse'].indexOf(f.tipoDoc)<0&&!f.nfe55Em)?'<div class="fin-msg '+(f.semNfe55?'info':'warn')+'" style="display:block;margin-top:8px">'+(f.semNfe55?'Dispensada a NF-e modelo 55 para esta despesa.':'⚠️ Este documento é <b>'+dspEsc(dspTipoDocNome(f.tipoDoc))+'</b>, não NF-e modelo 55. Fica pendente até você anexar a NF-e'+(lan?' (botão 📎 Anexar NF-e 55 em Lançados)':' — pode lançar, e depois anexa em Lançados')+'.')+
+    ((f.tipoDoc&&['nfe','nfse'].indexOf(f.tipoDoc)<0&&!f.nfe55Em)?'<div class="fin-msg '+(f.semNfe55?'info':'warn')+'" style="display:block;margin-top:8px">'+(f.semNfe55?'Dispensada a NF-e modelo 55 para esta despesa.':'⚠️ Este documento é <b>'+dspEsc(dspTipoDocNome(f.tipoDoc))+'</b>, não NF-e modelo 55. Fica pendente até você anexar a NF-e'+(lan?' (botão 📎 Anexar NF-e 55 em Lançados)':': anexe aqui quando tiver, ou lance e anexe depois em Lançados')+'.'+(DSP.sel?'<div style="margin-top:6px"><button type="button" class="fin-btn sm pri" data-dnfe="'+dspEsc(DSP.sel)+'">📎 Incluir a NF-e 55'+(lan?'':' na conferência')+'</button></div>':''))+
       '<label style="display:flex;gap:8px;align-items:center;margin-top:6px;font-weight:600;cursor:pointer"><input type="checkbox" id="fSemNfe"'+(f.semNfe55?' checked':'')+'> Esta compra não tem NF-e 55 (não precisa)</label></div>':'')+'</div>'+
    '<div class="fin-sec"><p class="fin-st">Fornecedor '+(f.contato?'<span class="fin-chip ok">No Bling: '+dspEsc(f.contato.nome)+'</span>':'<span class="fin-chip">Se não existir no Bling, é cadastrado ao lançar</span>')+'</p>'+
     (DSP.revisao?'':dspHtmlCandidatos(DSP.sel))+'<div class="fin-g"><div class="fin-f fin-c4"><label for="fNome">Nome / razão social '+tag('fornecedor_nome')+'</label><input class="fin-in'+rd()+'" id="fNome" value="'+dspEsc(f.fornecedor.nome)+'"></div>'+
@@ -5921,6 +5930,7 @@ function dspHtmlFormCard(f,mob,ext){
   return h;
 }
 function dspBindConferencia(){
+  dspBindAnexar();
   DSP.root.querySelectorAll('[data-dup]').forEach(function(b){b.onclick=function(e){e.preventDefault();if(DSP.form&&DSP.form._editado)dspSalvarForm(true);if(DSP.mob)dspMobAbrir(b.dataset.dup);else dspAbrir(b.dataset.dup);};});
   dspBindLista();var cf=dspEl('dspConfNovo');if(cf)cf.onclick=dspConferirTudo;var ic=dspEl('dspIrCap');if(ic)ic.onclick=function(){DSP.tela='captura';dspDraw();};
   if(!DSP.sel||!dspEl('fNome'))return;var f=DSP.form;
