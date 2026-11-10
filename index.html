@@ -3985,7 +3985,7 @@ function renderModuloNav(){
 // Firebase: chat/{conv}/{push} = {de, para, t, txt, av}      conv = os dois usuários em ordem alfabética ("joao__raul")
 //           chatCaixa/{usuario}/{conv} = {com, ult, ultT, ultDe, n (não lidas), av (tem aviso não lido), lidoT}
 var CHT={root:null,eu:null,sel:null,com:null,caixa:{},users:null,msgs:[],lidoOutro:0,ultCarregado:0,carregando:false,
-  enviando:false,erro:'',avisados:{},poll:null,busca:''};
+  enviando:false,erro:'',avisados:{},poll:null,busca:'',pushInfo:{}};
 function chtK(u){return String(u||'').trim().toLowerCase().replace(/[.#$\[\]\/\s]+/g,'_')||'_';}
 function chtConv(a,b){var x=[chtK(a),chtK(b)].sort();return x[0]+'__'+x[1];}
 function chtHora(t){
@@ -4020,6 +4020,7 @@ function chtConvAberta(){return STATE.modulo==='mod25'&&CHT.sel&&!document.hidde
 
 // ---- Vigia: roda em qualquer tela, para todos os usuários ----
 function chtVigiar(){
+  if(location.hash==='#chat'){try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}setTimeout(function(){irParaModulo('mod25');},0);}
   if(CHT.poll)return;
   var checar=function(){
     if(!STATE.auth)return;
@@ -4117,11 +4118,33 @@ async function chtEnviar(){
     if(!r2.ok)throw new Error('mensagem salva, mas o aviso não foi (Firebase '+r2.status+')');
     var c=CHT.caixa[conv]=CHT.caixa[conv]||{};c.com=para;c.ult=res;c.ultT=t;c.ultDe=eu;
     CHT.msgs.push(m);CHT.ultCarregado=t;
+    chtPush(para,conv,res,av);
     if(ta){ta.value='';ta.style.height='';}if(cb)cb.checked=false;
     chtDrawConversa();chtDrawLista();
   }catch(e){alert('Não consegui enviar: '+(e.message||e));}
   CHT.enviando=false;if(btn){btn.disabled=false;btn.textContent='Enviar ➤';}
   if(ta)ta.focus();
+}
+
+// Notificação no Chrome do destinatário mesmo com o app fechado (mesmo servidor dos avisos de pagamento)
+function chtPush(para,conv,txt,av){
+  var eu=rppUsuario(),nome=eu;
+  try{fbGetUsers().then(function(u){Object.keys(u||{}).forEach(function(k){if(u[k]&&u[k].usuario===eu&&u[k].nome)nome=u[k].nome;});}).catch(function(){})
+  .then(function(){return BLG.cfgCarregada?null:blgCarregarCfg();})
+  .then(function(){
+    if(!blgUrl())return;
+    return blgApi('/push/chat',{method:'POST',body:{para:para,de:eu,nome:nome,conv:conv,txt:txt,av:av?1:0}}).then(function(r){
+      CHT.pushInfo[para]=r&&r.ok?(r.total?'ok':'sem'):'erro';
+      if(CHT.com===para)chtDrawPushInfo();
+    });
+  }).catch(function(){});}catch(e){}
+}
+function chtDrawPushInfo(){
+  var el=CHT.root&&CHT.root.querySelector('#chtPushInfo');if(!el)return;
+  var st=CHT.pushInfo[CHT.com];
+  el.style.display=st==='sem'||st==='erro'?'':'none';
+  el.innerHTML=st==='sem'?'⚠️ <b>'+rppEsc(chtNome(CHT.com))+'</b> ainda não ativou os avisos no Chrome dele: a mensagem só aparece quando ele abrir o app. Peça para ele entrar no app e clicar em <b>🔔 Ativar avisos</b>.'
+    :st==='erro'?'⚠️ Mensagem enviada, mas o aviso no Chrome dele falhou (servidor de avisos fora do ar ou desatualizado).':'';
 }
 
 // ---- Tela ----
@@ -4162,6 +4185,7 @@ function chtCss(){
   '.cht-comp .env{background:#5856d6;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:800;cursor:pointer;font-family:inherit;font-size:14px}'+
   '.cht-comp .env:disabled{opacity:.6;cursor:default}'+
   '.cht-comp label{width:100%;font-size:12.5px;color:#92400e;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer}'+
+  '.cht-pi{width:100%;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;border-radius:9px;padding:7px 10px;font-size:12.5px;line-height:1.4}'+
   '.cht-toast{bottom:auto;top:80px;border-top-color:#5856d6}.cht-toast.imp{border-top-color:#f59e0b;background:#fffbeb}'+
   '.cht-sino{position:relative}.cht-sino #chtN{position:absolute;top:-7px;right:-7px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;min-width:17px;height:17px;line-height:17px;border-radius:9px;text-align:center;padding:0 4px}'+
   '@media(max-width:720px){.cht-wrap{grid-template-columns:1fr;height:calc(100vh - 200px)}.cht-wrap.sel .cht-lado{display:none}.cht-wrap:not(.sel) .cht-conv{display:none}.cht-volta{display:block}.cht-m{max-width:88%}}';
@@ -4179,6 +4203,7 @@ function renderChat(){
       '<aside class="cht-lado"><input class="cht-busca" id="chtBusca" placeholder="🔎 Procurar '+(adm?'colaborador':'')+'..." value="'+rppEsc(CHT.busca)+'"><div class="cht-lista" id="chtLista"></div></aside>'+
       '<section class="cht-conv"><div class="cht-cab" id="chtCab"></div><div class="cht-msgs" id="chtMsgs"></div>'+
         '<div class="cht-comp" id="chtComp">'+
+          '<div id="chtPushInfo" class="cht-pi" style="display:none"></div>'+
           (adm?'<label><input type="checkbox" id="chtAv"> 🔔 Aviso importante (fica na tela do colaborador até ele abrir)</label>':'')+
           '<textarea id="chtTxt" rows="1" placeholder="Escreva a mensagem... (Enter envia, Shift+Enter pula linha)"></textarea>'+
           '<button class="env" id="chtEnviar">Enviar ➤</button>'+
@@ -4186,7 +4211,7 @@ function renderChat(){
     '</div>';
   var bn=root.querySelector('#chtNotif');
   if(bn)bn.onclick=function(){if(Notification.permission==='denied'){alert('O navegador está bloqueando os avisos deste site.\n\nClique no cadeado 🔒 ao lado do endereço › Notificações › Permitir. Depois clique em 🔄 Atualizar.');return;}
-    Notification.requestPermission().then(function(p){if(p==='granted'){bn.remove();try{new Notification('✅ Avisos ligados',{body:'Você vai ser avisado das mensagens do Chat.',icon:'logo.jpg'});}catch(e){}}});};
+    Notification.requestPermission().then(function(p){if(p==='granted'){bn.remove();if(typeof pushInscrever==='function')pushInscrever().catch(function(){});try{new Notification('✅ Avisos ligados',{body:'Você vai ser avisado das mensagens do Chat, mesmo com o app fechado.',icon:'logo.jpg'});}catch(e){}}});};
   root.querySelector('#chtBusca').oninput=function(){CHT.busca=this.value;chtDrawLista();};
   var ta=root.querySelector('#chtTxt');
   ta.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();chtEnviar();}};
@@ -4234,6 +4259,7 @@ function chtDrawCab(){
   var u=(CHT.users||[]).filter(function(x){return x.usuario===CHT.com;})[0];
   cab.innerHTML='<button class="cht-volta" title="Voltar">‹</button><div class="cht-av">'+rppEsc(String(chtNome(CHT.com)).charAt(0).toUpperCase())+'</div>'+
     '<div>'+rppEsc(chtNome(CHT.com))+'<small>'+(u?(u.role==='admin'?'Administrador':'Colaborador')+' · '+rppEsc(u.usuario):'usuário inativo ou removido')+'</small></div>';
+  chtDrawPushInfo();
   cab.querySelector('.cht-volta').onclick=function(){CHT.sel=null;CHT.com=null;chtDrawTudo();};
 }
 function chtDrawConversa(){
@@ -16860,7 +16886,7 @@ function pushSuportado(){return 'serviceWorker' in navigator&&'PushManager' in w
 async function pushInscrever(){
   if(!pushSuportado()||Notification.permission!=='granted')return false;
   await (BLG.cfgCarregada?Promise.resolve():blgCarregarCfg());if(!blgUrl())return false;
-  try{var c=await caches.open('push-cfg');await c.put('./push-cfg',new Response(blgUrl()));}catch(e){}
+  try{var c=await caches.open('push-cfg');await c.put('./push-cfg',new Response(blgUrl()));await c.put('./push-usuario',new Response(STATE.usuarioLogado||''));}catch(e){}
   var reg=await navigator.serviceWorker.register('sw.js',{scope:'./'});await navigator.serviceWorker.ready;
   var sub=await reg.pushManager.getSubscription();
   if(!sub){var k=await blgApi('/push/chave');if(!k||!k.ok)return false;sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:pushB64(k.chave)});}
@@ -16875,14 +16901,14 @@ function pushIniciar(){
   if(Date.now()-adiado<3*86400e3||document.getElementById('pushPede'))return;
   tefCss();
   var el=document.createElement('div');el.id='pushPede';el.className='tef-toast';el.style.borderTopColor='#0a7d6b';
-  el.innerHTML='<h4><span>🔔 Avisos de pagamento</span><button title="Fechar">✕</button></h4><p>Quer receber aviso no computador quando um pagamento for confirmado, <b>mesmo com o app fechado</b>?</p>'+
+  el.innerHTML='<h4><span>🔔 Avisos no computador</span><button title="Fechar">✕</button></h4><p>Quer receber aviso no computador das <b>mensagens do Chat</b>'+(STATE.roleLogado==='admin'||iniPode('mod17')||iniPode('mod22')?' e dos pagamentos confirmados':'')+', <b>mesmo com o app fechado</b>?</p>'+
     '<div class="bt"><button class="pri" style="background:#0a7d6b;border-color:#0a7d6b" data-t="sim">Ativar avisos</button><button data-t="nao">Agora não</button></div>';
   el.onclick=function(e){var b=e.target.closest('button');if(!b)return;
-    if(b.dataset.t==='sim'){Notification.requestPermission().then(function(p){el.remove();if(p==='granted')pushInscrever().then(function(ok){if(ok)try{new Notification('🔔 Avisos ativados',{body:'Você vai receber os pagamentos confirmados aqui.'});}catch(x){}});});return;}
+    if(b.dataset.t==='sim'){Notification.requestPermission().then(function(p){el.remove();if(p==='granted')pushInscrever().then(function(ok){if(ok)try{new Notification('🔔 Avisos ativados',{body:'Você vai receber os avisos do app aqui, mesmo com ele fechado.'});}catch(x){}});});return;}
     try{localStorage.setItem('pushAdiado',String(Date.now()));}catch(x){}el.remove();};
   document.body.appendChild(el);
 }
-try{if(navigator.serviceWorker)navigator.serviceWorker.addEventListener('message',function(e){if(e.data&&e.data.tipo==='abrirConciliacao'){BLG.view='';irParaModulo(iniPode('mod17')?'mod17':iniPode('mod22')?'mod22':'inicio');}});}catch(e){}
+try{if(navigator.serviceWorker)navigator.serviceWorker.addEventListener('message',function(e){if(e.data&&e.data.tipo==='abrirChat'){irParaModulo('mod25');return;}if(e.data&&e.data.tipo==='abrirConciliacao'){BLG.view='';irParaModulo(iniPode('mod17')?'mod17':iniPode('mod22')?'mod22':'inicio');}});}catch(e){}
 
 function pagToast(novos){
   tefCss();

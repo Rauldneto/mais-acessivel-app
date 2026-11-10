@@ -30,6 +30,7 @@
 //   GET  /boletos, POST /boletos/verificar|vincular|ignorar|simular|simular/passo → boletos Sicoob liquidados (ver o fim do arquivo)
 //   Contas a Pagar: GET /pagar/conciliar?de=&ate=, GET /pagar/conta?id=, POST /pagar/baixar|lancar|marcar → extrato Sicoob × Contas a Pagar (fim do arquivo)
 //     Precisa: escopo cco_extrato liberado no app do portal Sicoob (ou num 2º app: SICOOB_CLIENT_ID_CCO; o nº da conta é descoberto num boleto Sicoob; SICOOB_CONTA opcional) e permissão Contas a pagar (ler/gravar) no app do Bling.
+//   Chat: POST /push/chat {para,de,nome,conv,txt,av} → notificação no Chrome só dos navegadores do destinatário (GET /push/ultimos?u= devolve as dele)
 //   ECONF: GET /econf/pendentes|painel|diag|xml?k=, POST /econf/enviar|auto|certificado|registrar → evento de conciliação à Sefaz
 // Gatilho (Settings → Trigger Events → Cron): */5 * * * *  (PIX a cada 5 min; boletos a cada 30 min)
 // Modo: KV "modo" = "simulacao" (padrão: só anota o que faria) ou "real" (executa no Bling).
@@ -207,7 +208,26 @@ export default {
       }
       if (url.pathname === '/push/ultimos') {
         const fila = (await env.BLING_KV.get('push:fila', 'json')) || [];
-        return resp({ ok: true, avisos: fila.filter(a => Date.now() - a.quando < 30 * 60e3).slice(0, 5) });
+        const u = String(url.searchParams.get('u') || '');
+        const chat = u ? ((await env.BLING_KV.get('push:chat', 'json')) || []).filter(a => a.para === u && Date.now() - a.quando < 2 * 86400e3).slice(0, 5) : [];
+        return resp({ ok: true, avisos: fila.filter(a => Date.now() - a.quando < 30 * 60e3).slice(0, 5), chat });
+      }
+      // Chat do app (aba T.I. › Chat): avisa no Chrome SÓ os navegadores do destinatário, mesmo com o app fechado
+      if (url.pathname === '/push/chat' && req.method === 'POST') {
+        const b = (await req.json().catch(() => ({}))) || {};
+        const para = String(b.para || '').slice(0, 60);
+        if (!para) return resp({ ok: false, erro: 'Sem destinatário' }, 400);
+        const fila = (await env.BLING_KV.get('push:chat', 'json')) || [];
+        fila.unshift({ id: 'c' + Date.now() + Math.floor(Math.random() * 1000), quando: Date.now(), para, de: String(b.de || '').slice(0, 60),
+          nome: String(b.nome || b.de || '').slice(0, 60), conv: String(b.conv || '').slice(0, 130), txt: String(b.txt || '').slice(0, 200), av: b.av ? 1 : 0 });
+        await env.BLING_KV.put('push:chat', JSON.stringify(fila.filter(a => Date.now() - a.quando < 2 * 86400e3).slice(0, 60)));
+        const todos = (await env.BLING_KV.get('push:subs', 'json')) || [];
+        const dele = todos.filter(x => x.usuario === para);
+        if (!dele.length) return resp({ ok: true, enviados: 0, total: 0 });
+        const r = await pushTocar(env, dele);
+        const vivos = r.vivos.map(x => x.endpoint);
+        await env.BLING_KV.put('push:subs', JSON.stringify(todos.filter(x => x.usuario !== para || vivos.indexOf(x.endpoint) >= 0).map(x => r.vivos.find(v => v.endpoint === x.endpoint) || x)));
+        return resp({ ok: true, enviados: r.ok, total: dele.length });
       }
       if (url.pathname === '/push/inscritos') {
         const subs = (await env.BLING_KV.get('push:subs', 'json')) || [];
