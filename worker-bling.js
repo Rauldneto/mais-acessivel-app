@@ -1942,12 +1942,13 @@ async function sicoobExtrato(env, mes, ano, d1, d2) {
   let r = await env.SICOOB_MTLS.fetch(base + '/extrato/' + mes + '/' + ano + q, {
     headers: { Authorization: 'Bearer ' + tok, client_id: clientSicoob(env, escopo), Accept: 'application/json' },
   });
-  if (r.status === 404 && base !== SICOOB_CCO_V3) r = await env.SICOOB_MTLS.fetch(SICOOB_CCO_V3 + '/extrato/' + mes + '/' + ano + q, {
+  if ((r.status === 404 || r.status === 403) && base !== SICOOB_CCO_V3) r = await env.SICOOB_MTLS.fetch(SICOOB_CCO_V3 + '/extrato/' + mes + '/' + ano + q, {
     headers: { Authorization: 'Bearer ' + tok, client_id: clientSicoob(env, escopo), Accept: 'application/json' },
   });
   if (r.status === 204) return [];
   const txt = await r.text(); let j = {}; try { j = JSON.parse(txt); } catch (e) { j = { _texto: txt.slice(0, 300) }; }
   if (!r.ok && !conta) throw new Error('Não achei o número da conta Sicoob sozinho (nenhum boleto Sicoob lido ainda) e o Sicoob exigiu o número (' + r.status + '). Crie a variável SICOOB_CONTA no Worker. Detalhe: ' + ((j.mensagens && j.mensagens.map(x => x.mensagem).join('; ')) || j.message || j._texto || '').slice(0, 160));
+  if (r.status === 403 && /plan/i.test(txt)) throw new Error('O Sicoob ainda não ligou o app "JDFER Extrato" à API Conta Corrente (403 "Not registered to plan"). Isso costuma liberar algumas horas depois da aprovação; se passar de 1 dia, falar com a cooperativa/Alice.');
   if (!r.ok) throw new Error('Extrato Sicoob ' + r.status + ': ' + ((j.mensagens && j.mensagens.map(x => x.mensagem).join('; ')) || j.message || j.mensagem || j._texto || JSON.stringify(j).slice(0, 200)));
   const res = j.resultado || j;
   return res.transacoes || acharCampo(res, ['transacoes', 'lancamentos']) || [];
