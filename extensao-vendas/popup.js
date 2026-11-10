@@ -33,6 +33,17 @@ function montarBotaoAbrirAppFixo(){
   return btn;
 }
 
+// Chat: abre a janela de conversa (a mesma do app). Mostra quantas mensagens não lidas há.
+function montarBotaoChat(){
+  var btn=document.createElement('button');
+  btn.className='btn';btn.id='btnChat';
+  btn.style.cssText='background:#5856d6;color:#fff';
+  btn.textContent='💬 Chat';
+  btn.onclick=function(){chrome.runtime.sendMessage({action:'chatAbrir'},function(){void chrome.runtime.lastError;window.close();});};
+  try{chrome.action.getBadgeText({},function(t){if(t)btn.textContent='💬 Chat ('+t+' nova'+(t==='1'?'':'s')+')';});}catch(e){}
+  return btn;
+}
+
 function importar(dados){
   dynamicWrap.innerHTML='<p class="status">⏳ Buscando contato...</p>';
   var etCep=(dados.etiqueta_cep||'').replace(/\D/g,'');
@@ -233,6 +244,7 @@ function mostrarProposta(tabId,dados){
 body.innerHTML='';
 body.appendChild(dynamicWrap);
 body.appendChild(montarBotaoAbrirAppFixo());
+body.appendChild(montarBotaoChat());
 body.appendChild(montarBlocoWhatsApp());
 
 var AVISO_SEM_PROPOSTA='<p class="status">Abra uma <b>proposta comercial</b> no Bling para usar Cotação de Frete, Cotação avulsa e Check Proposta.</p>';

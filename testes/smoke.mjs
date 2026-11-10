@@ -125,6 +125,8 @@ try {
   await conferirAbas('colaborador', col, ['inicio', 'frete', 'mod10', 'mod8', 'mod18', 'mod25']);
   const temForm = await col.page.evaluate(() => { rppAbrir(); return !!document.querySelector('#rppTela') && !!document.querySelector('#rppAconteceu'); });
   if (!temForm) falhas.push('[colaborador] formulário Reportar Problema não abriu');
+  const temTodos = await col.page.evaluate(async () => { irParaModulo('mod25'); await new Promise(r => setTimeout(r, 600)); return !!document.querySelector('.cht-it[data-conv="todos"]') && !!document.querySelector('.cht-it[data-com="raul"]'); });
+  if (!temTodos) falhas.push('[colaborador] chat sem "Todos" ou sem os colegas na lista');
   const vePrivado = await col.page.evaluate(() => !!document.querySelector('[data-aba=chamados]'));
   if (vePrivado) falhas.push('[colaborador] está vendo o painel de Chamados do admin');
 } catch (e) {

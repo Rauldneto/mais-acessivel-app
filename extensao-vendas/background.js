@@ -933,3 +933,94 @@ chrome.runtime.onMessage.addListener(function(msg, sender, responder) {
   })();
   return true;
 });
+
+
+// ====================== CHAT (mesmos dados do Chat do app: aba T.I. › Chat) ======================
+// A cada 30 s confere a caixa de mensagens de quem está logado no app neste computador:
+//  • número de mensagens não lidas no ícone da extensão;
+//  • mensagem nova → notificação do Windows (clicando, abre a janela do Chat);
+//  • AVISO NA TELA (só o administrador manda) → notificação que não some + janela do Chat aberta NA FRENTE,
+//    com o aviso em destaque e o botão "Ciente". Se a pessoa fechar sem dar ciente, a janela volta a cada 5 min.
+// Também marca chatExt/{login} = agora: o app sabe que esta pessoa tem a extensão (e não manda aviso repetido pelo Chrome).
+function chatK(u) { return String(u || '').trim().toLowerCase().replace(/[.#$\[\]\/\s]+/g, '_') || '_'; }
+async function chatNomes() {
+  var c = await chrome.storage.local.get(['chatNomes', 'chatNomesTs']);
+  if (c.chatNomes && Date.now() - (c.chatNomesTs || 0) < 3600e3) return c.chatNomes;
+  var n = {};
+  try { var r = await fetch(FB + '/usuarios.json'); var u = r.ok ? (await r.json()) || {} : {}; Object.keys(u).forEach(function(id) { if (u[id] && u[id].usuario) n[u[id].usuario] = u[id].nome || u[id].usuario; }); } catch (e) {}
+  await chrome.storage.local.set({ chatNomes: n, chatNomesTs: Date.now() });
+  return n;
+}
+async function chatJanela(conv, com, aviso) {
+  var url = chrome.runtime.getURL('chat.html') + (conv ? '?conv=' + encodeURIComponent(conv) + '&com=' + encodeURIComponent(com || '') : '');
+  var s = await chrome.storage.local.get(['chatWin']);
+  if (s.chatWin) {
+    try {
+      var w = await chrome.windows.get(s.chatWin);
+      if (w) {
+        await chrome.windows.update(w.id, { focused: true, drawAttention: !!aviso, state: 'normal' });
+        if (conv) chrome.runtime.sendMessage({ action: 'chatAbrirConv', conv: conv, com: com }, function() { void chrome.runtime.lastError; });
+        return;
+      }
+    } catch (e) {}
+  }
+  var larg = 430, alt = 640, left, top;
+  try { var ult = await chrome.windows.getLastFocused(); if (ult && ult.width) { left = Math.max(0, (ult.left || 0) + ult.width - larg - 20); top = Math.max(0, (ult.top || 0) + 60); } } catch (e) {}
+  var nova = await chrome.windows.create({ url: url, type: 'popup', width: larg, height: alt, left: left, top: top, focused: true });
+  await chrome.storage.local.set({ chatWin: nova.id });
+}
+chrome.windows.onRemoved.addListener(function(id) { chrome.storage.local.get(['chatWin'], function(s) { if (s.chatWin === id) chrome.storage.local.remove('chatWin'); }); });
+
+async function chatVerificar() {
+  var st = await chrome.storage.local.get(['appUsuario', 'fbAuth', 'chatVistos', 'chatAvisoMostrado']);
+  if (!st.appUsuario || !st.fbAuth) { try { chrome.action.setBadgeText({ text: '' }); } catch (e) {} return; }
+  var eu = st.appUsuario, k = chatK(eu);
+  fetch(FB + '/chatExt/' + encodeURIComponent(k) + '.json', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Date.now()) }).catch(function() {});
+  var r = await fetch(FB + '/chatCaixa/' + encodeURIComponent(k) + '.json');
+  if (!r.ok) return;
+  var cx = (await r.json()) || {};
+  var vistos = st.chatVistos || {}, mostrado = st.chatAvisoMostrado || {}, total = 0, novos = [], avisos = [], agora = Date.now();
+  Object.keys(cx).forEach(function(conv) {
+    var c = cx[conv]; if (!c) return;
+    total += Number(c.n) || 0;
+    if (c.ultDe === eu) return;
+    if (c.av) { if (vistos[conv] !== c.ultT || agora - (mostrado[conv] || 0) > 5 * 60000) avisos.push(Object.assign({ conv: conv }, c)); }
+    else if (c.n > 0 && vistos[conv] !== c.ultT) novos.push(Object.assign({ conv: conv }, c));
+    if (c.n > 0) vistos[conv] = c.ultT;
+  });
+  try { chrome.action.setBadgeText({ text: total ? (total > 99 ? '99+' : String(total)) : '' }); chrome.action.setBadgeBackgroundColor({ color: avisos.length ? '#f59e0b' : '#ef4444' }); } catch (e) {}
+  avisos.forEach(function(a) { mostrado[a.conv] = agora; });
+  await chrome.storage.local.set({ chatVistos: vistos, chatAvisoMostrado: mostrado });
+  if (!novos.length && !avisos.length) return;
+  var nomes = await chatNomes();
+  var nm = function(u) { return u === 'todos' ? 'Todos' : (nomes[u] || u || '?'); };
+  novos.slice(0, 3).forEach(function(c) {
+    chrome.notifications.create('chat|' + c.conv + '|' + (c.com || '') + '|' + c.ultT, {
+      type: 'basic', iconUrl: 'icons/icon128.png', priority: 2,
+      title: '💬 ' + (c.conv === 'todos' ? '📢 Todos · ' + nm(c.ultDe) : nm(c.ultDe)),
+      message: String(c.ult || 'Nova mensagem').slice(0, 180)
+    });
+  });
+  if (avisos.length) {
+    var a = avisos[0];
+    chrome.notifications.create('chat|' + a.conv + '|' + (a.com || '') + '|av' + a.ultT, {
+      type: 'basic', iconUrl: 'icons/icon128.png', priority: 2, requireInteraction: true,
+      title: '🔔 AVISO de ' + nm(a.ultDe), message: String(a.ult || '').slice(0, 180)
+    });
+    chatJanela(a.conv, a.com, true).catch(function() {});
+  }
+}
+alarme('chat', 0.5);
+chrome.alarms.onAlarm.addListener(function(a) { if (a.name === 'chat') chatVerificar().catch(function() {}); });
+chatVerificar().catch(function() {});
+if (chrome.notifications) chrome.notifications.onClicked.addListener(function(id) {
+  if (id.indexOf('chat|') !== 0) return;
+  var p = id.split('|');
+  chatJanela(p[1], p[2], false).catch(function() {});
+  chrome.notifications.clear(id);
+});
+chrome.runtime.onMessage.addListener(function(msg, sender, responder) {
+  if (msg && msg.action === 'chatAbrir') { chatJanela(msg.conv || '', msg.com || '', false).then(function() { responder({ ok: true }); }).catch(function(e) { responder({ ok: false, erro: String(e) }); }); return true; }
+  if (msg && msg.action === 'chatAtualizar') { chatVerificar().catch(function() {}); return false; }
+  return false;
+});

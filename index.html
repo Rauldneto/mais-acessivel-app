@@ -3987,13 +3987,14 @@ function renderModuloNav(){
 var CHT={root:null,eu:null,sel:null,com:null,caixa:{},users:null,msgs:[],lidoOutro:0,ultCarregado:0,carregando:false,
   enviando:false,erro:'',avisados:{},poll:null,busca:'',pushInfo:{}};
 function chtK(u){return String(u||'').trim().toLowerCase().replace(/[.#$\[\]\/\s]+/g,'_')||'_';}
-function chtConv(a,b){var x=[chtK(a),chtK(b)].sort();return x[0]+'__'+x[1];}
+function chtConv(a,b){if(b==='todos')return 'todos';var x=[chtK(a),chtK(b)].sort();return x[0]+'__'+x[1];}
 function chtHora(t){
   if(!t)return '';var d=new Date(t),h=new Date();
   var hh=d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   return d.toDateString()===h.toDateString()?hh:d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' '+hh;
 }
 function chtNome(u){
+  if(u==='todos')return 'Todos';
   var l=CHT.users||[];for(var i=0;i<l.length;i++)if(l[i].usuario===u)return l[i].nome||u;
   return u||'?';
 }
@@ -4001,7 +4002,6 @@ async function chtCarregarUsers(forcar){
   if(CHT.users&&!forcar)return CHT.users;
   var u=await fbGetUsers()||{};var eu=rppUsuario();
   var l=Object.keys(u).map(function(k){return u[k];}).filter(function(x){return x&&x.ativo&&x.usuario&&x.usuario!==eu;});
-  if(!rppAdmin())l=l.filter(function(x){return x.role==='admin';});
   l.sort(function(a,b){return String(a.nome||a.usuario).localeCompare(String(b.nome||b.usuario),'pt-BR');});
   CHT.users=l;return l;
 }
@@ -4053,14 +4053,14 @@ function chtAviso(novas){
   var el=document.getElementById('chtToast');if(el)el.remove();
   el=document.createElement('div');el.id='chtToast';el.className='rpp-toast cht-toast'+(imp?' imp':'');
   el.innerHTML='<div class="rpp-toast-h">'+(imp?'🔔 Aviso importante':'💬 Nova mensagem')+(novas.length>1?' ('+novas.length+' conversas)':'')+'<button aria-label="Fechar">✕</button></div>'+
-    '<div class="rpp-toast-b"><b>'+rppEsc(chtNome(c.com))+'</b><br>'+rppEsc(String(c.ult||'').slice(0,160))+'</div>'+
+    '<div class="rpp-toast-b"><b>'+(c.conv==='todos'?'📢 Todos · '+rppEsc(chtNome(c.ultDe)):rppEsc(chtNome(c.com)))+'</b><br>'+rppEsc(String(c.ult||'').slice(0,160))+'</div>'+
     '<button class="rpp-toast-v">Abrir conversa</button>';
   var abrir=function(){el.remove();CHT.sel=c.conv;CHT.com=c.com;irParaModulo('mod25');};
   el.querySelector('.rpp-toast-h button').onclick=function(){el.remove();};
   el.querySelector('.rpp-toast-v').onclick=abrir;
   document.body.appendChild(el);
   chtBip();
-  try{if(window.Notification&&Notification.permission==='granted'){
+  try{if(window.Notification&&Notification.permission==='granted'&&!document.documentElement.hasAttribute('data-ma-ext')){
     var n=new Notification((imp?'🔔 Aviso de ':'💬 ')+chtNome(c.com),{body:String(c.ult||'').slice(0,120),tag:'cht-'+c.conv,requireInteraction:!!imp,icon:'logo.jpg'});
     n.onclick=function(){try{window.focus();}catch(e){}n.close();abrir();};
   }}catch(e){}
@@ -4077,7 +4077,7 @@ async function chtAbrirConversa(conv,com,silencioso){
     var j=await r.json()||{};
     var l=Object.keys(j).sort().map(function(k){return j[k];}).filter(Boolean);
     var lido=0;
-    try{var r2=await fetch(FIREBASE_DB+'/chatCaixa/'+encodeURIComponent(chtK(com))+'/'+encodeURIComponent(conv)+'/lidoT.json');if(r2.ok)lido=Number(await r2.json())||0;}catch(e){}
+    if(conv!=='todos')try{var r2=await fetch(FIREBASE_DB+'/chatCaixa/'+encodeURIComponent(chtK(com))+'/'+encodeURIComponent(conv)+'/lidoT.json');if(r2.ok)lido=Number(await r2.json())||0;}catch(e){}
     if(CHT.sel!==conv)return;
     var ult=l.length?l[l.length-1].t:0;
     var nada=!mudou&&ult===CHT.ultCarregado&&lido===CHT.lidoOutro&&!CHT.carregando;
@@ -4104,6 +4104,7 @@ async function chtEnviar(){
   var raiz=CHT.root;if(!raiz||CHT.enviando||!CHT.com)return;
   var ta=raiz.querySelector('#chtTxt');var txt=(ta&&ta.value||'').trim();if(!txt)return;
   var cb=raiz.querySelector('#chtAv');var av=!!(cb&&cb.checked);
+  if(av&&CHT.com==='todos'&&!confirm('Mandar este AVISO NA TELA para TODOS os colaboradores?'))return;
   var btn=raiz.querySelector('#chtEnviar');
   CHT.enviando=true;if(btn){btn.disabled=true;btn.textContent='Enviando...';}
   var eu=rppUsuario(),para=CHT.com,conv=chtConv(eu,para),t=Date.now();
@@ -4111,14 +4112,16 @@ async function chtEnviar(){
     var m={de:eu,para:para,t:t,txt:txt.slice(0,4000)};if(av)m.av=1;
     var r=await fetch(FIREBASE_DB+'/chat/'+encodeURIComponent(conv)+'.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(m)});
     if(!r.ok)throw new Error('Firebase respondeu '+r.status);
-    var res=txt.replace(/\s+/g,' ').slice(0,140),p={},kd=chtK(para)+'/'+conv,ke=chtK(eu)+'/'+conv;
-    p[kd+'/com']=eu;p[kd+'/ult']=res;p[kd+'/ultT']=t;p[kd+'/ultDe']=eu;p[kd+'/n']={'.sv':{'increment':1}};if(av)p[kd+'/av']=1;
+    var res=txt.replace(/\s+/g,' ').slice(0,140),p={},ke=chtK(eu)+'/'+conv;
+    var destinos=para==='todos'?(await chtCarregarUsers(true)).map(function(u){return u.usuario;}):[para];
+    destinos.forEach(function(d){var kd=chtK(d)+'/'+conv;
+      p[kd+'/com']=para==='todos'?'todos':eu;p[kd+'/ult']=res;p[kd+'/ultT']=t;p[kd+'/ultDe']=eu;p[kd+'/n']={'.sv':{'increment':1}};if(av)p[kd+'/av']=1;});
     p[ke+'/com']=para;p[ke+'/ult']=res;p[ke+'/ultT']=t;p[ke+'/ultDe']=eu;
     var r2=await fetch(FIREBASE_DB+'/chatCaixa.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
     if(!r2.ok)throw new Error('mensagem salva, mas o aviso não foi (Firebase '+r2.status+')');
     var c=CHT.caixa[conv]=CHT.caixa[conv]||{};c.com=para;c.ult=res;c.ultT=t;c.ultDe=eu;
     CHT.msgs.push(m);CHT.ultCarregado=t;
-    chtPush(para,conv,res,av);
+    destinos.forEach(function(d){chtPush(d,conv,res,av);});
     if(ta){ta.value='';ta.style.height='';}if(cb)cb.checked=false;
     chtDrawConversa();chtDrawLista();
   }catch(e){alert('Não consegui enviar: '+(e.message||e));}
@@ -4129,6 +4132,8 @@ async function chtEnviar(){
 // Notificação no Chrome do destinatário mesmo com o app fechado (mesmo servidor dos avisos de pagamento)
 function chtPush(para,conv,txt,av){
   var eu=rppUsuario(),nome=eu;
+  fetch(FIREBASE_DB+'/chatExt/'+encodeURIComponent(chtK(para))+'.json').then(function(r){return r.ok?r.json():0;}).catch(function(){return 0;}).then(function(ext){
+  if(Number(ext)&&Date.now()-Number(ext)<3*60000){CHT.pushInfo[para]='ext';if(CHT.com===para)chtDrawPushInfo();return;}
   try{fbGetUsers().then(function(u){Object.keys(u||{}).forEach(function(k){if(u[k]&&u[k].usuario===eu&&u[k].nome)nome=u[k].nome;});}).catch(function(){})
   .then(function(){return BLG.cfgCarregada?null:blgCarregarCfg();})
   .then(function(){
@@ -4138,12 +4143,13 @@ function chtPush(para,conv,txt,av){
       if(CHT.com===para)chtDrawPushInfo();
     });
   }).catch(function(){});}catch(e){}
+  });
 }
 function chtDrawPushInfo(){
   var el=CHT.root&&CHT.root.querySelector('#chtPushInfo');if(!el)return;
-  var st=CHT.pushInfo[CHT.com];
+  var st=CHT.com==='todos'?'':CHT.pushInfo[CHT.com];
   el.style.display=st==='sem'||st==='erro'?'':'none';
-  el.innerHTML=st==='sem'?'⚠️ <b>'+rppEsc(chtNome(CHT.com))+'</b> ainda não ativou os avisos no Chrome dele: a mensagem só aparece quando ele abrir o app. Peça para ele entrar no app e clicar em <b>🔔 Ativar avisos</b>.'
+  el.innerHTML=st==='sem'?'⚠️ <b>'+rppEsc(chtNome(CHT.com))+'</b> não está com a extensão nem com os avisos do Chrome ligados: a mensagem só aparece quando ele abrir o app. Peça para ele atualizar a extensão Mais Acessível ou clicar em <b>🔔 Ativar avisos</b> no app.'
     :st==='erro'?'⚠️ Mensagem enviada, mas o aviso no Chrome dele falhou (servidor de avisos fora do ar ou desatualizado).':'';
 }
 
@@ -4178,6 +4184,7 @@ function chtCss(){
   '.cht-m.ele{align-self:flex-start;background:#fff;border-bottom-left-radius:4px}'+
   '.cht-m.eu{align-self:flex-end;background:#5856d6;color:#fff;border-bottom-right-radius:4px}'+
   '.cht-m.av{border:2px solid #f59e0b}.cht-m.av.eu{background:#b45309}'+
+  '.cht-av.todos{background:#f59e0b;font-size:18px}.cht-m .qm{display:block;font-size:11.5px;font-weight:700;color:#5856d6;margin-bottom:1px}'+
   '.cht-m .tg{display:block;font-size:11px;font-weight:800;margin-bottom:2px}'+
   '.cht-m .hr{display:block;font-size:10.5px;opacity:.65;text-align:right;margin-top:3px}'+
   '.cht-comp{border-top:1px solid #e5e7eb;padding:10px;display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;background:#fff}'+
@@ -4197,14 +4204,14 @@ function renderChat(){
   var adm=rppAdmin();
   var podeNotif=window.Notification&&Notification.permission!=='granted';
   root.innerHTML=
-    '<div class="cht-top"><div><h2>💬 Chat</h2><p>'+(adm?'Mande mensagem ou aviso para um colaborador. Ele é avisado em qualquer tela do app.':'Mensagens do administrador. Você também pode responder por aqui.')+'</p></div>'+
+    '<div class="cht-top"><div><h2>💬 Chat</h2><p>'+(adm?'Converse com qualquer pessoa ou com 📢 Todos. O <b>Aviso na tela</b> aparece na frente de tudo para ele (precisa da extensão).':'Converse com qualquer pessoa da equipe ou com 📢 Todos. Também abre pelo botão 💬 Chat da extensão.')+'</p></div>'+
     (podeNotif?'<button class="cht-notif" id="chtNotif">'+(Notification.permission==='denied'?'🔕 Avisos do computador bloqueados (libere no cadeado 🔒 ao lado do endereço)':'🔔 Ativar avisos no computador')+'</button>':'')+'</div>'+
     '<div class="cht-wrap'+(CHT.sel?' sel':'')+'" id="chtWrap">'+
-      '<aside class="cht-lado"><input class="cht-busca" id="chtBusca" placeholder="🔎 Procurar '+(adm?'colaborador':'')+'..." value="'+rppEsc(CHT.busca)+'"><div class="cht-lista" id="chtLista"></div></aside>'+
+      '<aside class="cht-lado"><input class="cht-busca" id="chtBusca" placeholder="🔎 Procurar pessoa..." value="'+rppEsc(CHT.busca)+'"><div class="cht-lista" id="chtLista"></div></aside>'+
       '<section class="cht-conv"><div class="cht-cab" id="chtCab"></div><div class="cht-msgs" id="chtMsgs"></div>'+
         '<div class="cht-comp" id="chtComp">'+
           '<div id="chtPushInfo" class="cht-pi" style="display:none"></div>'+
-          (adm?'<label><input type="checkbox" id="chtAv"> 🔔 Aviso importante (fica na tela do colaborador até ele abrir)</label>':'')+
+          (adm?'<label><input type="checkbox" id="chtAv"> 🔔 Aviso na tela (aparece na frente de tudo para ele até clicar em Ciente)</label>':'')+
           '<textarea id="chtTxt" rows="1" placeholder="Escreva a mensagem... (Enter envia, Shift+Enter pula linha)"></textarea>'+
           '<button class="env" id="chtEnviar">Enviar ➤</button>'+
         '</div></section>'+
@@ -4230,20 +4237,20 @@ function chtDrawTudo(){
 }
 function chtDrawLista(){
   var box=CHT.root&&CHT.root.querySelector('#chtLista');if(!box||!box.isConnected)return;
-  var eu=rppUsuario(),cx=CHT.caixa||{},itens={};
+  var eu=rppUsuario(),cx=CHT.caixa||{},itens={todos:{com:'todos',nome:'📢 Todos'}};
   (CHT.users||[]).forEach(function(u){itens[chtConv(eu,u.usuario)]={com:u.usuario,nome:u.nome||u.usuario};});
   Object.keys(cx).forEach(function(conv){var c=cx[conv];if(!c||!c.com)return;itens[conv]=itens[conv]||{com:c.com,nome:chtNome(c.com),fora:true};Object.assign(itens[conv],{ult:c.ult,ultT:c.ultT,ultDe:c.ultDe,n:c.n,av:c.av});});
   var q=String(CHT.busca||'').trim().toLowerCase();
   var l=Object.keys(itens).map(function(k){var x=itens[k];x.conv=k;return x;})
     .filter(function(x){return !q||String(x.nome).toLowerCase().indexOf(q)>=0||String(x.com).toLowerCase().indexOf(q)>=0;})
-    .sort(function(a,b){return (b.ultT||0)-(a.ultT||0)||String(a.nome).localeCompare(String(b.nome),'pt-BR');});
-  if(!l.length){box.innerHTML='<div class="cht-vazio">'+(CHT.users?(q?'Ninguém com esse nome.':'Nenhum '+(rppAdmin()?'colaborador ativo':'administrador')+' encontrado.'):'Carregando...')+'</div>';return;}
+    .sort(function(a,b){return (a.conv==='todos'?-1:0)-(b.conv==='todos'?-1:0)||(b.ultT||0)-(a.ultT||0)||String(a.nome).localeCompare(String(b.nome),'pt-BR');});
+  if(!l.length){box.innerHTML='<div class="cht-vazio">Ninguém com esse nome.</div>';return;}
   box.innerHTML=l.map(function(x){
     var n=Number(x.n)||0;
     return '<div class="cht-it'+(x.conv===CHT.sel?' on':'')+'" data-conv="'+rppEsc(x.conv)+'" data-com="'+rppEsc(x.com)+'">'+
-      '<div class="cht-av">'+rppEsc(String(x.nome||'?').charAt(0).toUpperCase())+'</div>'+
+      '<div class="cht-av'+(x.conv==='todos'?' todos':'')+'">'+(x.conv==='todos'?'📢':rppEsc(String(x.nome||'?').charAt(0).toUpperCase()))+'</div>'+
       '<div class="tx"><div class="nm"><span>'+rppEsc(x.nome)+'</span><small>'+chtHora(x.ultT)+'</small></div>'+
-      '<div class="pv'+(n?' nl':'')+'">'+(x.av&&n?'🔔 ':'')+(x.ult?(x.ultDe===eu?'Você: ':'')+rppEsc(x.ult):'<i>Sem mensagens</i>')+'</div></div>'+
+      '<div class="pv'+(n?' nl':'')+'">'+(x.av&&n?'🔔 ':'')+(x.ult?(x.ultDe===eu?'Você: ':(x.conv==='todos'&&x.ultDe?rppEsc(chtNome(x.ultDe))+': ':''))+rppEsc(x.ult):'<i>'+(x.conv==='todos'?'Mensagem para toda a equipe':'Sem mensagens')+'</i>')+'</div></div>'+
       (n?'<span class="bd">'+n+'</span>':'')+'</div>';
   }).join('');
   box.querySelectorAll('.cht-it').forEach(function(d){d.onclick=function(){
@@ -4257,8 +4264,9 @@ function chtDrawCab(){
   if(!CHT.sel){cab.style.display='none';return;}
   cab.style.display='';
   var u=(CHT.users||[]).filter(function(x){return x.usuario===CHT.com;})[0];
-  cab.innerHTML='<button class="cht-volta" title="Voltar">‹</button><div class="cht-av">'+rppEsc(String(chtNome(CHT.com)).charAt(0).toUpperCase())+'</div>'+
-    '<div>'+rppEsc(chtNome(CHT.com))+'<small>'+(u?(u.role==='admin'?'Administrador':'Colaborador')+' · '+rppEsc(u.usuario):'usuário inativo ou removido')+'</small></div>';
+  var td=CHT.com==='todos';
+  cab.innerHTML='<button class="cht-volta" title="Voltar">‹</button><div class="cht-av'+(td?' todos':'')+'">'+(td?'📢':rppEsc(String(chtNome(CHT.com)).charAt(0).toUpperCase()))+'</div>'+
+    '<div>'+(td?'📢 Todos':rppEsc(chtNome(CHT.com)))+'<small>'+(td?'Mensagem para toda a equipe':u?(u.role==='admin'?'Administrador':'Colaborador')+' · '+rppEsc(u.usuario):'usuário inativo ou removido')+'</small></div>';
   chtDrawPushInfo();
   cab.querySelector('.cht-volta').onclick=function(){CHT.sel=null;CHT.com=null;chtDrawTudo();};
 }
@@ -4266,7 +4274,7 @@ function chtDrawConversa(){
   var box=CHT.root&&CHT.root.querySelector('#chtMsgs');if(!box||!box.isConnected)return;
   chtDrawCab();
   var w=CHT.root.querySelector('#chtWrap');if(w)w.classList.toggle('sel',!!CHT.sel);
-  if(!CHT.sel){box.innerHTML='<div class="cht-vazio">👈 Escolha '+(rppAdmin()?'um colaborador':'a conversa')+' para '+(rppAdmin()?'mandar uma mensagem':'ver as mensagens')+'.</div>';return;}
+  if(!CHT.sel){box.innerHTML='<div class="cht-vazio">👈 Escolha uma pessoa ou 📢 Todos para conversar.</div>';return;}
   if(CHT.carregando){box.innerHTML='<div class="cht-vazio">Carregando...</div>';return;}
   if(CHT.erro){box.innerHTML='<div class="cht-vazio" style="color:#dc2626">'+rppEsc(CHT.erro)+'</div>';return;}
   var perto=box.scrollHeight-box.scrollTop-box.clientHeight<120||!box.childElementCount||box.querySelector('.cht-vazio');
@@ -4276,8 +4284,8 @@ function chtDrawConversa(){
   box.innerHTML=CHT.msgs.map(function(m,i){
     var meu=m.de===eu;
     var st='';
-    if(meu&&i===ultMinha)st=CHT.lidoOutro>=m.t?' · ✓✓ Vista':' · ✓ Enviada';
-    return '<div class="cht-m '+(meu?'eu':'ele')+(m.av?' av':'')+'">'+(m.av?'<span class="tg">🔔 AVISO IMPORTANTE</span>':'')+rppEsc(m.txt)+'<span class="hr">'+chtHora(m.t)+st+'</span></div>';
+    if(meu&&i===ultMinha&&CHT.sel!=='todos')st=CHT.lidoOutro>=m.t?' · ✓✓ Vista':' · ✓ Enviada';
+    return '<div class="cht-m '+(meu?'eu':'ele')+(m.av?' av':'')+'">'+(m.av?'<span class="tg">🔔 AVISO IMPORTANTE</span>':'')+(!meu&&CHT.sel==='todos'?'<span class="qm">'+rppEsc(chtNome(m.de))+'</span>':'')+rppEsc(m.txt)+'<span class="hr">'+chtHora(m.t)+st+'</span></div>';
   }).join('');
   if(perto)box.scrollTop=box.scrollHeight;
 }
