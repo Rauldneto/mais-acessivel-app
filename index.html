@@ -13911,7 +13911,7 @@ function lcCss(){
 // opt-out ("SAIR") e acompanhamento da taxa de resposta — o que mais pesa para o número não ser bloqueado.
 // Firebase: reativacao/{bling, campanhas/{id}, envios/{id}/{chave}, optout/{chave}}
 var RV={view:'clientes',wa:null,waMeta:null,bl:null,camps:null,env:null,opt:null,carregando:false,err:'',
-  F:{q:'',sc:'90',sv:'30',orig:'todos',wa:'com',etq:'',tier:'',rec:true},sel:{},ord:'score',pg:1,
+  F:{q:'',sc:'0',sv:'0',grp:'',vend:'',tier:'',rec:true},sel:{},cfg:{},users:{},ord:'score',pg:1,
   blReq:null,blStatus:'',meses:'24',camp:null,edit:null,sess:null,timer:null,arte:null,iaBusy:false,toast:''};
 var RV_P='reativacao',RV_EXT_MIN='2.2.0',RV_PG=100;
 function rvFb(path,method,body){
@@ -13954,10 +13954,33 @@ function rvCss(){
 function rvCarregar(forcar){
   if(RV.carregando)return;RV.carregando=true;RV.err='';
   var fb=function(p){return fetch(FIREBASE_DB+'/'+p+'.json').then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});};
-  Promise.all([fb('waChats'),fb('waMeta'),fb(RV_P+'/bling'),fb(RV_P+'/campanhas'),fb(RV_P+'/envios'),fb(RV_P+'/optout')]).then(function(a){
-    RV.wa=a[0]||{};RV.waMeta=a[1];RV.bl=a[2];if(!RV._fIni){RV._fIni=true;if(!RV.bl||!RV.bl.ts)RV.F.sc='0';}RV.camps=a[3]||{};RV.env=a[4]||{};RV.opt=a[5]||{};RV.carregando=false;RV.rows=null;rvDraw();
+  Promise.all([fb('waChats'),fb('waMeta'),fb(RV_P+'/bling'),fb(RV_P+'/campanhas'),fb(RV_P+'/envios'),fb(RV_P+'/optout'),fb('usuarios'),fb(RV_P+'/config')]).then(function(a){
+    RV.wa=a[0]||{};RV.waMeta=a[1];RV.bl=a[2];RV.users=a[6]||{};RV.cfg=a[7]||{};RV.camps=a[3]||{};RV.env=a[4]||{};RV.opt=a[5]||{};RV.carregando=false;RV.rows=null;rvDraw();
   }).catch(function(e){RV.carregando=false;RV.err='Não consegui carregar ('+e.message+').';rvDraw();});
 }
+
+// ── grupos que podem receber envio: etiquetas do WhatsApp ──
+// 🟢 PROPOSTA ALTA PROB. · 🟠 PROPOSTA BAIXA PROB. · 💬 nome do vendedor (em atendimento) · ⏸ Standby
+var RV_GRP={alta:['🟢 Alta prob.','#15803d','#dcfce7',40],baixa:['🟠 Baixa prob.','#b45309','#ffedd5',28],atend:['💬 Em atendimento','#1d4ed8','#dbeafe',18],standby:['⏸ Standby','#57534e','#e7e5e4',10]};
+function rvVendNomes(){
+  if(RV._vn)return RV._vn;var v={};
+  var add=function(n){var w=cqNorm(n).split(' ')[0];if(w&&w.length>=3)v[w]=1;};
+  Object.keys(RV.users||{}).forEach(function(k){var u=RV.users[k]||{};if(u.ativo===false)return;add(u.usuario||'');add(u.nome||'');});
+  var cli=(RV.bl&&RV.bl.cli)||{};Object.keys(cli).forEach(function(k){if(cli[k].vd)add(cli[k].vd);});
+  return (RV._vn=v);
+}
+function rvEtqTipo(e){
+  var c=RV.cfg&&RV.cfg.etq&&RV.cfg.etq[rvEtqKey(e)];if(c)return c==='nao'?'':c;// marcação manual do gestor
+  if(/alta\s*prob/i.test(e))return 'alta';if(/baixa\s*prob/i.test(e))return 'baixa';
+  if(/stand\s*-?\s*by/i.test(e))return 'standby';
+  if(/arquiv|cliente|fornecedor|pago|pedido|novo|lead|proposta|orcamento|cobran|entreg/i.test(cqNorm(e)))return '';
+  return rvVendNomes()[cqNorm(e).split(' ')[0]]?'atend':'';
+}
+function rvEtqKey(e){return String(e||'').replace(/[.#$\/\[\]]/g,'_').slice(0,80)||'_';}
+function rvGrupos(w){var g={},vend=[];((w&&w.e)||[]).forEach(function(e){var t=rvEtqTipo(e);if(!t)return;g[t]=1;if(t==='atend')vend.push(e);});
+  var pri=['alta','baixa','atend','standby'].filter(function(x){return g[x];});return {g:g,pri:pri[0]||'',vend:vend};}
+function rvChips(r){return r.grs.map(function(x){var G=RV_GRP[x];return '<span class="rv-tag" style="background:'+G[2]+';color:'+G[1]+'">'+G[0]+'</span>';}).join('')+
+  r.vend.map(function(v){return '<span class="rv-tag" style="background:linear-gradient(135deg,#0ea5e9,#6366f1);color:#fff">👤 '+cqEsc(v)+'</span>';}).join('');}
 
 // ── cruzamento WhatsApp × Bling ──
 function rvMontar(){
@@ -13966,7 +13989,7 @@ function rvMontar(){
   Object.keys(RV.wa||{}).forEach(function(p){var k=cqWaChave(p);if(!k)return;var o=RV.wa[p]||{};
     if(waIdx[k]&&(waIdx[k].t||0)>(o.t||0))return;waIdx[k]={p:String(p).replace(/\D/g,''),n:o.n||'',e:o.e||[],uc:o.uc||0,un:o.un||0,t:o.t||0};});
   Object.keys(waIdx).forEach(function(k){String(waIdx[k].n||'').split(/\s[-–|\/]\s|\s*[|\/]\s*/).forEach(function(seg){var s=cqNorm(seg);if(s.length>=5)(nomeIdx[s]=nomeIdx[s]||[]).push(k);});});
-  var rows=[],usados={},cli=(RV.bl&&RV.bl.cli)||{};
+  RV._vn=null;var rows=[],usados={},cli=(RV.bl&&RV.bl.cli)||{};
   Object.keys(cli).forEach(function(id){var c=cli[id],ks=(c.f||[]).map(cqWaChave).filter(Boolean),wk='',via='';
     for(var i=0;i<ks.length;i++)if(waIdx[ks[i]]){wk=ks[i];via='telefone';break;}
     if(!wk){var cn=cqNorm(c.n);if(cn.length>=5&&nomeIdx[cn]){wk=nomeIdx[cn].filter(function(k){return !usados[k];})[0]||'';if(wk)via='nome';}}
@@ -13977,37 +14000,38 @@ function rvMontar(){
     rows.push({id:'b'+id,k:wk,nome:c.n||'(sem nome)',doc:c.d||'',fone:(c.f||[])[0]||'',w:waIdx[wk]||null,via:via,uc:c.uc||'',uv:c.uv||0,q:c.q||0,tot:c.tot||0,vd:c.vd||'',orig:'bling'});
   });
   Object.keys(waIdx).forEach(function(k){if(usados[k])return;var w=waIdx[k];rows.push({id:'w'+k,k:k,nome:w.n||rvFone(w.p),doc:'',fone:w.p,w:w,via:'',uc:'',uv:0,q:0,tot:0,vd:'',orig:'wa'});});
+  // só entram conversas do WhatsApp com etiqueta Alta/Baixa prob., nome de vendedor (em atendimento) ou Standby
+  rows=rows.filter(function(r){if(!r.w)return false;var G=rvGrupos(r.w);r.grp=G.pri;r.grs=['alta','baixa','atend','standby'].filter(function(x){return G.g[x];});r.vend=G.vend;return !!r.grp;});
   // prioridade: valor (percentil) 40% · frequência 25% · tempo sem comprar na "faixa boa" 35%
   var tots=rows.filter(function(r){return r.q;}).map(function(r){return r.tot;}).sort(function(a,b){return a-b;});
   function pct(v){if(!tots.length)return 0;var lo=0,hi=tots.length;while(lo<hi){var m=(lo+hi)>>1;if(tots[m]<v)lo=m+1;else hi=m;}return lo/tots.length;}
   var agora=Date.now()/1000;
   rows.forEach(function(r){
     r.dc=rvDias(r.uc);var w=r.w,ult=w?Math.max(w.uc||0,w.un||0,w.t||0):0;r.dv=ult?Math.floor((agora-ult)/86400):null;r.ultCli=w&&w.uc?Math.floor((agora-w.uc)/86400):null;
-    var s;
-    if(r.q){var d=r.dc==null?999:r.dc,rec=d<45?0.15:d<90?0.6:d<=365?1:d<=730?0.7:0.45;s=100*(0.4*pct(r.tot)+0.25*Math.min(1,r.q/6)+0.35*rec);}
-    else s=18+(w&&w.uc?12:0);
-    if(r.dv!=null&&r.dv<15)s*=0.5;// conversou há pouco: não é reativação
-    if(!r.k)s*=0.5;
-    r.sc=Math.round(s);r.tier=r.sc>=65?1:r.sc>=40?2:3;
+    // 1º o grupo da etiqueta (Alta > Baixa > Em atendimento > Standby); depois o histórico de compras no Bling
+    var hc=0;if(r.q){var d=r.dc==null?999:r.dc,rec=d<45?0.4:d<90?0.7:d<=365?1:d<=730?0.7:0.45;hc=100*(0.4*pct(r.tot)+0.25*Math.min(1,r.q/6)+0.35*rec);}
+    var s=RV_GRP[r.grp][3]+0.6*hc;
+    if(r.dv!=null&&r.dv<3)s*=0.7;// conversa de hoje/ontem: o vendedor já está falando com ele
+    r.sc=Math.round(s);r.tier=r.sc>=55?1:r.sc>=32?2:3;
   });
   RV.rows=rows;RV.waIdx=waIdx;return rows;
 }
 function rvContato(r){var n=String((r.w&&r.w.n)||'').trim();if(!n)return '';var p=n.split(/\s[-–|\/]\s/)[0].trim().split(/\s+/)[0]||'';
   if(!/^[A-Za-zÀ-ÿ]{3,15}$/.test(p)||cqNorm(r.nome).indexOf(cqNorm(p))===0)return '';return p.charAt(0).toUpperCase()+p.slice(1).toLowerCase();}
+function rvEmpresa(r){if(r.orig==='bling')return rvNomeCurto(r.nome);var n=String((r.w&&r.w.n)||''),m=n.split(/\s[-–|\/]\s/);return m.length>1?rvNomeCurto(m.slice(1).join(' ')):'';}
 function rvUltEnvio(k){var u=0,uu='',cid='';Object.keys(RV.env||{}).forEach(function(c){var e=(RV.env[c]||{})[k];if(e&&e.st==='env'&&e.ts>u){u=e.ts;uu=e.u||'';cid=c;}});return u?{ts:u,u:uu,c:cid}:null;}
 function rvOptout(k){return !!(k&&RV.opt&&RV.opt[k]);}
 function rvFiltrar(){
   var F=RV.F,q=cqNorm(F.q),qd=String(F.q||'').replace(/\D/g,''),lim30=Date.now()-30*86400000;
   var L=rvMontar().filter(function(r){
     if(rvOptout(r.k))return false;
-    if(F.orig==='bling'&&r.orig!=='bling')return false;if(F.orig==='wa'&&r.orig!=='wa')return false;
-    if(F.wa==='com'&&!r.k)return false;if(F.wa==='conv'&&!r.w)return false;if(F.wa==='sem'&&r.k)return false;
+    if(F.grp&&r.grs.indexOf(F.grp)===-1)return false;
+    if(F.vend&&r.vend.indexOf(F.vend)===-1)return false;
     if(F.sc==='nunca'){if(r.q)return false;}else if(+F.sc>0){if(!r.q||r.dc==null||r.dc<+F.sc)return false;}
     if(+F.sv>0&&r.dv!=null&&r.dv<+F.sv)return false;
-    if(F.etq){var et=(r.w&&r.w.e)||[];if(F.etq==='__sem'?et.length:et.indexOf(F.etq)===-1)return false;}
     if(F.tier&&String(r.tier)!==F.tier)return false;
     if(F.rec){var ue=rvUltEnvio(r.k);if(ue&&ue.ts>lim30)return false;}
-    if(q||qd.length>=4){var hay=cqNorm(r.nome+' '+r.vd+' '+((r.w&&r.w.n)||''));if(!(q&&hay.indexOf(q)!==-1)&&!(qd.length>=4&&(String(r.doc).indexOf(qd)!==-1||String(r.fone).indexOf(qd)!==-1||String(r.k).indexOf(qd)!==-1)))return false;}
+    if(q||qd.length>=4){var hay=cqNorm(r.nome+' '+r.vd+' '+r.vend.join(' ')+' '+((r.w&&r.w.n)||''));if(!(q&&hay.indexOf(q)!==-1)&&!(qd.length>=4&&(String(r.doc).indexOf(qd)!==-1||String(r.fone).indexOf(qd)!==-1||String(r.k).indexOf(qd)!==-1)))return false;}
     return true;
   });
   var o=RV.ord;
@@ -14051,6 +14075,16 @@ function rvDraw(){
   var tb2=document.getElementById('rvTbl');if(tb2&&tbS)tb2.scrollTop=tbS;if(Math.abs(window.scrollY-pgY)>2)window.scrollTo(0,pgY);
   if(foco){var el=document.getElementById(foco);if(el&&el.focus){el.focus();try{if(sel!=null)el.setSelectionRange(sel,sel);}catch(e){}}}
 }
+function rvHtmlEtqCfg(){
+  var et=(RV.waMeta&&RV.waMeta.etiquetas)||[];if(!et.length)return '';
+  var ab=RV.etqAberto;
+  var h='<div style="margin-top:10px"><a href="#" data-a="etqTog" class="rv-mut" style="font-weight:800;text-decoration:none">⚙️ Etiquetas ('+(ab?'fechar':'conferir quais entram no envio')+')</a>';
+  if(ab)h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px;margin-top:8px">'+et.map(function(e){var t=rvEtqTipo(e),man=RV.cfg&&RV.cfg.etq&&RV.cfg.etq[rvEtqKey(e)];
+    return '<div style="display:flex;gap:6px;align-items:center;background:#fafaf9;border-radius:8px;padding:5px 8px"><span style="flex:1;font-weight:700;font-size:12.5px">'+cqEsc(e)+'</span><select class="rv-in" data-etq="'+cqEsc(e)+'" style="width:auto;padding:3px 6px;font-size:12px">'+
+      [['','Não entra'],['alta','Alta prob.'],['baixa','Baixa prob.'],['atend','Vendedor'],['standby','Standby']].map(function(o){return '<option value="'+o[0]+'"'+(t===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>'+(man?'<span class="rv-mut" title="marcado à mão">✋</span>':'')+'</div>';}).join('')+
+    '</div><div class="rv-mut" style="margin-top:4px">O app reconhece sozinho; corrija aqui se alguma etiqueta estiver errada. Vale para toda a equipe.</div>';
+  return h+'</div>';
+}
 function rvSelOpt(id,label,opts,val){return '<div><label>'+label+'</label><select id="rvF_'+id+'" data-f="'+id+'">'+opts.map(function(o){return '<option value="'+cqEsc(o[0])+'"'+(String(val)===String(o[0])?' selected':'')+'>'+cqEsc(o[1])+'</option>';}).join('')+'</select></div>';}
 
 function rvHtmlClientes(){
@@ -14072,22 +14106,23 @@ function rvHtmlClientes(){
 
   var all=rvMontar(),L=rvFiltrar(),F=RV.F;
   var n1=L.filter(function(r){return r.tier===1;}).length,n2=L.filter(function(r){return r.tier===2;}).length,nOpt=Object.keys(RV.opt||{}).length,nSel=Object.keys(RV.sel).length;
-  h+='<div class="rv-card"><div class="rv-k">'+
-    '<div><b>'+all.length+'</b><span>contatos (Bling + WhatsApp)</span></div>'+
-    '<div><b>'+L.length+'</b><span>no filtro atual</span></div>'+
-    '<div><b style="color:#b91c1c">'+n1+'</b><span>🔥 prioridade alta</span></div>'+
-    '<div><b style="color:#92400e">'+n2+'</b><span>prioridade média</span></div>'+
-    '<div><b>'+nOpt+'</b><span>pediram para não receber</span></div>'+
-    '<div><b style="color:#007aff">'+nSel+'</b><span>selecionados</span></div></div>';
-  var etqs=(wm&&wm.etiquetas)||[];
+  var cg={alta:0,baixa:0,atend:0,standby:0},cv={};all.forEach(function(r){if(rvOptout(r.k))return;r.grs.forEach(function(x){cg[x]++;});r.vend.forEach(function(v){cv[v]=(cv[v]||0)+1;});});
+  var vends=Object.keys(cv).sort(function(a,b){return cv[b]-cv[a];});
+  h+='<div class="rv-card"><div style="font-size:12.5px;color:#57534e;margin-bottom:8px">Só entram no envio as conversas do WhatsApp com etiqueta <b>Proposta Alta prob.</b>, <b>Proposta Baixa prob.</b>, <b>nome do vendedor</b> (em atendimento) ou <b>Standby</b>. Clique num grupo para filtrar.</div>'+
+    '<div class="rv-k">'+['alta','baixa','atend','standby'].map(function(x){var G=RV_GRP[x],on=F.grp===x;
+      return '<div data-a="grp" data-v="'+x+'" style="cursor:pointer;background:'+(on?G[2]:'#f8fafc')+';outline:'+(on?'2px solid '+G[1]:'none')+'"><b style="color:'+G[1]+'">'+cg[x]+'</b><span>'+G[0]+'</span></div>';}).join('')+
+    '<div><b style="color:#007aff">'+nSel+'</b><span>selecionados · '+L.length+' no filtro</span></div></div>'+
+    (vends.length||((RV.waMeta&&RV.waMeta.etiquetas)||[]).some(function(e){return rvEtqTipo(e)==='atend';})?(vends.length?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center"><span class="rv-mut" style="font-weight:800">EM ATENDIMENTO COM:</span>'+vends.map(function(v){var on=F.vend===v;
+      return '<button class="rv-btn sm" data-a="fvend" data-v="'+cqEsc(v)+'" style="'+(on?'background:#1d4ed8;border-color:#1d4ed8;color:#fff':'')+'">👤 '+cqEsc(v)+' <b>'+cv[v]+'</b></button>';}).join('')+'</div>':''):
+      '<div class="rv-warn" style="margin:10px 0 0;font-size:12.5px">Nenhuma etiqueta com nome de vendedor foi reconhecida. '+(rvGestor()?'Marque abaixo, em <b>⚙️ Etiquetas</b>, quais etiquetas são de vendedor.':'Peça ao administrador para marcar as etiquetas de vendedor.')+'</div>');
+  if(rvGestor())h+=rvHtmlEtqCfg();
   h+='<div class="rv-f" style="margin-top:12px">'+
     '<div style="grid-column:span 2"><label>Buscar</label><input id="rvQ" data-f="q" placeholder="Empresa, CNPJ, telefone, vendedor…" value="'+cqEsc(F.q)+'"></div>'+
     rvSelOpt('sc','Sem comprar há',[['0','Qualquer'],['60','60+ dias'],['90','90+ dias'],['180','6+ meses'],['365','1+ ano'],['nunca','Nunca comprou']],F.sc)+
     rvSelOpt('sv','Sem conversar há',[['0','Qualquer'],['15','15+ dias'],['30','30+ dias'],['60','60+ dias'],['90','90+ dias'],['180','6+ meses']],F.sv)+
-    rvSelOpt('orig','Origem',[['todos','Bling + WhatsApp'],['bling','Comprou (Bling)'],['wa','Só WhatsApp']],F.orig)+
-    rvSelOpt('wa','WhatsApp',[['com','Com número de WhatsApp'],['conv','Com conversa salva'],['todos','Todos'],['sem','Sem celular']],F.wa)+
+    rvSelOpt('grp','Grupo',[['','Todos os grupos'],['alta','🟢 Proposta alta prob.'],['baixa','🟠 Proposta baixa prob.'],['atend','💬 Em atendimento'],['standby','⏸ Standby']],F.grp)+
+    rvSelOpt('vend','Vendedor',[['','Todos']].concat(vends.map(function(v){return [v,v+' ('+cv[v]+')'];})),F.vend)+
     rvSelOpt('tier','Prioridade',[['','Todas'],['1','🔥 Alta'],['2','Média'],['3','Baixa']],F.tier)+
-    (etqs.length?rvSelOpt('etq','Etiqueta WhatsApp',[['','Todas'],['__sem','Sem etiqueta']].concat(etqs.map(function(e){return [e,e];})),F.etq):'')+
     '<div><label>&nbsp;</label><label style="text-transform:none;font-weight:600;font-size:12.5px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="rvF_rec" data-f="rec" style="width:auto"'+(F.rec?' checked':'')+'> Esconder quem recebeu disparo nos últimos 30 dias</label></div></div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">'+
     '<button class="rv-btn" data-a="selTop" data-n="50">☑️ Selecionar os 50 primeiros</button><button class="rv-btn" data-a="selTop" data-n="150">☑️ 150 primeiros</button>'+
@@ -14099,17 +14134,17 @@ function rvHtmlClientes(){
   var tot=L.length,pgs=Math.max(1,Math.ceil(tot/RV_PG));if(RV.pg>pgs)RV.pg=pgs;var P=L.slice((RV.pg-1)*RV_PG,RV.pg*RV_PG);
   var th=function(o,t){return '<th data-a="ord" data-o="'+o+'">'+t+(RV.ord===o?' ▾':'')+'</th>';};
   h+='<div class="rv-card" id="rvTbl" style="padding:0;overflow:auto;max-height:70vh"><table class="rv-t"><tr><th style="width:26px"><input type="checkbox" data-a="selPag"'+(P.length&&P.every(function(r){return RV.sel[r.id];})?' checked':'')+'></th>'+
-    th('score','Prioridade')+th('nome','Cliente')+'<th>WhatsApp</th>'+th('conversa','Última conversa')+th('compra','Última compra')+th('total','Compras')+'<th class="rv-hide-m">Disparos</th></tr>';
-  if(!P.length)h+='<tr><td colspan="8" style="text-align:center;padding:30px;color:#78716c">Nenhum cliente neste filtro.</td></tr>';
+    th('score','Prioridade')+th('nome','Cliente')+'<th>Situação no WhatsApp</th><th>WhatsApp</th>'+th('conversa','Última conversa')+th('compra','Última compra')+th('total','Compras')+'<th class="rv-hide-m">Disparos</th></tr>';
+  if(!P.length)h+='<tr><td colspan="9" style="text-align:center;padding:30px;color:#78716c">Nenhum cliente neste filtro.</td></tr>';
   P.forEach(function(r){
     var w=r.w,ue=rvUltEnvio(r.k),tl=['','🔥 Alta','Média','Baixa'][r.tier];
     h+='<tr><td><input type="checkbox" data-a="sel" data-id="'+cqEsc(r.id)+'"'+(RV.sel[r.id]?' checked':'')+(r.k?'':' disabled title="Sem celular"')+'></td>'+
       '<td><span class="rv-tag rv-p'+r.tier+'">'+tl+'</span><div class="rv-mut">'+r.sc+' pts</div></td>'+
-      '<td><b>'+cqEsc(r.nome)+'</b>'+(r.doc?'<div class="rv-mut">'+cqEsc(lcFmtCnpj(r.doc))+'</div>':'')+(r.vd?'<div class="rv-mut">👤 '+cqEsc(r.vd)+'</div>':'')+(r.orig==='wa'?'<div><span class="rv-tag">só WhatsApp</span></div>':'')+'</td>'+
+      '<td><b>'+cqEsc(r.nome)+'</b>'+(r.doc?'<div class="rv-mut">'+cqEsc(lcFmtCnpj(r.doc))+'</div>':'')+(r.vd?'<div class="rv-mut">👤 '+cqEsc(r.vd)+'</div>':'')+'</td>'+
+      '<td>'+rvChips(r)+'</td>'+
       '<td>'+(r.k?'<a href="#" data-a="abrirWa" data-id="'+cqEsc(r.id)+'" style="color:#15803d;font-weight:700;text-decoration:none">'+cqEsc(rvFone(w?w.p:r.k))+'</a>':'<span class="rv-mut">sem celular'+(r.fone?' ('+cqEsc(rvFone(r.fone))+')':'')+'</span>')+
         (w&&w.n&&r.orig==='bling'?'<div class="rv-mut">'+cqEsc(w.n)+(r.via==='nome'?' (achado pelo nome)':'')+'</div>':'')+
-        (r.k&&!w?'<div class="rv-mut">do cadastro do Bling — sem conversa</div>':'')+
-        ((w&&w.e&&w.e.length)?'<div>'+w.e.map(function(e){return '<span class="rv-tag">'+cqEsc(e)+'</span>';}).join('')+'</div>':'')+'</td>'+
+'</td>'+
       '<td>'+(r.dv!=null?'há <b>'+r.dv+'</b> dias'+(r.ultCli!=null?'<div class="rv-mut">cliente falou há '+r.ultCli+' d</div>':''):'<span class="rv-mut">—</span>')+'</td>'+
       '<td>'+(r.uc?rvDataBr(r.uc)+'<div class="rv-mut">há '+r.dc+' dias · '+rvMoeda(r.uv)+'</div>':'<span class="rv-mut">'+(r.orig==='wa'?'não achado no Bling':'—')+'</span>')+'</td>'+
       '<td>'+(r.q?'<b>'+r.q+'</b>×<div class="rv-mut">'+rvMoeda(r.tot)+'</div>':'<span class="rv-mut">—</span>')+'</td>'+
@@ -14117,7 +14152,7 @@ function rvHtmlClientes(){
   });
   h+='</table></div>';
   if(pgs>1)h+='<div style="display:flex;gap:8px;justify-content:center;align-items:center"><button class="rv-btn sm" data-a="pg" data-p="'+(RV.pg-1)+'"'+(RV.pg<=1?' disabled':'')+'>‹</button><span>Página '+RV.pg+' de '+pgs+' ('+tot+')</span><button class="rv-btn sm" data-a="pg" data-p="'+(RV.pg+1)+'"'+(RV.pg>=pgs?' disabled':'')+'>›</button></div>';
-  h+='<div class="rv-mut" style="margin-top:8px">Prioridade = quanto o cliente já comprou (40%), quantas vezes comprou (25%) e há quanto tempo parou de comprar (35% — o ponto ideal é entre 3 e 12 meses). Quem conversou nos últimos 15 dias cai pela metade: não precisa de reativação.</div>';
+  h+='<div class="rv-mut" style="margin-top:8px">Prioridade = 1º a etiqueta (Alta prob. → Baixa prob. → Em atendimento → Standby); dentro de cada grupo sobe quem mais comprou no Bling (valor, frequência e tempo sem comprar). Conversa de hoje/ontem cai um pouco: o vendedor já está falando com ele.</div>';
   return h;
 }
 
@@ -14157,15 +14192,15 @@ function rvHtmlCampanhas(){
   return h;
 }
 function rvNovaCamp(){
-  var rows=rvMontar(),fila={};rows.forEach(function(r){if(RV.sel[r.id]&&r.k&&!rvOptout(r.k))fila[r.k]={n:String(r.nome).slice(0,80),p:r.w?r.w.p:('55'+r.k),uc:r.uc||'',vd:r.vd||'',sc:r.sc||0,c:rvContato(r)};});
+  var rows=rvMontar(),fila={};rows.forEach(function(r){if(RV.sel[r.id]&&r.k&&!rvOptout(r.k))fila[r.k]={n:String(r.nome).slice(0,80),p:r.w?r.w.p:('55'+r.k),uc:r.uc||'',vd:r.vd||'',sc:r.sc||0,c:rvContato(r),g:r.grs||[],ve:r.vend||[],emp:rvEmpresa(r)};});
   RV.edit={id:'',nome:'Reativação '+new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'}),
-    txt:['{Olá|Oi|Bom dia}, {contato}! Tudo bem? Aqui é {vendedor}, da Mais Acessível.\n\nFaz um tempo que não falamos com a {nome} e quis te mandar nossas novidades em piso tátil e acessibilidade. Tem alguma obra começando por aí?','',''],
+    txt:['{Olá|Oi|Bom dia}, {contato}! Tudo bem? Aqui é {vendedor}, da Mais Acessível.\n\nPassando para saber como está a obra da {nome}. Ainda posso te ajudar com piso tátil e acessibilidade? Tem alguma novidade por aí?','',''],
     sair:true,img:'',lim:40,imin:60,imax:150,fila:fila};
   RV.view='editar';rvDraw();
 }
 function rvHtmlEditar(){
   var e=RV.edit;if(!e){RV.view='campanhas';return rvHtmlCampanhas();}
-  var nf=Object.keys(e.fila||{}).length,ex=rvMsgPara(e,{n:'Construtora Exemplo LTDA',c:'João',uc:'2026-03-10'},0);
+  var nf=Object.keys(e.fila||{}).length,ex=rvMsgPara(e,{n:'Construtora Exemplo LTDA',emp:'Construtora Exemplo',c:'João',uc:'2026-03-10'},0);
   return '<div class="rv-card"><div style="font-weight:900;font-size:15px;margin-bottom:10px">'+(e.id?'Editar campanha':'Nova campanha')+' · '+nf+' contato(s)</div><div class="rv-g2"><div>'+
     '<div class="rv-f" style="grid-template-columns:1fr"><div><label>Nome da campanha</label><input id="rvENome" class="rv-in" value="'+cqEsc(e.nome)+'"></div></div>'+
     '<div style="margin-top:10px"><label style="font-size:11px;font-weight:800;color:#57534e;text-transform:uppercase">Mensagem (até 3 versões — o app alterna entre elas)</label>'+
@@ -14195,7 +14230,7 @@ function rvNomeCurto(n){var s=String(n||'').replace(/\s+(ltda|me|epp|eireli|s\/?
 function rvMsgPara(c,f,i){
   var vs=(c.txt||[]).filter(function(t){return String(t||'').trim();});if(!vs.length)return '';
   var t=vs[(i||0)%vs.length];var uc=f.uc?f.uc.split('-'):null;
-  t=t.replace(/\{contato\}/gi,f.c||rvNomeCurto(f.n)||'tudo bem').replace(/\{nome\}/gi,rvNomeCurto(f.n)||'tudo bem').replace(/\{vendedor\}/gi,rvMe().charAt(0).toUpperCase()+rvMe().slice(1)).replace(/\{ultima_compra\}/gi,uc?uc[1]+'/'+uc[0]:'');
+  t=t.replace(/\{contato\}/gi,f.c||rvNomeCurto(f.n)||'tudo bem').replace(/\{nome\}/gi,(f.emp!=null?f.emp:rvNomeCurto(f.n))||'sua empresa').replace(/\{vendedor\}/gi,rvMe().charAt(0).toUpperCase()+rvMe().slice(1)).replace(/\{ultima_compra\}/gi,uc?uc[1]+'/'+uc[0]:'');
   t=rvSpin(t).replace(/\n{3,}/g,'\n\n').trim();
   if(c.sair)t+='\n\n'+rvSpin('{Se não quiser mais receber nossas mensagens, é só responder SAIR.|Caso não queira receber mais mensagens, responda SAIR.|Se preferir não receber, responda SAIR que tiramos seu número.}');
   return t;
@@ -14255,7 +14290,7 @@ function rvHtmlEnvio(){
   if(!s.k)return h+'<div class="rv-good" style="font-size:14px">✅ Não há mais contatos para enviar nesta campanha agora.</div>';
   var f=c.fila[s.k],r=null;rvMontar().some(function(x){if(x.k===s.k){r=x;return true;}return false;});
   h+='<div class="rv-card"><div class="rv-g2"><div>'+
-    '<div style="font-size:18px;font-weight:900">'+cqEsc(f.n)+'</div><div class="rv-mut" style="margin:3px 0 10px">📱 '+cqEsc(rvFone(f.p))+(f.uc?' · última compra '+rvDataBr(f.uc):'')+(r&&r.dv!=null?' · última conversa há '+r.dv+' dias':'')+(f.vd?' · vendedor '+cqEsc(f.vd):'')+'</div>'+
+    '<div style="font-size:18px;font-weight:900">'+cqEsc(f.n)+'</div><div style="margin-top:4px">'+rvChips({grs:(r&&r.grs)||f.g||[],vend:(r&&r.vend)||f.ve||[]})+'</div><div class="rv-mut" style="margin:3px 0 10px">📱 '+cqEsc(rvFone(f.p))+(f.uc?' · última compra '+rvDataBr(f.uc):'')+(r&&r.dv!=null?' · última conversa há '+r.dv+' dias':'')+(f.vd?' · vendedor '+cqEsc(f.vd):'')+'</div>'+
     '<ol class="rv-li" style="font-size:13.5px"><li>Clique em <b>Abrir no WhatsApp</b> — a mensagem já vai escrita'+(c.img?' e a imagem fica copiada':'')+'.</li>'+(c.img?'<li>No WhatsApp, aperte <b>Ctrl+V</b> para colar a imagem e depois <b>Enter</b>.</li>':'')+'<li>Envie o texto (<b>Enter</b>). Se quiser, ajuste algo antes — mensagem personalizada responde mais.</li><li>Volte aqui e clique em <b>✅ Enviei</b>.</li></ol>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">'+
       '<button class="rv-btn pri" data-a="abrirEnvio"'+(espera?' disabled':'')+' style="font-size:14px;padding:10px 16px">'+(espera?'⏳ Aguarde '+espera+' s':'💬 Abrir no WhatsApp')+'</button>'+
@@ -14382,6 +14417,9 @@ function rvClick(ev){
   if(a==='selPag'){var L=rvFiltrar().slice((RV.pg-1)*RV_PG,RV.pg*RV_PG);L.forEach(function(r){if(!r.k)return;if(b.checked)RV.sel[r.id]=1;else delete RV.sel[r.id];});rvDraw();return;}
   if(a==='selTop'){var n=+b.getAttribute('data-n');rvFiltrar().filter(function(r){return r.k;}).slice(0,n).forEach(function(r){RV.sel[r.id]=1;});rvDraw();return;}
   if(a==='selLimpar'){RV.sel={};rvDraw();return;}
+  if(a==='grp'){var g=b.getAttribute('data-v');RV.F.grp=RV.F.grp===g?'':g;RV.pg=1;rvDraw();return;}
+  if(a==='fvend'){var vv=b.getAttribute('data-v');RV.F.vend=RV.F.vend===vv?'':vv;RV.pg=1;rvDraw();return;}
+  if(a==='etqTog'){RV.etqAberto=!RV.etqAberto;rvDraw();return;}
   if(a==='novaCamp'){rvNovaCamp();return;}
   if(a==='abrirWa'){var id2=b.getAttribute('data-id'),r2=null;rvMontar().some(function(x){if(x.id===id2){r2=x;return true;}return false;});if(!r2)return;var num=r2.w?r2.w.p:('55'+r2.k);if(num.length<=11)num='55'+num;window.open('https://wa.me/'+num,'maWA');return;}
   if(a==='optout'){var k=b.getAttribute('data-k');if(!k||!confirm('Marcar '+b.getAttribute('data-n')+' como "não quer receber"? Ele sai de todas as campanhas.'))return;RV.opt[k]={ts:Date.now(),u:rvMe(),n:b.getAttribute('data-n')};rvFb('optout/'+k,'PUT',RV.opt[k]).catch(function(){});RV.rows=null;rvDraw();return;}
@@ -14406,8 +14444,10 @@ function rvChange(ev){
   var t=ev.target,f=t.getAttribute('data-f');
   if(f){RV.F[f]=t.type==='checkbox'?t.checked:t.value;RV.pg=1;rvDraw();return;}
   if(t.id==='rvMeses'){RV.meses=t.value;return;}
+  if(t.getAttribute('data-etq')!=null){var e=t.getAttribute('data-etq'),k=rvEtqKey(e),v=t.value||'nao';RV.cfg.etq=RV.cfg.etq||{};RV.cfg.etq[k]=v;RV.rows=null;
+    rvFb('config/etq/'+k,'PUT',v).catch(function(err){alert('Não consegui salvar: '+err.message);});rvDraw();return;}
   if(t.id==='rvAbrirEm'){try{localStorage.setItem('rvAbrirEm',t.value);}catch(e){}return;}
-  if(t.id==='rvAddCamp'&&t.value){var cid=t.value,c=RV.camps[cid],add={},n=0;rvMontar().forEach(function(r){if(RV.sel[r.id]&&r.k&&!rvOptout(r.k)&&!(c.fila||{})[r.k]){add[r.k]={n:String(r.nome).slice(0,80),p:r.w?r.w.p:('55'+r.k),uc:r.uc||'',vd:r.vd||'',sc:r.sc||0,c:rvContato(r)};n++;}});
+  if(t.id==='rvAddCamp'&&t.value){var cid=t.value,c=RV.camps[cid],add={},n=0;rvMontar().forEach(function(r){if(RV.sel[r.id]&&r.k&&!rvOptout(r.k)&&!(c.fila||{})[r.k]){add[r.k]={n:String(r.nome).slice(0,80),p:r.w?r.w.p:('55'+r.k),uc:r.uc||'',vd:r.vd||'',sc:r.sc||0,c:rvContato(r),g:r.grs||[],ve:r.vend||[],emp:rvEmpresa(r)};n++;}});
     if(!n){alert('Os selecionados já estão nessa campanha.');t.value='';return;}
     rvFb('campanhas/'+cid+'/fila','PATCH',add).then(function(){c.fila=Object.assign(c.fila||{},add);RV.sel={};RV.toast='✅ '+n+' contato(s) adicionados em '+cqEsc(c.nome)+'.';rvDraw();}).catch(function(e){alert('Não consegui adicionar: '+e.message);});return;}
   if(t.id==='rvEImg'&&t.files&&t.files[0]){rvLerEditor();rvImgArquivo(t.files[0],function(d){RV.edit.img=d;rvDraw();});return;}
