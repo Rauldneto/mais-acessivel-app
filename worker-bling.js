@@ -202,6 +202,11 @@ export default {
       if (url.pathname === '/pagar/conciliar') return resp(await pagarConciliar(env, url.searchParams.get('de'), url.searchParams.get('ate'), url.searchParams.get('mes')));
       if (url.pathname === '/pagar/baixar' && req.method === 'POST') return resp(await pagarBaixar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/pagar/lancar' && req.method === 'POST') return resp(await pagarLancar(env, (await req.json().catch(() => ({}))) || {}));
+      // Conciliação DDA (celular/tablet): DDA do dia × contas a pagar do Bling; pagar pelo Sicoob e baixar no Bling
+      if (url.pathname === '/dda/painel') return resp(await ddaPainel(env, url.searchParams.get('dia')));
+      if (url.pathname === '/dda/diag') return resp(await ddaDiag(env));
+      if (url.pathname === '/dda/pagar' && req.method === 'POST') return resp(await ddaPagar(env, (await req.json().catch(() => ({}))) || {}));
+      if (url.pathname === '/dda/pendente' && req.method === 'POST') return resp(await ddaPendenteResolver(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/pagar/auto' && req.method === 'POST') return resp(await pagarTaxasAuto(env, { forcar: true }));
       if (url.pathname === '/pagar/auto') return resp(Object.assign({ ok: true }, (await env.BLING_KV.get('pagar:auto', 'json')) || {}));
       if (url.pathname === '/pagar/marcar' && req.method === 'POST') return resp(await pagarMarcar(env, (await req.json().catch(() => ({}))) || {}));
@@ -650,7 +655,7 @@ const ESCOPO_PIX = 'cob.write cob.read pix.read';
 const ESCOPO_BOLETOS = 'boletos_consulta';
 
 // O extrato (Conta Corrente) pode vir de um 2º app do portal Sicoob: variável SICOOB_CLIENT_ID_CCO (opcional)
-function clientSicoob(env, escopo) { return (/^cco_/.test(escopo || '') && env.SICOOB_CLIENT_ID_CCO) || env.SICOOB_CLIENT_ID; }
+function clientSicoob(env, escopo) { return (/^(cco_|pagamentos_)/.test(escopo || '') && env.SICOOB_CLIENT_ID_CCO) || env.SICOOB_CLIENT_ID; }
 function pedirTokenSicoob(env, escopo) {
   return env.SICOOB_MTLS.fetch(SICOOB_TOKEN, {
     method: 'POST',
@@ -2479,5 +2484,202 @@ async function pagarMarcar(env, b) {
   if ('tipo' in b) d.tipo = b.tipo || undefined;
   if ('contaId' in b) d.contaId = b.contaId ? String(b.contaId) : undefined;
   await salvarMarca(env, b.chave, d);
+  return { ok: true };
+}
+
+
+// ======================================================================================================
+// ---------------- Conciliação DDA: boletos do DDA (Sicoob) × Contas a Pagar do Bling ----------------
+// API Cobrança Bancária Pagamentos v3 (app "JDFER Extrato", SICOOB_CLIENT_ID_CCO): escopos pagamentos_consulta e pagamentos_inclusao.
+//  GET  /pagamentos/v3/boletos                         → boletos DDA do pagador (JDFER)
+//  GET  /pagamentos/v3/boletos/{codigoBarras}?numeroConta=&dataPagamento=  → consulta para pagar (valor com juros/desconto, identificadorConsulta)
+//  POST /pagamentos/v3/boletos/pagamentos/{codigoBarras} (header x-idempotency-key)  → PAGA (movimenta dinheiro)
+//  GET  /pagamentos/v3/boletos/pagamentos/{chave}/idempotency/comprovantes?numeroConta= → acha pagamento já feito com a mesma chave
+// Travas do pagamento: variável DDA_PAGAR = "sim" e segredo DDA_PIN (o Raul digita o PIN no app); só paga boleto que está no DDA da JDFER;
+// limite diário DDA_LIMITE_DIA (padrão R$ 30.000); nunca paga duas vezes o mesmo boleto (chave de idempotência + registro no KV).
+const SICOOB_PAG = 'https://api.sicoob.com.br/pagamentos/v3';
+const SICOOB_COOP = 3054;
+const DDA_RAZAO = 'JDFER COMERCIO E SERVICOS LTDA';
+async function sicoobPag(env, escopo, metodo, caminho, corpo, extra) {
+  if (!env.SICOOB_MTLS || !env.SICOOB_CLIENT_ID_CCO) throw new Error('Falta o app do Sicoob com a API "Cobrança Bancária Pagamentos" (variável SICOOB_CLIENT_ID_CCO).');
+  let tok;
+  try { tok = await sicoobToken(env, escopo); }
+  catch (e) { throw new Error('O app do Sicoob ainda não tem a API "Cobrança Bancária Pagamentos" (' + escopo + '). Detalhe: ' + (e.message || e)); }
+  const fazer = t => env.SICOOB_MTLS.fetch(SICOOB_PAG + caminho, { method: metodo,
+    headers: Object.assign({ Authorization: 'Bearer ' + t, client_id: clientSicoob(env, escopo), Accept: 'application/json' }, corpo ? { 'Content-Type': 'application/json' } : {}, extra || {}),
+    body: corpo ? JSON.stringify(corpo) : undefined });
+  let r = await fazer(tok);
+  if (r.status === 401) { await env.BLING_KV.delete(chaveTokenSicoob(env, escopo)); r = await fazer(await sicoobToken(env, escopo)); }
+  if (r.status === 429) { await new Promise(x => setTimeout(x, 2500)); r = await fazer(tok); }
+  const txt = await r.text(); let j = null; try { j = txt ? JSON.parse(txt) : null; } catch (e) { j = { _texto: txt.slice(0, 300) }; }
+  if (!r.ok) {
+    const cod = j && Array.isArray(j.mensagens) ? j.mensagens.map(m => (m.codigo ? m.codigo + ' ' : '') + (m.mensagem || '')).join('; ') : '';
+    const e = new Error('Sicoob ' + r.status + ': ' + (cod || (j && (j.message || j.mensagem || j.moreInformation || j._texto)) || '').slice(0, 220)); e.status = r.status; e.txt = txt.slice(0, 400); throw e;
+  }
+  return j && j.resultado !== undefined ? j.resultado : j;
+}
+function ddaLista(o) { // primeira lista de boletos (objetos com código de barras) em qualquer nível da resposta
+  if (Array.isArray(o)) { if (o.length && o[0] && typeof o[0] === 'object' && ('numeroCodigoBarras' in o[0] || 'codigoBarras' in o[0] || 'valorBoleto' in o[0])) return o; for (const x of o) { const l = ddaLista(x); if (l) return l; } return o.length ? null : o; }
+  if (o && typeof o === 'object') for (const k of Object.keys(o)) { const l = ddaLista(o[k]); if (l) return l; }
+  return null;
+}
+function ddaNorm(b) {
+  const pago = !!(b.dataPagamento || Number(b.valorPagamento || 0) > 0) || /pag|liquid|baix/i.test(String(b.descricaoSituacaoBoleto || ''));
+  return { cb: String(b.numeroCodigoBarras || b.codigoBarras || '').replace(/\D/g, ''), linha: String(b.linhaDigitavel || ''),
+    doc: dig(b.numeroCpfCnpjBeneficiario), nome: String(b.nomeRazaoSocialBeneficiario || b.nomeFantasiaBeneficiario || '').trim(),
+    valor: r2(numBR(b.valorBoleto)), venc: soData(b.dataVencimentoBoleto), limite: soData(b.dataLimitePagamento), emissao: soData(b.dataEmissao),
+    ndoc: String(b.numeroDocumento || '').trim(), situacao: String(b.descricaoSituacaoBoleto || b.codigoTipoSituacaoBoleto || ''), pagoNoBanco: pago,
+    juros: !!Number(b.codigoTipoJuros || 0) };
+}
+// A consulta do DDA aceita filtros diferentes conforme a versão: tenta as combinações conhecidas e guarda a que funcionou
+const DDA_FILTROS = [
+  (de, ate) => ({ numeroCpfCnpjPagador: ECONF_CNPJ, dataInicial: de, dataFinal: ate }),
+  (de, ate) => ({ numeroCpfCnpj: ECONF_CNPJ, dataInicial: de, dataFinal: ate }),
+  (de, ate) => ({ cpfCnpjPagador: ECONF_CNPJ, dataVencimentoInicial: de, dataVencimentoFinal: ate }),
+  (de, ate) => ({ numeroConta: '{conta}', dataInicial: de, dataFinal: ate }),
+  (de, ate) => ({ dataInicial: de, dataFinal: ate }),
+];
+async function ddaListar(env, de, ate) {
+  const conta = await contaSicoob(env);
+  const pref = Number(await env.BLING_KV.get('dda:filtro')) || 0;
+  const ordem = [pref].concat(DDA_FILTROS.map((_, i) => i).filter(i => i !== pref));
+  let ultimoErro;
+  for (const i of ordem) {
+    const p = DDA_FILTROS[i](de, ate); Object.keys(p).forEach(k => { if (p[k] === '{conta}') p[k] = conta; });
+    try {
+      const r = await sicoobPag(env, 'pagamentos_consulta', 'GET', '/boletos?' + new URLSearchParams(p));
+      const lista = ddaLista(r) || [];
+      if (i !== pref) await env.BLING_KV.put('dda:filtro', String(i));
+      return lista.map(ddaNorm).filter(b => b.cb && b.valor);
+    } catch (e) { ultimoErro = e; if (e.status !== 400 && e.status !== 422 && e.status !== 404) throw e; }
+  }
+  throw ultimoErro || new Error('DDA: nenhum filtro aceito pelo Sicoob.');
+}
+async function ddaDiag(env) {
+  const hoje = hojeLocal(), out = [];
+  for (let i = 0; i < DDA_FILTROS.length; i++) {
+    const p = DDA_FILTROS[i](somaDias(hoje, -7), somaDias(hoje, 7)); if (p.numeroConta) p.numeroConta = await contaSicoob(env);
+    try { const r = await sicoobPag(env, 'pagamentos_consulta', 'GET', '/boletos?' + new URLSearchParams(p)); const l = ddaLista(r) || [];
+      out.push({ i, ok: true, qtd: l.length, campos: l[0] ? Object.keys(l[0]) : (r ? Object.keys(r) : []) }); break; }
+    catch (e) { out.push({ i, ok: false, erro: String(e.message).slice(0, 200) }); }
+  }
+  return { ok: true, testes: out };
+}
+
+// Painel do dia: DDA (vencidos não pagos dos últimos 10 dias até o dia escolhido) × contas a pagar em aberto do Bling (até o dia)
+async function ddaPainel(env, dia) {
+  const hoje = hojeLocal(); dia = soData(dia) || hoje;
+  const de = somaDias(dia, -10);
+  const dda = (await ddaListar(env, de, dia)).filter(b => b.venc && b.venc <= dia);
+  const pagos = {};
+  for (const b of dda) { const k = await env.BLING_KV.get('ddapago:' + b.cb, 'json'); if (k) pagos[b.cb] = k; }
+  const contasRaw = await pagarListar(env, 'dataVencimento', somaDias(dia, -30), dia, 4);
+  const fp = await formas(env);
+  const contas = contasRaw.filter(c => [1, 3].includes(Number(c.situacao))).map(c => {
+    const f = fp[c.formaPagamento && c.formaPagamento.id] || null;
+    return { id: c.id, valor: r2(c.valor), venc: soData(c.vencimento), situacao: Number(c.situacao), contatoId: String((c.contato && c.contato.id) || ''), forma: f ? f.nome : '', historico: c.historico || '' };
+  });
+  const info = await contatosInfo(env, contas.map(c => c.contatoId), 18);
+  contas.forEach(c => { const k = info.cache[c.contatoId] || {}; c.fornecedor = k.n || ('Fornecedor #' + c.contatoId); c.doc = k.d || ''; });
+  const raiz = d => String(d || '').slice(0, 8);
+  const tokens = s => semAcento(s).replace(/\b(LTDA|ME|EPP|EIRELI|S\/?A|SA|COMERCIO|INDUSTRIA|SERVICOS|DE|DA|DO|E)\b/g, ' ').split(/\W+/).filter(t => t.length >= 4);
+  const parecido = (a, b) => { const A = tokens(a), B = new Set(tokens(b)); return A.some(t => B.has(t)); };
+  const usadas = new Set(), linhas = [];
+  // 1º: mesmo CNPJ (ou mesma empresa) e mesmo valor; 2º: mesmo CNPJ e valor diferente; 3º: nome parecido e mesmo valor
+  const ordemDda = dda.slice().sort((a, b) => a.venc.localeCompare(b.venc) || b.valor - a.valor);
+  for (const b of ordemDda) {
+    const livre = contas.filter(c => !usadas.has(c.id));
+    const docOk = c => b.doc && c.doc && (b.doc === c.doc || (b.doc.length === 14 && raiz(b.doc) === raiz(c.doc)));
+    const igual = c => Math.abs(c.valor - b.valor) <= 0.01;
+    let c = livre.filter(c => docOk(c) && igual(c)).sort((x, y) => Math.abs(Date.parse(x.venc) - Date.parse(b.venc)) - Math.abs(Date.parse(y.venc) - Date.parse(b.venc)))[0], st = 'ok';
+    if (!c) { c = livre.filter(c => !b.doc && parecido(b.nome, c.fornecedor) && igual(c))[0] || livre.filter(c => !c.doc && parecido(b.nome, c.fornecedor) && igual(c))[0]; st = c ? 'provavel' : st; }
+    if (!c) { c = livre.filter(docOk).sort((x, y) => Math.abs(x.valor - b.valor) - Math.abs(y.valor - b.valor))[0]; st = c ? 'divergente' : 'sem_bling'; }
+    if (c) usadas.add(c.id);
+    linhas.push({ st: pagos[b.cb] ? 'pago' : st, dda: b, conta: c || null, pago: pagos[b.cb] || null, dif: c ? r2(b.valor - c.valor) : 0 });
+  }
+  contas.filter(c => !usadas.has(c.id)).sort((a, b) => a.venc.localeCompare(b.venc)).forEach(c => linhas.push({ st: 'sem_dda', dda: null, conta: c }));
+  const pend = (await env.BLING_KV.get('dda:pendentes', 'json')) || [];
+  return { ok: true, dia, hoje, linhas, pendentes: pend.filter(p => !p.resolvido).slice(-50).reverse(), faltamNomes: info.faltam,
+    pagarLigado: env.DDA_PAGAR === 'sim' && !!env.DDA_PIN, limiteDia: Number(env.DDA_LIMITE_DIA || 30000),
+    pagoHoje: Number(((await env.BLING_KV.get('dda:dia:' + hoje, 'json')) || {}).total || 0) };
+}
+
+async function ddaChave(cb, tentativa, conta) {
+  const h = await sha256hex(cb + ':' + tentativa);
+  const v = ((parseInt(h[16], 16) & 3) | 8).toString(16);
+  return SICOOB_COOP + '-' + Number(conta) + '-' + h.slice(0, 8) + '-' + h.slice(8, 12) + '-4' + h.slice(13, 16) + '-' + v + h.slice(17, 20) + '-' + h.slice(20, 32);
+}
+// chave para pagar este boleto, ou o pagamento já feito com ela (resposta perdida não vira pagamento em dobro)
+async function ddaAcharChave(env, cb, conta) {
+  for (let t = 0; t < 10; t++) {
+    const k = await ddaChave(cb, t, conta);
+    let ant;
+    try { ant = await sicoobPag(env, 'pagamentos_consulta', 'GET', '/boletos/pagamentos/' + k + '/idempotency/comprovantes?numeroConta=' + Number(conta)); }
+    catch (e) { if (/10275/.test(e.message) || e.status === 404) return { k }; throw e; }
+    if (!ant) return { k };
+    if (!['Cancelado', 'Rejeitado'].includes(ant.situacaoPagamento)) return { anterior: ant };
+  }
+  throw new Error('Este boleto já tem pagamentos demais cancelados/rejeitados.');
+}
+
+// POST /dda/pagar {cb, valor, contaId?, pin, usuario, avulso?}
+async function ddaPagar(env, b) {
+  if (env.DDA_PAGAR !== 'sim' || !env.DDA_PIN) return { ok: false, erro: 'Pagamento pelo app ainda desligado. No Cloudflare: variável DDA_PAGAR = sim e segredo DDA_PIN (o seu PIN).' };
+  const tentKey = 'dda:pin:erros:' + hojeLocal(); const tent = Number(await env.BLING_KV.get(tentKey) || 0);
+  if (tent >= 5) return { ok: false, erro: 'PIN errado 5 vezes hoje: pagamento bloqueado até amanhã.' };
+  if ((await sha256hex(String(b.pin || ''))) !== (await sha256hex(String(env.DDA_PIN)))) { await env.BLING_KV.put(tentKey, String(tent + 1), { expirationTtl: 86400 }); return { ok: false, erro: 'PIN errado.', pin: true }; }
+  const cb = dig(b.cb); if (cb.length !== 44) return { ok: false, erro: 'Código de barras inválido.' };
+  const ja = await env.BLING_KV.get('ddapago:' + cb, 'json'); if (ja) return { ok: false, erro: 'Este boleto já foi pago pelo app em ' + brData(ja.data) + '.' };
+  const trava = 'dda:trava:' + cb; if (await env.BLING_KV.get(trava)) return { ok: false, erro: 'Este boleto já está sendo pago.' };
+  await env.BLING_KV.put(trava, '1', { expirationTtl: 120 });
+  try {
+    const hoje = hojeLocal(), conta = await contaSicoob(env);
+    // 1) só boleto que está no DDA da JDFER
+    const lista = await ddaListar(env, somaDias(hoje, -30), somaDias(hoje, 60));
+    const doDda = lista.find(x => x.cb === cb);
+    if (!doDda) return { ok: false, erro: 'Esse boleto não está no DDA da JDFER: por segurança o app só paga boletos do DDA.' };
+    // 2) consulta para pagar (valor do dia, juros/desconto, beneficiário)
+    const q = await sicoobPag(env, 'pagamentos_consulta', 'GET', '/boletos/' + cb + '?numeroConta=' + Number(conta) + '&dataPagamento=' + hoje);
+    if (q.bloquearPagamento === true) return { ok: false, erro: 'O Sicoob bloqueou o pagamento deste boleto.' };
+    const valorPagar = r2(numBR(q.valorPagamento != null ? q.valorPagamento : q.valorBoleto));
+    if (Math.abs(valorPagar - Number(b.valor || 0)) > 0.01) return { ok: false, erro: 'O valor a pagar hoje é ' + valorPagar.toFixed(2).replace('.', ',') + ' (com juros/desconto), diferente do que estava na tela. Confira e tente de novo.', valorNovo: valorPagar };
+    // 3) limite do dia
+    const limite = Number(env.DDA_LIMITE_DIA || 30000), kd = 'dda:dia:' + hoje, dd = (await env.BLING_KV.get(kd, 'json')) || { total: 0, qtd: 0 };
+    if (dd.total + valorPagar > limite) return { ok: false, erro: 'Passaria do limite diário de pagamentos pelo app (R$ ' + limite.toFixed(2).replace('.', ',') + '). Já pago hoje: R$ ' + dd.total.toFixed(2).replace('.', ',') + '.' };
+    // 4) chave (não paga duas vezes) e PAGAMENTO
+    const kk = await ddaAcharChave(env, cb, conta);
+    let pg = kk.anterior;
+    if (!pg) {
+      pg = await sicoobPag(env, 'pagamentos_inclusao', 'POST', '/boletos/pagamentos/' + cb, {
+        identificadorConsulta: q.identificadorConsulta, valorBoleto: r2(numBR(q.valorBoleto)), valorDescontoAbatimento: r2(numBR(q.valorAbatimentoDesconto)),
+        valorMultaMora: r2(numBR(q.valorMultaMora)), aceitaValorDivergente: false, numeroCpfCnpjPortador: ECONF_CNPJ, nomePortador: DDA_RAZAO,
+        amount: valorPagar, date: soData(q.dataPagamento) || hoje,
+        debtorAccount: { issuer: SICOOB_COOP, number: Number(conta), accountType: 0, personType: 1 },
+      }, { 'x-idempotency-key': kk.k });
+    }
+    const sit = String((pg && pg.situacaoPagamento) || '');
+    if (!['Efetivado', 'Agendado'].includes(sit)) return { ok: false, erro: 'O Sicoob não confirmou o pagamento (situação: ' + (sit || '?') + '). Confira no app do banco antes de tentar de novo.' };
+    const dataPg = soData(pg.dataPagamento) || hoje;
+    const reg = { data: dataPg, valor: valorPagar, situacao: sit, id: pg.idPagamento, por: String(b.usuario || '').slice(0, 60), em: Date.now(), nome: doDda.nome, doc: doDda.doc, contaId: b.contaId || null };
+    await env.BLING_KV.put('ddapago:' + cb, JSON.stringify(reg), { expirationTtl: 400 * 86400 });
+    dd.total = r2(dd.total + valorPagar); dd.qtd++; await env.BLING_KV.put(kd, JSON.stringify(dd), { expirationTtl: 3 * 86400 });
+    await logAcao(env, { origem: 'dda', acao: 'dda_pago', cb, valor: valorPagar, situacao: sit, fornecedor: doDda.nome, por: reg.por });
+    // 5) baixa no Bling (ou pendência de lançamento)
+    let baixa = null;
+    if (b.contaId) {
+      baixa = await baixarContaPagar(env, b.contaId, valorPagar, dataPg, 'DDA Sicoob pago pelo app (' + sit + ') - ' + doDda.nome, Math.max(0, r2(valorPagar - Number(b.valorConta || valorPagar)))).catch(e => 'ERRO: ' + (e.message || e));
+    } else {
+      const pend = (await env.BLING_KV.get('dda:pendentes', 'json')) || [];
+      pend.push({ cb, nome: doDda.nome, doc: doDda.doc, valor: valorPagar, venc: doDda.venc, data: dataPg, ndoc: doDda.ndoc, por: reg.por, em: Date.now() });
+      await env.BLING_KV.put('dda:pendentes', JSON.stringify(pend.slice(-200)));
+    }
+    return { ok: true, situacao: sit, data: dataPg, valor: valorPagar, baixa, pendente: !b.contaId };
+  } finally { await env.BLING_KV.delete(trava); }
+}
+async function ddaPendenteResolver(env, b) {
+  const pend = (await env.BLING_KV.get('dda:pendentes', 'json')) || [];
+  const p = pend.find(x => x.cb === dig(b.cb)); if (!p) return { ok: false, erro: 'Pendência não encontrada.' };
+  p.resolvido = { por: String(b.usuario || '').slice(0, 60), em: Date.now(), contaId: b.contaId || null };
+  await env.BLING_KV.put('dda:pendentes', JSON.stringify(pend));
   return { ok: true };
 }

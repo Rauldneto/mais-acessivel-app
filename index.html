@@ -1,5 +1,5 @@
 <!-- v5.4-1785154153 -->
-<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material | fin-sem-nro-documento | fin-sem-ocorrencia | energia-solar-mod11-renderEnergiaSolar | leilao-imoveis-mod12-renderLeilaoImoveis | bling-mod17-renderBling | relatorio-despesas-mod19-renderRelDespesas | conciliacao-receber-boletos-dentro-do-mod17 | pagamentos-mod22-renderBling-pag | conciliacao-pagar-mod23-renderConcPagar | frete-compra-mod24-fcAtivo | lead-reativacao-whatsapp-mod26-renderDisparo -->
+<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material | fin-sem-nro-documento | fin-sem-ocorrencia | energia-solar-mod11-renderEnergiaSolar | leilao-imoveis-mod12-renderLeilaoImoveis | bling-mod17-renderBling | relatorio-despesas-mod19-renderRelDespesas | conciliacao-receber-boletos-dentro-do-mod17 | pagamentos-mod22-renderBling-pag | conciliacao-pagar-mod23-renderConcPagar | conciliacao-dda-mod27-renderConcDda | frete-compra-mod24-fcAtivo | lead-reativacao-whatsapp-mod26-renderDisparo -->
 <!-- ANTES DE PUBLICAR QUALQUER MUDANCA NESTE ARQUIVO: busque a versao atual em producao via GitHub API,
      confirme que os marcadores acima (nomes de funcao) ainda existem, e aplique a mudanca por cima dela -
      NUNCA sobrescreva com uma copia local antiga. Um commit em 21/08/2026 (f0ebfff) reverteu por engano
@@ -1414,6 +1414,7 @@ var ACESSO_ABAS=[
     {id:'mod16',n:'Lançamento de frete',admin:true},
     {id:'mod19',n:'Relatório de despesas',admin:true},
     {id:'mod23',n:'Conciliação contas a Pagar',admin:true},
+    {id:'mod27',n:'Conciliação DDA',admin:true},
     {id:'mod14',n:'Lançamento de despesas',admin:true}]},
   {g:'T.I.',e:'💻',c:'#5856d6',itens:[
     {id:'mod3',n:'Ace IA'},
@@ -3452,7 +3453,7 @@ function iniEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){re
 function iniAdmin(){return STATE.roleLogado==='admin';}
 // Mesma regra do menu (renderModuloNav): quais abas este usuário enxerga
 function iniModulos(){
-  var todos=['frete','mod10','mod2','mod7','mod8','mod9','mod26','mod3','mod4','mod11','mod12','mod13','mod20','mod14','mod16','mod19','mod23','mod17','mod22','mod5','mod15'];
+  var todos=['frete','mod10','mod2','mod7','mod8','mod9','mod26','mod3','mod4','mod11','mod12','mod13','mod20','mod14','mod16','mod19','mod23','mod27','mod17','mod22','mod5','mod15'];
   if(iniAdmin())return todos;
   var ids=todos;
   if(STATE.abasPermitidas&&STATE.abasPermitidas.length){
@@ -3461,7 +3462,7 @@ function iniModulos(){
     if(p.indexOf('_v2')<0&&p.indexOf('mod17')>=0&&p.indexOf('mod22')<0)p.push('mod22');
     ids=todos.filter(function(id){return p.indexOf(id)>=0;});
   }
-  var soAdmin=['mod11','mod12','mod13','mod14','mod15','mod16','mod19','mod23'];
+  var soAdmin=['mod11','mod12','mod13','mod14','mod15','mod16','mod19','mod23','mod27'];
   return ids.filter(function(id){return soAdmin.indexOf(id)<0;});
 }
 function iniPode(id){return iniModulos().indexOf(id)>=0;}
@@ -3797,6 +3798,7 @@ function renderModuloNav(){
     {id:'mod16', icon:'🚚', label:'Lançamento de frete'},
     {id:'mod19', icon:'📊', label:'Relatório de despesas'},
     {id:'mod23', icon:'🔁', label:'Conciliação contas a Pagar'},
+    {id:'mod27', icon:'💳', label:'Conciliação DDA'},
     {id:'mod17', icon:'🏦', label:'Conciliação contas a Receber'},
     {id:'mod22', icon:'💳', label:'Pagamentos'},
     {id:'mod5',  icon:'🧪', label:'Modelo em Teste'},
@@ -3805,7 +3807,7 @@ function renderModuloNav(){
     {id:'mod25', icon:'💬', label:'Chat'}
   ];
   // Mapeamento id antigo -> novo
-  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13','mod14':'mod14','mod15':'mod15','mod16':'mod16','mod17':'mod17','mod22':'mod22','mod18':'mod18','mod19':'mod19','mod20':'mod20','mod21':'mod17','mod23':'mod23','mod24':'mod24','mod25':'mod25'};
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13','mod14':'mod14','mod15':'mod15','mod16':'mod16','mod17':'mod17','mod22':'mod22','mod18':'mod18','mod19':'mod19','mod20':'mod20','mod21':'mod17','mod23':'mod23','mod24':'mod24','mod25':'mod25','mod27':'mod27'};
   // Admin ve tudo; outros so veem abas permitidas
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
@@ -3821,7 +3823,7 @@ function renderModuloNav(){
     }
   }
   // Abas só do administrador: Energia solar e Leilão (pessoais) e Formação de preço (mostra custos)
-  var ABAS_SO_ADMIN=['mod11','mod12','mod13','mod14','mod15','mod16','mod19','mod23'];
+  var ABAS_SO_ADMIN=['mod11','mod12','mod13','mod14','mod15','mod16','mod19','mod23','mod27'];
   if(STATE.roleLogado!=='admin'){
     MODULOS=MODULOS.filter(function(m){return ABAS_SO_ADMIN.indexOf(m.id)<0;});
     if(ABAS_SO_ADMIN.indexOf(STATE.modulo)>=0&&MODULOS.length)STATE.modulo=MODULOS[0].id;
@@ -3831,12 +3833,12 @@ function renderModuloNav(){
     {n:'Vendas',i:'ti-shopping-bag',c:'#ff9500',ids:['frete','mod10','mod2','mod7','mod8','mod4','mod5']},
     {n:'Lead',i:'ti-target-arrow',c:'#007aff',ids:['mod9','mod26']},
     {n:'Compras',i:'ti-shopping-cart',c:'#34c759',ids:['mod13','mod20','mod24']},
-    {n:'Financeiro',i:'ti-cash',c:'#0a7d6b',ids:['mod16','mod19','mod23','mod14','mod17','mod22'],
-     sub:[{n:'Contas a pagar',i:'ti-arrow-up-right',e:'📤',ids:['mod16','mod19','mod23','mod14']},{n:'Contas a receber',i:'ti-arrow-down-left',e:'📥',ids:['mod17','mod22']}]},
+    {n:'Financeiro',i:'ti-cash',c:'#0a7d6b',ids:['mod16','mod19','mod23','mod27','mod14','mod17','mod22'],
+     sub:[{n:'Contas a pagar',i:'ti-arrow-up-right',e:'📤',ids:['mod27','mod23','mod16','mod19','mod14']},{n:'Contas a receber',i:'ti-arrow-down-left',e:'📥',ids:['mod17','mod22']}]},
     {n:'T.I.',i:'ti-cpu',c:'#5856d6',ids:['mod3','mod15','mod18','mod25']},
     {n:'Particular',i:'ti-home',c:'#af52de',ids:['mod12','mod11']}
   ];
-  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod26:'ti-speakerphone',mod13:'ti-currency-dollar',mod20:'ti-scale',mod24:'ti-truck-loading',mod14:'ti-receipt-2',mod16:'ti-truck-delivery',mod17:'ti-building-bank',mod22:'ti-credit-card',mod19:'ti-report-money',mod23:'ti-arrows-exchange',mod15:'ti-gauge',mod18:'ti-bug',mod25:'ti-message-circle',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun'};
+  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod26:'ti-speakerphone',mod13:'ti-currency-dollar',mod20:'ti-scale',mod24:'ti-truck-loading',mod14:'ti-receipt-2',mod16:'ti-truck-delivery',mod17:'ti-building-bank',mod22:'ti-credit-card',mod19:'ti-report-money',mod23:'ti-arrows-exchange',mod27:'ti-file-dollar',mod15:'ti-gauge',mod18:'ti-bug',mod25:'ti-message-circle',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun'};
   if(!document.getElementById('navIosCss')){
     var lk=document.createElement('link');lk.rel='stylesheet';lk.href='https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css';lk.onload=function(){document.documentElement.classList.add('ti-ok');};document.head.appendChild(lk);
     var st=document.createElement('style');st.id='navIosCss';
@@ -4424,7 +4426,7 @@ function rppAdmin(){return STATE.roleLogado==='admin';}
 function rppUsuario(){return STATE.usuarioLogado||STATE.loginUser||'?';}
 function rppData(t){var d=new Date(t);return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
 function rppNomeTela(id){
-  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod26:'Reativação WhatsApp',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod23:'Conciliação contas a Pagar',mod17:'Conciliação contas a Receber',mod22:'Pagamentos (gerar PIX / link)',mod15:'Controle',mod18:'Reportar Problema',mod25:'Chat',ext:'Extensão do Chrome',outro:'Outra / não sei'};
+  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod26:'Reativação WhatsApp',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod23:'Conciliação contas a Pagar',mod27:'Conciliação DDA',mod17:'Conciliação contas a Receber',mod22:'Pagamentos (gerar PIX / link)',mod15:'Controle',mod18:'Reportar Problema',mod25:'Chat',ext:'Extensão do Chrome',outro:'Outra / não sei'};
   return nomes[id]||id||'?';
 }
 
@@ -4516,7 +4518,7 @@ async function rppAnalisar(c,fotos,anteriores){
 // ---- Envio do chamado ----
 // ---- Correção automática (robô no GitHub: .github/workflows/corrigir-chamado.yml, disparado pelo Worker corrigir-chamado) ----
 // Firebase chamadosConfig = {autoUrl, autoLigado}. Resultado do robô: chamados-auto/<autoId>.json, publicado junto com o app.
-var RPP_AUTO_TELAS_FORA=['mod2','mod13','mod20','mod14','mod15','mod16','mod17','mod22','mod23']; // crédito e financeiro: nunca disparam sozinhos
+var RPP_AUTO_TELAS_FORA=['mod2','mod13','mod20','mod14','mod15','mod16','mod17','mod22','mod23','mod27']; // crédito e financeiro: nunca disparam sozinhos
 var RPP_AUTO_PARECER='Erro confirmado! A correção automática já está sendo aplicada. Em alguns minutos a resposta aparece aqui em Meus chamados.';
 async function rppCfg(forcar){
   if(RPP.cfg&&!forcar)return RPP.cfg;
@@ -4953,7 +4955,7 @@ function rppHtmlNovo(){
     '<p style="color:#6b7280;margin:0 0 16px">'+(RPP.ok.resolvido?'Se o erro continuar, abra <b>Meus chamados</b> e clique em <b>🔁 Reabrir</b>.':'O T.I. já foi avisado. Você acompanha a situação em <b>Meus chamados</b>.')+'</p>'+
     '<button class="rpp-btn" data-a="outro">Reportar outro problema</button> <button class="rpp-btn sec" data-a="voltar">Voltar ao que eu estava fazendo</button></div>';
   // Só as abas que este colaborador enxerga no menu (mesma regra do menu), mais o Início e a extensão (se liberada)
-  var telas=['inicio','frete','mod10','mod2','mod4','mod8','mod9','mod26','mod7','mod3','mod17','mod22','mod14','mod16','mod23','mod13','mod20','mod15','mod5','mod11','mod12'];
+  var telas=['inicio','frete','mod10','mod2','mod4','mod8','mod9','mod26','mod7','mod3','mod17','mod22','mod14','mod16','mod23','mod27','mod13','mod20','mod15','mod5','mod11','mod12'];
   var pode=telas;try{if(typeof iniModulos==='function')pode=iniModulos();}catch(e){}
   telas=telas.filter(function(t){return t==='inicio'||pode.indexOf(t)>=0;});
   if(rppAdmin()||(STATE.abasPermitidas&&STATE.abasPermitidas.indexOf('ext')>=0))telas.push('ext');
@@ -5191,7 +5193,7 @@ var CTL_PRECOS=[
   {p:'claude-sonnet',in:3,out:15},
   {p:'claude-opus-4-5',in:5,out:25},{p:'claude-opus-4-6',in:5,out:25},{p:'claude-opus',in:15,out:75}
 ];
-var CTL_AREAS={mod18:'Reportar Problema',frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Despesas (comprovantes)',mod16:'Lançamento de frete (CT-e)',mod23:'Conciliação contas a Pagar (extrato Sicoob × Bling)',mod17:'Conciliação contas a Receber (PIX, boletos e crédito)',mod22:'Pagamentos (gerar PIX / link de crédito)',mod15:'Controle'};
+var CTL_AREAS={mod18:'Reportar Problema',frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Despesas (comprovantes)',mod16:'Lançamento de frete (CT-e)',mod23:'Conciliação contas a Pagar (extrato Sicoob × Bling)',mod27:'Conciliação DDA (pagar e baixar)',mod17:'Conciliação contas a Receber (PIX, boletos e crédito)',mod22:'Pagamentos (gerar PIX / link de crédito)',mod15:'Controle'};
 var CTL={cfg:null,ia:null,carregando:false,erro:'',dolar:null,root:null};
 
 function ctlPreco(model){model=model||'';for(var k=0;k<CTL_PRECOS.length;k++){if(model.indexOf(CTL_PRECOS[k].p)===0)return CTL_PRECOS[k];}return {in:3,out:15};}
@@ -15281,6 +15283,240 @@ function ccrExcel(){
   var aEl=document.createElement('a');aEl.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));aEl.download='simulacao-boletos-sicoob-'+CCR.f.de+'-a-'+CCR.f.ate+'.csv';aEl.click();
 }
 
+// ===================== MÓDULO CONCILIAÇÃO DDA (mod27) =====================
+// Financeiro › Contas a pagar › Conciliação DDA (só admin; feita para celular e tablet; abre direto em #dda).
+// DDA do dia (Sicoob) à esquerda × contas a pagar em aberto do Bling à direita. Fornecedor (CNPJ) e valor batem → verde:
+// "Pagar e baixar" paga o boleto pelo Sicoob (com PIN) e dá baixa no Bling. DDA sem conta no Bling → pagar avulso
+// (fica pendente o lançamento) e avisar o financeiro pelo Chat. Servidor: Worker "bling" (rotas /dda/*).
+var DDA={root:null,dados:null,carregando:false,erro:'',dia:'',msg:'',msgTipo:'',pin:'',ocup:{},filtro:'todos'};
+if((location.hash||'')==='#dda'){STATE.modulo='mod27';}
+var DDA_ST={ok:['Bate','#16a34a','#dcfce7','✅'],provavel:['Provável (nome e valor)','#0d9488','#ccfbf1','🟢'],divergente:['Valor diferente','#ea580c','#ffedd5','⚠️'],sem_bling:['Não está no Bling','#dc2626','#fee2e2','❌'],sem_dda:['Sem DDA (Bling)','#64748b','#f1f5f9','📋'],pago:['Pago pelo app','#2563eb','#dbeafe','💙']};
+function ddaEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function ddaR(v){return 'R$ '+Number(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');}
+function ddaD(iso){if(!iso)return '';var p=String(iso).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]:iso;}
+function ddaHoje(off){var d=new Date();d.setDate(d.getDate()+(off||0));return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function ddaDoc(d){d=String(d||'');return d.length===14?d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5'):d.length===11?d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4'):d;}
+function ddaResp(){try{return localStorage.getItem('dda_resp')||'';}catch(e){return '';}}
+function ddaSetResp(v){try{localStorage.setItem('dda_resp',v);}catch(e){}}
+
+function ddaCss(){
+  if(document.getElementById('ddaCss'))return;
+  var st=document.createElement('style');st.id='ddaCss';
+  st.textContent=
+  '.dda{--azul:#2563eb;--roxo:#7c3aed;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;color:#0f172a;max-width:1100px;margin:0 auto;padding-bottom:90px}'+
+  '.dda *{box-sizing:border-box}'+
+  '.dda-hero{background:linear-gradient(135deg,#0a7d6b 0%,#0e9f87 45%,#2563eb 100%);color:#fff;border-radius:22px;padding:18px 18px 16px;box-shadow:0 10px 30px rgba(14,159,135,.28);margin-bottom:14px;position:relative;overflow:hidden}'+
+  '.dda-hero:after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;border-radius:50%;background:rgba(255,255,255,.12)}'+
+  '.dda-hero h2{margin:0;font-size:21px;font-weight:800;letter-spacing:-.3px}.dda-hero .s{opacity:.9;font-size:13px;margin-top:3px}'+
+  '.dda-dias{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;position:relative;z-index:1}'+
+  '.dda-dia{border:1.5px solid rgba(255,255,255,.55);background:rgba(255,255,255,.12);color:#fff;border-radius:999px;padding:7px 14px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}'+
+  '.dda-dia.on{background:#fff;color:#0a7d6b;border-color:#fff}'+
+  '.dda-dia input{border:none;background:transparent;color:inherit;font:inherit;width:120px}'+
+  '.dda-res{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-bottom:12px}'+
+  '.dda-k{background:#fff;border-radius:16px;padding:11px 12px;box-shadow:0 4px 14px rgba(15,23,42,.07);border:1px solid #eef2f7;cursor:pointer;position:relative;overflow:hidden;transition:transform .15s}'+
+  '.dda-k:active{transform:scale(.97)}.dda-k.on{outline:2.5px solid var(--c)}'+
+  '.dda-k:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--c)}'+
+  '.dda-k .t{font-size:11.5px;font-weight:700;color:#475569}.dda-k .v{font-size:18px;font-weight:800;margin-top:2px;color:var(--c)}.dda-k .n{font-size:11.5px;color:#64748b}'+
+  '.dda-msg{border-radius:14px;padding:11px 14px;margin-bottom:12px;font-weight:600;font-size:13.5px;box-shadow:0 2px 8px rgba(0,0,0,.05)}'+
+  '.dda-msg.ok{background:#dcfce7;color:#166534}.dda-msg.bad{background:#fee2e2;color:#991b1b}.dda-msg.warn{background:#fef3c7;color:#92400e}'+
+  '.dda-cols{display:grid;grid-template-columns:1fr 1fr;gap:0;font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#64748b;padding:0 6px 6px}'+
+  '.dda-cols .a{color:var(--azul)}.dda-cols .b{color:var(--roxo);padding-left:14px}'+
+  '.dda-card{background:#fff;border-radius:20px;box-shadow:0 6px 20px rgba(15,23,42,.08);margin-bottom:12px;overflow:hidden;border:1px solid #eef2f7;animation:ddaIn .25s ease-out}'+
+  '@keyframes ddaIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}'+
+  '.dda-top{display:flex;align-items:center;gap:8px;padding:8px 14px;font-size:12.5px;font-weight:800;background:var(--bg);color:var(--c)}'+
+  '.dda-top .dif{margin-left:auto;font-weight:700}'+
+  '.dda-par{display:grid;grid-template-columns:1fr 1fr;position:relative}'+
+  '.dda-par:after{content:"⇄";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:30px;height:30px;border-radius:50%;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center;font-weight:900;color:var(--c);font-size:14px}'+
+  '.dda-lado{padding:12px 14px;min-height:92px}'+
+  '.dda-lado.a{border-right:1px dashed #e2e8f0;background:linear-gradient(180deg,#f8fbff,#fff)}.dda-lado.b{background:linear-gradient(180deg,#faf8ff,#fff);padding-left:22px}'+
+  '.dda-lado .lb{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px}.dda-lado.a .lb{color:var(--azul)}.dda-lado.b .lb{color:var(--roxo)}'+
+  '.dda-lado .nm{font-weight:800;font-size:14px;margin-top:3px;line-height:1.25;word-break:break-word}'+
+  '.dda-lado .vl{font-size:19px;font-weight:900;margin-top:4px;letter-spacing:-.3px}'+
+  '.dda-lado .mt{font-size:11.5px;color:#64748b;margin-top:2px}'+
+  '.dda-lado .vazio{color:#94a3b8;font-weight:700;font-size:13px;margin-top:14px}'+
+  '.dda-acts{display:flex;gap:8px;flex-wrap:wrap;padding:10px 14px 14px;border-top:1px solid #f1f5f9}'+
+  '.dda-b{flex:1 1 auto;min-height:44px;border-radius:14px;border:none;font-family:inherit;font-weight:800;font-size:14px;padding:0 14px;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.12);transition:transform .1s,filter .15s}'+
+  '.dda-b:active{transform:scale(.97)}.dda-b[disabled]{opacity:.5;cursor:not-allowed}'+
+  '.dda-b.pagar{background:linear-gradient(135deg,#16a34a,#0d9488);color:#fff}'+
+  '.dda-b.avulso{background:linear-gradient(135deg,#dc2626,#ea580c);color:#fff}'+
+  '.dda-b.sec{background:#fff;color:#334155;border:1.5px solid #e2e8f0;box-shadow:none}'+
+  '.dda-b.avisa{background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff}'+
+  '.dda-fixo{position:fixed;left:0;right:0;bottom:0;z-index:50;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:rgba(255,255,255,.92);backdrop-filter:blur(10px);box-shadow:0 -6px 20px rgba(0,0,0,.08)}'+
+  '.dda-fixo .dda-b{width:100%;max-width:700px;display:block;margin:0 auto;min-height:52px;font-size:15.5px}'+
+  '.dda-sec{font-size:15px;font-weight:800;margin:18px 4px 8px;display:flex;align-items:center;gap:8px}'+
+  '.dda-pend{background:#fff;border-radius:16px;padding:12px 14px;margin-bottom:8px;box-shadow:0 3px 12px rgba(15,23,42,.06);border-left:5px solid #f59e0b}'+
+  '.dda-vazio{background:#fff;border-radius:20px;padding:28px;text-align:center;color:#64748b;box-shadow:0 4px 14px rgba(15,23,42,.06)}'+
+  '.dda-modal{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center;animation:ddaFade .15s}'+
+  '@keyframes ddaFade{from{opacity:0}to{opacity:1}}'+
+  '.dda-modal .box{background:#fff;width:100%;max-width:480px;border-radius:24px 24px 0 0;padding:20px 18px calc(20px + env(safe-area-inset-bottom));box-shadow:0 -10px 40px rgba(0,0,0,.25)}'+
+  '@media(min-width:700px){.dda-modal{align-items:center}.dda-modal .box{border-radius:24px}}'+
+  '.dda-modal h3{margin:0 0 6px;font-size:18px}.dda-modal .rs{background:#f8fafc;border-radius:14px;padding:10px 12px;margin:10px 0;font-size:13.5px;line-height:1.5}'+
+  '.dda-modal input,.dda-modal select{width:100%;height:50px;border-radius:14px;border:2px solid #e2e8f0;font-size:20px;text-align:center;letter-spacing:6px;font-family:inherit;margin:6px 0 12px}'+
+  '.dda-modal select{font-size:15px;letter-spacing:0;text-align:left;padding:0 12px}'+
+  '.dda-modal .row{display:flex;gap:8px}'+
+  '@media(max-width:420px){.dda-lado{padding:10px 10px}.dda-lado.b{padding-left:18px}.dda-lado .nm{font-size:13px}.dda-lado .vl{font-size:16.5px}.dda-hero h2{font-size:19px}}';
+  document.head.appendChild(st);
+}
+
+function renderConcDda(){
+  ddaCss();
+  var w=document.createElement('div');w.className='dda';DDA.root=w;
+  if(!DDA.dia)DDA.dia=ddaHoje(0);
+  setTimeout(function(){var go=function(){ddaDraw();if(!DDA.dados&&!DDA.carregando&&blgUrl())ddaCarregar();};if(BLG.cfgCarregada)go();else blgCarregarCfg().then(go);},0);
+  return w;
+}
+function ddaCarregar(){
+  if(DDA.carregando)return;DDA.carregando=true;DDA.erro='';ddaDraw();
+  blgApi('/dda/painel?dia='+DDA.dia).then(function(r){DDA.carregando=false;if(!r||!r.ok){DDA.erro=(r&&r.erro)||'Falhou';DDA.dados=null;}else DDA.dados=r;ddaDraw();})
+    .catch(function(e){DDA.carregando=false;DDA.erro='Sem conexão com o servidor: '+e.message;ddaDraw();});
+}
+function ddaGrupo(st){return st==='provavel'?'ok':st;}
+function ddaDraw(){
+  var w=DDA.root;if(!w||!document.body.contains(w))return;
+  var d=DDA.dados,h='';
+  h+='<div class="dda-hero"><h2>💳 Conciliação DDA</h2><div class="s">Boletos do DDA (Sicoob) × contas a pagar do Bling. O que bate você paga e baixa com um toque.</div>'+
+    '<div class="dda-dias"><button class="dda-dia'+(DDA.dia===ddaHoje(0)?' on':'')+'" data-dia="0">Hoje</button><button class="dda-dia'+(DDA.dia===ddaHoje(1)?' on':'')+'" data-dia="1">Amanhã</button>'+
+    '<label class="dda-dia'+(DDA.dia!==ddaHoje(0)&&DDA.dia!==ddaHoje(1)?' on':'')+'">📅 <input type="date" id="ddaData" value="'+DDA.dia+'"></label>'+
+    '<button class="dda-dia" id="ddaAtual">'+(DDA.carregando?'⏳':'🔄')+'</button></div></div>';
+  if(DDA.msg)h+='<div class="dda-msg '+(DDA.msgTipo||'ok')+'">'+DDA.msg+'</div>';
+  if(DDA.erro)h+='<div class="dda-msg bad">'+ddaEsc(DDA.erro)+'</div>';
+  if(!blgUrl()){w.innerHTML=h+'<div class="dda-vazio">Servidor (Worker) não configurado.</div>';ddaLigar();return;}
+  if(!d){w.innerHTML=h+'<div class="dda-vazio">'+(DDA.carregando?'Lendo o DDA do Sicoob e o Contas a Pagar do Bling…':(DDA.erro?'':'Toque em 🔄 para carregar.'))+'</div>';ddaLigar();return;}
+  var L=d.linhas||[],cont={},tot={};
+  L.forEach(function(x){var g=ddaGrupo(x.st);cont[g]=(cont[g]||0)+1;tot[g]=(tot[g]||0)+((x.dda||x.conta||{}).valor||0);});
+  var ks=[['todos','Tudo','#0f172a'],['ok','✅ Batem','#16a34a'],['divergente','⚠️ Valor diferente','#ea580c'],['sem_bling','❌ Sem Bling','#dc2626'],['sem_dda','📋 Sem DDA','#64748b'],['pago','💙 Pagos','#2563eb']];
+  h+='<div class="dda-res">'+ks.map(function(k){var n=k[0]==='todos'?L.length:(cont[k[0]]||0),v=k[0]==='todos'?L.reduce(function(s,x){return s+((x.dda||x.conta||{}).valor||0);},0):(tot[k[0]]||0);
+    return '<div class="dda-k'+(DDA.filtro===k[0]?' on':'')+'" data-f="'+k[0]+'" style="--c:'+k[2]+'"><div class="t">'+k[1]+'</div><div class="v">'+n+'</div><div class="n">'+ddaR(v)+'</div></div>';}).join('')+'</div>';
+  if(!d.pagarLigado)h+='<div class="dda-msg warn">🔒 O pagamento pelo app ainda está desligado. Por enquanto você pode <b>dar baixa no Bling</b> do que já pagou no banco. Para ligar: Cloudflare → variável <b>DDA_PAGAR = sim</b> e segredo <b>DDA_PIN</b>.</div>';
+  else h+='<div class="dda-msg ok" style="font-weight:500">🔐 Pagamentos pelo app hoje: <b>'+ddaR(d.pagoHoje)+'</b> de '+ddaR(d.limiteDia)+' (limite diário).</div>';
+  var F=L.filter(function(x){return DDA.filtro==='todos'||ddaGrupo(x.st)===DDA.filtro;});
+  if(!F.length)h+='<div class="dda-vazio">Nada aqui para '+(DDA.dia===ddaHoje(0)?'hoje':ddaD(DDA.dia))+'. ✓</div>';
+  else{
+    h+='<div class="dda-cols"><div class="a">🏦 DDA Sicoob</div><div class="b">📋 Bling</div></div>';
+    F.forEach(function(x,i){h+=ddaCard(x,L.indexOf(x));});
+  }
+  if(d.pendentes&&d.pendentes.length){
+    h+='<div class="dda-sec">⏳ Pagos sem lançamento no Bling <span style="font-size:12px;color:#64748b;font-weight:600">('+d.pendentes.length+')</span></div>';
+    d.pendentes.forEach(function(p){h+='<div class="dda-pend"><b>'+ddaEsc(p.nome)+'</b> · '+ddaR(p.valor)+'<div style="font-size:12px;color:#64748b">CNPJ '+ddaDoc(p.doc)+' · venc. '+ddaD(p.venc)+' · pago '+ddaD(p.data)+' por '+ddaEsc(p.por)+'</div>'+
+      '<div class="dda-acts" style="padding:8px 0 0;border:none"><button class="dda-b avisa" data-a="avisarPend" data-cb="'+p.cb+'">📣 Avisar financeiro</button><button class="dda-b sec" data-a="resolver" data-cb="'+p.cb+'">✔️ Já lançado</button></div></div>';});
+  }
+  var verdes=L.filter(function(x){return (x.st==='ok')&&x.conta&&x.dda;});
+  if(verdes.length)h+='<div class="dda-fixo"><button class="dda-b pagar" data-a="todos">'+(d.pagarLigado?'💸 Pagar e baixar':'✅ Baixar no Bling')+(verdes.length===1?' o 1 com CNPJ e valor iguais':' os '+verdes.length+' com CNPJ e valor iguais')+' · '+ddaR(verdes.reduce(function(s,x){return s+x.dda.valor;},0))+'</button></div>';
+  w.innerHTML=h;ddaLigar();
+}
+function ddaCard(x,i){
+  var s=DDA_ST[x.st]||DDA_ST.ok,b=x.dda,c=x.conta,d=DDA.dados;
+  var h='<div class="dda-card" style="--c:'+s[1]+';--bg:'+s[2]+'"><div class="dda-top">'+s[3]+' '+s[0]+(x.st==='divergente'?'<span class="dif">diferença '+ddaR(x.dif)+'</span>':'')+(x.st==='pago'&&x.pago?'<span class="dif">'+ddaEsc(x.pago.situacao)+' em '+ddaD(x.pago.data)+'</span>':'')+'</div><div class="dda-par">';
+  h+='<div class="dda-lado a"><div class="lb">DDA</div>'+(b?'<div class="nm">'+ddaEsc(b.nome||'(sem nome)')+'</div><div class="vl">'+ddaR(b.valor)+'</div><div class="mt">venc. '+ddaD(b.venc)+(b.venc<DDA.dados.hoje?' · <b style="color:#dc2626">vencido</b>':'')+'</div><div class="mt">'+ddaDoc(b.doc)+(b.ndoc?' · doc '+ddaEsc(b.ndoc):'')+'</div>':'<div class="vazio">— sem DDA —</div>')+'</div>';
+  h+='<div class="dda-lado b"><div class="lb">Bling</div>'+(c?'<div class="nm">'+ddaEsc(c.fornecedor)+'</div><div class="vl">'+ddaR(c.valor)+'</div><div class="mt">venc. '+ddaD(c.venc)+' · '+ddaEsc(c.forma||'')+'</div><div class="mt">'+ddaDoc(c.doc)+'</div>':'<div class="vazio">— não lançado —</div>')+'</div>';
+  h+='</div><div class="dda-acts">';
+  if(x.st==='ok'||x.st==='provavel'||x.st==='divergente'){
+    if(d.pagarLigado)h+='<button class="dda-b pagar" data-a="pagar" data-i="'+i+'">💸 Pagar e baixar</button>';
+    h+='<button class="dda-b '+(d.pagarLigado?'sec':'pagar')+'" data-a="baixar" data-i="'+i+'">'+(d.pagarLigado?'Já paguei · só baixar':'✅ Já paguei · baixar no Bling')+'</button>';
+  }else if(x.st==='sem_bling'){
+    if(d.pagarLigado)h+='<button class="dda-b avulso" data-a="avulso" data-i="'+i+'">💳 Pagar avulso</button>';
+    h+='<button class="dda-b avisa" data-a="avisar" data-i="'+i+'">📣 Avisar financeiro</button>';
+  }else if(x.st==='sem_dda'){
+    h+='<button class="dda-b sec" data-a="baixar" data-i="'+i+'">Paguei por outro meio · baixar</button>';
+  }else if(x.st==='pago'&&x.pago&&!x.pago.contaId&&!c){
+    h+='<button class="dda-b avisa" data-a="avisar" data-i="'+i+'">📣 Avisar financeiro</button>';
+  }
+  return h+'</div></div>';
+}
+function ddaLigar(){
+  var w=DDA.root;if(!w)return;
+  w.querySelectorAll('[data-dia]').forEach(function(b){b.onclick=function(){DDA.dia=ddaHoje(+b.getAttribute('data-dia'));DDA.msg='';ddaCarregar();};});
+  var di=w.querySelector('#ddaData');if(di)di.onchange=function(){if(di.value){DDA.dia=di.value;DDA.msg='';ddaCarregar();}};
+  var at=w.querySelector('#ddaAtual');if(at)at.onclick=function(){DDA.msg='';ddaCarregar();};
+  w.querySelectorAll('[data-f]').forEach(function(b){b.onclick=function(){DDA.filtro=b.getAttribute('data-f');ddaDraw();};});
+  w.querySelectorAll('[data-a]').forEach(function(b){b.onclick=function(){ddaAcao(b.getAttribute('data-a'),b);};});
+}
+function ddaAviso(m,t){DDA.msg=m;DDA.msgTipo=t||'ok';ddaDraw();window.scrollTo({top:0,behavior:'smooth'});}
+function ddaModal(html,ligar){
+  var m=document.createElement('div');m.className='dda-modal';m.innerHTML='<div class="box">'+html+'</div>';
+  m.onclick=function(e){if(e.target===m)m.remove();};document.body.appendChild(m);ligar(m);return m;
+}
+function ddaPedirPin(titulo,resumo,cb){
+  if(DDA.pin){cb(DDA.pin);return;}
+  ddaModal('<h3>🔐 '+titulo+'</h3><div class="rs">'+resumo+'</div><div style="font-size:13px;color:#64748b">Digite o seu PIN de pagamento:</div><input type="password" inputmode="numeric" autocomplete="off" id="ddaPin" maxlength="12"><div class="row"><button class="dda-b sec" id="ddaCanc">Cancelar</button><button class="dda-b pagar" id="ddaOk">Confirmar pagamento</button></div>',function(m){
+    var inp=m.querySelector('#ddaPin');setTimeout(function(){inp.focus();},50);
+    m.querySelector('#ddaCanc').onclick=function(){m.remove();};
+    var ok=function(){if(!inp.value)return;var p=inp.value;m.remove();DDA.pin=p;cb(p);};
+    m.querySelector('#ddaOk').onclick=ok;inp.onkeydown=function(e){if(e.key==='Enter')ok();};
+  });
+}
+function ddaConfirma(titulo,resumo,botao,cb){
+  ddaModal('<h3>'+titulo+'</h3><div class="rs">'+resumo+'</div><div class="row"><button class="dda-b sec" id="ddaCanc">Cancelar</button><button class="dda-b pagar" id="ddaOk">'+botao+'</button></div>',function(m){
+    m.querySelector('#ddaCanc').onclick=function(){m.remove();};m.querySelector('#ddaOk').onclick=function(){m.remove();cb();};});
+}
+function ddaPagarUm(x){
+  return blgApi('/dda/pagar',{method:'POST',body:{cb:x.dda.cb,valor:x.dda.valor,contaId:x.conta?x.conta.id:null,valorConta:x.conta?x.conta.valor:null,pin:DDA.pin,usuario:STATE.usuarioLogado||''}})
+    .then(function(r){if(r&&r.pin)DDA.pin='';return r||{ok:false,erro:'sem resposta'};});
+}
+function ddaAcao(a,b){
+  var d=DDA.dados,i=+b.getAttribute('data-i'),x=d&&d.linhas[i];
+  if(a==='pagar'||a==='avulso'){
+    var resumo='<b>'+ddaEsc(x.dda.nome)+'</b><br>'+ddaR(x.dda.valor)+' · venc. '+ddaD(x.dda.venc)+'<br>'+(x.conta?'Baixa no Bling: <b>'+ddaEsc(x.conta.fornecedor)+'</b> ('+ddaR(x.conta.valor)+')':'<b style="color:#dc2626">Sem conta no Bling</b>: fica pendente o lançamento')+'<br><span style="color:#64748b">Sai da conta Sicoob da JDFER.</span>';
+    ddaConfirma('💸 Pagar este boleto?',resumo,'Sim, pagar',function(){ddaPedirPin('PIN de pagamento',resumo,function(){
+      b.disabled=true;b.textContent='Pagando…';
+      ddaPagarUm(x).then(function(r){
+        if(r.ok)ddaAviso('✅ Pago ('+r.situacao+', '+ddaD(r.data)+') · '+ddaR(r.valor)+(r.pendente?' · ⏳ falta lançar no Bling':(r.baixa==='ok'?' · baixado no Bling':' · baixa: '+ddaEsc(r.baixa))),'ok');
+        else ddaAviso('❌ '+ddaEsc(r.erro),'bad');
+        if(r.ok&&r.pendente)ddaAvisarDialogo(x.dda,true);
+        ddaCarregar();});});});
+    return;}
+  if(a==='todos'){
+    var V=d.linhas.filter(function(y){return y.st==='ok'&&y.conta&&y.dda;}),tot=V.reduce(function(s,y){return s+y.dda.valor;},0);
+    if(!d.pagarLigado){
+      ddaConfirma('✅ Baixar no Bling?','Você já pagou no banco os <b>'+V.length+'</b> boletos que batem ('+ddaR(tot)+')?<br>A baixa sai no Bling com a data de hoje, conta Sicoob.','Sim, baixar',function(){ddaBaixar(V,b);});return;}
+    ddaConfirma('💸 Pagar '+V.length+' boletos?','Total <b>'+ddaR(tot)+'</b>, pela conta Sicoob da JDFER, e baixa de cada um no Bling.','Sim, pagar todos',function(){ddaPedirPin('PIN de pagamento','Pagar '+V.length+' boletos · '+ddaR(tot),function(){
+      b.disabled=true;var ok=0,er=[],k=0;
+      var passo=function(){if(k>=V.length){ddaAviso((ok?'✅ '+ok+' pago(s) e baixado(s). ':'')+(er.length?'❌ '+er.length+' com erro: '+er.join(' | '):''),er.length?(ok?'warn':'bad'):'ok');ddaCarregar();return;}
+        var y=V[k++];b.textContent='Pagando '+k+'/'+V.length+'…';
+        ddaPagarUm(y).then(function(r){if(r.ok)ok++;else{er.push(ddaEsc(y.dda.nome)+': '+ddaEsc(r.erro));if(r.pin){k=V.length;}}passo();});};
+      passo();});});
+    return;}
+  if(a==='baixar'){
+    var c=x.conta,valor=x.dda?x.dda.valor:c.valor;
+    ddaConfirma('✅ Dar baixa no Bling?','<b>'+ddaEsc(c.fornecedor)+'</b> · '+ddaR(c.valor)+'<br>Pago hoje ('+ddaD(ddaHoje(0))+'): '+ddaR(valor)+(valor>c.valor+0.01?' (juros '+ddaR(valor-c.valor)+')':'')+'<br><span style="color:#64748b">Só a baixa no Bling — nenhum pagamento sai daqui.</span>','Baixar',function(){ddaBaixar([x],b);});
+    return;}
+  if(a==='avisar'){ddaAvisarDialogo(x.dda,false);return;}
+  if(a==='avisarPend'){var p=d.pendentes.filter(function(z){return z.cb===b.getAttribute('data-cb');})[0];if(p)ddaAvisarDialogo({nome:p.nome,doc:p.doc,valor:p.valor,venc:p.venc,ndoc:p.ndoc,cb:p.cb},true);return;}
+  if(a==='resolver'){blgApi('/dda/pendente',{method:'POST',body:{cb:b.getAttribute('data-cb'),usuario:STATE.usuarioLogado||''}}).then(function(){ddaCarregar();});return;}
+}
+function ddaBaixar(V,b){
+  b.disabled=true;
+  var itens=V.map(function(y){var v=y.dda?y.dda.valor:y.conta.valor;return {contaId:y.conta.id,valor:v,data:ddaHoje(0),juro:Math.max(0,Math.round((v-y.conta.valor)*100)/100),historico:'Pago no Sicoob'+(y.dda?' (DDA '+y.dda.nome+')':'')+' - baixa pelo app'};});
+  var todos=[],k=0;
+  var passo=function(){var lote=itens.slice(k,k+15);if(!lote.length){var ok=todos.filter(function(z){return z.ok;}).length,er=todos.filter(function(z){return !z.ok;});
+      ddaAviso((ok?'✅ '+ok+' baixa(s) no Bling. ':'')+(er.length?'❌ '+er.map(function(z){return ddaEsc(z.erro);}).join(' | '):''),er.length?'warn':'ok');ddaCarregar();return;}
+    blgApi('/pagar/baixar',{method:'POST',body:{itens:lote,usuario:STATE.usuarioLogado||''}}).then(function(r){todos=todos.concat((r&&r.itens)||[]);k+=15;passo();});};
+  passo();
+}
+// Aviso pelo Chat do app (com alerta na tela) para o responsável lançar a despesa no Bling
+function ddaAvisarDialogo(b,pago){
+  chtCarregarUsers(true).then(function(us){
+    var resp=ddaResp();
+    var ops=us.map(function(u){return '<option value="'+ddaEsc(u.usuario)+'"'+(u.usuario===resp?' selected':'')+'>'+ddaEsc(u.nome||u.usuario)+'</option>';}).join('');
+    var txt='📣 Lançar no Contas a Pagar do Bling: '+(b.nome||'')+' · CNPJ '+ddaDoc(b.doc)+' · '+ddaR(b.valor)+' · venc. '+ddaD(b.venc)+(b.ndoc?' · doc '+b.ndoc:'')+(pago?' · JÁ PAGO pelo DDA (lançar e dar baixa)':' · está no DDA e ainda não foi lançado')+'.';
+    ddaModal('<h3>📣 Avisar o financeiro</h3><div class="rs">'+ddaEsc(txt)+'</div><div style="font-size:13px;color:#64748b">Mandar para:</div><select id="ddaPara"><option value="">— escolha —</option>'+ops+'</select><div class="row"><button class="dda-b sec" id="ddaCanc">Cancelar</button><button class="dda-b avisa" id="ddaOk">Enviar aviso</button></div>',function(m){
+      m.querySelector('#ddaCanc').onclick=function(){m.remove();};
+      m.querySelector('#ddaOk').onclick=function(){var para=m.querySelector('#ddaPara').value;if(!para){alert('Escolha quem recebe o aviso.');return;}
+        ddaSetResp(para);m.remove();ddaChat(para,txt).then(function(){ddaAviso('📣 Aviso enviado pelo Chat.','ok');}).catch(function(e){ddaAviso('Não consegui avisar: '+ddaEsc(e.message),'bad');});};
+    });
+  }).catch(function(e){ddaAviso('Não consegui carregar os usuários: '+ddaEsc(e.message),'bad');});
+}
+async function ddaChat(para,txt){
+  var eu=rppUsuario(),conv=chtConv(eu,para),t=Date.now(),m={de:eu,para:para,t:t,txt:txt.slice(0,4000),av:1},res=txt.replace(/\s+/g,' ').slice(0,140);
+  var r=await fetch(FIREBASE_DB+'/chat/'+encodeURIComponent(conv)+'.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(m)});
+  if(!r.ok)throw new Error('Firebase '+r.status);
+  var p={},kd=chtK(para)+'/'+conv,ke=chtK(eu)+'/'+conv;
+  p[kd+'/com']=eu;p[kd+'/ult']=res;p[kd+'/ultT']=t;p[kd+'/ultDe']=eu;p[kd+'/n']={'.sv':{'increment':1}};p[kd+'/av']=1;
+  p[ke+'/com']=para;p[ke+'/ult']=res;p[ke+'/ultT']=t;p[ke+'/ultDe']=eu;
+  await fetch(FIREBASE_DB+'/chatCaixa.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+  try{chtPush(para,conv,res,true);}catch(e){}
+}
+
 // ===================== MÓDULO CONCILIAÇÃO CONTAS A PAGAR (mod23) =====================
 // Financeiro › Contas a pagar › Conciliação contas a Pagar (só admin).
 // Débitos do extrato Sicoob × Contas a Pagar do Bling, separados em PIX, Boleto, Crédito (fatura do cartão),
@@ -17623,6 +17859,8 @@ function renderApp(){
     main.appendChild(renderFretes());
   } else if(STATE.modulo==='mod19'&&STATE.roleLogado==='admin'){
     main.appendChild(renderRelDespesas());
+  } else if(STATE.modulo==='mod27'&&STATE.roleLogado==='admin'){
+    main.appendChild(renderConcDda());
   } else if(STATE.modulo==='mod23'&&STATE.roleLogado==='admin'){
     main.appendChild(renderConcPagar());
   } else if(STATE.modulo==='mod21'){
