@@ -1,5 +1,5 @@
 <!-- v5.4-1785154153 -->
-<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material | fin-sem-nro-documento | fin-sem-ocorrencia | energia-solar-mod11-renderEnergiaSolar | leilao-imoveis-mod12-renderLeilaoImoveis | bling-mod17-renderBling | relatorio-despesas-mod19-renderRelDespesas | conciliacao-receber-boletos-dentro-do-mod17 | pagamentos-mod22-renderBling-pag | conciliacao-pagar-mod23-renderConcPagar | frete-compra-mod24-fcAtivo | lead-reativacao-whatsapp-renderDisparo -->
+<!-- FEATURES-ATIVAS (NAO REMOVER ESTE COMENTARIO): historico-sem-limite-30 | persistSaved-grava-so-idAlvo | excluirCotacaoSalva-e-fbDelete | tab-nav-transportadoras-focarCampoTransportadora | transportadora-preserva-linha-parcial | backup-saved_log-append-only | lancar-financeiro-abrirLancarFinanceiro | salvas-ordem-mais-nova-primeiro | fin-busca-cnpj | fin-formas-so-pagamento | fin-categorias-so-frete | fin-sem-material | fin-sem-nro-documento | fin-sem-ocorrencia | energia-solar-mod11-renderEnergiaSolar | leilao-imoveis-mod12-renderLeilaoImoveis | bling-mod17-renderBling | relatorio-despesas-mod19-renderRelDespesas | conciliacao-receber-boletos-dentro-do-mod17 | pagamentos-mod22-renderBling-pag | conciliacao-pagar-mod23-renderConcPagar | frete-compra-mod24-fcAtivo | lead-reativacao-whatsapp-mod26-renderDisparo -->
 <!-- ANTES DE PUBLICAR QUALQUER MUDANCA NESTE ARQUIVO: busque a versao atual em producao via GitHub API,
      confirme que os marcadores acima (nomes de funcao) ainda existem, e aplique a mudanca por cima dela -
      NUNCA sobrescreva com uma copia local antiga. Um commit em 21/08/2026 (f0ebfff) reverteu por engano
@@ -1400,7 +1400,8 @@ var ACESSO_ABAS=[
     {id:'mod4',n:'Cotação avulsa'},
     {id:'mod5',n:'Modelo em Teste'}]},
   {g:'Lead',e:'🎯',c:'#007aff',itens:[
-    {id:'mod9',n:'Licitação'}]},
+    {id:'mod9',n:'Licitação'},
+    {id:'mod26',n:'Reativação WhatsApp'}]},
   {g:'Compras',e:'🛒',c:'#34c759',itens:[
     {id:'mod20',n:'Cotação compra'},
     {id:'mod24',n:'Frete compra'},
@@ -3451,7 +3452,7 @@ function iniEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){re
 function iniAdmin(){return STATE.roleLogado==='admin';}
 // Mesma regra do menu (renderModuloNav): quais abas este usuário enxerga
 function iniModulos(){
-  var todos=['frete','mod10','mod2','mod7','mod8','mod9','mod3','mod4','mod11','mod12','mod13','mod20','mod14','mod16','mod19','mod23','mod17','mod22','mod5','mod15'];
+  var todos=['frete','mod10','mod2','mod7','mod8','mod9','mod26','mod3','mod4','mod11','mod12','mod13','mod20','mod14','mod16','mod19','mod23','mod17','mod22','mod5','mod15'];
   if(iniAdmin())return todos;
   var ids=todos;
   if(STATE.abasPermitidas&&STATE.abasPermitidas.length){
@@ -3784,6 +3785,7 @@ function renderModuloNav(){
     {id:'mod7',  icon:'📐', label:'Norma NBR 9050'},
     {id:'mod8',  icon:'📦', label:'Produtos'},
     {id:'mod9',  icon:'👥', label:'Licitação'},
+    {id:'mod26', icon:'📣', label:'Reativação WhatsApp'},
     {id:'mod3', icon:'🤖', label:'Ace IA'},
     {id:'mod4',  icon:'🧾', label:'Cotação avulsa'},
     {id:'mod11', icon:'☀️', label:'Energia solar'},
@@ -3827,14 +3829,14 @@ function renderModuloNav(){
   // ---- Menu em abas mães (grupos) e filhas, estilo iOS (apenas visual) ----
   var GRUPOS=[
     {n:'Vendas',i:'ti-shopping-bag',c:'#ff9500',ids:['frete','mod10','mod2','mod7','mod8','mod4','mod5']},
-    {n:'Lead',i:'ti-target-arrow',c:'#007aff',ids:['mod9']},
+    {n:'Lead',i:'ti-target-arrow',c:'#007aff',ids:['mod9','mod26']},
     {n:'Compras',i:'ti-shopping-cart',c:'#34c759',ids:['mod13','mod20','mod24']},
     {n:'Financeiro',i:'ti-cash',c:'#0a7d6b',ids:['mod16','mod19','mod23','mod14','mod17','mod22'],
      sub:[{n:'Contas a pagar',i:'ti-arrow-up-right',e:'📤',ids:['mod16','mod19','mod23','mod14']},{n:'Contas a receber',i:'ti-arrow-down-left',e:'📥',ids:['mod17','mod22']}]},
     {n:'T.I.',i:'ti-cpu',c:'#5856d6',ids:['mod3','mod15','mod18','mod25']},
     {n:'Particular',i:'ti-home',c:'#af52de',ids:['mod12','mod11']}
   ];
-  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod13:'ti-currency-dollar',mod20:'ti-scale',mod24:'ti-truck-loading',mod14:'ti-receipt-2',mod16:'ti-truck-delivery',mod17:'ti-building-bank',mod22:'ti-credit-card',mod19:'ti-report-money',mod23:'ti-arrows-exchange',mod15:'ti-gauge',mod18:'ti-bug',mod25:'ti-message-circle',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun'};
+  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod26:'ti-speakerphone',mod13:'ti-currency-dollar',mod20:'ti-scale',mod24:'ti-truck-loading',mod14:'ti-receipt-2',mod16:'ti-truck-delivery',mod17:'ti-building-bank',mod22:'ti-credit-card',mod19:'ti-report-money',mod23:'ti-arrows-exchange',mod15:'ti-gauge',mod18:'ti-bug',mod25:'ti-message-circle',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun'};
   if(!document.getElementById('navIosCss')){
     var lk=document.createElement('link');lk.rel='stylesheet';lk.href='https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css';lk.onload=function(){document.documentElement.classList.add('ti-ok');};document.head.appendChild(lk);
     var st=document.createElement('style');st.id='navIosCss';
@@ -4422,7 +4424,7 @@ function rppAdmin(){return STATE.roleLogado==='admin';}
 function rppUsuario(){return STATE.usuarioLogado||STATE.loginUser||'?';}
 function rppData(t){var d=new Date(t);return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
 function rppNomeTela(id){
-  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod23:'Conciliação contas a Pagar',mod17:'Conciliação contas a Receber',mod22:'Pagamentos (gerar PIX / link)',mod15:'Controle',mod18:'Reportar Problema',mod25:'Chat',ext:'Extensão do Chrome',outro:'Outra / não sei'};
+  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod26:'Reativação WhatsApp',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod23:'Conciliação contas a Pagar',mod17:'Conciliação contas a Receber',mod22:'Pagamentos (gerar PIX / link)',mod15:'Controle',mod18:'Reportar Problema',mod25:'Chat',ext:'Extensão do Chrome',outro:'Outra / não sei'};
   return nomes[id]||id||'?';
 }
 
@@ -4951,7 +4953,7 @@ function rppHtmlNovo(){
     '<p style="color:#6b7280;margin:0 0 16px">'+(RPP.ok.resolvido?'Se o erro continuar, abra <b>Meus chamados</b> e clique em <b>🔁 Reabrir</b>.':'O T.I. já foi avisado. Você acompanha a situação em <b>Meus chamados</b>.')+'</p>'+
     '<button class="rpp-btn" data-a="outro">Reportar outro problema</button> <button class="rpp-btn sec" data-a="voltar">Voltar ao que eu estava fazendo</button></div>';
   // Só as abas que este colaborador enxerga no menu (mesma regra do menu), mais o Início e a extensão (se liberada)
-  var telas=['inicio','frete','mod10','mod2','mod4','mod8','mod9','mod7','mod3','mod17','mod22','mod14','mod16','mod23','mod13','mod20','mod15','mod5','mod11','mod12'];
+  var telas=['inicio','frete','mod10','mod2','mod4','mod8','mod9','mod26','mod7','mod3','mod17','mod22','mod14','mod16','mod23','mod13','mod20','mod15','mod5','mod11','mod12'];
   var pode=telas;try{if(typeof iniModulos==='function')pode=iniModulos();}catch(e){}
   telas=telas.filter(function(t){return t==='inicio'||pode.indexOf(t)>=0;});
   if(rppAdmin()||(STATE.abasPermitidas&&STATE.abasPermitidas.indexOf('ext')>=0))telas.push('ext');
@@ -14437,13 +14439,13 @@ window.addEventListener('message',function(e){
     rvFb('bling','PUT',o).then(function(){RV.bl=o;RV.rows=null;RV.blStatus='✅ '+o.vendas+' vendas de '+o.clientes+' clientes lidas do Bling.';rvDraw();})
       .catch(function(err){RV.bl=o;RV.rows=null;RV.blStatus='⚠️ Li o Bling, mas não consegui salvar para a equipe ('+err.message+').';rvDraw();});
   }
-  if(STATE.modulo==='mod9'&&STATE.tabClientes==='disparo')rvDraw();
+  if(STATE.modulo==='mod26')rvDraw();
 });
 
 function renderNavClientes(){
   if(!STATE.tabClientes)STATE.tabClientes='licitacao';
   var nav=document.createElement('nav');
-  [{id:'licitacao',l:'🏛️ Licitação'},{id:'disparo',l:'📣 Reativação WhatsApp'}].forEach(function(t){
+  [{id:'licitacao',l:'🏛️ Licitação'}].forEach(function(t){
     var b=document.createElement('button');b.className='tab'+(STATE.tabClientes===t.id?' active':'');b.textContent=t.l;
     b.onclick=function(){STATE.tabClientes=t.id;render();};nav.appendChild(b);
   });
@@ -17596,7 +17598,9 @@ function renderApp(){
   } else if(STATE.modulo==='mod8'){
     main.appendChild(renderPesquisaProdutos());
   } else if(STATE.modulo==='mod9'){
-    main.appendChild(STATE.tabClientes==='disparo'?renderDisparo():renderClientes());
+    main.appendChild(renderClientes());
+  } else if(STATE.modulo==='mod26'){
+    main.appendChild(renderDisparo());
   } else if(STATE.modulo==='mod3'){
     main.appendChild(renderAceIA());
   } else if(STATE.modulo==='mod4'){
