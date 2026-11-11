@@ -1964,7 +1964,7 @@ function categoriaTaxa(desc) {
 }
 async function chaveDebito(t) { return (await sha256hex([t.data, t.valor.toFixed(2), t.doc, t.desc, t.ndoc, t.seq].join('|'))).slice(0, 20); }
 
-async function sicoobExtrato(env, mes, ano, d1, d2) {
+async function sicoobExtrato(env, mes, ano, d1, d2, semAgrupar) {
   if (!env.SICOOB_MTLS || !env.SICOOB_CLIENT_ID) throw new Error('Sicoob ainda não ativado no Worker.');
   const conta = await contaSicoob(env);
   let tok, base = SICOOB_CCO, escopo = ESCOPO_EXTRATO;
@@ -1973,7 +1973,7 @@ async function sicoobExtrato(env, mes, ano, d1, d2) {
     try { escopo = 'cco_extrato'; base = SICOOB_CCO_V3; tok = await sicoobToken(env, escopo); }
     catch (e2) { throw new Error((env.SICOOB_CLIENT_ID_CCO ? 'O app "JDFER Extrato" do Sicoob ainda não está liberado (aprovação no Sicoobnet pendente?). ' : 'Falta o app do Sicoob com a API Conta Corrente (variável SICOOB_CLIENT_ID_CCO). ') + 'Detalhe: ' + (e.message || e)); }
   }
-  const q = '?' + (conta ? 'numeroContaCorrente=' + encodeURIComponent(conta) + '&' : '') + 'diaInicial=' + d1 + '&diaFinal=' + d2 + '&agruparCNAB=true';
+  const q = '?' + (conta ? 'numeroContaCorrente=' + encodeURIComponent(conta) + '&' : '') + 'diaInicial=' + d1 + '&diaFinal=' + d2 + '&agruparCNAB=' + (semAgrupar ? 'false' : 'true');
   let r = await env.SICOOB_MTLS.fetch(base + '/extrato/' + mes + '/' + ano + q, {
     headers: { Authorization: 'Bearer ' + tok, client_id: clientSicoob(env, escopo), Accept: 'application/json' },
   });
@@ -2042,7 +2042,27 @@ async function lerDebitos(env, de, ate) {
     const [a, m] = cur.split('-');
     const fimMes = new Date(Date.UTC(+a, +m, 0)).toISOString().slice(0, 10);
     const fim = fimMes < ate ? fimMes : ate;
-    const lista = await sicoobExtrato(env, +m, +a, +cur.slice(8), +fim.slice(8));
+    let lista = await sicoobExtrato(env, +m, +a, +cur.slice(8), +fim.slice(8));
+    // Linhas agrupadas pelo Sicoob ("@2 registro(s)" / Doc. AGRUPADO) escondem para quem foi cada PIX/pagamento:
+    // busca o extrato sem agrupar e troca cada grupo pelos lançamentos dele (mesmo dia e mesma descrição, soma igual).
+    // Tarifas continuam agrupadas como sempre (é assim que já foram lançadas no Bling).
+    const ehGrupo = t => /registro\(s\)/i.test(String(t.descInfComplementar || '')) || /AGRUPADO/i.test(String(t.numeroDocumento || ''));
+    const grupos = lista.filter(t => ehGrupo(t) && tipoDebito(String(t.descricao || '') + ' ' + String(t.descInfComplementar || '')) !== 'taxa');
+    if (grupos.length) {
+      const det = await sicoobExtrato(env, +m, +a, +cur.slice(8), +fim.slice(8), true).catch(() => null);
+      if (det && det.length) {
+        const usados = new Set();
+        const trocas = new Map();
+        for (const g of grupos) {
+          const dia = soData(g.data || g.dataLote), desc = String(g.descricao || '').trim(), alvo = r2(numBR(g.valor));
+          const filhos = det.filter((d, i) => !usados.has(i) && !ehGrupo(d) && soData(d.data || d.dataLote) === dia && String(d.descricao || '').trim() === desc && String(d.tipo || '') === String(g.tipo || ''))
+            .map(d => ({ d, i: det.indexOf(d) }));
+          const soma = r2(filhos.reduce((a2, f) => a2 + numBR(f.d.valor), 0));
+          if (filhos.length > 1 && Math.abs(soma - alvo) < 0.01) { filhos.forEach(f => usados.add(f.i)); trocas.set(g, filhos.map(f => f.d)); }
+        }
+        if (trocas.size) lista = lista.flatMap(t => trocas.get(t) || [t]);
+      }
+    }
     lista.forEach(t => transacoes.push(t));
     cur = somaDias(fimMes, 1);
   }
