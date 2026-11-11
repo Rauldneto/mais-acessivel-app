@@ -1156,9 +1156,9 @@ const CNPJ_SICOOB_IF = '02038232000164';   // Banco Cooperativo Sicoob S.A. (par
 async function nfDados(env, nfId) {
   const ck = 'nfdados:' + nfId;
   const c = await env.BLING_KV.get(ck, 'json');
-  if (c && c.chave && Date.now() - c.ts < 7 * 86400e3) return c;
+  if (c && c.chave && Date.now() - c.ts < 7 * 86400e3 && (c.emissaoHora || c.emissao < hojeLocal())) return c;
   const d = (await bling(env, '/nfe/' + nfId)).data || {};
-  const out = { ts: Date.now(), id: nfId, numero: String(d.numero || ''), chave: String(d.chaveAcesso || '').replace(/\D/g, ''), situacao: d.situacao, emissao: String(d.dataEmissao || '').slice(0, 10),
+  const out = { ts: Date.now(), id: nfId, numero: String(d.numero || ''), chave: String(d.chaveAcesso || '').replace(/\D/g, ''), situacao: d.situacao, emissao: String(d.dataEmissao || '').slice(0, 10), emissaoHora: String(d.dataEmissao || ''),
     contatoId: (d.contato && d.contato.id) || null, valor: Number(d.valorNota || d.total || 0) };
   if (out.chave.length === 44) await env.BLING_KV.put(ck, JSON.stringify(out), { expirationTtl: 30 * 86400 });
   return out;
@@ -1238,6 +1238,10 @@ async function econfPendentes(env, maxChamadas) {
           }
           else if (![5, 6, 7].includes(sitNF)) { item.status = 'nf_nao_autorizada'; item.erro = 'NF ' + nf.numero + ' está ' + (SIT_NOME[sitNF] || ('situação ' + sitNF)) + ' no Bling'; await env.BLING_KV.delete('nfdados:' + nfId); if (tipo === 'pedido') await env.BLING_KV.delete('pednf:' + id); }
           else item.status = 'pronto';
+          if (item.status === 'pronto') {
+            const nfx = item.nf, t = Date.parse(String(nfx.emissaoHora || '').replace(' ', 'T') + '-03:00');
+            if (!isNaN(t) && Date.now() - t < 60 * 60e3) { item.status = 'aguardando_sefaz'; item.erro = 'NF ' + nfx.numero + ' emitida às ' + String(nfx.emissaoHora).slice(11, 16) + ' — espera 1 hora para a nota chegar no ambiente nacional da Sefaz'; }
+          }
           if (item.status === 'pronto' && !item.subst) item.momento = nf.emissao && dia < nf.emissao ? 'anterior' : 'posterior';
           if (!item.subst) item.nSeq = Number((await env.BLING_KV.get('econfseq:' + nf.chave)) || 0) + 1;
         } catch (e) { item.status = 'erro'; item.erro = String(e.message || e); }
@@ -1258,6 +1262,11 @@ async function econfRegistrar(env, b) {
   // 135 = evento registrado e vinculado; 136 = registrado sem vínculo; 573 = duplicidade (já existe)
   reg.ok = b.ambiente === 'producao' && ['135', '136', '573'].includes(reg.cStat);
   await env.BLING_KV.put('econf:' + b.e2e, JSON.stringify(reg), { expirationTtl: 5 * 365 * 86400 });
+  if (reg.ok) {
+    const al = (await env.BLING_KV.get('tef:alertas', 'json')) || [];
+    let mud = false; al.forEach(a => { if (a.e2e === b.e2e && !a.visto) { a.visto = Date.now(); a.resolvido = 'aceito depois (' + reg.cStat + ')'; mud = true; } });
+    if (mud) await env.BLING_KV.put('tef:alertas', JSON.stringify(al));
+  }
   if (b.ambiente === 'producao' && ['135', '136'].includes(reg.cStat)) await env.BLING_KV.put('econfseq:' + b.chave, String(b.nSeq || 1), { expirationTtl: 5 * 365 * 86400 });
   if (b.ambiente === 'producao') await logAcao(env, { acao: 'econf', modo: 'real', detalhe: 'ECONF da chave ' + b.chave.slice(25, 34) + ' (R$ ' + Number(b.valor || 0).toFixed(2) + '): ' + reg.cStat + ' ' + reg.xMotivo + (reg.nProt ? ' · protocolo ' + reg.nProt : '') });
   return { ok: true, registrado: reg.ok };
@@ -1862,7 +1871,9 @@ async function econfEnviar(env, opt) {
         await econfRegistrar(env, { e2e: p.e2e, chave: p.nf.chave, nSeq: item.nSeq, ambiente, cStat: item.cStat, xMotivo: item.xMotivo, nProt: item.nProt, valor: p.valor });
       } catch (e) { item.cStat = 'erro'; item.xMotivo = String(e.message || e).slice(0, 300); }
       res.push(item);
-      if (ambiente === 'producao' && !['135', '136', '573'].includes(item.cStat))
+      const recente494 = item.cStat === '494' && (() => { const t = Date.parse(String(p.nf.emissaoHora || '').replace(' ', 'T') + '-03:00'); return isNaN(t) || Date.now() - t < 24 * 3600e3; })();
+      if (recente494) item.xMotivo = (item.xMotivo || '') + ' — a nota ainda não tinha chegado ao ambiente nacional; reenvia sozinho na próxima rodada';
+      if (ambiente === 'producao' && !['135', '136', '573'].includes(item.cStat) && !recente494)
         await tefAlerta(env, { e2e: p.e2e, chave: item.cStat, tipo: /^\d+$/.test(item.cStat) ? 'recusado' : 'falha', nf: item.nf, valor: p.valor, pagador: p.pagador, dia: p.dia,
           motivo: (/^\d+$/.test(item.cStat) ? 'Sefaz recusou (' + item.cStat + '): ' : 'Não consegui enviar: ') + (item.xMotivo || '') });
     }
