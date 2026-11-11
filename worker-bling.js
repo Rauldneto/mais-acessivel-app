@@ -185,7 +185,7 @@ export default {
         return resp({ ok: true, sim: sim ? resumoSim(sim) : null, rel: sim ? ((await env.BLING_KV.get('bolsim:rel', 'json')) || []) : [] });
       }
       // Conciliação contas a Pagar: débitos do extrato Sicoob × Contas a Pagar do Bling (ver o fim do arquivo)
-      if (url.pathname === '/pagar/conciliar') return resp(await pagarConciliar(env, url.searchParams.get('de'), url.searchParams.get('ate')));
+      if (url.pathname === '/pagar/conciliar') return resp(await pagarConciliar(env, url.searchParams.get('de'), url.searchParams.get('ate'), url.searchParams.get('mes')));
       if (url.pathname === '/pagar/baixar' && req.method === 'POST') return resp(await pagarBaixar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/pagar/lancar' && req.method === 'POST') return resp(await pagarLancar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/pagar/marcar' && req.method === 'POST') return resp(await pagarMarcar(env, (await req.json().catch(() => ({}))) || {}));
@@ -2012,8 +2012,15 @@ async function contatosInfo(env, ids, max) {
   return { cache, faltam: Math.max(0, falta.length - novos) };
 }
 
-async function pagarConciliar(env, de, ate) {
+async function pagarConciliar(env, de, ate, mes) {
   const hoje = hojeLocal();
+  // Visão por mês: contas do Bling que vencem no mês; o extrato vai de 10 dias antes a 10 dias depois (pagamento adiantado/atrasado)
+  let mesIni = '', mesFim = '';
+  if (/^\d{4}-\d{2}$/.test(String(mes || ''))) {
+    mesIni = mes + '-01'; mesFim = new Date(Date.UTC(+mes.slice(0, 4), +mes.slice(5, 7), 0)).toISOString().slice(0, 10);
+    if (mesIni > hoje) return { ok: false, erro: 'Esse mês ainda não começou.' };
+    de = somaDias(mesIni, -10); ate = somaDias(mesFim, 10);
+  }
   de = soData(de) || hoje.slice(0, 8) + '01'; ate = soData(ate) || hoje;
   if (ate > hoje) ate = hoje;
   if (de > ate) return { ok: false, erro: 'Período inválido.' };
@@ -2048,7 +2055,7 @@ async function pagarConciliar(env, de, ate) {
     debitos.push(x);
   }
   // 2) contas a pagar do Bling: por vencimento (janela larga) + pagas dentro do período
-  const porVenc = await pagarListar(env, 'dataVencimento', somaDias(de, -40), somaDias(ate, 20), 5);
+  const porVenc = await pagarListar(env, 'dataVencimento', somaDias(de, -40), somaDias(ate, 20), 8);
   const porPag = await pagarListar(env, 'dataPagamento', somaDias(de, -3), somaDias(ate, 3), 3).catch(() => []);
   const fp = await formas(env);
   const contas = {}, pagasNoPeriodo = new Set(porPag.map(c => String(c.id)));
@@ -2059,7 +2066,7 @@ async function pagarConciliar(env, de, ate) {
       pagaNoPeriodo: pagasNoPeriodo.has(String(c.id)) };
   });
   const lc = Object.values(contas).filter(c => c.situacao !== 5 && c.situacao !== 4);
-  const info = await contatosInfo(env, lc.map(c => c.contatoId), 14);
+  const info = await contatosInfo(env, (mesIni ? lc.filter(c => [1, 3].includes(c.situacao) && c.venc >= mesIni && c.venc <= mesFim) : lc).map(c => c.contatoId).concat(lc.map(c => c.contatoId)), 18);
   lc.forEach(c => { const k = info.cache[c.contatoId] || {}; c.fornecedor = k.n || (c.contatoId ? 'Fornecedor #' + c.contatoId : '(sem fornecedor)'); c.doc = k.d || ''; });
   const usadas = new Set();
   Object.values(marcas).forEach(m => { if (m.contaId) usadas.add(String(m.contaId)); if (m.lancado) usadas.add(String(m.lancado)); });
@@ -2116,7 +2123,21 @@ async function pagarConciliar(env, de, ate) {
     .sort((a, b) => String(a.venc).localeCompare(String(b.venc)));
   const resumo = {};
   debitos.forEach(x => { const t = x.tipo; resumo[t] = resumo[t] || { qtd: 0, total: 0, pend: 0 }; resumo[t].qtd++; resumo[t].total = r2(resumo[t].total + x.valor); if (!x.ignorado && x.status !== 'ok') resumo[t].pend++; });
-  return { ok: true, de, ate, debitos: debitos.sort((a, b) => b.data.localeCompare(a.data)), emAberto, resumo, faltamNomes: info.faltam,
+  // 6) Visão por mês (Bling → Sicoob): toda conta em aberto que vence no mês, com a sugestão do extrato ao lado
+  let contasMes = null;
+  if (mesIni) {
+    const forte = {}, possiveis = {};
+    const resumoDeb = x => ({ chave: x.chave, data: x.data, valor: x.valor, desc: x.desc, compl: x.compl, doc: x.doc, tipo: x.tipo, motivo: x.motivo });
+    debitos.filter(x => !x.ignorado).forEach(x => {
+      if (x.conta && x.conta.id && (x.status === 'baixar' || x.status === 'ok')) forte[x.conta.id] = Object.assign(resumoDeb(x), { juro: x.conta.juro || 0, como: 'debito' });
+      if (x.status === 'escolher') (x.cands || []).forEach(c => (possiveis[c.id] = possiveis[c.id] || []).push(Object.assign(resumoDeb(x), { juro: c.juro || 0, pontos: c.pontos })));
+      if (x.cartao) x.cartao.contas.forEach(c => { forte[c.id] = Object.assign(resumoDeb(x), { juro: 0, como: 'fatura', fatTotal: x.valor, fatSoma: x.cartao.soma, fatDif: x.cartao.dif }); });
+    });
+    contasMes = lc.filter(c => [1, 3].includes(c.situacao) && c.venc >= mesIni && c.venc <= mesFim)
+      .sort((a, b) => String(a.venc).localeCompare(String(b.venc)) || b.valor - a.valor)
+      .map(c => Object.assign({}, c, { sug: forte[c.id] || null, possiveis: forte[c.id] ? [] : (possiveis[c.id] || []).sort((a, b) => b.pontos - a.pontos).slice(0, 3), aVencer: c.venc > hoje }));
+  }
+  return { ok: true, de, ate, mes: mesIni ? mesIni.slice(0, 7) : '', mesIni, mesFim, contasMes, debitos: debitos.sort((a, b) => b.data.localeCompare(a.data)), emAberto, resumo, faltamNomes: info.faltam,
     totalDebitos: r2(debitos.reduce((s, x) => s + x.valor, 0)) };
 }
 
