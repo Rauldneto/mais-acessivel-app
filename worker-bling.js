@@ -28,7 +28,8 @@
 //   GET  /produtos-fornecedores?ids=1,2,3 → códigos que cada fornecedor usa para esses produtos (cadastro do Bling),
 //                             usados como pista para ligar a cotação do fornecedor aos itens do pedido. Cache de 1 dia.
 //   GET  /boletos, POST /boletos/verificar|vincular|ignorar|simular|simular/passo → boletos Sicoob liquidados (ver o fim do arquivo)
-//   Contas a Pagar: GET /pagar/conciliar?de=&ate=, GET /pagar/conta?id=, POST /pagar/baixar|lancar|marcar → extrato Sicoob × Contas a Pagar (fim do arquivo)
+//   Contas a Pagar: tarifas/taxas lançadas e baixadas sozinhas todo dia a partir das 20h (GET /pagar/auto = situação, POST = rodar agora).
+//   GET /pagar/conciliar?mes=AAAA-MM (ou ?de=&ate=), GET /pagar/conta?id=, POST /pagar/baixar|lancar|marcar → extrato Sicoob × Contas a Pagar (fim do arquivo)
 //     Precisa: escopo cco_extrato liberado no app do portal Sicoob (ou num 2º app: SICOOB_CLIENT_ID_CCO; o nº da conta é descoberto num boleto Sicoob; SICOOB_CONTA opcional) e permissão Contas a pagar (ler/gravar) no app do Bling.
 //   Chat: POST /push/chat {para,de,nome,conv,txt,av} → notificação no Chrome só dos navegadores do destinatário (GET /push/ultimos?u= devolve as dele)
 //   ECONF: GET /econf/pendentes|painel|diag|xml?k=, POST /econf/enviar|auto|certificado|registrar → evento de conciliação à Sefaz
@@ -48,6 +49,11 @@ export default {
   async scheduled(evento, env, ctx) {
     // 13h e 18h: a rodada é do ECONF automático (envio à Sefaz); nas outras, conferência de PIX e boletos
     if (await econfAgendado(env).catch(e => { registrarErro(env, 'ECONF automático: ' + String(e.message || e)); return false; })) return;
+    // a partir das 20h: tarifas e taxas do extrato Sicoob → Contas a Pagar (lança e baixa sozinho). Essa rodada faz só isso.
+    if (env.SICOOB_CLIENT_ID_CCO && new Date(Date.now() - 3 * 3600e3).getUTCHours() >= 20) {
+      const st = (await env.BLING_KV.get('pagar:auto', 'json')) || {};
+      if (!(st.dia === hojeLocal() && st.fim)) { ctx.waitUntil(pagarTaxasAuto(env).catch(e => registrarErro(env, 'Tarifas automáticas: ' + String(e.message || e)))); return; }
+    }
     ctx.waitUntil(verificarPagamentos(env).then(() => registrarErro(env, null)).catch(e => registrarErro(env, String(e.message || e)))
       .then(() => verificarBoletos(env)).catch(e => registrarErro(env, 'Boletos: ' + String(e.message || e))));
   },
@@ -188,6 +194,8 @@ export default {
       if (url.pathname === '/pagar/conciliar') return resp(await pagarConciliar(env, url.searchParams.get('de'), url.searchParams.get('ate'), url.searchParams.get('mes')));
       if (url.pathname === '/pagar/baixar' && req.method === 'POST') return resp(await pagarBaixar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/pagar/lancar' && req.method === 'POST') return resp(await pagarLancar(env, (await req.json().catch(() => ({}))) || {}));
+      if (url.pathname === '/pagar/auto' && req.method === 'POST') return resp(await pagarTaxasAuto(env, { forcar: true }));
+      if (url.pathname === '/pagar/auto') return resp(Object.assign({ ok: true }, (await env.BLING_KV.get('pagar:auto', 'json')) || {}));
       if (url.pathname === '/pagar/marcar' && req.method === 'POST') return resp(await pagarMarcar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/pagar/conta') return resp(await pagarContaPorId(env, url.searchParams.get('id')));
       if (url.pathname === '/push/chave') return resp({ ok: true, chave: (await vapid(env)).pub });
@@ -1944,7 +1952,7 @@ function tipoDebito(desc) {
 function categoriaTaxa(desc) {
   const d = semAcento(desc);
   if (/JUROS|ENCARGO|\bMORA\b/.test(d)) return PAG_CAT.juros;
-  if (/\bIOF\b/.test(d)) return PAG_CAT.taxas;
+  if (/\bIOF\b|SIPAG|CARTAO|CARTOES|MDR|ANTECIP|DESC/.test(d)) return PAG_CAT.taxas;   // IOF e taxa/desconto de cartão
   return PAG_CAT.tarifa;
 }
 async function chaveDebito(t) { return (await sha256hex([t.data, t.valor.toFixed(2), t.doc, t.desc, t.ndoc, t.seq].join('|'))).slice(0, 20); }
@@ -2012,20 +2020,8 @@ async function contatosInfo(env, ids, max) {
   return { cache, faltam: Math.max(0, falta.length - novos) };
 }
 
-async function pagarConciliar(env, de, ate, mes) {
-  const hoje = hojeLocal();
-  // Visão por mês: contas do Bling que vencem no mês; o extrato vai de 10 dias antes a 10 dias depois (pagamento adiantado/atrasado)
-  let mesIni = '', mesFim = '';
-  if (/^\d{4}-\d{2}$/.test(String(mes || ''))) {
-    mesIni = mes + '-01'; mesFim = new Date(Date.UTC(+mes.slice(0, 4), +mes.slice(5, 7), 0)).toISOString().slice(0, 10);
-    if (mesIni > hoje) return { ok: false, erro: 'Esse mês ainda não começou.' };
-    de = somaDias(mesIni, -10); ate = somaDias(mesFim, 10);
-  }
-  de = soData(de) || hoje.slice(0, 8) + '01'; ate = soData(ate) || hoje;
-  if (ate > hoje) ate = hoje;
-  if (de > ate) return { ok: false, erro: 'Período inválido.' };
-  if ((Date.parse(ate) - Date.parse(de)) / 864e5 > 62) return { ok: false, erro: 'Escolha no máximo 2 meses por vez.' };
-  // 1) extrato Sicoob, mês a mês
+// Débitos do extrato Sicoob no período, já com chave estável, tipo e marcas (ignorado/vínculo/lançado)
+async function lerDebitos(env, de, ate) {
   const transacoes = [];
   let cur = de;
   while (cur <= ate) {
@@ -2054,6 +2050,24 @@ async function pagarConciliar(env, de, ate, mes) {
     if (mk.lancado) x.lancado = mk.lancado;
     debitos.push(x);
   }
+  return { debitos, marcas };
+}
+
+async function pagarConciliar(env, de, ate, mes) {
+  const hoje = hojeLocal();
+  // Visão por mês: contas do Bling que vencem no mês; o extrato vai de 10 dias antes a 10 dias depois (pagamento adiantado/atrasado)
+  let mesIni = '', mesFim = '';
+  if (/^\d{4}-\d{2}$/.test(String(mes || ''))) {
+    mesIni = mes + '-01'; mesFim = new Date(Date.UTC(+mes.slice(0, 4), +mes.slice(5, 7), 0)).toISOString().slice(0, 10);
+    if (mesIni > hoje) return { ok: false, erro: 'Esse mês ainda não começou.' };
+    de = somaDias(mesIni, -10); ate = somaDias(mesFim, 10);
+  }
+  de = soData(de) || hoje.slice(0, 8) + '01'; ate = soData(ate) || hoje;
+  if (ate > hoje) ate = hoje;
+  if (de > ate) return { ok: false, erro: 'Período inválido.' };
+  if ((Date.parse(ate) - Date.parse(de)) / 864e5 > 62) return { ok: false, erro: 'Escolha no máximo 2 meses por vez.' };
+  // 1) extrato Sicoob, mês a mês
+  const { debitos, marcas } = await lerDebitos(env, de, ate);
   // 2) contas a pagar do Bling: por vencimento (janela larga) + pagas dentro do período
   const porVenc = await pagarListar(env, 'dataVencimento', somaDias(de, -40), somaDias(ate, 20), 8);
   const porPag = await pagarListar(env, 'dataPagamento', somaDias(de, -3), somaDias(ate, 3), 3).catch(() => []);
@@ -2232,6 +2246,38 @@ async function pagarLancar(env, b) {
     } catch (e) { out.push({ chave: it.chave, ok: false, erro: String(e.message || e) }); }
   }
   return { ok: out.every(x => x.ok), itens: out };
+}
+
+// ---------------- Tarifas e taxas automáticas (todo dia) ----------------
+// Débitos do tipo "taxa" (tarifa de boleto/pacote, IOF, juros, taxa/desconto de cartão…) dos últimos 7 dias que não existem
+// no Contas a Pagar do Bling são lançados SOZINHOS (contato = Sicoob, categoria sugerida, conta Sicoob) e baixados na data do extrato.
+// Decisão do Raul (10/11/2026): não depende de autorização. Nunca lança duas vezes: marca a chave do débito e confere no Bling
+// se já existe conta com o mesmo vencimento e o mesmo valor (lançada à mão).
+const PAG_AUTO_MAX = 6;   // por rodada (limite de chamadas do Worker); o cron continua na rodada seguinte
+async function pagarTaxasAuto(env, opt) {
+  opt = opt || {};
+  const hoje = hojeLocal(), de = somaDias(hoje, -7);
+  const st = (await env.BLING_KV.get('pagar:auto', 'json')) || {};
+  if (!opt.forcar && st.dia === hoje && st.fim) return { ok: true, pulado: 'já feito hoje' };
+  const { debitos } = await lerDebitos(env, de, hoje);
+  const pend = debitos.filter(x => x.tipo === 'taxa' && !x.ignorado && !x.lancado && !x.vinculo);
+  let existentes = [];
+  if (pend.length) existentes = await pagarListar(env, 'dataVencimento', de, hoje, 2);
+  const itens = [];
+  for (const x of pend) {
+    const igual = existentes.find(c => soData(c.vencimento) === x.data && Math.abs(r2(c.valor) - x.valor) < 0.01);
+    if (igual) { await salvarMarca(env, x.chave, { contaId: String(igual.id), por: 'automático (já existia no Bling)' }); continue; }
+    itens.push({ chave: x.chave, data: x.data, valor: x.valor, categoriaId: categoriaTaxa(x.desc + ' ' + x.compl), tipo: 'taxa',
+      historico: 'Sicoob ' + brData(x.data) + ' - ' + x.desc + (x.compl ? ' - ' + x.compl : '') + ' (automático)' });
+  }
+  const lote = itens.slice(0, PAG_AUTO_MAX);
+  const r = lote.length ? await pagarLancar(env, { itens: lote, usuario: 'automático' }) : { ok: true, itens: [] };
+  const erros = (r.itens || []).filter(x => !x.ok);
+  const fim = itens.length <= PAG_AUTO_MAX;
+  await env.BLING_KV.put('pagar:auto', JSON.stringify({ dia: hoje, fim, ultimo: Date.now(), feitos: (st.dia === hoje ? st.feitos || 0 : 0) + (r.itens || []).filter(x => x.ok).length,
+    erros: erros.map(e => e.erro).slice(0, 5) }));
+  if (erros.length) await registrarErro(env, 'Tarifas automáticas: ' + erros[0].erro);
+  return { ok: !erros.length, lancados: (r.itens || []).filter(x => x.ok).length, restantes: Math.max(0, itens.length - lote.length), erros: erros.map(e => e.erro) };
 }
 
 // POST /pagar/marcar {chave, ignorar?:bool, tipo?:'pix'|'boleto'|'credito'|'taxa'|'outro'|'', contaId?:id|null, usuario}
