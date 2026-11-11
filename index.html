@@ -15438,8 +15438,15 @@ function cpgHtmlDebitos(tipo){
   if(temLancar||temBaixar){
     h+='<div class="cpg-bar" style="margin-bottom:8px">';
     if(temBaixar)h+='<button class="cpg-btn" data-a="baixarTodas">⬇️ Baixar todas as sugestões desta aba</button>';
-    if(temLancar)h+='<button class="cpg-btn sec" data-a="lancarSel">➕ Lançar selecionadas como despesa paga</button><span class="cpg-mut">Marque as linhas e escolha a categoria de cada uma.</span>';
     h+='</div>';
+    if(temLancar){
+      var marc=L.filter(function(y){return CPG.sel[y.chave]&&!y.ignorado;});
+      h+='<div class="cpg-bar" style="margin-bottom:8px;background:#f2fbf8;border-color:#bfe6da">'+
+        '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:700"><input type="checkbox" id="cpgTodas"'+(marc.length&&marc.length===L.filter(function(y){return !y.ignorado&&(y.status==='sem_conta'||y.status==='lancar');}).length?' checked':'')+'> Marcar todas</label>'+
+        '<span class="cpg-mut">Para as marcadas:</span><select id="cpgCatLote" style="height:30px;border:1px solid #c7c7cc;border-radius:7px;max-width:230px">'+cpgCatOpts('').replace('— categoria —','— categoria (aplicar) —')+'</select>'+
+        '<select id="cpgFormaLote" style="height:30px;border:1px solid #c7c7cc;border-radius:7px"><option value="">— forma (aplicar) —</option>'+cpgFormaOpts('')+'</select>'+
+        '<span style="flex:1"></span><button class="cpg-btn" data-a="lancarSel"'+(marc.length?'':' disabled')+'>➕ Lançar '+marc.length+' marcada'+(marc.length===1?'':'s')+(marc.length?' ('+cpgR(marc.reduce(function(a2,y){return a2+y.valor;},0))+')':'')+' de uma vez</button></div>';
+    }
   }
   h+='<table class="cpg-tbl"><thead><tr><th style="width:26px"></th><th>Data</th><th>Extrato Sicoob</th><th class="num">Valor</th><th>Situação e conta no Bling</th></tr></thead><tbody>';
   L.forEach(function(x){
@@ -15579,9 +15586,12 @@ function cpgLigar(){
   var mi=cpgEl('cpgMes');if(mi)mi.onchange=function(){if(mi.value){CPG.mes=mi.value;CPG.msg='';cpgCarregar();}};
   w.querySelectorAll('[data-mes]').forEach(function(b){b.onclick=function(){CPG.mes=cpgMesAtual(+b.getAttribute('data-mes'));CPG.msg='';cpgCarregar();};});
   var c=cpgEl('cpgConf');if(c)c.onclick=function(){CPG.msg='';cpgCarregar();};
+  var td=cpgEl('cpgTodas');if(td)td.onchange=function(){cpgLista(CPG.aba).forEach(function(y){if(!y.ignorado&&(y.status==='sem_conta'||y.status==='lancar'))CPG.sel[y.chave]=td.checked;});cpgDraw();};
+  var cl=cpgEl('cpgCatLote');if(cl)cl.onchange=function(){if(!cl.value)return;var n=0;cpgLista(CPG.aba).forEach(function(y){if(CPG.sel[y.chave]){CPG.cat[y.chave]=cl.value;n++;}});if(!n)alert('Marque as linhas primeiro.');cpgDraw();};
+  var fl=cpgEl('cpgFormaLote');if(fl)fl.onchange=function(){if(!fl.value)return;cpgLista(CPG.aba).forEach(function(y){if(CPG.sel[y.chave])CPG.forma[y.chave]=fl.value;});cpgDraw();};
   var sp=cpgEl('cpgSoPend');if(sp)sp.onchange=function(){CPG.soPend=sp.checked;cpgDraw();};
   w.querySelectorAll('[data-aba]').forEach(function(b){b.onclick=function(){CPG.aba=b.getAttribute('data-aba');cpgDraw();};});
-  w.querySelectorAll('[data-sel]').forEach(function(b){b.onchange=function(){CPG.sel[b.getAttribute('data-sel')]=b.checked;};});
+  w.querySelectorAll('[data-sel]').forEach(function(b){b.onchange=function(){CPG.sel[b.getAttribute('data-sel')]=b.checked;cpgDraw();};});
   w.querySelectorAll('[data-ccid]').forEach(function(b){b.onchange=function(){CPG.sel[b.getAttribute('data-ccid')]=b.checked;};});
   w.querySelectorAll('select[data-k=cat]').forEach(function(s){s.onchange=function(){CPG.cat[s.getAttribute('data-c')]=s.value;var k=s.getAttribute('data-c');if(s.value)CPG.sel[k]=true;var cb=w.querySelector('[data-sel="'+k+'"]');if(cb&&s.value)cb.checked=true;};});
   w.querySelectorAll('select[data-k=forma]').forEach(function(s){s.onchange=function(){CPG.forma[s.getAttribute('data-c')]=s.value;};});
@@ -15640,7 +15650,13 @@ function cpgAcao(a,k,b){
     var tot2=lista.reduce(function(s,y){return s+y.valor;},0);
     if(!confirm('Lançar '+lista.length+' despesa(s) no Contas a Pagar do Bling, já pagas pela conta Sicoob, total '+cpgR(tot2)+'?'))return;
     b.disabled=true;
-    cpgPost('/pagar/lancar',{itens:lista.slice(0,12).map(function(y){return cpgItemLanc(y,y.valor,CPG.cat[y.chave]||y.catSug);})}).then(function(r){if(lista.length>12)CPG.msg='(lançadas as 12 primeiras; clique de novo para o resto) ';cpgResultado(r,'despesa(s) lançada(s) e baixada(s)');});return;}
+    // vai em lotes de 8 (limite de chamadas do servidor), um atrás do outro, até acabar
+    var itens=lista.map(function(y){var it=cpgItemLanc(y,y.valor,CPG.cat[y.chave]||y.catSug);it.criarContato=true;it.nome=y.compl||y.desc;return it;}),todos=[],i0=0;
+    var passo=function(){var lote=itens.slice(i0,i0+8);if(!lote.length){cpgResultado({ok:todos.every(function(z){return z.ok;}),itens:todos},'despesa(s) lançada(s) e baixada(s)');return;}
+      b.textContent='Lançando '+Math.min(i0+lote.length,itens.length)+'/'+itens.length+'…';
+      cpgPost('/pagar/lancar',{itens:lote}).then(function(r){todos=todos.concat((r&&r.itens)||lote.map(function(){return {ok:false,erro:(r&&r.erro)||'sem resposta'};}));i0+=8;passo();})
+        .catch(function(e){todos.push({ok:false,erro:e.message});i0+=8;passo();});};
+    passo();return;}
   if(a==='baixarCartao'){
     var ids=[].slice.call(CPG.root.querySelectorAll('input[data-cc="'+k+'"]')).filter(function(i){return i.checked;}).map(function(i){return i.value;});
     var cs=x.cartao.contas.filter(function(c){return ids.indexOf(String(c.id))>=0;});

@@ -2222,10 +2222,22 @@ async function contatoBanco(env) {
   return id;
 }
 
+// Cadastra o fornecedor no Bling pelo CPF/CNPJ do extrato (só quando a busca pelo documento não achou: nunca duplica)
+async function criarFornecedor(env, doc, nome) {
+  doc = dig(doc); if (!doc) return 0;
+  const ja = await contatoPorDoc(env, doc); if (ja) return ja;
+  const n = String(nome || '').replace(/\s+/g, ' ').trim().slice(0, 120) || ('Fornecedor ' + doc);
+  const j = await blingPost(env, '/contatos', { nome: n, tipo: doc.length === 14 ? 'J' : 'F', numeroDocumento: doc, situacao: 'A' });
+  const id = (j.data && j.data.id) || j.id || 0;
+  if (id) await env.BLING_KV.put('cache:contatodoc:' + doc, String(id), { expirationTtl: 90 * 86400 });
+  await logAcao(env, { origem: 'pagar', acao: 'fornecedor_criado', contato: id, doc, nome: n });
+  return id;
+}
+
 // POST /pagar/lancar {itens:[{chave, data, valor, categoriaId, formaId?, historico, doc?, contatoId?, tipo}], usuario}
 // Cria a conta a pagar (emissão e vencimento = dia do débito) e já baixa como paga no Sicoob.
 async function pagarLancar(env, b) {
-  const itens = (b.itens || []).slice(0, 12), out = [];
+  const itens = (b.itens || []).slice(0, 8), out = [];
   for (const it of itens) {
     try {
       if (!it.categoriaId) throw new Error('Escolha a categoria.');
@@ -2233,6 +2245,7 @@ async function pagarLancar(env, b) {
       if (m.lancado) { out.push({ chave: it.chave, ok: true, contaId: m.lancado, res: 'já lançado antes' }); continue; }
       let contato = Number(it.contatoId || 0) || await contatoPorDoc(env, it.doc);
       if (!contato && (it.tipo === 'taxa' || !dig(it.doc))) contato = await contatoBanco(env);
+      if (!contato && it.criarContato && dig(it.doc)) contato = await criarFornecedor(env, it.doc, it.nome);
       if (!contato) throw new Error(dig(it.doc) ? 'Fornecedor ' + it.doc + ' não está cadastrado no Bling. Cadastre e tente de novo (ou informe o id do contato).' : 'Informe o fornecedor (id do contato no Bling).');
       const data = soData(it.data), valor = r2(it.valor);
       const j = await blingPost(env, '/contas/pagar', { vencimento: data, dataEmissao: data, competencia: data, valor, contato: { id: contato },
