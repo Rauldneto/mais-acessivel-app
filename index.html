@@ -16814,7 +16814,7 @@ function blgCss(){
   '.blg-pix .ln b{color:#fff}'+
   '.blg-pix label{display:block;font-size:12px;color:var(--tx);margin:12px 0 5px}'+
   '.blg-pix input{width:100%;height:32px;border-radius:8px;border:.9px solid var(--bd);background:var(--inp);color:#fff;font-size:13px;padding:0 10px;font-family:arial,sans-serif}'+
-  '.blg-pix .blg-btn{width:100%;margin-top:10px;white-space:nowrap}'+
+  '.blg-pix .blg-btn{width:100%;margin-top:10px;white-space:normal;height:auto;min-height:38px;padding:8px 12px;line-height:1.25;text-align:center}'+
   '.blg-pix .qr{background:#fff;border-radius:8px;padding:8px;margin:12px 0 8px;display:flex;justify-content:center}'+
   '.blg-pix .qr svg,.blg-pix .qr img{width:150px;height:150px}'+
   '.blg-pix textarea{width:100%;height:62px;border-radius:8px;border:.9px solid var(--bd);background:var(--inp);color:#ddd;font-size:10.5px;padding:6px 8px;resize:none;font-family:monospace}'+
@@ -17217,7 +17217,7 @@ function blgPainelPix(x){
     '<div class="ln"><span>A receber</span><b>R$ '+blgMoeda(x.aReceber)+'</b></div>'+
     '<div class="ln"><span>Forma</span><b>'+blgEsc(x.formaNome||((x.formas||[]).indexOf('pix')>=0?'PIX':'Crédito'))+'</b></div>'+
     (x.pago?'<div class="ln"><span>Pago</span><b style="color:#15803d">R$ '+blgMoeda(x.pago)+'</b></div>'+(x.pagos||[]).map(function(p,i){return '<div class="ln" style="font-size:11px;align-items:center"><span>'+blgEsc(pagDataHora(p.horario))+' · R$ '+blgMoeda(p.valor)+'</span><a data-a="comprovante" data-i="'+i+'" style="color:#15803d;cursor:pointer;font-weight:700;white-space:nowrap" title="Comprovante de recebimento deste pagamento (imagem para copiar ou baixar)">🧾 Comprovante</a></div>';}).join('')+
-      '<button class="blg-btn" data-a="msgConfirmado" title="Copia a mensagem de pagamento recebido para colar no WhatsApp">'+BLG_IC.copiar+' Copiar mensagem de pagamento recebido</button>'+
+      '<button class="blg-btn" data-a="msgConfirmado" title="Copia a mensagem de pagamento recebido para colar no WhatsApp">'+BLG_IC.copiar+' Copiar confirmação</button>'+
       (BLG.comprovante&&BLG.comprovante.k===blgChave(x)?'<div class="nota" style="color:#15803d">'+BLG.comprovante.aviso+'</div>':''):'');
   if(!blgPag())h+=blgPainelTefHist(x);   // histórico de TEF/baixas é assunto da Conciliação
   if(!blgPag()){   // Conciliação: só consulta. Gerar/cancelar/enviar PIX fica na tela Pagamentos
