@@ -15287,11 +15287,11 @@ function ccrExcel(){
 // Nada é feito no Bling sem o clique do Raul. Servidor: Worker "bling" (rotas /pagar/*).
 var CPG={root:null,dados:null,carregando:false,erro:'',aba:'mes',mes:'',soPend:true,de:'',ate:'',msg:'',msgTipo:'',sel:{},cat:{},forma:{},abertos:{},ocup:{}};
 if((location.hash||'')==='#conciliacao-pagar'){STATE.modulo='mod23';}
-var CPG_ABAS=[['mes','📅','Contas do Bling (mês)'],['sembling','➕','Sicoob sem Bling'],['pix','⚡','PIX'],['boleto','📄','Boleto'],['credito','💳','Crédito (fatura)'],['taxa','🏦','Taxas e tarifas'],['outro','❓','Outros débitos']];
-var CPG_TIPOS_DEB=['pix','boleto','credito','taxa','outro'];
+var CPG_ABAS=[['mes','📅','Contas do Bling (mês)'],['sembling','➕','Sicoob sem Bling'],['pix','⚡','PIX'],['boleto','📄','Boleto'],['credito','💳','Crédito (fatura)'],['taxa','🏦','Taxas e tarifas'],['transf','🔄','Saques/transferências'],['outro','❓','Outros débitos']];
+var CPG_TIPOS_DEB=['pix','boleto','credito','taxa','transf','outro'];
 function cpgMesAtual(off){var d=new Date();d.setDate(1);d.setMonth(d.getMonth()+(off||0));return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 function cpgNomeMes(m){var n=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];return m?n[+m.slice(5,7)-1]+'/'+m.slice(0,4):'';}
-var CPG_ST={ok:['✅ Pago e baixado','ok'],baixar:['⬇️ Falta baixar no Bling','warn'],escolher:['🔎 Escolher a conta','warn'],sem_conta:['➕ Sem conta no Bling','bad'],lancar:['➕ Lançar despesa','bad'],diferenca:['⚠️ Diferença','bad']};
+var CPG_ST={ok:['✅ Pago e baixado','ok'],baixar:['⬇️ Falta baixar no Bling','warn'],escolher:['🔎 Escolher a conta','warn'],sem_conta:['➕ Sem conta no Bling','bad'],lancar:['➕ Lançar despesa','bad'],diferenca:['⚠️ Diferença','bad'],transf:['🔄 Entre contas próprias','ign']};
 function cpgEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function cpgR(v){return 'R$ '+Number(v||0).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');}
 function cpgD(iso){if(!iso)return '';var p=String(iso).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:iso;}
@@ -15377,12 +15377,12 @@ function cpgSemBling(x){return !x.ignorado&&x.tipo!=='credito'&&(x.status==='sem
 function cpgLista(tipo){
   var d=CPG.dados;if(!d)return [];
   if(tipo==='sembling')return d.debitos.filter(cpgSemBling);
-  return d.debitos.filter(function(x){if(x.tipo!==tipo)return false;if(CPG.soPend&&(x.ignorado||x.status==='ok'))return false;return true;});
+  return d.debitos.filter(function(x){if(x.tipo!==tipo)return false;if(CPG.soPend&&tipo!=='transf'&&(x.ignorado||x.status==='ok'))return false;return true;});
 }
 function cpgPend(tipo){var d=CPG.dados;if(!d)return 0;
   if(tipo==='mes')return (d.contasMes||[]).filter(function(c){return !c.aVencer;}).length;
   if(tipo==='sembling')return d.debitos.filter(cpgSemBling).length;
-  return d.debitos.filter(function(x){return x.tipo===tipo&&!x.ignorado&&x.status!=='ok';}).length;}
+  return d.debitos.filter(function(x){return x.tipo===tipo&&!x.ignorado&&x.status!=='ok'&&x.status!=='transf';}).length;}
 
 function cpgDraw(){
   var w=CPG.root;if(!w||!document.body.contains(w))return;
@@ -15424,12 +15424,12 @@ function cpgContaHtml(c,extra){
   return '<div class="cpg-conta"><b>'+cpgEsc(c.fornecedor||'')+'</b> · '+cpgR(c.valor)+' · venc. '+cpgD(c.venc)+(c.forma?' · '+cpgEsc(c.forma):'')+' · <i>'+sit+'</i> · <span class="cpg-mut">id '+c.id+'</span>'+(extra||'')+'</div>';
 }
 function cpgSelTipo(x){
-  return '<select data-k="tipo" data-c="'+x.chave+'" title="Mover para outra aba">'+CPG_ABAS.filter(function(a){return a[0]!=='bling';}).map(function(a){return '<option value="'+a[0]+'"'+(x.tipo===a[0]?' selected':'')+'>Mover: '+a[2]+'</option>';}).join('')+'</select>';
+  return '<select data-k="tipo" data-c="'+x.chave+'" title="Mover para outra aba">'+CPG_ABAS.filter(function(a){return CPG_TIPOS_DEB.indexOf(a[0])>=0;}).map(function(a){return '<option value="'+a[0]+'"'+(x.tipo===a[0]?' selected':'')+'>Mover: '+a[2]+'</option>';}).join('')+'</select>';
 }
 
 function cpgHtmlDebitos(tipo){
   var L=cpgLista(tipo);
-  var auto=tipo==='taxa'?'<div class="cpg-msg ok" style="font-weight:500">🤖 <b>Automático:</b> tarifas e taxas do extrato que não existem no Bling são <b>lançadas e baixadas sozinhas todo dia a partir das 20h</b> (contato Sicoob, conta Sicoob, data do extrato). <button class="cpg-btn mini sec" data-a="autoAgora">Rodar agora</button></div>':'';
+  var auto=tipo==='transf'?'<div class="cpg-msg warn" style="font-weight:500">🔄 Saques e transferências para contas da própria empresa (mesmo CNPJ) <b>não são despesa</b>: não entram no Contas a Pagar nem na lista "Sicoob sem Bling". Se algum aqui for, na verdade, um pagamento, use "Mover" para a aba certa.</div>':tipo==='taxa'?'<div class="cpg-msg ok" style="font-weight:500">🤖 <b>Automático:</b> tarifas e taxas do extrato que não existem no Bling são <b>lançadas e baixadas sozinhas todo dia a partir das 20h</b> (contato Sicoob, conta Sicoob, data do extrato). <button class="cpg-btn mini sec" data-a="autoAgora">Rodar agora</button></div>':'';
   if(auto&&!L.length)return auto+'<div class="cpg-vazio">'+(CPG.soPend?'Nenhuma pendência aqui no período. ✓':'Nenhum débito deste tipo no período.')+'</div>';
   if(!L.length)return '<div class="cpg-vazio">'+(CPG.soPend?'Nenhuma pendência aqui no período. ✓':'Nenhum débito deste tipo no período.')+'</div>';
   var temLancar=L.some(function(x){return !x.ignorado&&(x.status==='sem_conta'||x.status==='lancar');});

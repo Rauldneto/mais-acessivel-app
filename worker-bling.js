@@ -1943,6 +1943,8 @@ function numBR(v) { // "1234.56", "-1234.56", "1.234,56"
 }
 function tipoDebito(desc) {
   const d = semAcento(desc);
+  // dinheiro que só muda de conta (não é despesa): saque, transferência entre contas próprias, aplicação/resgate
+  if (/SAQUE|\bSAQ\b|ENTRE CONTAS|MESMA TITUL|MESMA TIT|CONTA PROPRIA|APLICACAO|APLIC\.|RESGATE|POUPANCA/.test(d)) return 'transf';
   if (/^TAR\b|^TAR\.|TARIFA|\bIOF\b|JUROS|ENCARGO|\bMORA\b|ANUIDADE|CESTA|PACOTE|MANUT|CUSTAS|\bTAXA/.test(d)) return 'taxa';
   if (/FATURA|CARTAO|CREDICARD|SIPAG|MASTERCARD|\bVISA\b|ELO\b/.test(d)) return 'credito';
   if (/\bPIX\b|PIX\.|PIX /.test(d)) return 'pix';
@@ -2042,7 +2044,7 @@ async function lerDebitos(env, de, ate) {
     if (!x.data || x.data < de || x.data > ate || !x.valor) continue;
     const base = [x.data, x.valor, x.desc, x.ndoc].join('|'); x.seq = vistos[base] = (vistos[base] || 0) + 1;
     x.chave = await chaveDebito(x);
-    x.tipoAuto = tipoDebito(x.desc + ' ' + x.compl);
+    x.tipoAuto = x.doc === ECONF_CNPJ ? 'transf' : tipoDebito(x.desc + ' ' + x.compl);   // PIX/TED para o próprio CNPJ = transferência
     const mk = marcas[x.chave] || {};
     x.tipo = mk.tipo || x.tipoAuto;
     if (mk.ign) x.ignorado = { por: mk.por || '', em: mk.em };
@@ -2101,7 +2103,8 @@ async function pagarConciliar(env, de, ate, mes) {
     if (c.situacao === 2 && !c.pagaNoPeriodo) p -= 30;         // paga em outra data: provavelmente outra conta
     return { p, exato, docOk, juro: exato ? 0 : r2(dv), dias };
   };
-  const ordem = debitos.filter(x => !x.ignorado && x.tipo !== 'credito').sort((a, b) => (b.doc ? 1 : 0) - (a.doc ? 1 : 0));
+  debitos.filter(x => !x.ignorado && x.tipo === 'transf').forEach(x => { x.status = 'transf'; x.motivo = 'saque/transferência entre contas próprias (não é despesa)'; });
+  const ordem = debitos.filter(x => !x.ignorado && x.tipo !== 'credito' && x.tipo !== 'transf').sort((a, b) => (b.doc ? 1 : 0) - (a.doc ? 1 : 0));
   for (const x of ordem) {
     if (x.vinculo) {
       const c = contas[x.vinculo]; usadas.add(String(x.vinculo));
@@ -2136,7 +2139,7 @@ async function pagarConciliar(env, de, ate, mes) {
   const emAberto = lc.filter(c => [1, 3].includes(c.situacao) && !usadas.has(String(c.id)) && c.venc >= de && c.venc <= ate)
     .sort((a, b) => String(a.venc).localeCompare(String(b.venc)));
   const resumo = {};
-  debitos.forEach(x => { const t = x.tipo; resumo[t] = resumo[t] || { qtd: 0, total: 0, pend: 0 }; resumo[t].qtd++; resumo[t].total = r2(resumo[t].total + x.valor); if (!x.ignorado && x.status !== 'ok') resumo[t].pend++; });
+  debitos.forEach(x => { const t = x.tipo; resumo[t] = resumo[t] || { qtd: 0, total: 0, pend: 0 }; resumo[t].qtd++; resumo[t].total = r2(resumo[t].total + x.valor); if (!x.ignorado && x.status !== 'ok' && x.status !== 'transf') resumo[t].pend++; });
   // 6) Visão por mês (Bling → Sicoob): toda conta em aberto que vence no mês, com a sugestão do extrato ao lado
   let contasMes = null;
   if (mesIni) {
