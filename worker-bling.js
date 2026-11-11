@@ -642,9 +642,13 @@ function pedirTokenSicoob(env, escopo) {
   });
 }
 
+function chaveTokenSicoob(env, escopo) {
+  escopo = escopo || ESCOPO_PIX;
+  return escopo === ESCOPO_PIX ? 'sicoob:token' : escopo === ESCOPO_BOLETOS ? 'sicoob:token:boletos' : 'sicoob:token:' + escopo.replace(/\W+/g, '_') + ':' + String(clientSicoob(env, escopo)).slice(0, 8); // troca de app = token novo
+}
 async function sicoobToken(env, escopo) {
   escopo = escopo || ESCOPO_PIX;
-  const chave = escopo === ESCOPO_PIX ? 'sicoob:token' : escopo === ESCOPO_BOLETOS ? 'sicoob:token:boletos' : 'sicoob:token:' + escopo.replace(/\W+/g, '_') + ':' + String(clientSicoob(env, escopo)).slice(0, 8); // troca de app = token novo
+  const chave = chaveTokenSicoob(env, escopo);
   const c = await env.BLING_KV.get(chave, 'json');
   if (c && Date.now() < c.exp) return c.access;
   let r, txt = '', j = {};
@@ -1972,6 +1976,13 @@ async function sicoobExtrato(env, mes, ano, d1, d2) {
   let r = await env.SICOOB_MTLS.fetch(base + '/extrato/' + mes + '/' + ano + q, {
     headers: { Authorization: 'Bearer ' + tok, client_id: clientSicoob(env, escopo), Accept: 'application/json' },
   });
+  if (r.status === 401) { // token guardado foi invalidado pelo Sicoob (ex.: virada do dia): pede um novo e tenta de novo
+    await env.BLING_KV.delete(chaveTokenSicoob(env, escopo));
+    tok = await sicoobToken(env, escopo);
+    r = await env.SICOOB_MTLS.fetch(base + '/extrato/' + mes + '/' + ano + q, {
+      headers: { Authorization: 'Bearer ' + tok, client_id: clientSicoob(env, escopo), Accept: 'application/json' },
+    });
+  }
   if ((r.status === 404 || r.status === 403) && base !== SICOOB_CCO_V3) r = await env.SICOOB_MTLS.fetch(SICOOB_CCO_V3 + '/extrato/' + mes + '/' + ano + q, {
     headers: { Authorization: 'Bearer ' + tok, client_id: clientSicoob(env, escopo), Accept: 'application/json' },
   });
