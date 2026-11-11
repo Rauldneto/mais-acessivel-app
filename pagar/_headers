@@ -1,0 +1,5 @@
+/*
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  X-Robots-Tag: noindex
+  Cache-Control: no-store

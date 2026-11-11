@@ -72,6 +72,11 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
     // Página pública de pagamento (link curto que vai para o cliente): /p/AB12CD
     { const m = new URL(req.url).pathname.match(/^\/p\/([A-Za-z0-9]{4,12})\/?$/); if (m && env.BLING_KV) return paginaPix(env, m[1]); }
+    // Dados públicos do link (usados pelo site de pagamento maisacessivel.pages.dev): /p/AB12CD.json
+    { const m = new URL(req.url).pathname.match(/^\/p\/([A-Za-z0-9]{4,12})\.json$/); if (m && env.BLING_KV) {
+      const d = await pixPublico(env, m[1]);
+      return new Response(JSON.stringify(d), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' } });
+    } }
     if (!okOrigem) return resp({ ok: false, erro: 'Origem não autorizada' }, 403);
     if (!env.BLING_KV || !env.BLING_CLIENT_ID || !env.BLING_CLIENT_SECRET)
       return resp({ ok: false, erro: 'Worker sem configuração (BLING_KV, BLING_CLIENT_ID, BLING_CLIENT_SECRET).' }, 500);
@@ -736,6 +741,21 @@ async function linkCurto(env, txid, expiraMs) {
 }
 const escH = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const brlH = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// só o necessário para o cliente pagar (sem dados internos)
+async function pixPublico(env, cod) {
+  const txid = await env.BLING_KV.get('pixcurto:' + String(cod).toUpperCase());
+  const reg = txid ? await env.BLING_KV.get('pix:' + txid, 'json') : null;
+  if (!reg) return { ok: false, status: 'NAO_ENCONTRADO' };
+  let status = reg.status || 'ATIVA';
+  const expira = Number(reg.expira || (Number(reg.criado || 0) + 86400e3));
+  if (status === 'ATIVA' && env.SICOOB_MTLS) {
+    try { const c = await sicoob(env, 'GET', '/cob/' + txid); if (c.status === 'CONCLUIDA') status = 'PAGO'; else if (c.status && c.status !== 'ATIVA') status = 'CANCELADA'; } catch (e) {}
+  }
+  if (status === 'ATIVA' && Date.now() > expira) status = 'VENCIDA';
+  if (status === 'PAGO' || status === 'CONCLUIDA') status = 'PAGO';
+  return { ok: true, status, tipo: reg.tipo, numero: reg.numero, valor: reg.valor, cliente: reg.cliente || '', expira, copia: status === 'ATIVA' ? reg.copia : '' };
+}
+
 async function paginaPix(env, cod) {
   const LOGO = 'https://rauldneto.github.io/mais-acessivel-app/logo.jpg';
   const css = '*{box-sizing:border-box}body{margin:0;background:#eef2f1;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:#1c1c1e;-webkit-font-smoothing:antialiased}' +

@@ -17295,7 +17295,9 @@ function blgCancelarPix(k,cb){
   }).catch(function(e){p.cancelando=false;p.erroCancelar='Sem conexão: '+(e&&e.message||e);blgDraw();if(cb)cb(false);});
 }
 // texto que acompanha o QR Code no WhatsApp (o código Copia e Cola vai em mensagem separada)
-function blgLinkPix(p){return p&&p.curto?blgUrl()+'/p/'+p.curto:'';}
+// link curto do cliente: site separado da empresa (Cloudflare Pages), sem o nome da conta. Pode ser trocado em bling/config.sitePix
+var PAG_SITE='https://maisacessivel.pages.dev';
+function blgLinkPix(p){return p&&p.curto?((BLG.cfg&&BLG.cfg.sitePix)||PAG_SITE).replace(/\/+$/,'')+'/p/'+p.curto:'';}
 function blgMsgPix(x,p){
   var nome=blgNomeCliente(x),ref=x.tipo==='nota'?'da *nota fiscal nº '+x.numero+'*':'do *pedido nº '+x.numero+'*';
   return 'Olá'+(nome?', '+nome:'')+'! 👋\n\n'+
