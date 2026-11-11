@@ -2265,25 +2265,29 @@ async function pagarLancar(env, b) {
 }
 
 // ---------------- Tarifas e taxas automáticas (todo dia) ----------------
-// Débitos do tipo "taxa" (tarifa de boleto/pacote, IOF, juros, taxa/desconto de cartão…) dos últimos 7 dias que não existem
+// Tarifas de boleto (débito tipo "taxa" com valor múltiplo de R$ 1,60) dos últimos 35 dias que não existem
 // no Contas a Pagar do Bling são lançados SOZINHOS (contato = Sicoob, categoria sugerida, conta Sicoob) e baixados na data do extrato.
 // Decisão do Raul (10/11/2026): não depende de autorização. Nunca lança duas vezes: marca a chave do débito e confere no Bling
 // se já existe conta com o mesmo vencimento e o mesmo valor (lançada à mão).
-const PAG_AUTO_MAX = 6;   // por rodada (limite de chamadas do Worker); o cron continua na rodada seguinte
+const PAG_AUTO_MAX = 6;
+const PAG_AUTO_DIAS = 35;   // olha o extrato dos últimos 35 dias (pega o que ficou para trás)
+// Regra do Raul (11/11/2026): automático SÓ para tarifa de valor múltiplo de R$ 1,60 (tarifa de boleto) → categoria Tarifa bancária.
+// IOF, juros e taxa de cartão ficam para lançar à mão (em lote).
+function tarifaBoleto(x) { const n = Math.round(x.valor / 1.6); return n >= 1 && Math.abs(n * 1.6 - x.valor) < 0.005; }   // por rodada (limite de chamadas do Worker); o cron continua na rodada seguinte
 async function pagarTaxasAuto(env, opt) {
   opt = opt || {};
-  const hoje = hojeLocal(), de = somaDias(hoje, -7);
+  const hoje = hojeLocal(), de = somaDias(hoje, -PAG_AUTO_DIAS);
   const st = (await env.BLING_KV.get('pagar:auto', 'json')) || {};
   if (!opt.forcar && st.dia === hoje && st.fim) return { ok: true, pulado: 'já feito hoje' };
   const { debitos } = await lerDebitos(env, de, hoje);
-  const pend = debitos.filter(x => x.tipo === 'taxa' && !x.ignorado && !x.lancado && !x.vinculo);
+  const pend = debitos.filter(x => x.tipo === 'taxa' && tarifaBoleto(x) && !x.ignorado && !x.lancado && !x.vinculo);
   let existentes = [];
   if (pend.length) existentes = await pagarListar(env, 'dataVencimento', de, hoje, 2);
   const itens = [];
   for (const x of pend) {
     const igual = existentes.find(c => soData(c.vencimento) === x.data && Math.abs(r2(c.valor) - x.valor) < 0.01);
     if (igual) { await salvarMarca(env, x.chave, { contaId: String(igual.id), por: 'automático (já existia no Bling)' }); continue; }
-    itens.push({ chave: x.chave, data: x.data, valor: x.valor, categoriaId: categoriaTaxa(x.desc + ' ' + x.compl), tipo: 'taxa',
+    itens.push({ chave: x.chave, data: x.data, valor: x.valor, categoriaId: PAG_CAT.tarifa, tipo: 'taxa',
       historico: 'Sicoob ' + brData(x.data) + ' - ' + x.desc + (x.compl ? ' - ' + x.compl : '') + ' (automático)' });
   }
   const lote = itens.slice(0, PAG_AUTO_MAX);
