@@ -28,7 +28,7 @@
 //   GET  /produtos-fornecedores?ids=1,2,3 → códigos que cada fornecedor usa para esses produtos (cadastro do Bling),
 //                             usados como pista para ligar a cotação do fornecedor aos itens do pedido. Cache de 1 dia.
 //   GET  /boletos, POST /boletos/verificar|vincular|ignorar|simular|simular/passo → boletos Sicoob liquidados (ver o fim do arquivo)
-//   Contas a Pagar: tarifas/taxas lançadas e baixadas sozinhas todo dia a partir das 20h (GET /pagar/auto = situação, POST = rodar agora).
+//   Contas a Pagar: tarifas de boleto (múltiplos de R$ 1,60) lançadas e baixadas sozinhas todo dia às 13h e 18h (GET /pagar/auto = situação, POST = rodar agora).
 //   GET /pagar/conciliar?mes=AAAA-MM (ou ?de=&ate=), GET /pagar/conta?id=, POST /pagar/baixar|lancar|marcar → extrato Sicoob × Contas a Pagar (fim do arquivo)
 //     Precisa: escopo cco_extrato liberado no app do portal Sicoob (ou num 2º app: SICOOB_CLIENT_ID_CCO; o nº da conta é descoberto num boleto Sicoob; SICOOB_CONTA opcional) e permissão Contas a pagar (ler/gravar) no app do Bling.
 //   Chat: POST /push/chat {para,de,nome,conv,txt,av} → notificação no Chrome só dos navegadores do destinatário (GET /push/ultimos?u= devolve as dele)
@@ -49,10 +49,11 @@ export default {
   async scheduled(evento, env, ctx) {
     // 13h e 18h: a rodada é do ECONF automático (envio à Sefaz); nas outras, conferência de PIX e boletos
     if (await econfAgendado(env).catch(e => { registrarErro(env, 'ECONF automático: ' + String(e.message || e)); return false; })) return;
-    // a partir das 20h: tarifas e taxas do extrato Sicoob → Contas a Pagar (lança e baixa sozinho). Essa rodada faz só isso.
-    if (env.SICOOB_CLIENT_ID_CCO && new Date(Date.now() - 3 * 3600e3).getUTCHours() >= 20) {
+    // 13h e 18h (logo depois do ECONF da mesma hora): tarifas de boleto do extrato Sicoob → Contas a Pagar (lança e baixa sozinho). Essa rodada faz só isso.
+    const horaAgora = new Date(Date.now() - 3 * 3600e3).getUTCHours();
+    if (env.SICOOB_CLIENT_ID_CCO && PAG_AUTO_HORAS.includes(horaAgora)) {
       const st = (await env.BLING_KV.get('pagar:auto', 'json')) || {};
-      if (!(st.dia === hojeLocal() && st.fim)) { ctx.waitUntil(pagarTaxasAuto(env).catch(e => registrarErro(env, 'Tarifas automáticas: ' + String(e.message || e)))); return; }
+      if (!(st.slot === hojeLocal() + '-' + horaAgora && st.fim)) { ctx.waitUntil(pagarTaxasAuto(env).catch(e => registrarErro(env, 'Tarifas automáticas: ' + String(e.message || e)))); return; }
     }
     ctx.waitUntil(verificarPagamentos(env).then(() => registrarErro(env, null)).catch(e => registrarErro(env, String(e.message || e)))
       .then(() => verificarBoletos(env)).catch(e => registrarErro(env, 'Boletos: ' + String(e.message || e))));
@@ -2281,6 +2282,7 @@ async function pagarLancar(env, b) {
 // Decisão do Raul (10/11/2026): não depende de autorização. Nunca lança duas vezes: marca a chave do débito e confere no Bling
 // se já existe conta com o mesmo vencimento e o mesmo valor (lançada à mão).
 const PAG_AUTO_MAX = 6;
+const PAG_AUTO_HORAS = [13, 18];   // horário de Brasília (Raul, 11/11/2026)
 const PAG_AUTO_DIAS = 35;   // olha o extrato dos últimos 35 dias (pega o que ficou para trás)
 // Regra do Raul (11/11/2026): automático SÓ para tarifa de valor múltiplo de R$ 1,60 (tarifa de boleto) → categoria Tarifa bancária.
 // IOF, juros e taxa de cartão ficam para lançar à mão (em lote).
@@ -2289,7 +2291,8 @@ async function pagarTaxasAuto(env, opt) {
   opt = opt || {};
   const hoje = hojeLocal(), de = somaDias(hoje, -PAG_AUTO_DIAS);
   const st = (await env.BLING_KV.get('pagar:auto', 'json')) || {};
-  if (!opt.forcar && st.dia === hoje && st.fim) return { ok: true, pulado: 'já feito hoje' };
+  const slot = hoje + '-' + new Date(Date.now() - 3 * 3600e3).getUTCHours();
+  if (!opt.forcar && st.slot === slot && st.fim) return { ok: true, pulado: 'já feito nesta rodada' };
   const { debitos } = await lerDebitos(env, de, hoje);
   const pend = debitos.filter(x => x.tipo === 'taxa' && tarifaBoleto(x) && !x.ignorado && !x.lancado && !x.vinculo);
   let existentes = [];
@@ -2305,7 +2308,7 @@ async function pagarTaxasAuto(env, opt) {
   const r = lote.length ? await pagarLancar(env, { itens: lote, usuario: 'automático' }) : { ok: true, itens: [] };
   const erros = (r.itens || []).filter(x => !x.ok);
   const fim = itens.length <= PAG_AUTO_MAX;
-  await env.BLING_KV.put('pagar:auto', JSON.stringify({ dia: hoje, fim, ultimo: Date.now(), feitos: (st.dia === hoje ? st.feitos || 0 : 0) + (r.itens || []).filter(x => x.ok).length,
+  await env.BLING_KV.put('pagar:auto', JSON.stringify({ dia: hoje, slot, fim, ultimo: Date.now(), feitos: (st.dia === hoje ? st.feitos || 0 : 0) + (r.itens || []).filter(x => x.ok).length,
     erros: erros.map(e => e.erro).slice(0, 5) }));
   if (erros.length) await registrarErro(env, 'Tarifas automáticas: ' + erros[0].erro);
   return { ok: !erros.length, lancados: (r.itens || []).filter(x => x.ok).length, restantes: Math.max(0, itens.length - lote.length), erros: erros.map(e => e.erro) };
