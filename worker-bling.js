@@ -70,6 +70,8 @@ export default {
     };
     const resp = (o, st) => new Response(JSON.stringify(o), { status: st || 200, headers: cors });
     if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
+    // Página pública de pagamento (link curto que vai para o cliente): /p/AB12CD
+    { const m = new URL(req.url).pathname.match(/^\/p\/([A-Za-z0-9]{4,12})\/?$/); if (m && env.BLING_KV) return paginaPix(env, m[1]); }
     if (!okOrigem) return resp({ ok: false, erro: 'Origem não autorizada' }, 403);
     if (!env.BLING_KV || !env.BLING_CLIENT_ID || !env.BLING_CLIENT_SECRET)
       return resp({ ok: false, erro: 'Worker sem configuração (BLING_KV, BLING_CLIENT_ID, BLING_CLIENT_SECRET).' }, 500);
@@ -602,7 +604,8 @@ async function listarAbertos(env) {
       if (x.cancelado || Date.now() > Number(x.expira || (Number(x.criado || 0) + 86400e3))) continue;
       const reg = await env.BLING_KV.get('pix:' + x.txid, 'json');
       if (!reg || reg.status === 'PAGO' || reg.status === 'CANCELADA') continue;
-      vivos.push({ txid: x.txid, valor: reg.valor, criado: reg.criado, copia: reg.copia, usuario: reg.usuario || '', validoAte: Number(reg.expira || (Number(reg.criado || 0) + 86400e3)) });
+      if (!reg.curto) { reg.curto = await linkCurto(env, x.txid, Number(reg.expira || (Number(reg.criado || 0) + 86400e3))); await env.BLING_KV.put('pix:' + x.txid, JSON.stringify(reg), { expirationTtl: 90 * 86400 }); }
+      vivos.push({ txid: x.txid, curto: reg.curto, valor: reg.valor, criado: reg.criado, copia: reg.copia, usuario: reg.usuario || '', validoAte: Number(reg.expira || (Number(reg.criado || 0) + 86400e3)) });
     }
     if (vivos.length) it.pixAtivos = vivos.sort((a, b) => b.criado - a.criado);
     const pg = (await env.BLING_KV.get('pagosdoc:' + it.tipo + ':' + it.id, 'json')) || [];
@@ -719,6 +722,86 @@ function validadePix(venc) {
   return { dia, ms: Date.parse(dia + 'T23:59:59-03:00') };
 }
 
+// ---------------- Link curto + página de pagamento para o cliente ----------------
+const CURTO_LETRAS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // sem 0/O, 1/I para não confundir
+async function linkCurto(env, txid, expiraMs) {
+  for (let t = 0; t < 5; t++) {
+    const b = crypto.getRandomValues(new Uint8Array(6));
+    const cod = Array.from(b, x => CURTO_LETRAS[x % CURTO_LETRAS.length]).join('');
+    if (await env.BLING_KV.get('pixcurto:' + cod)) continue;
+    await env.BLING_KV.put('pixcurto:' + cod, txid, { expirationTtl: Math.max(7 * 86400, Math.ceil(((expiraMs || Date.now()) - Date.now()) / 1000) + 30 * 86400) });
+    return cod;
+  }
+  return '';
+}
+const escH = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const brlH = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+async function paginaPix(env, cod) {
+  const LOGO = 'https://rauldneto.github.io/mais-acessivel-app/logo.jpg';
+  const css = '*{box-sizing:border-box}body{margin:0;background:#eef2f1;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:#1c1c1e;-webkit-font-smoothing:antialiased}' +
+    '.top{background:linear-gradient(135deg,#0a7d6b,#075e51);color:#fff;padding:16px 18px 64px}.tl{display:flex;align-items:center;gap:12px;max-width:460px;margin:0 auto}' +
+    '.tl img{height:46px;background:#fff;border-radius:12px;padding:5px 9px}.tl b{font-size:17px;display:block}.tl small{opacity:.9;font-size:12.5px}' +
+    '.seg{display:flex;align-items:center;justify-content:center;gap:6px;max-width:460px;margin:12px auto 0;font-size:12.5px;background:rgba(255,255,255,.14);border-radius:999px;padding:6px 12px}' +
+    '.wrap{padding:0 14px}.card{background:#fff;margin:-46px auto 14px;max-width:460px;border-radius:22px;padding:22px 18px;box-shadow:0 10px 30px rgba(0,0,0,.08);text-align:center}' +
+    '.ref{font-size:14px;color:#636366}.val{font-size:42px;font-weight:800;color:#0a7d6b;margin:4px 0 2px;letter-spacing:-.5px}.vld{display:inline-block;font-size:13px;color:#92400e;background:#fef3c7;border-radius:999px;padding:4px 12px;font-weight:600}' +
+    '.cli{font-size:13px;color:#636366;margin-top:8px}' +
+    '.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:0;border-radius:14px;background:#16a34a;color:#fff;font:inherit;font-size:17px;font-weight:800;padding:16px;margin-top:16px;cursor:pointer;text-decoration:none}' +
+    '.btn.sec{background:#fff;color:#0a7d6b;border:2px solid #0a7d6b;margin-top:10px}.btn.ok{background:#0a7d6b;color:#fff}' +
+    '.msg{font-size:13px;color:#15803d;margin-top:8px;min-height:18px}' +
+    '.passos{text-align:left;background:#f7f9f8;border-radius:14px;padding:12px 14px;margin-top:14px;font-size:14px;line-height:1.6}.passos b{color:#0a7d6b}' +
+    '.conf{max-width:460px;margin:0 auto 14px;background:#fff;border-radius:18px;padding:16px 18px;box-shadow:0 6px 18px rgba(0,0,0,.05)}' +
+    '.conf h3{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px}.ln{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid #f0f0f3;font-size:13.5px}.ln span{color:#636366}.ln b{text-align:right}' +
+    '.alerta{margin-top:10px;font-size:12.5px;color:#475569;background:#f1f5f9;border-radius:12px;padding:10px 12px;line-height:1.5}' +
+    '.qr{margin:14px auto 4px;width:190px;min-height:190px}.qr svg{width:190px;height:190px}.ou{font-size:12px;color:#8e8e93}' +
+    'details{margin-top:12px;text-align:left}summary{cursor:pointer;color:#0a7d6b;font-weight:700;font-size:14px}.cod{width:100%;margin-top:8px;font-size:11px;font-family:monospace;border:1px solid #e5e5ea;border-radius:10px;padding:8px;height:70px;resize:none;color:#555}' +
+    '.st{font-size:22px;font-weight:800;margin:12px 0 6px}.st.pago{color:#16a34a}.st.off{color:#b91c1c}.rod{font-size:12px;color:#8e8e93;text-align:center;padding:4px 20px 26px;line-height:1.6}';
+  const html = (corpo, titulo, desc) => new Response('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>' + escH(titulo) + '</title><meta property="og:title" content="' + escH(titulo) + '"><meta property="og:description" content="' + escH(desc) + '">' +
+    '<meta property="og:image" content="' + LOGO + '"><meta name="robots" content="noindex"><meta name="theme-color" content="#0a7d6b"><style>' + css + '</style></head><body>' +
+    '<div class="top"><div class="tl"><img src="' + LOGO + '" alt="Mais Acessível"><div><b>Mais Acessível</b><small>JDFER Comércio e Serviços Ltda</small></div></div>' +
+    '<div class="seg">🔒 Pagamento seguro via PIX · Banco Sicoob</div></div><div class="wrap">' + corpo + '</div>' +
+    '<div class="rod">Mais Acessível · Goiânia/GO<br>Nunca pedimos senha, código de verificação ou dados de cartão.</div></body></html>',
+    { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer' } });
+  const txid = await env.BLING_KV.get('pixcurto:' + String(cod).toUpperCase());
+  const reg = txid ? await env.BLING_KV.get('pix:' + txid, 'json') : null;
+  if (!reg) return html('<div class="card"><div class="st off">Link não encontrado</div><p>Este link de pagamento não existe ou já expirou. Fale com quem te atendeu para receber um novo.</p></div>', 'Pagamento PIX · Mais Acessível', 'Link não encontrado');
+  let status = reg.status || 'ATIVA';
+  const expira = Number(reg.expira || (Number(reg.criado || 0) + 86400e3));
+  if (status === 'ATIVA' && env.SICOOB_MTLS) {   // confere na hora se já foi pago ou cancelado
+    try { const c = await sicoob(env, 'GET', '/cob/' + txid); if (c.status === 'CONCLUIDA') status = 'PAGO'; else if (c.status && c.status !== 'ATIVA') status = 'CANCELADA'; } catch (e) {}
+  }
+  const ref = (reg.tipo === 'nota' ? 'Nota fiscal nº ' : 'Pedido nº ') + escH(reg.numero);
+  const vd = new Date(expira - 3 * 3600e3).toISOString();
+  const validade = vd.slice(8, 10) + '/' + vd.slice(5, 7) + '/' + vd.slice(0, 4) + ' às ' + vd.slice(11, 16);
+  const titulo = 'Pagamento PIX · Mais Acessível · ' + (reg.tipo === 'nota' ? 'NF ' : 'Pedido ') + reg.numero;
+  const topo = '<div class="ref">' + ref + '</div><div class="val">R$ ' + brlH(reg.valor) + '</div>';
+  if (status === 'PAGO') return html('<div class="card">' + topo + '<div class="st pago">✅ Pagamento recebido</div><p>Obrigado! Já recebemos este pagamento. Não é preciso pagar de novo.</p></div>', titulo, 'Pagamento recebido');
+  if (status === 'CANCELADA') return html('<div class="card">' + topo + '<div class="st off">PIX cancelado</div><p>Este PIX foi cancelado. Fale com quem te atendeu para receber um novo link.</p></div>', titulo, 'PIX cancelado');
+  if (Date.now() > expira) return html('<div class="card">' + topo + '<div class="st off">PIX vencido</div><p>Este PIX venceu em ' + validade + '. Fale com quem te atendeu para receber um novo link.</p></div>', titulo, 'PIX vencido');
+  const corpo = '<div class="card">' + topo + '<div class="vld">⏰ Válido até ' + validade + '</div>' + (reg.cliente ? '<div class="cli">' + escH(reg.cliente) + '</div>' : '') +
+    '<button class="btn" id="banco">🏦 Pagar no app do meu banco</button>' +
+    '<button class="btn sec" id="cp">📋 Copiar código PIX</button><div class="msg" id="msg"></div>' +
+    '<div class="passos"><b>1.</b> Toque em <b>Pagar no app do meu banco</b> (ou copie o código)<br><b>2.</b> No app do banco, entre em <b>PIX › Pix Copia e Cola</b><br><b>3.</b> Cole o código, <b>confira o recebedor</b> abaixo e confirme</div>' +
+    '<details><summary>Ver o código PIX</summary><textarea class="cod" id="cod" readonly>' + escH(reg.copia) + '</textarea></details>' +
+    '<div class="qr" id="qr"></div><div class="ou">No computador? Leia o QR Code com a câmera do app do banco.</div></div>' +
+    '<div class="conf"><h3>🛡️ Confira antes de pagar</h3>' +
+    '<div class="ln"><span>Recebedor</span><b>JDFER COMÉRCIO E SERVIÇOS LTDA</b></div>' +
+    '<div class="ln"><span>CNPJ</span><b>35.017.646/0001-66</b></div>' +
+    '<div class="ln"><span>Banco</span><b>Sicoob</b></div>' +
+    '<div class="ln"><span>Valor</span><b>R$ ' + brlH(reg.valor) + '</b></div>' +
+    '<div class="ln"><span>Referente a</span><b>' + ref + '</b></div>' +
+    '<div class="alerta">No app do seu banco, antes de confirmar, o recebedor deve aparecer como <b>JDFER COMÉRCIO E SERVIÇOS LTDA</b> e o valor deve ser <b>R$ ' + brlH(reg.valor) + '</b>. Se algo for diferente, não pague e fale com a gente.</div></div>' +
+    '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script><script>' +
+    'var c=document.getElementById("cod").value,m=document.getElementById("msg");' +
+    'function copiar(fim){var ok=function(){fim&&fim(true);};try{navigator.clipboard.writeText(c).then(ok).catch(function(){var t=document.getElementById("cod");t.parentNode.open=true;t.select();try{document.execCommand("copy");ok();}catch(e){fim&&fim(false);}});}catch(e){fim&&fim(false);}}' +
+    'document.getElementById("cp").onclick=function(){var b=this;copiar(function(ok){if(ok){b.textContent="✓ Código copiado";b.className="btn ok";m.textContent="Agora abra o app do seu banco › PIX › Pix Copia e Cola e cole o código.";}else{document.querySelector("details").open=true;m.textContent="Selecione o código abaixo e copie.";}});};' +
+    'document.getElementById("banco").onclick=function(){copiar(function(){' +
+      'if(navigator.share){navigator.share({text:c}).catch(function(){});m.textContent="Código copiado. Escolha o app do seu banco na lista ou abra o banco e use Pix Copia e Cola.";}' +
+      'else{m.textContent="Código copiado. Abra o app do seu banco › PIX › Pix Copia e Cola e cole.";}});};' +
+    'try{var q=qrcode(0,"M");q.addData(c);q.make();document.getElementById("qr").innerHTML=q.createSvgTag({cellSize:4,margin:1});}catch(e){}</script>';
+  return html(corpo, titulo, 'R$ ' + brlH(reg.valor) + ' · válido até ' + validade + ' · Recebedor JDFER Comércio e Serviços Ltda');
+}
+
 async function gerarPix(env, b) {
   const valor = Math.round(Number(b.valor) * 100) / 100;
   if (!(valor > 0) || valor > 1e7) return { ok: false, erro: 'Valor inválido.' };
@@ -749,7 +832,9 @@ async function gerarPix(env, b) {
   lista.push({ txid, valor, criado: reg.criado, expira: val.ms });
   await env.BLING_KV.put(k, JSON.stringify(lista.slice(-20)), { expirationTtl: 90 * 86400 });
   await env.BLING_KV.delete('cache:abertos');
-  return { ok: true, txid, copiaECola: c.brcode || '', validade: val.dia.slice(8, 10) + '/' + val.dia.slice(5, 7) + '/' + val.dia.slice(0, 4) + ' 23:59', expira: val.ms };
+  reg.curto = await linkCurto(env, txid, val.ms);
+  await env.BLING_KV.put('pix:' + txid, JSON.stringify(reg), { expirationTtl: 90 * 86400 });
+  return { ok: true, txid, curto: reg.curto, copiaECola: c.brcode || '', validade: val.dia.slice(8, 10) + '/' + val.dia.slice(5, 7) + '/' + val.dia.slice(0, 4) + ' 23:59', expira: val.ms };
 }
 
 // cancela a cobrança no Sicoob (o QR Code para de aceitar pagamento). Padrão do Banco Central: PATCH /cob/{txid} status REMOVIDA_PELO_USUARIO_RECEBEDOR

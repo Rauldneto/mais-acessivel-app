@@ -17204,7 +17204,7 @@ function blgDataHora(ms){var d=new Date(ms);return d.toLocaleDateString('pt-BR',
 function blgRestaurarPix(x){
   var k=blgChave(x);if(BLG.pix[k]||!x.pixAtivos||!x.pixAtivos.length||BLG.demo)return;
   var v=x.pixAtivos[0];
-  BLG.pix[k]={valor:v.valor,copia:v.copia,txid:v.txid,validade:blgDataHora(v.validoAte),restaurado:true,criado:v.criado,usuario:v.usuario};
+  BLG.pix[k]={valor:v.valor,copia:v.copia,txid:v.txid,curto:v.curto||'',validade:blgDataHora(v.validoAte),restaurado:true,criado:v.criado,usuario:v.usuario};
   blgAcompanhar(k,v.txid);
 }
 function blgPainelPix(x){
@@ -17241,11 +17241,12 @@ function blgPainelPix(x){
     if(outros.length)h+='<div class="blg-msg" style="margin-top:8px;font-size:11.5px">⚠️ <b>Há mais '+outros.length+' PIX ativo(s)</b> para '+(x.tipo==='nota'?'esta nota':'este pedido')+' (o cliente pode pagar duas vezes):'+
       outros.map(function(v){return '<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;margin-top:4px">R$ '+blgMoeda(v.valor)+' · '+blgDataHora(v.criado)+' <button class="blg-btn sec" style="height:24px;width:auto;margin:0;padding:0 8px" data-a="cancelarOutro" data-k="'+blgEsc(v.txid)+'">Cancelar</button></div>';}).join('')+'</div>';
     h+='<div class="qr" id="blgQr"></div>'+
-       '<div class="nota" style="margin-top:12px;color:#111"><b>No WhatsApp vão 2 mensagens:</b> primeiro o texto, depois o código sozinho (o cliente segura e copia só o código).</div>'+
-       '<label for="blgMsg">1ª mensagem — texto</label><textarea id="blgMsg" style="height:150px;font-family:arial,sans-serif;font-size:11px">'+blgEsc(pg.msg!=null?pg.msg:blgMsgPix(x,pg))+'</textarea>'+
-       '<button class="blg-btn'+(pg.etapa===1?' sec':'')+'" data-a="copiarMsg" title="Copia o texto para colar no WhatsApp (Ctrl+V) e enviar">'+BLG_IC.copiar+(pg.etapa>=1?' ✓ Texto copiado':' 1. Copiar texto')+'</button>'+
-       '<label>2ª mensagem — código PIX</label><textarea id="blgCopia" readonly style="height:54px;font-size:10px">'+blgEsc(pg.copia)+'</textarea>'+
-       '<button class="blg-btn'+(pg.etapa===1?' marcado':'')+'" data-a="copiarCod" title="Copia só o código PIX para colar numa segunda mensagem no WhatsApp">'+BLG_IC.copiar+(pg.etapa===2?' ✓ Código copiado':' 2. Copiar código PIX')+'</button>'+
+       (blgLinkPix(pg)?'<label for="blgMsg">Mensagem para o cliente (com o link de pagamento)</label><textarea id="blgMsg" style="height:150px;font-family:arial,sans-serif;font-size:11px">'+blgEsc(pg.msg!=null?pg.msg:blgMsgPix(x,pg))+'</textarea>'+
+         '<button class="blg-btn" data-a="copiarMsg" title="Copia a mensagem com o link para colar no WhatsApp (Ctrl+V)">'+BLG_IC.copiar+' Copiar mensagem</button>'+
+         '<button class="blg-btn sec" data-a="verLink" title="Abre a página que o cliente vai ver">🔗 Ver página do cliente</button>'
+        :'<div class="nota" style="color:#b45309">Link curto indisponível (servidor antigo): use o código abaixo.</div>')+
+       '<textarea id="blgCopia" readonly style="position:absolute;left:-9999px">'+blgEsc(pg.copia)+'</textarea>'+
+       '<button class="blg-btn sec" data-a="copiarCod" title="Copia só o código PIX Copia e Cola (sem o link)">'+BLG_IC.copiar+' Copiar só o código PIX</button>'+
        (pg.avisoCopia?'<div class="nota" style="color:#15803d">'+pg.avisoCopia+'</div>':'')+
        '<button class="blg-btn" data-a="copiarImg" title="Copia a imagem do QR Code (com valor e pedido/nota) para colar no WhatsApp com Ctrl+V">'+BLG_IC.qr+' Copiar QR Code</button>'+
        '<div class="nota">Valor: <b style="color:#111">R$ '+blgMoeda(pg.valor)+'</b> · vale até '+blgEsc(pg.validade||'hoje 23:59')+'.'+(BLG.demo?'<br><b style="color:#b45309">Prévia: código de exemplo, não paga nada.</b>':'')+'</div>'+
@@ -17294,17 +17295,17 @@ function blgCancelarPix(k,cb){
   }).catch(function(e){p.cancelando=false;p.erroCancelar='Sem conexão: '+(e&&e.message||e);blgDraw();if(cb)cb(false);});
 }
 // texto que acompanha o QR Code no WhatsApp (o código Copia e Cola vai em mensagem separada)
+function blgLinkPix(p){return p&&p.curto?blgUrl()+'/p/'+p.curto:'';}
 function blgMsgPix(x,p){
   var nome=blgNomeCliente(x),ref=x.tipo==='nota'?'da *nota fiscal nº '+x.numero+'*':'do *pedido nº '+x.numero+'*';
-  return 'Olá'+(nome?', '+nome:'')+'! 👋\n'+
-    'Aqui é da *Mais Acessível*. Segue o PIX para pagamento '+ref+(nome||!x.cliente?'':' ('+x.cliente+')')+'.\n\n'+
+  return 'Olá'+(nome?', '+nome:'')+'! 👋\n\n'+
+    'Segue o link seguro para pagamento '+ref+(nome||!x.cliente?'':' ('+x.cliente+')')+' — *Mais Acessível*.\n\n'+
     '💰 *Valor:* R$ '+blgMoeda(p.valor)+'\n'+
     '⏰ *Válido até:* '+String(p.validade||'hoje 23:59')+'\n\n'+
-    '*Como pagar:*\n'+
-    '1️⃣ Copie o código PIX que vou mandar na próxima mensagem 👇\n'+
-    '2️⃣ No app do seu banco, entre em *PIX › Pix Copia e Cola*\n'+
-    '3️⃣ Cole o código, confira o recebedor *JDFER COMÉRCIO E SERVIÇOS LTDA* e confirme\n\n'+
-    'Qualquer dúvida, estamos à disposição. Obrigado! 🙏';
+    '👉 *Pagar com PIX:*\n'+(blgLinkPix(p)||String(p.copia||''))+'\n\n'+
+    'No link você pode pagar pelo app do seu banco ou copiar o código PIX.\n'+
+    '🔒 Recebedor: *JDFER COMÉRCIO E SERVIÇOS LTDA* (CNPJ 35.017.646/0001-66).\n\n'+
+    'Qualquer dúvida, estou à disposição. Obrigado! 🙏';
 }
 function blgNomeCliente(x){
   var n=String(x.cliente||'').trim(),d=String(x.doc||'').replace(/\D/g,'');
@@ -17500,7 +17501,7 @@ function blgAcao(a){
   }
   if(a==='abrirBling'&&x){window.open(x.tipo==='nota'?'https://www.bling.com.br/notas.fiscais.php#edit/'+x.id:'https://www.bling.com.br/vendas.php#edit/'+x.id,'_blank');return;}
   if(a==='irPagamentos'){var keep=BLG.sel;irParaModulo('mod22');if(keep){BLG.sel=keep;blgDraw();}return;}
-  if(!blgPag()&&['pixSel','gerarPix','credSel','novoPix','cancelarPix','cancelarOutro','wpp','wppCodigo','baixarQr','copiar','copiarImg','copiarMsg','copiarCod'].indexOf(a)>=0)return;
+  if(!blgPag()&&['pixSel','gerarPix','credSel','novoPix','cancelarPix','cancelarOutro','wpp','wppCodigo','baixarQr','copiar','copiarImg','copiarMsg','copiarCod','verLink'].indexOf(a)>=0)return;
   if(a==='pixSel'){if(!x)return;blgDraw();var i=BLG.root.querySelector('#blgValor');if(i){i.focus();i.select();}return;}
   if(a==='novoPix'&&x){
     var pn=BLG.pix[BLG.sel];
@@ -17525,10 +17526,11 @@ function blgAcao(a){
   if(a==='msgConfirmado'){pagCopiarMsg(BLG.root.querySelector('[data-a="msgConfirmado"]'));return;}
   if(a==='comprovante'&&x){var pc=(x.pagos||[])[Number(BLG._i)];if(!pc)return;pagComprovante(x,pc);return;}
   if(a==='copiarMsg'&&x){var pm=BLG.pix[BLG.sel],tm=BLG.root.querySelector('#blgMsg');if(!pm||!tm)return;
-    var feito=function(){pm.etapa=1;pm.avisoCopia='✓ Texto copiado. Cole no WhatsApp (<b>Ctrl+V</b>) e <b>envie</b>. Depois clique em <b>2. Copiar código PIX</b>.';blgDraw();};
+    var feito=function(){pm.avisoCopia='✓ Mensagem copiada. Cole no WhatsApp (<b>Ctrl+V</b>) e envie — o cliente toca no link e paga.';blgDraw();};
     try{navigator.clipboard.writeText(tm.value).then(feito).catch(function(){tm.select();document.execCommand('copy');feito();});}catch(e){tm.select();document.execCommand('copy');feito();}return;}
+  if(a==='verLink'&&x){var pl=BLG.pix[BLG.sel];if(pl&&blgLinkPix(pl))window.open(blgLinkPix(pl),'_blank');return;}
   if(a==='copiarCod'&&x){var pk=BLG.pix[BLG.sel];if(!pk)return;
-    var fk=function(){pk.etapa=2;pk.avisoCopia='✓ Código copiado. Cole no WhatsApp (<b>Ctrl+V</b>) como <b>nova mensagem</b> e envie.';blgDraw();};
+    var fk=function(){pk.avisoCopia='✓ Código PIX copiado.';blgDraw();};
     try{navigator.clipboard.writeText(pk.copia).then(fk).catch(function(){var tk=BLG.root.querySelector('#blgCopia');tk.select();document.execCommand('copy');fk();});}catch(e){var tk2=BLG.root.querySelector('#blgCopia');tk2.select();document.execCommand('copy');fk();}return;}
   if(a==='copiarImg'&&x){var pi=BLG.pix[BLG.sel];if(!pi)return;blgCopiarImagem(x,pi);return;}
   if(a==='copiar'){var t=BLG.root.querySelector('#blgCopia');if(t){t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand('copy');}var bt=BLG.root.querySelector('[data-a="copiar"]');if(bt){bt.innerHTML='✓ Código copiado';setTimeout(function(){if(bt)bt.innerHTML=BLG_IC.copiar+' Copiar só o código';},1800);}}return;}
@@ -17538,10 +17540,10 @@ function blgAcao(a){
     var falta=Math.max(0,Number(x.aReceber||0)-Number(x.pago||0));var val=Math.round(falta*100)/100;   // valor fixo: sempre o que falta do pedido/nota (sem edição)
     if(!(val>0)){BLG.pix[BLG.sel]={erro:'Não há valor a receber neste pedido/nota.'};blgDraw();return;}
     if(val>falta+0.009){BLG.pix[BLG.sel]={erro:'O valor passa do que falta receber (R$ '+blgMoeda(falta)+').'};blgDraw();return;}
-    if(BLG.demo){BLG.pix[BLG.sel]={valor:val,copia:'00020101021226870014br.gov.bcb.pix2565pix.exemplo.com.br/qr/v3/PREVIA-'+x.numero+'-SEM-VALOR-REAL5204000053039865802BR5915MAIS ACESSIVEL6007GOIANIA62070503***6304ABCD',validade:'hoje 23:59'};blgDraw();return;}
+    if(BLG.demo){BLG.pix[BLG.sel]={curto:'DEMO01',valor:val,copia:'00020101021226870014br.gov.bcb.pix2565pix.exemplo.com.br/qr/v3/PREVIA-'+x.numero+'-SEM-VALOR-REAL5204000053039865802BR5915MAIS ACESSIVEL6007GOIANIA62070503***6304ABCD',validade:'hoje 23:59'};blgDraw();return;}
     var k=BLG.sel;BLG.pix[k]={gerando:true};blgDraw();
     blgApi('/pix',{method:'POST',body:{tipo:x.tipo,id:x.id,numero:x.numero,valor:val,venc:x.venc||'',cliente:x.cliente||'',doc:x.doc||'',total:x.total||0,aReceber:x.aReceber||0,contas:x.contas||[],usuario:STATE.usuarioLogado||''}}).then(function(r){
-      BLG.pix[k]=r&&r.ok?{valor:val,copia:r.copiaECola,validade:r.validade,txid:r.txid}:{erro:(r&&r.erro)||'Não gerou o PIX.'};blgDraw();
+      BLG.pix[k]=r&&r.ok?{valor:val,copia:r.copiaECola,validade:r.validade,txid:r.txid,curto:r.curto||''}:{erro:(r&&r.erro)||'Não gerou o PIX.'};blgDraw();
       if(r&&r.ok&&r.txid)blgAcompanhar(k,r.txid);
     }).catch(function(e){BLG.pix[k]={erro:'Sem conexão: '+(e&&e.message||e)};blgDraw();});
     return;
