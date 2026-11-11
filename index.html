@@ -15651,7 +15651,7 @@ function cpgAcao(a,k,b){
     if(!confirm('Lançar '+lista.length+' despesa(s) no Contas a Pagar do Bling, já pagas pela conta Sicoob, total '+cpgR(tot2)+'?'))return;
     b.disabled=true;
     // vai em lotes de 8 (limite de chamadas do servidor), um atrás do outro, até acabar
-    var itens=lista.map(function(y){var it=cpgItemLanc(y,y.valor,CPG.cat[y.chave]||y.catSug);it.criarContato=true;it.nome=y.compl||y.desc;return it;}),todos=[],i0=0;
+    var itens=lista.map(function(y){var it=cpgItemLanc(y,y.valor,CPG.cat[y.chave]||y.catSug);it.criarContato=true;it.nome=y.nome||String(y.compl||'').split('|')[0].replace(/^Pagamento Pix$/i,'')||y.desc;return it;}),todos=[],i0=0;
     var passo=function(){var lote=itens.slice(i0,i0+8);if(!lote.length){cpgResultado({ok:todos.every(function(z){return z.ok;}),itens:todos},'despesa(s) lançada(s) e baixada(s)');return;}
       b.textContent='Lançando '+Math.min(i0+lote.length,itens.length)+'/'+itens.length+'…';
       cpgPost('/pagar/lancar',{itens:lote}).then(function(r){todos=todos.concat((r&&r.itens)||lote.map(function(){return {ok:false,erro:(r&&r.erro)||'sem resposta'};}));i0+=8;passo();})

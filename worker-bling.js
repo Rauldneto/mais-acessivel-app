@@ -1977,6 +1977,10 @@ async function sicoobExtrato(env, mes, ano, d1, d2, semAgrupar) {
   let r = await env.SICOOB_MTLS.fetch(base + '/extrato/' + mes + '/' + ano + q, {
     headers: { Authorization: 'Bearer ' + tok, client_id: clientSicoob(env, escopo), Accept: 'application/json' },
   });
+  if (r.status === 429) { // limite de consultas do Sicoob: espera um pouco e tenta uma vez
+    await new Promise(x => setTimeout(x, 2500));
+    r = await env.SICOOB_MTLS.fetch(base + '/extrato/' + mes + '/' + ano + q, { headers: { Authorization: 'Bearer ' + tok, client_id: clientSicoob(env, escopo), Accept: 'application/json' } });
+  }
   if (r.status === 401) { // token guardado foi invalidado pelo Sicoob (ex.: virada do dia): pede um novo e tenta de novo
     await env.BLING_KV.delete(chaveTokenSicoob(env, escopo));
     tok = await sicoobToken(env, escopo);
@@ -1991,6 +1995,7 @@ async function sicoobExtrato(env, mes, ano, d1, d2, semAgrupar) {
   const txt = await r.text(); let j = {}; try { j = JSON.parse(txt); } catch (e) { j = { _texto: txt.slice(0, 300) }; }
   if (!r.ok && !conta) throw new Error('Não achei o número da conta Sicoob sozinho (nenhum boleto Sicoob lido ainda) e o Sicoob exigiu o número (' + r.status + '). Crie a variável SICOOB_CONTA no Worker. Detalhe: ' + ((j.mensagens && j.mensagens.map(x => x.mensagem).join('; ')) || j.message || j._texto || '').slice(0, 160));
   if (r.status === 403 && /plan/i.test(txt)) throw new Error('O Sicoob ainda não ligou o app "JDFER Extrato" à API Conta Corrente (403 "Not registered to plan"). Isso costuma liberar algumas horas depois da aprovação; se passar de 1 dia, falar com a cooperativa/Alice.');
+  if (r.status === 429) throw new Error('O Sicoob limitou as consultas por alguns minutos (muitas seguidas). Espere 1–2 minutos e clique em Conferir de novo.');
   if (!r.ok) throw new Error('Extrato Sicoob ' + r.status + ': ' + ((j.mensagens && j.mensagens.map(x => x.mensagem).join('; ')) || j.message || j.mensagem || j._texto || JSON.stringify(j).slice(0, 200)));
   const res = j.resultado || j;
   return res.transacoes || acharCampo(res, ['transacoes', 'lancamentos']) || [];
@@ -2076,6 +2081,14 @@ async function lerDebitos(env, de, ate) {
     if (!x.data || x.data < de || x.data > ate || !x.valor) continue;
     const base = [x.data, x.valor, x.desc, x.ndoc].join('|'); x.seq = vistos[base] = (vistos[base] || 0) + 1;
     x.chave = await chaveDebito(x);
+    // O Sicoob costuma mandar o CPF/CNPJ e o favorecido dentro do texto complementar ("Pagamento Pix|@11.146.393 0001-62|@ped 5422",
+    // "FAV.: BARUC INDUSTRIAL LTDA|@...|@JDFER...|@35.017.646 0001-66"): lê de lá (ignora o próprio CNPJ, que é o pagador). Depois da chave, para ela não mudar.
+    if (!x.doc) {
+      const docs = (x.compl.match(/\d{2}\.?\d{3}\.?\d{3}[\s\/]?\d{4}-?\d{2}|\d{3}\.\d{3}\.\d{3}-\d{2}/g) || []).map(dig).filter(d => (d.length === 14 || d.length === 11) && d !== ECONF_CNPJ);
+      if (docs.length) x.doc = docs[0];
+    }
+    const fav = x.compl.match(/FAV\.?:\s*([^|@]+)/i);
+    if (fav) x.nome = fav[1].trim();
     x.tipoAuto = x.doc === ECONF_CNPJ ? 'transf' : tipoDebito(x.desc + ' ' + x.compl);   // PIX/TED para o próprio CNPJ = transferência
     const mk = marcas[x.chave] || {};
     x.tipo = mk.tipo || x.tipoAuto;
