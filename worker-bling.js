@@ -269,6 +269,14 @@ export default {
       if (url.pathname === '/econf/painel') return resp(Object.assign({ ok: true }, await econfPainel(env)));
       if (url.pathname === '/tef/alertas') {
         const l = (await env.BLING_KV.get('tef:alertas', 'json')) || [];
+        // aviso de um pagamento cujo TEF já foi aceito depois: some sozinho
+        let mud = false;
+        for (const a of l) {
+          if (a.visto || !a.e2e || a.e2e === 'geral') continue;
+          const r = await env.BLING_KV.get('econf:' + a.e2e, 'json');
+          if (r && r.ok) { a.visto = Date.now(); a.resolvido = r.ignorado ? 'marcado como teste' : 'aceito depois (' + (r.cStat || 'ok') + ')'; mud = true; }
+        }
+        if (mud) await env.BLING_KV.put('tef:alertas', JSON.stringify(l));
         return resp({ ok: true, alertas: l.slice(0, 60), naoVistos: l.filter(a => !a.visto).length });
       }
       if (url.pathname === '/tef/alertas/visto' && req.method === 'POST') {
