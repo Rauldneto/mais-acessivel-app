@@ -56,9 +56,9 @@ self.addEventListener('push', function(e) {
     var novosPag = avisos.filter(function(a) { return vistos.indexOf(a.id) < 0; }).slice(0, 3);
     for (var i = 0; i < novosPag.length; i++) {
       var a = novosPag[i]; vistos.push(a.id); mostrou++;
-      var titulo = a.teste ? '🔔 Teste de aviso' : '💰 Pagamento confirmado';
+      var titulo = a.teste ? '🔔 Teste de aviso' : a.uso ? '⚠️ Limite do servidor' : '💰 Pagamento confirmado';
       var ref = a.numero ? (a.tipo === 'nota' ? 'NF ' : 'Pedido ') + a.numero + ' · ' : '';
-      var corpo = a.teste ? (a.cliente || 'Os avisos de pagamento estão funcionando neste computador.') : ref + 'R$ ' + brl(a.valor) + (a.cliente ? ' · ' + a.cliente : '') + (a.forma ? ' (' + a.forma + ')' : '');
+      var corpo = a.uso ? a.cliente : a.teste ? (a.cliente || 'Os avisos de pagamento estão funcionando neste computador.') : ref + 'R$ ' + brl(a.valor) + (a.cliente ? ' · ' + a.cliente : '') + (a.forma ? ' (' + a.forma + ')' : '');
       await self.registration.showNotification(titulo, { body: corpo, tag: a.id, icon: 'logo.jpg', data: { url: new URL('./#bling', self.registration.scope).href } });
     }
     await vistosGravar(vistos);

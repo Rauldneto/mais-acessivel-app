@@ -17481,6 +17481,9 @@ function pagAvisoGlobal(){
       if(!blgUrl())return;
       return blgApi('/pagamentos').then(function(r){
         if(!r||!r.ok)return;
+        if(STATE.roleLogado==='admin'){var ua=(r.acoes||[]).filter(function(a){return a.acao==='uso_alerta';})[0],uv=0;try{uv=Number(localStorage.getItem('usoVisto')||0);}catch(e){}
+          if(ua&&ua.quando>uv){try{localStorage.setItem('usoVisto',String(ua.quando));}catch(e){}tefCss();var ue=document.createElement('div');ue.className='tef-toast';ue.style.borderTopColor='#f59e0b';ue.style.bottom='240px';
+            ue.innerHTML='<h4><span>⚠️ Limite do servidor</span><button>✕</button></h4><p>'+blgEsc(String(ua.detalhe||'').replace(/^⚠️ /,''))+'</p>';ue.onclick=function(e){if(e.target.closest('button'))ue.remove();};document.body.appendChild(ue);}}
         var pg=(r.acoes||[]).filter(function(a){return a.acao==='pix_pago'||a.acao==='boleto_pago';});
         var visto=0;try{visto=Number(localStorage.getItem('pagVistoAte')||0);}catch(e){}
         var maior=pg.reduce(function(m,a){return Math.max(m,Number(a.quando||0));},visto);
@@ -17617,6 +17620,7 @@ function blgAcoes(){
     it('imprimir',BLG_IC.imp,'Imprimir lista')+
     como+
     (blgAdmin()&&blgUrl()?'<div class="grp">Administrador</div>'+blgAdminStatus()+
+      '<div class="sub">Consumo do servidor hoje (plano grátis)</div><span class="lk">'+(BLG.usoInfo||'Confira quanto do limite diário já foi usado.')+'</span>'+it('usoVer',BLG_IC.rec,'Ver consumo agora')+
       '<div class="sub">Avisos de pagamento no navegador</div><span class="lk">'+(BLG.pushInfo?BLG.pushInfo:'Veja quem recebe os avisos e mande um teste.')+'</span>'+it('pushTeste',BLG_IC.rec,'Ver inscritos e enviar teste')+it('conectar',BLG_IC.rec,'Reconectar ao Bling')+it('demo',BLG_IC.olho,BLG.demo?'Prévia ligada':'Ver prévia com dados de exemplo')+it('trocarWk',BLG_IC.copiar,'Trocar endereço do Worker'):'');
 }
 
@@ -17941,6 +17945,12 @@ function blgAcao(a){
     blgCancelarPix(BLG.sel);return;}
   if(a==='baixarQr'&&x){var pb=BLG.pix[BLG.sel];if(!pb)return;blgImagemPix(x,pb).then(function(bl){blgBaixarBlob(bl,blgNomeImg(x));});return;}
   if(a==='wppCodigo'&&x){var pw=BLG.pix[BLG.sel];if(!pw)return;blgEnviarTexto(pw.copia,'Código PIX');pw.falta2=false;pw.avisoWpp='✅ Código enviado.';blgDraw();return;}
+  if(a==='usoVer'){BLG.usoInfo='Consultando…';blgDraw();
+    blgApi('/uso/verificar',{method:'POST'}).then(function(u){
+      if(u&&u.semToken)BLG.usoInfo='<b style="color:#b45309">Falta liberar a leitura do consumo</b> (token CF_API_TOKEN no servidor).';
+      else if(!u||u.erro)BLG.usoInfo='Erro: '+blgEsc((u&&u.erro)||'?');
+      else BLG.usoInfo=(u.itens||[]).map(function(i){return blgEsc(i.nome)+': <b style="color:'+(i.pct>=90?'#dc2626':i.pct>=70?'#d97706':'#15803d')+'">'+i.pct+'%</b> ('+i.usado+' de '+i.max+')';}).join('<br>')+'<br><small>Zera todo dia às 21h. Aviso automático em 70% e 90%.</small>';
+      blgDraw();}).catch(function(e){BLG.usoInfo='Erro: '+e;blgDraw();});return;}
   if(a==='pushTeste'){BLG.pushInfo='Enviando…';blgDraw();
     blgApi('/push/inscritos').then(function(r){var L=(r&&r.inscritos)||[];
       return blgApi('/push/teste',{method:'POST',body:{usuario:STATE.usuarioLogado||''}}).then(function(t){

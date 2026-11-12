@@ -47,6 +47,7 @@ const DIAS_CONTAS = 180;                  // contas a receber em aberto emitidas
 
 export default {
   async scheduled(evento, env, ctx) {
+    ctx.waitUntil(verificarUso(env).catch(() => {}));   // de hora em hora: confere o consumo do plano grátis do Cloudflare
     // 13h e 18h: a rodada é do ECONF automático (envio à Sefaz); nas outras, conferência de PIX e boletos
     if (await econfAgendado(env).catch(e => { registrarErro(env, 'ECONF automático: ' + String(e.message || e)); return false; })) return;
     // 13h e 18h (logo depois do ECONF da mesma hora): tarifas de boleto do extrato Sicoob → Contas a Pagar (lança e baixa sozinho). Essa rodada faz só isso.
@@ -211,6 +212,8 @@ export default {
       if (url.pathname === '/pagar/auto') return resp(Object.assign({ ok: true }, (await env.BLING_KV.get('pagar:auto', 'json')) || {}));
       if (url.pathname === '/pagar/marcar' && req.method === 'POST') return resp(await pagarMarcar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/pagar/conta') return resp(await pagarContaPorId(env, url.searchParams.get('id')));
+      if (url.pathname === '/uso') return resp(Object.assign({ ok: true }, (await env.BLING_KV.get('uso:estado', 'json')) || { semToken: !env.CF_API_TOKEN }));
+      if (url.pathname === '/uso/verificar' && req.method === 'POST') return resp(Object.assign({ ok: true }, await verificarUso(env, true)));
       if (url.pathname === '/push/chave') return resp({ ok: true, chave: (await vapid(env)).pub });
       if (url.pathname === '/push/inscrever' && req.method === 'POST') {
         const b = (await req.json().catch(() => ({}))) || {};
@@ -937,6 +940,46 @@ async function logAcao(env, a) {
   }
 }
 
+// ---------------- Consumo do plano grátis do Cloudflare (aviso antes de acabar) ----------------
+// Lê as estatísticas do dia (o limite zera às 21h de Brasília = 00h UTC) pela API do Cloudflare e avisa quando passar de 70% / 90%.
+// Precisa do segredo CF_API_TOKEN (token com permissão "Account Analytics: Read"). Sem ele, não faz nada.
+const CF_CONTA = 'b1227592690312fc1ee86c5994980366';
+const USO_LIMITES = { requisicoes: { nome: 'Chamadas ao servidor', max: 100000 }, leituras: { nome: 'Leituras do KV', max: 100000 },
+  gravacoes: { nome: 'Gravações do KV', max: 1000 }, exclusoes: { nome: 'Exclusões do KV', max: 1000 }, listagens: { nome: 'Listagens do KV', max: 1000 } };
+async function verificarUso(env, agora) {
+  if (!env.CF_API_TOKEN) return { semToken: true };
+  if (!agora) {   // no máximo 1 vez por hora, sem gastar gravação (guarda no cache do Cloudflare)
+    const cache = caches.default, chave = new Request('https://uso.interno/ultimo');
+    if (await cache.match(chave)) return { pulou: true };
+    await cache.put(chave, new Response('1', { headers: { 'Cache-Control': 'max-age=3300' } }));
+  }
+  const hoje = new Date().toISOString().slice(0, 10);
+  const q = 'query($c:String!,$d:Date!){viewer{accounts(filter:{accountTag:$c}){' +
+    'kv:kvOperationsAdaptiveGroups(limit:20,filter:{date:$d}){sum{requests}dimensions{actionType}}' +
+    'w:workersInvocationsAdaptive(limit:100,filter:{date:$d}){sum{requests}}}}}';
+  const r = await fetch('https://api.cloudflare.com/client/v4/graphql', { method: 'POST', headers: { Authorization: 'Bearer ' + env.CF_API_TOKEN, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: q, variables: { c: CF_CONTA, d: hoje } }) });
+  const j = await r.json().catch(() => ({}));
+  const conta = j && j.data && j.data.viewer && j.data.viewer.accounts && j.data.viewer.accounts[0];
+  if (!conta) { const e = { quando: Date.now(), erro: 'Não consegui ler o consumo: ' + JSON.stringify((j && j.errors) || j).slice(0, 200) }; await env.BLING_KV.put('uso:estado', JSON.stringify(e)); return e; }
+  const kv = {}; (conta.kv || []).forEach(g => { kv[g.dimensions.actionType] = (kv[g.dimensions.actionType] || 0) + Number(g.sum.requests || 0); });
+  const uso = { requisicoes: (conta.w || []).reduce((t, g) => t + Number(g.sum.requests || 0), 0), leituras: kv.read || 0, gravacoes: kv.write || 0, exclusoes: kv.delete || 0, listagens: kv.list || 0 };
+  const itens = Object.keys(USO_LIMITES).map(k => ({ k, nome: USO_LIMITES[k].nome, usado: uso[k], max: USO_LIMITES[k].max, pct: Math.round(100 * uso[k] / USO_LIMITES[k].max) }));
+  const pior = itens.reduce((a, b) => (b.pct > a.pct ? b : a), itens[0]);
+  const nivel = pior.pct >= 90 ? 90 : pior.pct >= 70 ? 70 : 0;
+  const ant = (await env.BLING_KV.get('uso:estado', 'json')) || {};
+  const est = { quando: Date.now(), dia: hoje, itens, nivel, avisado: ant.dia === hoje ? (ant.avisado || 0) : 0 };
+  if (nivel && nivel > est.avisado) {   // avisa uma vez por nível por dia (70% e 90%)
+    est.avisado = nivel;
+    const txt = pior.nome + ' em ' + pior.pct + '% do limite grátis de hoje (' + pior.usado + ' de ' + pior.max + '). Zera às 21h.';
+    try { await pushAvisar(env, { uso: true, cliente: txt, numero: '', valor: 0, forma: '' }, String(env.USO_AVISAR || 'raul').toLowerCase().split(',').map(x => x.trim())); } catch (e) {}
+    await logAcao(env, { acao: 'uso_alerta', modo: 'real', detalhe: '⚠️ Consumo do servidor: ' + txt });
+  }
+  // grava só quando muda de nível ou a cada ~3 h (para não gastar gravação à toa)
+  if (agora || nivel !== ant.nivel || est.avisado !== ant.avisado || ant.dia !== hoje || Date.now() - Number(ant.quando || 0) > 3 * 3600e3) await env.BLING_KV.put('uso:estado', JSON.stringify(est));
+  return est;
+}
+
 // ---------------- Notificação no navegador (Web Push, sem custo) ----------------
 // O servidor cria sozinho o par de chaves VAPID (guardado no KV) e manda um "toque" vazio para cada navegador inscrito;
 // o sw.js do app busca /push/ultimos e mostra a notificação. Navegador inscrito que sumiu (404/410) sai da lista.
@@ -973,14 +1016,16 @@ async function pushTocar(env, subs) {
   }
   return { ok, vivos };
 }
-async function pushAvisar(env, aviso) {
+async function pushAvisar(env, aviso, so) {
   const fila = (await env.BLING_KV.get('push:fila', 'json')) || [];
   fila.unshift(Object.assign({ id: 'p' + Date.now() + Math.floor(Math.random() * 1000), quando: Date.now() }, aviso));
   await env.BLING_KV.put('push:fila', JSON.stringify(fila.slice(0, 30)));
-  const subs = (await env.BLING_KV.get('push:subs', 'json')) || [];
+  const todos = (await env.BLING_KV.get('push:subs', 'json')) || [];
+  const subs = so ? todos.filter(x => so.includes(String(x.usuario || '').toLowerCase())) : todos;   // so = lista de usuários (ex.: só o admin)
   if (!subs.length) return { ok: 0, total: 0 };
   const r = await pushTocar(env, subs);
-  await env.BLING_KV.put('push:subs', JSON.stringify(r.vivos));
+  const vivosEp = new Set(r.vivos.map(x => x.endpoint));
+  await env.BLING_KV.put('push:subs', JSON.stringify(todos.filter(x => !subs.includes(x) || vivosEp.has(x.endpoint))));
   return { ok: r.ok, total: subs.length };
 }
 
