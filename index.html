@@ -1408,7 +1408,7 @@ var ACESSO_ABAS=[
     {id:'mod13',n:'Formação de preço',admin:true}]},
   {g:'Financeiro',e:'💰',c:'#0a7d6b',itens:[
     {sub:'📥 Contas a receber'},
-    {id:'mod17',n:'Conciliação contas a Receber'},
+    {id:'mod17',n:'Baixa Contas a Receber'},
     {id:'mod22',n:'Pagamentos (gerar PIX / link)'},
     {sub:'📤 Contas a pagar'},
     {id:'mod16',n:'Lançamento de frete',admin:true},
@@ -3799,7 +3799,7 @@ function renderModuloNav(){
     {id:'mod19', icon:'📊', label:'Relatório de despesas'},
     {id:'mod23', icon:'🔁', label:'Conciliação contas a Pagar'},
     {id:'mod27', icon:'💳', label:'Baixa Contas a Pagar'},
-    {id:'mod17', icon:'🏦', label:'Conciliação contas a Receber'},
+    {id:'mod17', icon:'🏦', label:'Baixa Contas a Receber'},
     {id:'mod22', icon:'💳', label:'Pagamentos'},
     {id:'mod5',  icon:'🧪', label:'Modelo em Teste'},
     {id:'mod15', icon:'📊', label:'Controle'},
@@ -4426,7 +4426,7 @@ function rppAdmin(){return STATE.roleLogado==='admin';}
 function rppUsuario(){return STATE.usuarioLogado||STATE.loginUser||'?';}
 function rppData(t){var d=new Date(t);return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
 function rppNomeTela(id){
-  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod26:'Reativação WhatsApp',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod23:'Conciliação contas a Pagar',mod27:'Baixa Contas a Pagar',mod17:'Conciliação contas a Receber',mod22:'Pagamentos (gerar PIX / link)',mod15:'Controle',mod18:'Reportar Problema',mod25:'Chat',ext:'Extensão do Chrome',outro:'Outra / não sei'};
+  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod26:'Reativação WhatsApp',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod23:'Conciliação contas a Pagar',mod27:'Baixa Contas a Pagar',mod17:'Baixa Contas a Receber',mod22:'Pagamentos (gerar PIX / link)',mod15:'Controle',mod18:'Reportar Problema',mod25:'Chat',ext:'Extensão do Chrome',outro:'Outra / não sei'};
   return nomes[id]||id||'?';
 }
 
@@ -4486,7 +4486,7 @@ function rppPrompt(c,anteriores){
   var hist=anteriores.slice(0,40).map(function(a){return '#'+a.n+' ['+rppNomeTela(a.tela)+'] '+((a.ia&&a.ia.resumo)||a.aconteceu||'').slice(0,140)+' → '+((RPP_STATUS[a.status]||[])[1]||a.status)+((a.ia&&a.ia.causa)?' | causa: '+a.ia.causa.slice(0,120):'');}).join('\n');
   return 'Você é o analista de T.I. do app interno da Mais Acessível (revenda de materiais de construção em Goiânia). '+
   'O app é uma página web única (HTML + JavaScript puro, hospedada no GitHub Pages), com dados no Firebase Realtime Database, Workers da Cloudflare e integração com o ERP Bling (API v3 e uma extensão do Chrome). '+
-  'Telas do app: Frete (cotação de frete com ~170 transportadoras), Cotações (conferência de propostas do Bling), Análise de Crédito, NBR 9050, Produtos, Licitação, Ace IA, Cotação avulsa, Lançamento de despesas, Lançamento de frete, Conciliação contas a Receber (antiga BLING: PIX, boletos Sicoob e recebimentos), Controle.\n\n'+
+  'Telas do app: Frete (cotação de frete com ~170 transportadoras), Cotações (conferência de propostas do Bling), Análise de Crédito, NBR 9050, Produtos, Licitação, Ace IA, Cotação avulsa, Lançamento de despesas, Lançamento de frete, Baixa Contas a Receber (antiga BLING: PIX, boletos Sicoob e recebimentos), Controle.\n\n'+
   'Um colaborador abriu um chamado dizendo que deu erro. Confira o PRINT (é a prova do erro) junto com a explicação e os erros técnicos capturados. Seja criterioso: só diga que procede se o print/erros mostram de fato um problema.\n\n'+
   'CHAMADO\nColaborador: '+c.u+'\nTela informada: '+c.telaNome+(c.sub?' (sub-aba: '+c.sub+')':'')+'\nO que estava fazendo: '+(c.fazendo||'-')+'\nO que aconteceu (justificativa): '+(c.aconteceu||'-')+'\nO que esperava: '+(c.esperado||'-')+
   '\nTelas abertas antes: '+(c.trilha||[]).map(rppNomeTela).join(' → ')+
@@ -5193,7 +5193,7 @@ var CTL_PRECOS=[
   {p:'claude-sonnet',in:3,out:15},
   {p:'claude-opus-4-5',in:5,out:25},{p:'claude-opus-4-6',in:5,out:25},{p:'claude-opus',in:15,out:75}
 ];
-var CTL_AREAS={mod18:'Reportar Problema',frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Despesas (comprovantes)',mod16:'Lançamento de frete (CT-e)',mod23:'Conciliação contas a Pagar (extrato Sicoob × Bling)',mod27:'Baixa Contas a Pagar (DDA: pagar e baixar)',mod17:'Conciliação contas a Receber (PIX, boletos e crédito)',mod22:'Pagamentos (gerar PIX / link de crédito)',mod15:'Controle'};
+var CTL_AREAS={mod18:'Reportar Problema',frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Despesas (comprovantes)',mod16:'Lançamento de frete (CT-e)',mod23:'Conciliação contas a Pagar (extrato Sicoob × Bling)',mod27:'Baixa Contas a Pagar (DDA: pagar e baixar)',mod17:'Baixa Contas a Receber (PIX, boletos e crédito)',mod22:'Pagamentos (gerar PIX / link de crédito)',mod15:'Controle'};
 var CTL={cfg:null,ia:null,carregando:false,erro:'',dolar:null,root:null};
 
 function ctlPreco(model){model=model||'';for(var k=0;k<CTL_PRECOS.length;k++){if(model.indexOf(CTL_PRECOS[k].p)===0)return CTL_PRECOS[k];}return {in:3,out:15};}
@@ -15185,7 +15185,7 @@ async function lcUpload(file){
   }
 }
 // ===================== CONCILIAÇÃO CONTAS A RECEBER — parte dos BOLETOS SICOOB =====================
-// Fica DENTRO da aba Financeiro › Conciliação contas a Receber (mod17, antiga "BLING"), nas sub-abas só do admin
+// Fica DENTRO da aba Financeiro › Baixa Contas a Receber (mod17, antiga "BLING"), nas sub-abas só do admin
 // "📄 Boletos sem vínculo" e "🧪 Simulação boletos". O log das baixas de boleto aparece em "🧾 Pagamentos e ações", junto com os PIX.
 // Dados: Worker "bling" (rotas /boletos*). CCR.root é a caixa que o blgDraw cria para essas sub-abas.
 var CCR={root:null,aba:'sim',sim:null,rel:[],pain:null,carr:false,rodando:false,erro:'',f:{de:'2026-07-01',ate:'2026-08-31'},filtro:'todos'};
@@ -15665,7 +15665,7 @@ function cpgPend(tipo){var d=CPG.dados;if(!d)return 0;
 function cpgDraw(){
   var w=CPG.root;if(!w||!document.body.contains(w))return;
   var h='<h2>🔁 Conciliação contas a Pagar</h2><div class="sub">Tudo que saiu da conta Sicoob × Contas a Pagar do Bling. Nada é baixado ou lançado sem o seu clique.</div>';
-  if(!blgUrl()){w.innerHTML=h+'<div class="cpg-msg warn">O endereço do servidor (Worker) ainda não foi configurado. Configure na aba Conciliação contas a Receber.</div>';return;}
+  if(!blgUrl()){w.innerHTML=h+'<div class="cpg-msg warn">O endereço do servidor (Worker) ainda não foi configurado. Configure na aba Baixa Contas a Receber.</div>';return;}
   h+='<div class="cpg-bar"><b>Mês</b> <input type="month" id="cpgMes" value="'+CPG.mes+'" max="'+cpgMesAtual(0)+'" style="height:32px;border:1px solid #c7c7cc;border-radius:8px;padding:0 8px;font-family:inherit">'+
      '<button class="cpg-btn sec mini" data-mes="0">Este mês</button><button class="cpg-btn sec mini" data-mes="-1">Mês passado</button><button class="cpg-btn sec mini" data-mes="-2">Retrasado</button>'+
      (CPG.dados&&CPG.dados.de?'<span class="cpg-mut">extrato Sicoob de '+cpgD(CPG.dados.de)+' a '+cpgD(CPG.dados.ate)+'</span>':'')+
@@ -17140,7 +17140,7 @@ var BLG_IC={
   olho:'<svg width="16" height="14" viewBox="0 0 576 512" fill="currentColor"><path d="M572.52 241.4C518.29 135.59 410.93 64 288 64S57.68 135.64 3.48 241.41a32.35 32.35 0 0 0 0 29.19C57.71 376.41 165.07 448 288 448s230.32-71.64 284.52-177.41a32.35 32.35 0 0 0 0-29.19zM288 400a144 144 0 1 1 144-144 143.93 143.93 0 0 1-144 144zm0-240a95.31 95.31 0 0 0-25.31 3.79 47.85 47.85 0 0 1-66.9 66.9A95.78 95.78 0 1 0 288 160z"/></svg>'
 };
 
-// A mesma tela serve duas abas: 'conc' = Conciliação contas a Receber (mod17, só consulta/conciliação, sem gerar cobrança)
+// A mesma tela serve duas abas: 'conc' = Baixa Contas a Receber (mod17, só consulta/conciliação, sem gerar cobrança)
 // e 'pag' = Pagamentos (mod22, só gera PIX / link de crédito).
 function blgPag(){return BLG.modo==='pag';}
 function renderBling(modo){
@@ -17165,7 +17165,7 @@ function blgDraw(){
   var selPago=sel&&blgSit(sel)==='pago',nPend=(BLG.pend||[]).length,nBol=(CCR.pain&&CCR.pain.pendentes||[]).length;
   if(blgPag())h+='<div class="blg-top"><div class="blg-bc">Pagamentos</div><div class="blg-sep"></div><div class="blg-loja">Gerar PIX e link de crédito</div><div class="blg-sp"></div>'+
      '<button class="blg-btn" data-a="pixSel"'+(sel&&!selPago&&blgTemPix(sel)?'':' disabled')+'>'+BLG_IC.pix+' Gerar PIX</button></div>';
-  else h+='<div class="blg-top"><div class="blg-bc">Conciliação contas a Receber</div><div class="blg-sep"></div><div class="blg-loja">PIX e boletos Sicoob</div><div class="blg-sp"></div>'+
+  else h+='<div class="blg-top"><div class="blg-bc">Baixa Contas a Receber</div><div class="blg-sep"></div><div class="blg-loja">PIX e boletos Sicoob</div><div class="blg-sp"></div>'+
      (blgAdmin()&&!BLG.demo?blgBotaoTef():'')+'</div>';
   var aba=function(v,t){return '<button class="blg-aba'+((BLG.view||'')===v?' on':'')+'" data-a="aba" data-k="'+v+'">'+t+'</button>';};
   if(!BLG.demo&&!blgPag())h+='<div class="blg-abas">'+aba('','📋 Vendas a receber')+(blgAdmin()?aba('bol','📄 Boletos sem vínculo'+(nBol?' <i>'+nBol+'</i>':''))+aba('sim','🧪 Simulação boletos'):'')+'</div>';
@@ -17397,7 +17397,7 @@ function pagToast(novos){
   el.innerHTML='<h4><span>💰 '+(novos.length>1?novos.length+' pagamentos confirmados':'Pagamento confirmado')+'</span><button title="Fechar">✕</button></h4>'+
     '<p>'+(novos.length>1?'Total R$ '+blgMoeda(tot)+'<br>':'')+novos.slice(0,4).map(function(x){return '<b>'+blgEsc(ref(x)||'—')+'</b> · R$ '+blgMoeda(x.valor)+(x.cliente?' · '+blgEsc(x.cliente):x.pagador?' · '+blgEsc(x.pagador):'')+(x.acao==='boleto_pago'?' (boleto)':' (PIX)');}).join('<br>')+(novos.length>4?'<br>+ '+(novos.length-4)+' outro(s)':'')+'</p>'+
     '<div class="bt"><button class="pri" style="background:#16a34a;border-color:#16a34a" data-t="msg">📋 Copiar mensagem para o cliente</button>'+
-    ((iniPode('mod17')||iniPode('mod22'))?'<button data-t="ver">Ver na Conciliação</button>':'')+'</div>';
+    ((iniPode('mod17')||iniPode('mod22'))?'<button data-t="ver">Ver em Baixa Contas a Receber</button>':'')+'</div>';
   el.onclick=function(e){var b=e.target.closest('button');if(!b)return;
     if(b.dataset.t==='msg'){pagCopiarMsg(b);return;}
     el.remove();if(b.dataset.t==='ver'){BLG.view='';irParaModulo(iniPode('mod17')?'mod17':'mod22');}};
@@ -17461,10 +17461,10 @@ function blgAcoes(){
     ?'<div class="grp">Como funciona</div>'+
      '<div class="sub">PIX</div><span class="lk">Clique numa linha e gere o QR Code e o “copia e cola” aqui mesmo. Dá para mandar no WhatsApp, cancelar ou mudar o valor.</span>'+
      '<span class="lk">Pagou parte? O sistema baixa só o valor pago e o pedido fica como “Parcialmente pago”.</span>'+
-     '<div class="sub">Depois de pago</div><span class="lk">A conferência e a baixa no Bling aparecem em <b>Conciliação contas a Receber</b>.</span>'+
+     '<div class="sub">Depois de pago</div><span class="lk">A conferência e a baixa no Bling aparecem em <b>Baixa Contas a Receber</b>.</span>'+
      '<div class="sub">Link de crédito</div><span class="lk">Entra junto com a nova maquininha.</span>'
     :'<div class="grp">Como funciona</div>'+
-     '<div class="sub">Conciliação</div><span class="lk">Mostra o que entrou no Sicoob (PIX e boletos) e o que foi baixado no Contas a Receber do Bling.</span>'+
+     '<div class="sub">Baixa Contas a Receber</div><span class="lk">Mostra o que entrou no Sicoob (PIX e boletos) e o que foi baixado no Contas a Receber do Bling.</span>'+
      '<div class="sub">Depois de pago</div><span class="lk">Situação do pedido, baixa no Bling e vínculo do pagamento à nota (ECONF) são feitos sozinhos.</span>'+
      '<div class="sub">Gerar cobrança</div><span class="lk">PIX e link de crédito ficam na tela <b>Pagamentos</b>.</span>';
   return (blgPag()?it('pixSel',BLG_IC.pix,'Gerar PIX do pedido/nota selecionado',!BLG.sel||blgSit(blgSelecionado()||{})==='pago'||!blgTemPix(blgSelecionado()||{}))+
