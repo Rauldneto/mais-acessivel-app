@@ -16294,36 +16294,64 @@ function ccLimparAntigas(d){
 function ccNormalizar(c){
   c.itens=c.itens||[];c.forn=(c.forn||[]).map(function(f){f.precos=f.precos||[];while(f.precos.length<c.itens.length)f.precos.push('');return f;});return c;
 }
+// Abre o pedido: sempre consulta o Bling e junta com a cotação salva (se houver).
+// Itens/quantidades/preços do pedido vêm do Bling; o que foi digitado dos outros fornecedores fica (ligado pelo código ou descrição do item).
+function ccItemK(it){return it.cod?'c:'+String(it.cod).trim().toLowerCase():'d:'+ccNorm(it.desc);}
+function ccMesclar(velho,novo){
+  var mapa={};velho.itens.forEach(function(it,i){mapa[ccItemK(it)]=i;});
+  var pv=velho.forn.filter(function(f){return f.fixo;})[0]||{};
+  var p=novo.forn[0];
+  // fornecedor do pedido: preço do Bling; se o Bling estiver zerado e alguém digitou antes, mantém o digitado
+  p.precos=novo.itens.map(function(it,i){var k=mapa[ccItemK(it)],b=ccNum(p.precos[i]);if(b>0||k==null)return p.precos[i];var o=pv.precos&&pv.precos[k];return ccNum(o)>0?o:p.precos[i];});
+  ['numCot','validade','obs','st','credIcms'].forEach(function(x){if(pv[x]!==undefined&&pv[x]!==''&&(p[x]===''||p[x]==null))p[x]=pv[x];});
+  ['entrega','formaPag','prazoPag'].forEach(function(x){if((p[x]===''||p[x]==null)&&pv[x]!==undefined&&pv[x]!=='')p[x]=pv[x];});
+  if(pv.arquivos)p.arquivos=pv.arquivos;
+  novo.forn=[p].concat(velho.forn.filter(function(f){return !f.fixo;}).map(function(f){
+    var g=Object.assign({},f);g.precos=novo.itens.map(function(it){var k=mapa[ccItemK(it)];return k==null?'':(f.precos||[])[k];});return g;}));
+  var antes={},depois={};velho.itens.forEach(function(it){antes[ccItemK(it)]=it;});novo.itens.forEach(function(it){depois[ccItemK(it)]=it;});
+  var add=novo.itens.filter(function(it){return !antes[ccItemK(it)];}).length,rem=velho.itens.filter(function(it){return !depois[ccItemK(it)];}).length;
+  var qtd=novo.itens.filter(function(it){var a=antes[ccItemK(it)];return a&&Number(a.q)!==Number(it.q);}).length;
+  novo.criadoPor=velho.criadoPor;novo.criadoEm=velho.criadoEm;novo.atualizadoEm=velho.atualizadoEm;novo.atualizadoPor=velho.atualizadoPor;
+  var mudou=add||rem||qtd;
+  novo.vencedor=mudou?null:velho.vencedor;
+  return {add:add,rem:rem,qtd:qtd,mudou:!!mudou};
+}
 function ccBuscar(numero,doBling){
   numero=String(numero||'').replace(/\D/g,'');
   if(!numero){CC.erro='Digite o número do pedido de compra.';ccDraw();return;}
   if(!doBling&&CC.cot&&!ccPodeSair())return;
+  var atual=doBling&&CC.cot&&CC.cot.numero===numero?CC.cot:null;
   CC.sujo=false;CC.salvoEm=0;
   CC.num=numero;CC.carr=true;CC.erro='';CC.aviso='';CC.imp=null;ccDraw();
-  var salvo=doBling?Promise.resolve(null):fetch(FIREBASE_DB+'/cotacoesCompra/'+numero+'.json').then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
-  salvo.then(function(s){
-    if(s&&s.itens){CC.cot=ccNormalizar(s);CC.carr=false;CC.salvoEm=s.atualizadoEm||0;CC.aviso='Cotação salva deste pedido aberta'+(s.atualizadoEm?' (última gravação em '+new Date(s.atualizadoEm).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})+(s.atualizadoPor?' por '+s.atualizadoPor:'')+')':'')+'. Use "Atualizar do Bling" para puxar o pedido de novo.';ccDraw();return;}
-    var cfg=(typeof BLG!=='undefined'&&BLG.cfgCarregada)?Promise.resolve():blgCarregarCfg();
-    return cfg.then(function(){
-      if(!blgUrl())throw new Error('O endereço do Worker do Bling não está configurado (aba Financeiro › BLING).');
-      return blgApi('/pedido-compra?numero='+numero);
-    }).then(function(r){
-      CC.carr=false;
-      if(!r||!r.ok){var e=(r&&r.erro)||'Falhou';if(/Rota inexistente/.test(e))e='O Worker do Bling ainda não tem a busca de pedido de compra. Atualize o código do Worker na Cloudflare (arquivo worker-bling.js).';
-        else if(/refresh token|invalid_grant|recusou o acesso/i.test(e))e='A conexão com o Bling expirou. Vá em Financeiro › BLING › Reconectar ao Bling, clique em Autorizar e tente de novo.';
-        else if(/403|insufficient|higher privileges|escopo|scope/i.test(e))e='O app do Bling não tem permissão para Pedidos de compra. Marque esse escopo no aplicativo do Bling e reconecte em Financeiro › BLING. ('+e+')';
-        CC.erro=e;ccDraw();return;}
-      var novo=ccDoPedido(r.pedido);
-      if(doBling&&CC.cot&&CC.cot.numero===novo.numero){ // mantém os outros fornecedores, troca itens e o fornecedor do pedido
-        var velho=CC.cot,mapa={};velho.itens.forEach(function(it,i){mapa[(it.cod||it.desc)]=i;});
-        novo.forn=[novo.forn[0]].concat(velho.forn.filter(function(f){return !f.fixo;}).map(function(f){
-          var g=Object.assign({},f);g.precos=novo.itens.map(function(it){var k=mapa[(it.cod||it.desc)];return k==null?'':f.precos[k];});return g;}));
-        novo.vencedor=null;novo.criadoPor=velho.criadoPor;novo.criadoEm=velho.criadoEm;
-        CC.aviso='Pedido atualizado do Bling. Os outros fornecedores foram mantidos; confira os preços e escolha o vencedor de novo.';
-      }
-      CC.cot=novo;ccDraw();ccSalvar();
-    });
-  }).catch(function(e){CC.carr=false;CC.erro=String(e&&e.message||e);ccDraw();});
+  var salvo=atual?Promise.resolve(atual):fetch(FIREBASE_DB+'/cotacoesCompra/'+numero+'.json').then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
+  var cfg=(typeof BLG!=='undefined'&&BLG.cfgCarregada)?Promise.resolve():blgCarregarCfg();
+  var bling=cfg.then(function(){
+    if(!blgUrl())return {ok:false,erro:'O endereço do Worker do Bling não está configurado (aba Financeiro › BLING).'};
+    return blgApi('/pedido-compra?numero='+numero);
+  }).catch(function(e){return {ok:false,erro:String(e&&e.message||e)};});
+  Promise.all([salvo,bling]).then(function(x){
+    var s=x[0]&&x[0].itens?ccNormalizar(x[0]):null,r=x[1];
+    CC.carr=false;
+    var quando=s&&s.atualizadoEm?' (salva em '+new Date(s.atualizadoEm).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})+(s.atualizadoPor?' por '+s.atualizadoPor:'')+')':'';
+    if(!r||!r.ok){
+      var e=(r&&r.erro)||'Falhou';if(/Rota inexistente/.test(e))e='O Worker do Bling ainda não tem a busca de pedido de compra. Atualize o código do Worker na Cloudflare (arquivo worker-bling.js).';
+      else if(/refresh token|invalid_grant|recusou o acesso/i.test(e))e='A conexão com o Bling expirou. Vá em Financeiro › BLING › Reconectar ao Bling, clique em Autorizar e tente de novo.';
+      else if(/403|insufficient|higher privileges|escopo|scope/i.test(e))e='O app do Bling não tem permissão para Pedidos de compra. Marque esse escopo no aplicativo do Bling e reconecte em Financeiro › BLING. ('+e+')';
+      if(s){CC.cot=s;CC.salvoEm=s.atualizadoEm||0;CC.erro='Não consegui conferir o pedido no Bling agora: '+e+' Abri a cotação salva'+quando+', que pode estar desatualizada.';}
+      else CC.erro=e;
+      ccDraw();return;
+    }
+    var novo=ccDoPedido(r.pedido);
+    if(s){
+      var m=ccMesclar(s,novo);CC.cot=novo;CC.salvoEm=s.atualizadoEm||0;
+      if(m.mudou){
+        CC.sujo=true;
+        CC.aviso='O pedido mudou no Bling desde a cotação salva'+quando+': '+[m.add?m.add+' item(ns) novo(s)':'',m.rem?m.rem+' item(ns) removido(s)':'',m.qtd?m.qtd+' quantidade(s) alterada(s)':''].filter(Boolean).join(', ')+
+          '. Já trouxe tudo e mantive os preços dos outros fornecedores. Preencha os itens novos e clique em Salvar cotação.';
+      }else CC.aviso='Cotação salva aberta'+quando+', conferida com o Bling.';
+    }else{CC.cot=novo;CC.sujo=true;}
+    ccDraw();
+  });
 }
 function ccCarregarLista(){
   CC.lista='carr';ccDrawLista();
@@ -16623,7 +16651,7 @@ function ccLigar(el){
         if(j!==auto){motivo=prompt('Este fornecedor não é o de menor custo. Qual o motivo da escolha? (ex.: prazo de entrega, prazo de pagamento, qualidade)','');if(motivo===null)return;}
         c.vencedor={i:j,manual:j!==auto,motivo:motivo||'',por:(STATE.usuarioLogado||STATE.loginUser||''),em:Date.now()};ccDraw();ccSalvar();}
       else if(a==='auto'){c.vencedor=null;ccDraw();ccSalvar();}
-      else if(a==='bling'){if(confirm('Puxar o pedido de novo do Bling? Os itens e o fornecedor do pedido serão atualizados; os outros fornecedores ficam.'))ccBuscar(c.numero,true);}
+      else if(a==='bling'){ccBuscar(c.numero,true);}
       else if(a==='copiar')ccCopiar();
       else if(a==='salvar')ccGravar();
       else if(a==='carregar'){if(CC.imp&&CC.imp.status==='lendo')return;CC.impAlvo=b.dataset.j==='novo'?null:j;var fi=CC.root.querySelector('#ccFile');if(fi){fi.value='';fi.click();}}
