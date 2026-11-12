@@ -15458,7 +15458,9 @@ function ddaCard(x,i){
     h+='<button class="dda-b avisa" data-a="avisar" data-i="'+i+'">📣 Avisar financeiro</button>';
   }else if(x.st==='sem_dda'){
     h+='<button class="dda-b sec" data-a="baixar" data-i="'+i+'">Paguei por outro meio · baixar</button>';
-  }else if(x.st==='pago'&&x.pago&&!x.pago.contaId&&!c){
+  }else if(x.st==='pago'&&x.pago&&c){
+    h+='<button class="dda-b pagar" data-a="baixar" data-i="'+i+'">✅ '+(x.pago.banco?'Já pago no banco':'Pago')+' · baixar no Bling</button>';
+  }else if(x.st==='pago'&&x.pago&&!c){
     h+='<button class="dda-b avisa" data-a="avisar" data-i="'+i+'">📣 Avisar financeiro</button>';
   }
   return h+'</div></div>';

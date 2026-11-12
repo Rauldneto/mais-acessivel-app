@@ -2531,37 +2531,21 @@ function ddaNorm(b) {
     ndoc: String(b.numeroDocumento || '').trim(), situacao: String(b.descricaoSituacaoBoleto || b.codigoTipoSituacaoBoleto || ''), pagoNoBanco: pago,
     juros: !!Number(b.codigoTipoJuros || 0) };
 }
-// A consulta do DDA aceita filtros diferentes conforme a versão: tenta as combinações conhecidas e guarda a que funcionou
-const DDA_FILTROS = [
-  (de, ate) => ({ numeroCpfCnpjPagador: ECONF_CNPJ, dataInicial: de, dataFinal: ate }),
-  (de, ate) => ({ numeroCpfCnpj: ECONF_CNPJ, dataInicial: de, dataFinal: ate }),
-  (de, ate) => ({ cpfCnpjPagador: ECONF_CNPJ, dataVencimentoInicial: de, dataVencimentoFinal: ate }),
-  (de, ate) => ({ numeroConta: '{conta}', dataInicial: de, dataFinal: ate }),
-  (de, ate) => ({ dataInicial: de, dataFinal: ate }),
-];
-async function ddaListar(env, de, ate) {
+// GET /boletos (documentação oficial): numeroConta*, dataInicial*, dataFinal*, situacao* (1 em aberto, 2 agendado, 3 liquidado, 4 baixado),
+// tipoData* (1 vencimento, 2 emissão, 3 inclusão). Resposta: lista de BoletoDDA.
+async function ddaListar(env, de, ate, situacao) {
   const conta = await contaSicoob(env);
-  const pref = Number(await env.BLING_KV.get('dda:filtro')) || 0;
-  const ordem = [pref].concat(DDA_FILTROS.map((_, i) => i).filter(i => i !== pref));
-  let ultimoErro;
-  for (const i of ordem) {
-    const p = DDA_FILTROS[i](de, ate); Object.keys(p).forEach(k => { if (p[k] === '{conta}') p[k] = conta; });
-    try {
-      const r = await sicoobPag(env, 'pagamentos_consulta', 'GET', '/boletos?' + new URLSearchParams(p));
-      const lista = ddaLista(r) || [];
-      if (i !== pref) await env.BLING_KV.put('dda:filtro', String(i));
-      return lista.map(ddaNorm).filter(b => b.cb && b.valor);
-    } catch (e) { ultimoErro = e; if (e.status !== 400 && e.status !== 422 && e.status !== 404) throw e; }
-  }
-  throw ultimoErro || new Error('DDA: nenhum filtro aceito pelo Sicoob.');
+  const p = { numeroConta: Number(conta), dataInicial: de, dataFinal: ate, situacao: situacao || 1, tipoData: 1 };
+  let r;
+  try { r = await sicoobPag(env, 'pagamentos_consulta', 'GET', '/boletos?' + new URLSearchParams(p)); }
+  catch (e) { if (e.status === 404 || /10275|nenhum|n[aã]o encontrad/i.test(e.message)) return []; throw e; }
+  return (ddaLista(r) || []).map(b => Object.assign(ddaNorm(b), { sit: Number(situacao || 1) })).filter(b => b.cb && b.valor);
 }
 async function ddaDiag(env) {
   const hoje = hojeLocal(), out = [];
-  for (let i = 0; i < DDA_FILTROS.length; i++) {
-    const p = DDA_FILTROS[i](somaDias(hoje, -7), somaDias(hoje, 7)); if (p.numeroConta) p.numeroConta = await contaSicoob(env);
-    try { const r = await sicoobPag(env, 'pagamentos_consulta', 'GET', '/boletos?' + new URLSearchParams(p)); const l = ddaLista(r) || [];
-      out.push({ i, ok: true, qtd: l.length, campos: l[0] ? Object.keys(l[0]) : (r ? Object.keys(r) : []) }); break; }
-    catch (e) { out.push({ i, ok: false, erro: String(e.message).slice(0, 200) }); }
+  for (const sit of [1, 2, 3]) {
+    try { const l = await ddaListar(env, somaDias(hoje, -10), somaDias(hoje, 10), sit); out.push({ situacao: sit, ok: true, qtd: l.length, exemplo: l[0] ? { nome: l[0].nome, valor: l[0].valor, venc: l[0].venc } : null }); }
+    catch (e) { out.push({ situacao: sit, ok: false, erro: String(e.message).slice(0, 200) }); }
   }
   return { ok: true, testes: out };
 }
@@ -2570,7 +2554,10 @@ async function ddaDiag(env) {
 async function ddaPainel(env, dia) {
   const hoje = hojeLocal(); dia = soData(dia) || hoje;
   const de = somaDias(dia, -10);
-  const dda = (await ddaListar(env, de, dia)).filter(b => b.venc && b.venc <= dia);
+  const abertos = await ddaListar(env, de, dia, 1);
+  const agendados = await ddaListar(env, de, somaDias(dia, 5), 2).catch(() => []);
+  const liquidados = await ddaListar(env, de, dia, 3).catch(() => []);
+  const dda = abertos.concat(agendados, liquidados).filter(b => b.venc && (b.venc <= dia || b.sit === 2));
   const pagos = {};
   for (const b of dda) { const k = await env.BLING_KV.get('ddapago:' + b.cb, 'json'); if (k) pagos[b.cb] = k; }
   const contasRaw = await pagarListar(env, 'dataVencimento', somaDias(dia, -30), dia, 4);
@@ -2595,7 +2582,10 @@ async function ddaPainel(env, dia) {
     if (!c) { c = livre.filter(c => !b.doc && parecido(b.nome, c.fornecedor) && igual(c))[0] || livre.filter(c => !c.doc && parecido(b.nome, c.fornecedor) && igual(c))[0]; st = c ? 'provavel' : st; }
     if (!c) { c = livre.filter(docOk).sort((x, y) => Math.abs(x.valor - b.valor) - Math.abs(y.valor - b.valor))[0]; st = c ? 'divergente' : 'sem_bling'; }
     if (c) usadas.add(c.id);
-    linhas.push({ st: pagos[b.cb] ? 'pago' : st, dda: b, conta: c || null, pago: pagos[b.cb] || null, dif: c ? r2(b.valor - c.valor) : 0 });
+    // agendado/liquidado no banco (pelo app do Sicoob ou por aqui): não paga de novo; se tiver conta no Bling em aberto, sugere só a baixa
+    const pagoBanco = b.sit === 2 || b.sit === 3;
+    const pg = pagos[b.cb] || (pagoBanco ? { situacao: b.sit === 2 ? 'Agendado no banco' : 'Pago no banco', data: b.venc, banco: true } : null);
+    linhas.push({ st: pg ? 'pago' : st, dda: b, conta: c || null, pago: pg, dif: c ? r2(b.valor - c.valor) : 0 });
   }
   contas.filter(c => !usadas.has(c.id)).sort((a, b) => a.venc.localeCompare(b.venc)).forEach(c => linhas.push({ st: 'sem_dda', dda: null, conta: c }));
   const pend = (await env.BLING_KV.get('dda:pendentes', 'json')) || [];
@@ -2635,7 +2625,7 @@ async function ddaPagar(env, b) {
   try {
     const hoje = hojeLocal(), conta = await contaSicoob(env);
     // 1) só boleto que está no DDA da JDFER
-    const lista = await ddaListar(env, somaDias(hoje, -30), somaDias(hoje, 60));
+    const lista = await ddaListar(env, somaDias(hoje, -30), somaDias(hoje, 60), 1);
     const doDda = lista.find(x => x.cb === cb);
     if (!doDda) return { ok: false, erro: 'Esse boleto não está no DDA da JDFER: por segurança o app só paga boletos do DDA.' };
     // 2) consulta para pagar (valor do dia, juros/desconto, beneficiário)
