@@ -1414,7 +1414,7 @@ var ACESSO_ABAS=[
     {id:'mod16',n:'Lançamento de frete',admin:true},
     {id:'mod19',n:'Relatório de despesas',admin:true},
     {id:'mod23',n:'Conciliação contas a Pagar',admin:true},
-    {id:'mod27',n:'Conciliação DDA',admin:true},
+    {id:'mod27',n:'Baixa Contas a Pagar',admin:true},
     {id:'mod14',n:'Lançamento de despesas',admin:true}]},
   {g:'T.I.',e:'💻',c:'#5856d6',itens:[
     {id:'mod3',n:'Ace IA'},
@@ -3798,7 +3798,7 @@ function renderModuloNav(){
     {id:'mod16', icon:'🚚', label:'Lançamento de frete'},
     {id:'mod19', icon:'📊', label:'Relatório de despesas'},
     {id:'mod23', icon:'🔁', label:'Conciliação contas a Pagar'},
-    {id:'mod27', icon:'💳', label:'Conciliação DDA'},
+    {id:'mod27', icon:'💳', label:'Baixa Contas a Pagar'},
     {id:'mod17', icon:'🏦', label:'Conciliação contas a Receber'},
     {id:'mod22', icon:'💳', label:'Pagamentos'},
     {id:'mod5',  icon:'🧪', label:'Modelo em Teste'},
@@ -4426,7 +4426,7 @@ function rppAdmin(){return STATE.roleLogado==='admin';}
 function rppUsuario(){return STATE.usuarioLogado||STATE.loginUser||'?';}
 function rppData(t){var d=new Date(t);return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
 function rppNomeTela(id){
-  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod26:'Reativação WhatsApp',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod23:'Conciliação contas a Pagar',mod27:'Conciliação DDA',mod17:'Conciliação contas a Receber',mod22:'Pagamentos (gerar PIX / link)',mod15:'Controle',mod18:'Reportar Problema',mod25:'Chat',ext:'Extensão do Chrome',outro:'Outra / não sei'};
+  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod26:'Reativação WhatsApp',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod23:'Conciliação contas a Pagar',mod27:'Baixa Contas a Pagar',mod17:'Conciliação contas a Receber',mod22:'Pagamentos (gerar PIX / link)',mod15:'Controle',mod18:'Reportar Problema',mod25:'Chat',ext:'Extensão do Chrome',outro:'Outra / não sei'};
   return nomes[id]||id||'?';
 }
 
@@ -5193,7 +5193,7 @@ var CTL_PRECOS=[
   {p:'claude-sonnet',in:3,out:15},
   {p:'claude-opus-4-5',in:5,out:25},{p:'claude-opus-4-6',in:5,out:25},{p:'claude-opus',in:15,out:75}
 ];
-var CTL_AREAS={mod18:'Reportar Problema',frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Despesas (comprovantes)',mod16:'Lançamento de frete (CT-e)',mod23:'Conciliação contas a Pagar (extrato Sicoob × Bling)',mod27:'Conciliação DDA (pagar e baixar)',mod17:'Conciliação contas a Receber (PIX, boletos e crédito)',mod22:'Pagamentos (gerar PIX / link de crédito)',mod15:'Controle'};
+var CTL_AREAS={mod18:'Reportar Problema',frete:'Frete',mod10:'Cotações (dicas/mensagens)',mod2:'Análise de crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Despesas (comprovantes)',mod16:'Lançamento de frete (CT-e)',mod23:'Conciliação contas a Pagar (extrato Sicoob × Bling)',mod27:'Baixa Contas a Pagar (DDA: pagar e baixar)',mod17:'Conciliação contas a Receber (PIX, boletos e crédito)',mod22:'Pagamentos (gerar PIX / link de crédito)',mod15:'Controle'};
 var CTL={cfg:null,ia:null,carregando:false,erro:'',dolar:null,root:null};
 
 function ctlPreco(model){model=model||'';for(var k=0;k<CTL_PRECOS.length;k++){if(model.indexOf(CTL_PRECOS[k].p)===0)return CTL_PRECOS[k];}return {in:3,out:15};}
@@ -15324,7 +15324,7 @@ function ccrExcel(){
 }
 
 // ===================== MÓDULO CONCILIAÇÃO DDA (mod27) =====================
-// Financeiro › Contas a pagar › Conciliação DDA (só admin; feita para celular e tablet; abre direto em #dda).
+// Financeiro › Contas a pagar › Baixa Contas a Pagar (antiga Conciliação DDA; só admin; feita para celular e tablet; abre direto em #dda).
 // DDA do dia (Sicoob) à esquerda × contas a pagar em aberto do Bling à direita. Fornecedor (CNPJ) e valor batem → verde:
 // "Pagar e baixar" paga o boleto pelo Sicoob (com PIN) e dá baixa no Bling. DDA sem conta no Bling → pagar avulso
 // (fica pendente o lançamento) e avisar o financeiro pelo Chat. Servidor: Worker "bling" (rotas /dda/*).
@@ -15414,7 +15414,7 @@ function ddaGrupo(st){return st==='provavel'?'ok':st;}
 function ddaDraw(){
   var w=DDA.root;if(!w||!document.body.contains(w))return;
   var d=DDA.dados,h='';
-  h+='<div class="dda-hero"><h2>💳 Conciliação DDA</h2><div class="s">Boletos do DDA (Sicoob) × contas a pagar do Bling. O que bate você paga e baixa com um toque.</div>'+
+  h+='<div class="dda-hero"><h2>💳 Baixa Contas a Pagar</h2><div class="s">Boletos do DDA (Sicoob) × contas a pagar do Bling. O que bate você paga e baixa com um toque.</div>'+
     '<div class="dda-dias"><button class="dda-dia'+(DDA.dia===ddaHoje(0)?' on':'')+'" data-dia="0">Hoje</button><button class="dda-dia'+(DDA.dia===ddaHoje(1)?' on':'')+'" data-dia="1">Amanhã</button>'+
     '<label class="dda-dia'+(DDA.dia!==ddaHoje(0)&&DDA.dia!==ddaHoje(1)?' on':'')+'">📅 <input type="date" id="ddaData" value="'+DDA.dia+'"></label>'+
     '<button class="dda-dia" id="ddaAtual">'+(DDA.carregando?'⏳':'🔄')+'</button></div></div>';
