@@ -111,7 +111,8 @@ export default {
       }
       if (url.pathname === '/abertos') {
         // Responde na hora com a última lista montada; se ela tiver mais de 1 min, monta outra por trás (o app busca de novo em seguida).
-        const c = await env.BLING_KV.get('cache:abertos', 'json');
+        let c = ABERTOS_MEM;
+        if (!c) { c = await env.BLING_KV.get('cache:abertos', 'json'); if (c && c.itens) ABERTOS_MEM = c; }
         if (c && c.itens && !url.searchParams.get('forcar')) {
           const idade = Date.now() - Number(c.ts || 0);
           if (idade > 60000 && ctx) ctx.waitUntil(reconstruirAbertos(env).catch(() => {}));
@@ -522,22 +523,21 @@ function tipoForma(f) {
 }
 
 // ---- lista de pedidos/notas em aberto: guardada no KV e remontada por trás ----
+// A lista fica na memória do servidor (sem custo); no KV só uma cópia a cada 10 min (o plano grátis tem 1.000 gravações/dia).
+let ABERTOS_MEM = null, ABERTOS_KV_TS = 0, ABERTOS_TRAVA = 0;
 async function abertosVelho(env) {
-  const c = await env.BLING_KV.get('cache:abertos', 'json');
-  if (c && c.itens) { c.ts = 0; await env.BLING_KV.put('cache:abertos', JSON.stringify(c), { expirationTtl: 3 * 86400 }); }
+  if (ABERTOS_MEM) ABERTOS_MEM = Object.assign({}, ABERTOS_MEM, { ts: 0 });
 }
 async function reconstruirAbertos(env, forcado) {
-  if (!forcado) {
-    const trava = Number((await env.BLING_KV.get('abertos:trava')) || 0);
-    if (Date.now() - trava < 90000) return null;   // já tem uma montagem rodando
-  }
-  await env.BLING_KV.put('abertos:trava', String(Date.now()), { expirationTtl: 120 });
+  if (!forcado && Date.now() - ABERTOS_TRAVA < 90000) return null;   // já tem uma montagem rodando
+  ABERTOS_TRAVA = Date.now();
   try {
     const dados = await listarAbertos(env);
     const out = { ts: Date.now(), itens: dados.itens, faltaram: dados.faltaram };
-    await env.BLING_KV.put('cache:abertos', JSON.stringify(dados.faltaram ? Object.assign({}, out, { ts: Date.now() - 55000 }) : out), { expirationTtl: 3 * 86400 });
+    ABERTOS_MEM = dados.faltaram ? Object.assign({}, out, { ts: Date.now() - 55000 }) : out;
+    if (Date.now() - ABERTOS_KV_TS > 10 * 60e3) { ABERTOS_KV_TS = Date.now(); await env.BLING_KV.put('cache:abertos', JSON.stringify(ABERTOS_MEM), { expirationTtl: 3 * 86400 }); }
     return out;
-  } finally { await env.BLING_KV.delete('abertos:trava'); }
+  } finally { ABERTOS_TRAVA = 0; }
 }
 // roda várias leituras do KV ao mesmo tempo (de 20 em 20) em vez de uma por uma
 async function emLotes(lista, fn, n) {
@@ -701,10 +701,11 @@ function chaveTokenSicoob(env, escopo) {
   escopo = escopo || ESCOPO_PIX;
   return escopo === ESCOPO_PIX ? 'sicoob:token' : escopo === ESCOPO_BOLETOS ? 'sicoob:token:boletos' : 'sicoob:token:' + escopo.replace(/\W+/g, '_') + ':' + String(clientSicoob(env, escopo)).slice(0, 8); // troca de app = token novo
 }
+const TOK_MEM = {};   // tokens do Sicoob na memória do servidor (economiza gravações do KV)
 async function sicoobToken(env, escopo) {
   escopo = escopo || ESCOPO_PIX;
   const chave = chaveTokenSicoob(env, escopo);
-  const c = await env.BLING_KV.get(chave, 'json');
+  const c = TOK_MEM[chave];
   if (c && Date.now() < c.exp) return c.access;
   let r, txt = '', j = {};
   for (let t = 0; t < 2; t++) {
@@ -718,7 +719,7 @@ async function sicoobToken(env, escopo) {
     const info = 'status ' + r.status + ' · servidor ' + (r.headers.get('server') || '?') + ' · ' + (j.error_description || j.error || txt.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160));
     throw new Error('Sicoob recusou o acesso (' + r.status + '): ' + info);
   }
-  await env.BLING_KV.put(chave, JSON.stringify({ access: j.access_token, exp: Date.now() + (Number(j.expires_in || 300) - 30) * 1000 }), { expirationTtl: 3600 });
+  TOK_MEM[chave] = { access: j.access_token, exp: Date.now() + (Number(j.expires_in || 300) - 30) * 1000 };
   return j.access_token;
 }
 
@@ -922,6 +923,9 @@ const PORTADOR_SICOOB = 14890739452;   // conta "Sicoob" no Bling
 async function registrarErro(env, msg) {
   const e = (await env.BLING_KV.get('erros', 'json')) || { total: 0, seguidos: 0, ultimos: [] };
   if (!msg) { if (e.seguidos) { e.seguidos = 0; e.ultimoOk = Date.now(); await env.BLING_KV.put('erros', JSON.stringify(e)); } else if (!e.ultimoOk || Date.now() - e.ultimoOk > 3600e3) { e.ultimoOk = Date.now(); await env.BLING_KV.put('erros', JSON.stringify(e)); } return; }
+  // mesmo erro repetido em menos de 30 min: não grava de novo (economiza gravações do KV)
+  const ult = (e.ultimos || [])[0];
+  if (ult && ult.msg === msg.slice(0, 300) && Date.now() - ult.quando < 30 * 60e3) return;
   e.total++; e.seguidos++; e.ultimo = Date.now();
   e.ultimos = [{ quando: Date.now(), msg: msg.slice(0, 300) }].concat(e.ultimos || []).slice(0, 40);
   await env.BLING_KV.put('erros', JSON.stringify(e));
@@ -1058,7 +1062,7 @@ async function verificarPagamentos(env, opt) {
     pagina++;
     if (!tp || pagina >= tp || lista.length < 100) break;
   }
-  if (!opt.semMarcar) await env.BLING_KV.put('pix:ultimaVerificacao', String(agora));
+  if (!opt.semMarcar && agora - ult > 3600e3) await env.BLING_KV.put('pix:ultimaVerificacao', String(agora));   // 1x por hora (a janela de busca cobre a diferença)
   if (novos) await abertosVelho(env);
   return { novos, vistos, pendentes, inicio, fim };
 }
@@ -1085,9 +1089,9 @@ async function registrarPagamento(env, reg, p, origem) {
 
 async function itensAbertos(env, ctx) {
   if (ctx.itens) return ctx.itens;
-  const c = await env.BLING_KV.get('cache:abertos', 'json');
+  const c = ABERTOS_MEM || await env.BLING_KV.get('cache:abertos', 'json');
   if (c && Date.now() - c.ts < 30 * 60e3) ctx.itens = c.itens;
-  else { const d = await listarAbertos(env); ctx.itens = d.itens; if (!d.faltaram) await env.BLING_KV.put('cache:abertos', JSON.stringify({ ts: Date.now(), itens: d.itens }), { expirationTtl: 600 }); }
+  else { const d = await listarAbertos(env); ctx.itens = d.itens; if (!d.faltaram) ABERTOS_MEM = { ts: Date.now(), itens: d.itens, faltaram: 0 }; }
   return ctx.itens;
 }
 
