@@ -58,7 +58,7 @@ export default {
     ctx.waitUntil(verificarPagamentos(env).then(() => registrarErro(env, null)).catch(e => registrarErro(env, String(e.message || e)))
       .then(() => verificarBoletos(env)).catch(e => registrarErro(env, 'Boletos: ' + String(e.message || e))));
   },
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const origem = req.headers.get('Origin') || '';
     const okOrigem = ORIGENS.includes(origem);
     const cors = {
@@ -104,19 +104,19 @@ export default {
         if (!st) return resp({ ok: false, erro: 'Autorização expirada ou não iniciada por este app. Comece de novo.' }, 400);
         await env.BLING_KV.delete('state:' + b.state);
         await trocarToken(env, 'grant_type=authorization_code&code=' + encodeURIComponent(b.code));
-        await env.BLING_KV.delete('cache:abertos');
+        await abertosVelho(env);
         const emp = await bling(env, '/empresas/me/dados-basicos');
         return resp({ ok: true, empresa: emp && emp.data && emp.data.nome });
       }
       if (url.pathname === '/abertos') {
-        if (!url.searchParams.get('forcar')) {
-          const c = await env.BLING_KV.get('cache:abertos', 'json');
-          if (c && Date.now() - c.ts < 60000) return resp(Object.assign({ ok: true, cache: true }, c));
+        // Responde na hora com a última lista montada; se ela tiver mais de 1 min, monta outra por trás (o app busca de novo em seguida).
+        const c = await env.BLING_KV.get('cache:abertos', 'json');
+        if (c && c.itens && !url.searchParams.get('forcar')) {
+          const idade = Date.now() - Number(c.ts || 0);
+          if (idade > 60000 && ctx) ctx.waitUntil(reconstruirAbertos(env).catch(() => {}));
+          return resp(Object.assign({ ok: true, cache: true, idade, atualizando: idade > 60000 }, c));
         }
-        const dados = await listarAbertos(env);
-        const out = { ts: Date.now(), itens: dados.itens, faltaram: dados.faltaram };
-        if (!dados.faltaram) await env.BLING_KV.put('cache:abertos', JSON.stringify(out), { expirationTtl: 600 });
-        return resp(Object.assign({ ok: true }, out));
+        return resp(Object.assign({ ok: true }, await reconstruirAbertos(env, true)));
       }
       if (url.pathname === '/pix' && req.method === 'POST') {
         const b = await req.json();
@@ -154,7 +154,7 @@ export default {
         const lista = (await env.BLING_KV.get('acoes', 'json')) || [];
         for (const a of alvo) { const x = lista.find(y => y.quando === a.quando && y.acao === a.acao && y.contaId === a.contaId && String(y.id) === String(a.id)); if (x) x.executado = a.executado; }
         await env.BLING_KV.put('acoes', JSON.stringify(lista.slice(-300)));
-        await env.BLING_KV.delete('cache:abertos');
+        await abertosVelho(env);
         return resp({ ok: true, resultados: res });
       }
       if (url.pathname === '/diag/bling-escrita') {
@@ -331,7 +331,7 @@ export default {
           if (atual && atual.ok && !atual.ignorado) continue; // já informado de verdade: não mexe
           await env.BLING_KV.put('econf:' + e2e, JSON.stringify({ ok: true, ignorado: true, motivo: String(b.motivo || 'teste').slice(0, 120), por: String(b.usuario || '').slice(0, 60), quando: Date.now() }), { expirationTtl: 5 * 365 * 86400 });
         }
-        await env.BLING_KV.delete('cache:abertos');
+        await abertosVelho(env);
         await logAcao(env, { acao: 'econf', modo: 'real', tipo: b.tipo, id: b.id, numero: b.numero, detalhe: 'TEF: ' + lista.length + ' pagamento(s) marcado(s) para NÃO informar à Sefaz (' + String(b.motivo || 'teste') + ')' + (b.usuario ? ' — ' + String(b.usuario).slice(0, 60) : '') });
         return resp({ ok: true, ignorados: lista.length });
       }
@@ -345,7 +345,7 @@ export default {
         if (!b.tipo || !b.id) return resp({ ok: false, erro: 'Faltou tipo/id' }, 400);
         const k = 'oculto:' + b.tipo + ':' + b.id;
         if (b.desfazer) await env.BLING_KV.delete(k); else await env.BLING_KV.put(k, JSON.stringify({ por: String(b.usuario || '').slice(0, 60), quando: Date.now(), motivo: String(b.motivo || 'teste').slice(0, 120) }));
-        await env.BLING_KV.delete('cache:abertos');
+        await abertosVelho(env);
         await logAcao(env, { acao: 'ocultar', tipo: b.tipo, id: b.id, numero: b.numero || '', detalhe: (b.desfazer ? 'Voltou para a lista' : 'Excluído da lista (' + String(b.motivo || 'teste') + ')') + (b.usuario ? ' — ' + String(b.usuario).slice(0, 60) : '') });
         return resp({ ok: true });
       }
@@ -370,7 +370,7 @@ export default {
           await env.BLING_KV.put('pend:' + e, JSON.stringify(x), { expirationTtl: 180 * 86400 });
           lista.push((reg.tipo === 'nota' ? 'NF ' : 'Pedido ') + reg.numero + ' — R$ ' + Number(x.valor).toFixed(2) + ' — ' + x.pagador);
         }
-        await env.BLING_KV.delete('cache:abertos');
+        await abertosVelho(env);
         return resp({ ok: true, vinculadosJaBaixados: casados, vinculadosEmAberto: abertos, lista });
       }
       if (url.pathname === '/pendentes') {
@@ -518,6 +518,31 @@ function tipoForma(f) {
   return '';
 }
 
+// ---- lista de pedidos/notas em aberto: guardada no KV e remontada por trás ----
+async function abertosVelho(env) {
+  const c = await env.BLING_KV.get('cache:abertos', 'json');
+  if (c && c.itens) { c.ts = 0; await env.BLING_KV.put('cache:abertos', JSON.stringify(c), { expirationTtl: 3 * 86400 }); }
+}
+async function reconstruirAbertos(env, forcado) {
+  if (!forcado) {
+    const trava = Number((await env.BLING_KV.get('abertos:trava')) || 0);
+    if (Date.now() - trava < 90000) return null;   // já tem uma montagem rodando
+  }
+  await env.BLING_KV.put('abertos:trava', String(Date.now()), { expirationTtl: 120 });
+  try {
+    const dados = await listarAbertos(env);
+    const out = { ts: Date.now(), itens: dados.itens, faltaram: dados.faltaram };
+    await env.BLING_KV.put('cache:abertos', JSON.stringify(dados.faltaram ? Object.assign({}, out, { ts: Date.now() - 55000 }) : out), { expirationTtl: 3 * 86400 });
+    return out;
+  } finally { await env.BLING_KV.delete('abertos:trava'); }
+}
+// roda várias leituras do KV ao mesmo tempo (de 20 em 20) em vez de uma por uma
+async function emLotes(lista, fn, n) {
+  const out = [];
+  for (let i = 0; i < lista.length; i += (n || 20)) out.push(...await Promise.all(lista.slice(i, i + (n || 20)).map(fn)));
+  return out;
+}
+
 async function listarAbertos(env) {
   const fp = await formas(env);
   const vend = await vendedores(env);
@@ -527,15 +552,18 @@ async function listarAbertos(env) {
   const pedidos = await paginas(env, '/pedidos/vendas?idsSituacoes[]=' + SIT_PEDIDO_ABERTO + '&dataInicial=' + diasAtras(DIAS_PEDIDOS) + '&dataFinal=' + isoDia(new Date()), 5);
   // plano grátis da Cloudflare: no máx. 50 chamadas externas por vez → detalhe dos pedidos fica guardado 20 min
   let novasBuscas = 0, faltaram = 0;
-  for (const p of pedidos) {
+  const cachePed = await emLotes(pedidos, p => env.BLING_KV.get('ped:' + p.id, 'json'));   // lê todos os guardados de uma vez
+  for (let ip = 0; ip < pedidos.length; ip++) {
+    const p = pedidos[ip];
     let d = null;
     const ck = 'ped:' + p.id;
-    const c = await env.BLING_KV.get(ck, 'json');
-    if (c && Date.now() - c.ts < 20 * 60e3) d = c.d;
+    const c = cachePed[ip];
+    // guardado há menos de 20 min, ou há menos de 2 h com o mesmo total → não precisa buscar de novo no Bling
+    if (c && (Date.now() - c.ts < 20 * 60e3 || (Date.now() - c.ts < 2 * 3600e3 && Math.abs(Number(c.d && c.d.total) - Number(p.total)) < 0.01))) d = c.d;
     else if (novasBuscas < 30) {
       novasBuscas++;
       try { d = (await bling(env, '/pedidos/vendas/' + p.id)).data; } catch (e) { d = null; }
-      if (d) await env.BLING_KV.put(ck, JSON.stringify({ ts: Date.now(), d }), { expirationTtl: 3600 });
+      if (d) await env.BLING_KV.put(ck, JSON.stringify({ ts: Date.now(), d }), { expirationTtl: 3 * 3600 });
     } else faltaram++;
     if (!d) continue;
     const parc = (d.parcelas || []).map(x => ({ valor: Number(x.valor || 0), venc: x.dataVencimento, forma: fp[x.formaPagamento && x.formaPagamento.id] }));
@@ -582,17 +610,18 @@ async function listarAbertos(env) {
   let acoesLog = null, cur;
   do {
     const l = await env.BLING_KV.list({ prefix: 'pagosdoc:', cursor: cur });
-    for (const k of l.keys) {
+    const chaves = l.keys.filter(k => { const [, t, i] = k.name.split(':'); return !ja.has(t + ':' + i); });
+    const lidos = await emLotes(chaves, async k => [k, await env.BLING_KV.get('docmeta:' + k.name.split(':')[1] + ':' + k.name.split(':')[2], 'json'), await env.BLING_KV.get(k.name, 'json')]);
+    for (const [k, m0, pg0] of lidos) {
       const [, tipo, id] = k.name.split(':');
-      if (ja.has(tipo + ':' + id)) continue;
-      let m = await env.BLING_KV.get('docmeta:' + tipo + ':' + id, 'json');
+      let m = m0;
       if (!m) {
         if (!acoesLog) acoesLog = (await env.BLING_KV.get('acoes', 'json')) || [];
         const a = acoesLog.slice().reverse().find(x => x.tipo === tipo && String(x.id) === String(id) && x.numero);
         const nf = tipo === 'nota' ? await env.BLING_KV.get('nfdados:' + id, 'json') : null;
         m = { numero: (a && a.numero) || (nf && nf.numero) || String(id), cliente: (a && a.cliente) || '', doc: '', total: nf ? Number(nf.valor || 0) : 0, aReceber: 0, data: (nf && nf.emissao) || '' };
       }
-      const pg = (await env.BLING_KV.get(k.name, 'json')) || [];
+      const pg = pg0 || [];
       const pago = Math.round(pg.reduce((t, x) => t + Number(x.valor || 0), 0) * 100) / 100;
       const ultimo = pg.map(x => diaLocal(x.horario)).sort().pop() || '';
       if (ultimo && ultimo < diasAtras(DIAS_CONTAS)) continue;
@@ -603,10 +632,11 @@ async function listarAbertos(env) {
   } while (cur);
 
   // linhas tiradas da lista à mão (ex.: pedidos de teste)
-  for (let i = itens.length - 1; i >= 0; i--) if (await env.BLING_KV.get('oculto:' + itens[i].tipo + ':' + itens[i].id)) itens.splice(i, 1);
+  const ocultos = await emLotes(itens, it => env.BLING_KV.get('oculto:' + it.tipo + ':' + it.id));
+  for (let i = itens.length - 1; i >= 0; i--) if (ocultos[i]) itens.splice(i, 1);
 
-  const ctxTef = {};
-  for (const it of itens) {
+  const ctxTef = { alertas: (await env.BLING_KV.get('tef:alertas', 'json')) || [] };
+  await emLotes(itens, async it => {
     // PIX gerados pelo app que continuam valendo (não pagos, não cancelados, dentro das 24 h): o app mostra de novo ao reabrir
     const pd = (await env.BLING_KV.get('pixdoc:' + it.tipo + ':' + it.id, 'json')) || [];
     const vivos = [];
@@ -634,7 +664,7 @@ async function listarAbertos(env) {
       }
       it.tef = t;
     }
-  }
+  });
   // baixas automáticas feitas no Bling (para o filtro "Baixa automática" / dia da baixa)
   const log = (await env.BLING_KV.get('acoes', 'json')) || [];
   const baixas = {};
@@ -856,7 +886,7 @@ async function gerarPix(env, b) {
   const lista = (await env.BLING_KV.get(k, 'json')) || [];
   lista.push({ txid, valor, criado: reg.criado, expira: val.ms });
   await env.BLING_KV.put(k, JSON.stringify(lista.slice(-20)), { expirationTtl: 90 * 86400 });
-  await env.BLING_KV.delete('cache:abertos');
+  await abertosVelho(env);
   reg.curto = await linkCurto(env, txid, val.ms);
   await env.BLING_KV.put('pix:' + txid, JSON.stringify(reg), { expirationTtl: 90 * 86400 });
   return { ok: true, txid, curto: reg.curto, copiaECola: c.brcode || '', validade: val.dia.slice(8, 10) + '/' + val.dia.slice(5, 7) + '/' + val.dia.slice(0, 4) + ' 23:59', expira: val.ms };
@@ -879,7 +909,7 @@ async function cancelarPix(env, txid, usuario) {
     await logAcao(env, { acao: 'pix_cancelado', tipo: reg.tipo, id: reg.id, numero: reg.numero, cliente: reg.cliente, txid, valor: reg.valor,
       detalhe: 'PIX de R$ ' + Number(reg.valor || 0).toFixed(2) + ' cancelado' + (usuario ? ' por ' + usuario : '') + ' (QR Code não aceita mais pagamento).' });
   }
-  await env.BLING_KV.delete('cache:abertos');
+  await abertosVelho(env);
   return { ok: true, status: c.status || 'REMOVIDA_PELO_USUARIO_RECEBEDOR' };
 }
 
@@ -984,7 +1014,7 @@ async function verificarPagamentos(env, opt) {
     if (!tp || pagina >= tp || lista.length < 100) break;
   }
   if (!opt.semMarcar) await env.BLING_KV.put('pix:ultimaVerificacao', String(agora));
-  if (novos) await env.BLING_KV.delete('cache:abertos');
+  if (novos) await abertosVelho(env);
   return { novos, vistos, pendentes, inicio, fim };
 }
 
@@ -1101,7 +1131,7 @@ async function conciliarManual(env, b) {
   }
   x.resolvido = 'vinculado'; x.vinculo = { tipo: it.tipo, id: it.id, numero: it.numero }; x.por = String(b.usuario || '').slice(0, 60);
   await env.BLING_KV.put('pend:' + b.e2e, JSON.stringify(x), { expirationTtl: 180 * 86400 });
-  await env.BLING_KV.delete('cache:abertos');
+  await abertosVelho(env);
   return { ok: true };
 }
 
@@ -1751,7 +1781,7 @@ async function verificarBoletos(env, forcar) {
   }
   st.ultimo = Date.now();
   await env.BLING_KV.put('bol:estado', JSON.stringify(st));
-  if (novos) await env.BLING_KV.delete('cache:abertos');
+  if (novos) await abertosVelho(env);
   return { novos, pendentes, dias: Object.values(st.jobs).map(j => ({ dia: j.dia, etapa: j.etapa, msg: j.msg || '', qtd: (j.itens || []).length })) };
 }
 

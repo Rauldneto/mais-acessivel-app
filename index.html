@@ -16937,15 +16937,21 @@ function blgCarregar(forcar){
   if(BLG.demo){BLG.dados=blgDemo();BLG.ts=Date.now();blgDraw();return;}
   if(!blgUrl())return;
   if(!BLG.stChecado){BLG.stChecado=true;blgApi('/status').then(function(r){if(r&&r.ok){BLG.pixAtivo=!!r.pixAtivo;if(BLG.sel)blgDraw();}}).catch(function(){});}
+  // mostra na hora a última lista deste navegador enquanto busca a nova
+  if(!BLG.dados){try{var lc=JSON.parse(localStorage.getItem('blgAbertos')||'null');if(lc&&lc.itens&&Date.now()-lc.ts<3*86400e3){BLG.dados=lc.itens;BLG.ts=lc.ts;BLG.atualizando=true;}}catch(e){}}
   BLG.carr=true;BLG.erro=null;blgDraw();
   blgApi('/abertos'+(forcar?'?forcar=1':'')).then(function(r){
     BLG.carr=false;
     if(!r||!r.ok){BLG.erro=(r&&r.erro)||'Não consegui ler o Bling.';blgDraw();return;}
     BLG.dados=r.itens||[];BLG.ts=r.ts||Date.now();BLG.faltaram=r.faltaram||0;BLG.erro=null;
+    BLG.atualizando=!!r.atualizando;
+    try{localStorage.setItem('blgAbertos',JSON.stringify({ts:BLG.ts,itens:BLG.dados}));}catch(e){}
+    // o servidor está montando uma lista mais nova por trás: busca de novo daqui a pouco
+    if(r.atualizando&&!BLG.reTimer)BLG.reTimer=setTimeout(function(){BLG.reTimer=null;if(STATE.modulo==='mod17'||STATE.modulo==='mod22')blgCarregar(false);},12000);
     blgCarregarPend();
     if(BLG.sel&&!BLG.dados.some(function(x){return blgChave(x)===BLG.sel;}))BLG.sel=null;
     blgDraw();
-    if(BLG.faltaram)setTimeout(function(){if(STATE.modulo==='mod17'||STATE.modulo==='mod22')blgCarregar(true);},4000);
+    if(BLG.faltaram&&!BLG.reTimer)BLG.reTimer=setTimeout(function(){BLG.reTimer=null;if(STATE.modulo==='mod17'||STATE.modulo==='mod22')blgCarregar(false);},8000);
   }).catch(function(e){BLG.carr=false;BLG.erro='Sem conexão com o Worker: '+(e&&e.message||e);blgDraw();});
 }
 function blgChave(x){return x.tipo+':'+x.id;}
@@ -17324,7 +17330,7 @@ function blgDraw(){
   h+='<div class="blg-bar"><div class="blg-srch"><input id="blgBusca" placeholder="Pesquisar por nome, CPF/CNPJ ou nº do pedido/nota" value="'+blgEsc(BLG.f.busca)+'">'+BLG_IC.busca+'</div>'+
      blgPeriodoTopo()+
      '<button class="blg-date" data-a="soAbertos" style="cursor:pointer;'+(BLG.f.sit==='aberto'?'background:#34ad61;color:#fff;border-color:#34ad61':'')+'" title="Mostrar só o que ainda não foi pago">'+(BLG.f.sit==='aberto'?'✓ ':'')+'Somente em aberto</button>'+
-     '<span style="font-size:11px;color:#969696">'+(BLG.demo?'dados de exemplo':(BLG.ts?'atualizado '+new Date(BLG.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):''))+'</span>'+
+     '<span style="font-size:11px;color:#969696">'+(BLG.demo?'dados de exemplo':(BLG.ts?'atualizado '+new Date(BLG.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+(BLG.atualizando||BLG.carr?' · atualizando…':''):''))+'</span>'+
      '<span style="flex:1"></span><button class="blg-ib" data-a="recarregar" title="Atualizar: confere pagamentos no Sicoob e recarrega do Bling">'+BLG_IC.rec+'</button><button class="blg-ib gray" data-a="imprimir" title="Imprimir">'+BLG_IC.imp+'</button></div>';
   var nomeSit={aberto:'Em aberto',parcial:'Parcialmente pagos',pago:'Pagos',todos:'Todos'}[BLG.f.sit||'todos'];
   if(!BLG.view)h+='<div class="blg-fsit">Situação: '+nomeSit+(BLG.f.baixa==='auto'?' · com baixa automática':'')+(BLG.per&&(BLG.per.de||BLG.per.ate)?' · '+blgPerTexto(BLG.per):'')+(BLG.f.sit!=='todos'||BLG.f.tipo!=='todos'||BLG.f.forma!=='todos'||BLG.f.vendedor||BLG.f.busca||(BLG.f.tef&&BLG.f.tef!=='todos')||(BLG.f.baixa&&BLG.f.baixa!=='todos')||(BLG.per&&(BLG.per.de||BLG.per.ate))?'<a data-a="limpar">Limpar</a>':'')+'</div>';
