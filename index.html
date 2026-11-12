@@ -16374,6 +16374,9 @@ function ccCss(){
   '.cc-head h2{margin:0;font-size:20px;color:#1c1917}.cc-sub{font-size:12px;color:#78716c;margin-top:2px}'+
   '.cc-btn{border:1px solid #d6d3d1;background:#fff;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#1c1917}'+
   '.cc-btn:hover{background:#f5f5f4}.cc-btn.pri{background:#34c759;border-color:#2fb14f;color:#fff}.cc-btn.pri:hover{background:#2fb14f}'+
+  '#ccTip{display:none;position:fixed;z-index:10000;max-width:440px;background:#0f172a;color:#fff;border-radius:8px;padding:8px 11px;font-size:13px;line-height:1.4;box-shadow:0 8px 24px rgba(15,23,42,.28);pointer-events:none;white-space:normal}'+
+  '#ccTip b{display:block;font-weight:700}#ccTip span{display:block;font-size:11.5px;color:#cbd5e1;margin-top:2px}'+
+  '.cc-g .pd[data-tip],.cc-g .fn[data-tip]{cursor:help}'+
   '.cc-st{font-size:13px;font-weight:600;color:#64748b}.cc-st.pend{color:#b45309}.cc-st.ok{color:#15803d}'+
   '.cc-save{padding:9px 16px;font-size:14px}.cc-save.pend{background:#d97706;border-color:#b45309;animation:ccPulse 1.6s ease-in-out infinite}.cc-save.pend:hover{background:#b45309}'+
   '@keyframes ccPulse{0%,100%{box-shadow:0 0 0 0 rgba(217,119,6,.45)}50%{box-shadow:0 0 0 6px rgba(217,119,6,0)}}'+
@@ -16554,7 +16557,7 @@ function ccDraw(){
     t+='<th colspan="2" class="forn '+wc(j,'l ')+(f.fixo?'fixo':'')+'"><div class="fh">'+
       '<div class="ftop"><span class="fdot"></span><span class="ftag">'+(f.fixo?'Fornecedor do pedido':'Cotação '+(j+1))+'</span>'+
         (f.fixo?'':'<span style="flex:1"></span><button type="button" class="cc-ico" data-a="carregar" data-j="'+j+'" title="Carregar cotação (PDF, foto ou Excel)">📎</button><button type="button" class="cc-ico dan" data-a="rem" data-j="'+j+'" title="Remover fornecedor">✕</button>')+'</div>'+
-      (f.fixo?'<div class="fn" title="'+ccEsc(f.nome)+'">'+ccEsc(f.nome)+'</div>'
+      (f.fixo?'<div class="fn" data-tip="'+ccEsc(f.nome)+'">'+ccEsc(f.nome)+'</div>'
         :'<input class="fn-in" data-j="'+j+'" data-k="nome" placeholder="Nome do fornecedor" value="'+ccEsc(f.nome)+'">')+
       '<label class="fnum">Nº da cotação <input data-j="'+j+'" data-k="numCot" placeholder="—" value="'+ccEsc(f.numCot||'')+'"></label>'+
       '<div class="fs">'+((f.arquivos||[]).length?'<span title="'+ccEsc(f.arquivos.map(function(a){return a.nome;}).join(', '))+'">📄 '+ccEsc(String(f.arquivos[f.arquivos.length-1].nome).slice(0,30))+'</span>':(f.doc?'CNPJ '+ccEsc(f.doc):(f.fixo?'&nbsp;':'Digite ou carregue a cotação')))+'</div>'+
@@ -16566,7 +16569,7 @@ function ccDraw(){
   t+='</tr></thead><tbody>';
   // itens
   c.itens.forEach(function(it,i){
-    t+='<tr class="it"><td class="prod"><div class="pd" title="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div>'+(it.cod?'<div class="pc">Cód. '+ccEsc(it.cod)+'</div>':'')+'</td>'+
+    t+='<tr class="it"><td class="prod"><div class="pd" data-tip="'+ccEsc(it.desc)+'" data-tip2="'+ccEsc((it.cod?'Cód. '+it.cod+' · ':'')+ccIn(it.q,0)+' '+it.un)+'">'+ccEsc(it.desc)+'</div>'+(it.cod?'<div class="pc">Cód. '+ccEsc(it.cod)+'</div>':'')+'</td>'+
       '<td class="n q">'+ccIn(it.q,0)+'</td><td class="c">'+ccEsc(it.un)+'</td>';
     c.forn.forEach(function(f,j){var v=ccNum(f.precos[i]),best=v>0&&v===menor[i];
       t+='<td class="n inp '+wc(j,'l')+(best?' best':'')+'"><input inputmode="decimal" data-j="'+j+'" data-i="'+i+'" value="'+ccEsc(v>0?ccIn(f.precos[i]):'')+'" placeholder="—" aria-label="Preço unitário '+ccEsc(it.desc)+' '+ccEsc(f.nome)+'"></td>'+
@@ -16621,8 +16624,32 @@ function ccDraw(){
   var g=el.querySelector('.cc-g'),h1=g&&g.querySelector('tr.h1');if(h1)g.style.setProperty('--cc-h1',h1.offsetHeight+'px');
   ccLigar(el);
 }
+// Dica flutuante: mostra o texto inteiro por cima, sem mexer na largura da coluna nem na altura da linha
+function ccTip(){
+  var t=document.getElementById('ccTip');
+  if(!t){t=document.createElement('div');t.id='ccTip';t.setAttribute('role','tooltip');document.body.appendChild(t);}
+  return t;
+}
+function ccTipMostrar(alvo){
+  var tx=alvo.getAttribute('data-tip');if(!tx)return;
+  var t=ccTip(),sub=alvo.getAttribute('data-tip2');
+  t.innerHTML='<b>'+ccEsc(tx)+'</b>'+(sub?'<span>'+ccEsc(sub)+'</span>':'');
+  t.style.display='block';t.style.left='0px';t.style.top='0px';
+  var r=alvo.getBoundingClientRect(),w=t.offsetWidth,h=t.offsetHeight,x=r.left-8,y=r.top-h-8;
+  if(y<6)y=r.bottom+8;if(x+w>window.innerWidth-8)x=window.innerWidth-w-8;if(x<8)x=8;
+  t.style.left=x+'px';t.style.top=y+'px';
+}
+function ccTipEsconder(){var t=document.getElementById('ccTip');if(t)t.style.display='none';}
+window.addEventListener('scroll',ccTipEsconder,{passive:true,capture:true});
 function ccLigar(el){
   var c=CC.cot;if(!c)return;
+  el.querySelectorAll('[data-tip]').forEach(function(x){
+    x.addEventListener('mouseenter',function(){ccTipMostrar(x);});
+    x.addEventListener('mousemove',function(){var t=document.getElementById('ccTip');if(!t||t.style.display!=='block')ccTipMostrar(x);});
+    x.addEventListener('mouseleave',ccTipEsconder);
+    x.addEventListener('click',function(){ccTipMostrar(x);});
+  });
+  var gw=el.querySelector('.cc-gw');if(gw)gw.addEventListener('scroll',ccTipEsconder,{passive:true});
   ccLigarImp(el);
   var fi=el.querySelector('#ccFile');if(fi)fi.onchange=function(){var fs=[].slice.call(fi.files||[]);if(fs.length)ccImportar(CC.impAlvo,fs);};
   el.querySelectorAll('input[data-j],select[data-j]').forEach(function(inp){
