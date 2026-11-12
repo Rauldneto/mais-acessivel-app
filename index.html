@@ -4418,14 +4418,18 @@ var RPP={root:null,fotos:[],enviando:false,msg:'',msgTipo:'',ok:null,lista:null,
   filtro:'abertos',origem:null,origemSub:null,poll:null,ultimoVisto:0,novos:0,gerandoPlano:false,reanalisando:false};
 var RPP_LOG=[];       // últimos erros técnicos do app (console, JavaScript, promessas)
 var RPP_TRILHA=[];    // últimas telas abertas
-var RPP_STATUS={novo:['⏳','Pendente','#2563eb'],analise:['🔎','Em análise','#d97706'],reaberto:['🔁','Reaberto','#dc2626'],corrigindo:['🤖','Corrigindo','#0891b2'],resolvido:['✅','Resolvido','#16a34a'],nao_procede:['🚫','Não procede','#6b7280'],duplicado:['🔁','Repetido','#7c3aed']};
-var RPP_TIPO={bug:'🐞 Erro do app',uso:'🎓 Erro de uso',externo:'🌐 Fora do app (Bling, internet...)',sugestao:'💡 Sugestão de melhoria',incerto:'❔ Indefinido'};
+var RPP_STATUS={aguardando:['🧩','Aguardando teste','#0d9488'],novo:['⏳','Pendente','#2563eb'],analise:['🔎','Em análise','#d97706'],reaberto:['🔁','Reaberto','#dc2626'],corrigindo:['🤖','Corrigindo','#0891b2'],resolvido:['✅','Resolvido','#16a34a'],nao_procede:['🚫','Não procede','#6b7280'],duplicado:['🔁','Repetido','#7c3aed']};
+var RPP_TIPO={suporte:'🖥️ Suporte técnico',bug:'🐞 Erro do app',uso:'🎓 Erro de uso',externo:'🌐 Fora do app (Bling, internet...)',sugestao:'💡 Sugestão de melhoria',incerto:'❔ Indefinido'};
 var RPP_GRAV={alta:['🔴','Alta'],media:['🟡','Média'],baixa:['🟢','Baixa']};
 function rppEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function rppAdmin(){return STATE.roleLogado==='admin';}
 function rppUsuario(){return STATE.usuarioLogado||STATE.loginUser||'?';}
 function rppData(t){var d=new Date(t);return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
+// Suporte técnico (fora do app): a IA pesquisa na internet e passa o passo a passo ao colaborador
+var RPP_SUPORTE=[['sup_email','📧 E-mail'],['sup_windows','🪟 Windows'],['sup_whatsapp','💬 WhatsApp'],['sup_impressora','🖨️ Impressora'],['sup_internet','🌐 Internet / Wi-Fi'],['sup_computador','💻 Computador (lento, travando, não liga)'],['sup_teclado','⌨️ Teclado e mouse'],['sup_outro','🔧 Outro equipamento ou programa']];
+function rppEhSuporte(id){return /^sup_/.test(String(id||''));}
 function rppNomeTela(id){
+  if(rppEhSuporte(id)){var x=RPP_SUPORTE.filter(function(s){return s[0]===id;})[0];return x?x[1].replace(/^\S+\s/,'Suporte › '):'Suporte técnico';}
   var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod26:'Reativação WhatsApp',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod23:'Conciliação contas a Pagar',mod27:'Baixa Contas a Pagar',mod17:'Baixa Contas a Receber',mod22:'Pagamentos (gerar PIX / link)',mod15:'Controle',mod18:'Reportar Problema',mod25:'Chat',ext:'Extensão do Chrome',outro:'Outra / não sei'};
   return nomes[id]||id||'?';
 }
@@ -4527,6 +4531,7 @@ async function rppCfg(forcar){
 }
 function rppAutoPode(cfg){return !!(cfg&&cfg.autoUrl&&cfg.autoLigado!==false);}
 function rppAutoElegivel(c,cfg){
+  if(rppEhSuporte(c.tela))return false;
   var i=c.ia||{};
   return rppAutoPode(cfg)&&i.tipo==='bug'&&i.procede==='sim'&&i.correcao_pequena===true&&(i.confianca==null||i.confianca>=75)&&RPP_AUTO_TELAS_FORA.indexOf(c.tela)<0;
 }
@@ -4682,11 +4687,37 @@ async function rppChecarAuto(lista){
   if(mudou){rppContarNovos();if(STATE.modulo==='mod18')rppDraw();}
   return mudou;
 }
+async function rppSuporte(c,fotos){
+  var prompt='Você é o suporte técnico (help desk) de uma pequena empresa em Goiânia (revenda de materiais de construção). Os computadores usam Windows 10/11, e-mail pelo navegador ou Outlook, WhatsApp Web/Desktop e impressoras de escritório. '+
+    'Um colaborador SEM conhecimento técnico pediu ajuda. Pesquise na internet (web_search) a solução mais atual e confiável para o problema e escreva um passo a passo que ele mesmo consiga seguir.\n\n'+
+    'Categoria: '+rppNomeTela(c.tela)+'\nO que estava fazendo: '+(c.fazendo||'-')+'\nO que aconteceu: '+(c.aconteceu||'-')+'\nO que esperava: '+(c.esperado||'-')+'\nComputador/navegador de onde abriu o chamado: '+(c.amb||'-')+'\n'+(fotos.length?'Há '+fotos.length+' foto(s)/print(s) anexados.\n':'')+'\n'+
+    'Regras de segurança: só passos simples e seguros (reiniciar, verificar cabos, conferir configurações nas telas normais do Windows/programa, limpar fila de impressão, atualizar, sair e entrar de novo). '+
+    'NUNCA mande: mexer no registro do Windows, BIOS, formatar, apagar arquivos ou pastas do sistema, desativar antivírus/firewall, instalar programa de fonte desconhecida, digitar ou compartilhar senha com alguém, comandos avançados. '+
+    'Se resolver exigir isso, ou parecer defeito de peça, vírus, conta bloqueada pelo provedor ou acesso de administrador, marque precisa_tecnico=true.\n\n'+
+    'Responda SOMENTE com um JSON (sem texto antes ou depois):\n{"resumo": string (1 linha, o problema), "print_mostra": string (o que aparece nas fotos, ou ""), "causa_provavel": string, '+
+    '"passos": [string] (3 a 8 passos curtos, numerados implicitamente, em português simples, citando onde clicar; use **negrito** para nomes de botões/menus), '+
+    '"mensagem": string (1-2 frases simpáticas para o colaborador antes dos passos), "precisa_tecnico": boolean, "fontes": [{"titulo": string, "url": string}] (até 3 das páginas que você usou)}';
+  var content=[{type:'text',text:prompt}];
+  fotos.forEach(function(b){content.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:b}});});
+  var r=await fetch(DSP_IA_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2500,tools:[{type:'web_search_20250305',name:'web_search',max_uses:3}],messages:[{role:'user',content:content}]})});
+  if(!r.ok)throw new Error('IA respondeu '+r.status);
+  var j=await r.json();
+  if(j&&j.error){var em=(j.error.message||j.error.type||'erro');if(/credit balance/i.test(em))throw new Error('acabou o crédito da API da Anthropic');throw new Error('IA: '+em);}
+  var t=(j.content||[]).filter(function(x){return x.type==='text';}).map(function(x){return x.text;}).join('');
+  t=t.replace(/```json|```/g,'');var a=t.indexOf('{"'),b=t.lastIndexOf('}');if(a<0)a=t.indexOf('{');if(a<0||b<a)throw new Error('resposta sem dados');
+  var o=JSON.parse(t.slice(a,b+1));
+  return {resumo:String(o.resumo||'').slice(0,300),print_mostra:String(o.print_mostra||'').slice(0,1500),causa_provavel:String(o.causa_provavel||'').slice(0,800),
+    passos:(Array.isArray(o.passos)?o.passos:[]).map(function(x){return String(x).replace(/<[^>]*>/g,'').slice(0,500);}).filter(Boolean).slice(0,10),
+    mensagem:String(o.mensagem||'').slice(0,400),precisa_tecnico:o.precisa_tecnico===true,
+    fontes:(Array.isArray(o.fontes)?o.fontes:[]).filter(function(f){return f&&/^https?:\/\//.test(f.url||'');}).slice(0,4).map(function(f){return {titulo:String(f.titulo||'').slice(0,120),url:String(f.url).slice(0,400)};})};
+}
 async function rppEnviar(){
   if(RPP.enviando)return;
   var g=function(id){var e=document.getElementById(id);return e?e.value.trim():'';};
   var c={tela:g('rppTela')||'outro',fazendo:g('rppFazendo'),aconteceu:g('rppAconteceu'),esperado:g('rppEsperado')};
-  if(!RPP.fotos.length){RPP.msg='Cole ou carregue pelo menos 1 print do erro — ele é a prova do problema.';RPP.msgTipo='err';return rppDraw();}
+  if(!g('rppTela')){RPP.msg='Escolha onde aconteceu o problema.';RPP.msgTipo='err';return rppDraw();}
+  var suporte=rppEhSuporte(c.tela);
+  if(!suporte&&!RPP.fotos.length){RPP.msg='Cole ou carregue pelo menos 1 print do erro — ele é a prova do problema.';RPP.msgTipo='err';return rppDraw();}
   if(c.aconteceu.length<10){RPP.msg='Explique em poucas palavras o que deu errado.';RPP.msgTipo='err';return rppDraw();}
   RPP.enviando=true;RPP.msg='';rppDraw();
   c.telaNome=rppNomeTela(c.tela);c.sub=(c.tela===RPP.origem?RPP.origemSub:'')||'';
@@ -4694,19 +4725,30 @@ async function rppEnviar(){
   c.logs=RPP_LOG.slice(-15);c.trilha=RPP_TRILHA.slice();
   c.amb=navigator.userAgent.replace(/\s*\(KHTML, like Gecko\)/,'').slice(0,160)+' · '+window.innerWidth+'x'+window.innerHeight;
   var anteriores=[];try{anteriores=await rppGetLista();}catch(e){}
-  try{c.ia=await rppAnalisar(c,RPP.fotos,anteriores);
+  if(suporte){
+    c.tipoChamado='suporte';c.logs=[];c.trilha=[];
+    try{
+      var sr=await rppSuporte(c,RPP.fotos);
+      c.ia={tipo:'suporte',resumo:sr.resumo,print_mostra:sr.print_mostra,causa:sr.causa_provavel,procede:'sim'};
+      c.passos=sr.passos;c.fontes=sr.fontes;c.parecer=sr.mensagem;
+      if(sr.precisa_tecnico||!sr.passos.length){c.status='novo';c.lido=false;c.parecer=(sr.mensagem?sr.mensagem+' ':'')+'Esse caso precisa do T.I. — já avisamos e você acompanha a resposta aqui.';}
+      else{c.status='aguardando';c.lido=true;}
+    }catch(e){c.iaErro='Não consegui buscar a solução: '+(e.message||e);c.status='novo';c.lido=false;c.parecer='Recebemos seu chamado. O T.I. vai avaliar e você acompanha a situação aqui em Meus chamados.';}
+  }
+  else try{c.ia=await rppAnalisar(c,RPP.fotos,anteriores);
     if(c.ia.repetido_de&&anteriores.some(function(a){return a.n===c.ia.repetido_de;}))c.repetidoDe=c.ia.repetido_de;
     if(c.ia.parecer_colaborador)c.parecer=c.ia.parecer_colaborador;
     if(c.ia.resolve_na_hora===true&&c.ia.tipo!=='bug'&&(c.ia.confianca==null||c.ia.confianca>=75)){c.status='resolvido';c.autoResolvido=true;c.fim=c.t;}
   }catch(e){c.iaErro='Sem análise do print: '+(e.message||e);}
-  var auto=false;if(c.status!=='resolvido'&&c.ia){try{auto=rppAutoElegivel(c,await rppCfg(true));}catch(e){}}
+  var auto=false;if(!suporte&&c.status!=='resolvido'&&c.ia){try{auto=rppAutoElegivel(c,await rppCfg(true));}catch(e){}}
   if(!c.parecer)c.parecer='Recebemos seu chamado. O T.I. vai avaliar e você acompanha a situação aqui em Meus chamados.';
   try{
     c.n=await rppProximoNumero();
     var r=await fetch(FIREBASE_DB+'/chamados.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(c)});
     if(!r.ok)throw new Error('Firebase respondeu '+r.status);
     if(auto){var jr=await r.json().catch(function(){return null;});if(jr&&jr.name){c.k=jr.name;await rppDispararAuto(c);}}
-    RPP.ok={n:c.n,resolvido:c.status==='resolvido',corrigindo:c.status==='corrigindo',parecer:c.parecer};RPP.fotos=[];RPP.lista=null;
+    var jk=null;if(!auto){try{jk=await r.json();}catch(_e){}}
+    RPP.ok={n:c.n,k:(jk&&jk.name)||c.k,fontes:c.fontes,resolvido:c.status==='resolvido',corrigindo:c.status==='corrigindo',aguardando:c.status==='aguardando',passos:c.passos,parecer:c.parecer};RPP.fotos=[];RPP.lista=null;RPP.telaSel='';
   }catch(e){RPP.msg='Não consegui registrar o chamado ('+(e.message||e)+'). Tente de novo.';RPP.msgTipo='err';}
   RPP.enviando=false;rppDraw();
 }
@@ -4796,7 +4838,7 @@ function rppAviso(novos){
   var c=novos[0];var g=c.ia&&RPP_GRAV[c.ia.gravidade]||['⚪',''];
   var el=document.getElementById('rppToast');if(el)el.remove();
   el=document.createElement('div');el.id='rppToast';el.className='rpp-toast';
-  el.innerHTML='<div class="rpp-toast-h">🛠️ '+(novos.length>1?novos.length+' chamados novos/reabertos':(c.status==='reaberto'?'Chamado #'+c.n+' reaberto':c.autoCorrigido&&c.status==='resolvido'?'🤖 Chamado #'+c.n+' corrigido automaticamente':c.autoMotivo&&c.status==='novo'?'Chamado #'+c.n+' (correção automática não aplicada)':c.status==='corrigindo'?'Chamado #'+c.n+' (🤖 corrigindo)':c.autoResolvido?'Chamado #'+c.n+' (⚡ resolvido na hora)':'Novo chamado #'+c.n))+'<button aria-label="Fechar">✕</button></div>'+
+  el.innerHTML='<div class="rpp-toast-h">🛠️ '+(novos.length>1?novos.length+' chamados novos/reabertos':(c.suporteResultado==='nao_resolveu'&&c.status==='novo'?'🖥️ Chamado #'+c.n+': passos não resolveram':c.status==='reaberto'?'Chamado #'+c.n+' reaberto':c.autoCorrigido&&c.status==='resolvido'?'🤖 Chamado #'+c.n+' corrigido automaticamente':c.autoMotivo&&c.status==='novo'?'Chamado #'+c.n+' (correção automática não aplicada)':c.status==='corrigindo'?'Chamado #'+c.n+' (🤖 corrigindo)':c.autoResolvido?'Chamado #'+c.n+' (⚡ resolvido na hora)':'Novo chamado #'+c.n))+'<button aria-label="Fechar">✕</button></div>'+
     '<div class="rpp-toast-b">'+g[0]+' <b>'+rppEsc(c.u)+'</b> · '+rppEsc(c.telaNome)+'<br>'+rppEsc(((c.ia&&c.ia.resumo)||c.aconteceu||'').slice(0,140))+'</div>'+
     '<button class="rpp-toast-v">Ver chamado</button>';
   el.querySelector('.rpp-toast-h button').onclick=function(){el.remove();};
@@ -4898,6 +4940,8 @@ function rppCss(){
   '.rpp-plano{margin-top:8px;border:1.5px solid #67e8f9;background:#ecfeff;border-radius:10px;padding:8px}.rpp-plano-h{font-weight:800;color:#155e75;font-size:12.5px}.rpp-plano .s{font-size:12px;color:#155e75}'+
   '.rpp-chat-f{display:flex;gap:8px;padding:10px;border-top:1px solid #e0e7ff;background:#fff;align-items:flex-end}.rpp-chat-f textarea{min-height:44px;flex:1;resize:vertical}'+
   '.rpp-li.rpp-nova{border:2px solid #16a34a;background:#f0fdf4}.rpp-novatag{font-size:11px;font-weight:800;color:#fff;background:#16a34a;border-radius:20px;padding:2px 8px;align-self:flex-start;white-space:nowrap}'+
+  '.rpp-passos{margin:10px 0 0;padding-left:22px;font-size:14px;line-height:1.55}.rpp-passos li{margin:6px 0}.rpp-fontes{font-size:11.5px;color:#6b7280;margin-top:6px}.rpp-fontes a{color:#4f46e5}'+
+  '.rpp-teste{margin-top:12px;padding:10px 12px;border:1.5px dashed #14b8a6;border-radius:10px;background:#f0fdfa}'+
   '.rpp-okbox{text-align:center;padding:28px 16px}.rpp-okbox .big{font-size:44px}.rpp-okbox h3{font-size:20px;margin:6px 0}'+
   '.rpp-st{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:800;padding:3px 9px;border-radius:20px;color:#fff;white-space:nowrap}'+
   '.rpp-li{display:flex;gap:12px;align-items:flex-start;padding:11px 12px;border:1px solid #e5e7eb;border-radius:11px;margin-bottom:7px;cursor:pointer;background:#fff}'+
@@ -4949,7 +4993,21 @@ function rppDraw(){
   w.innerHTML=h;
   rppLigar(w);
 }
+function rppHtmlPassos(passos,fontes){
+  return '<ol class="rpp-passos">'+(passos||[]).map(function(p){return '<li>'+rppChatMd(p)+'</li>';}).join('')+'</ol>'+
+    ((fontes&&fontes.length)?'<div class="rpp-fontes">Fontes: '+fontes.slice(0,4).map(function(f){return '<a href="'+rppEsc(f.url)+'" target="_blank" rel="noopener">'+rppEsc((f.titulo||f.url).slice(0,60))+'</a>';}).join(' · ')+'</div>':'');
+}
+function rppHtmlTeste(k){
+  return '<div class="rpp-teste"><b>Conseguiu resolver seguindo os passos?</b><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'+
+    '<button class="rpp-btn mini" style="background:#16a34a" data-suporte="'+k+'" data-ok="1">✅ Sim, resolveu</button>'+
+    '<button class="rpp-btn mini" style="background:#dc2626" data-suporte="'+k+'" data-ok="0">❌ Não resolveu — chamar o T.I.</button></div></div>';
+}
 function rppHtmlNovo(){
+  if(RPP.ok&&RPP.ok.aguardando)return '<div class="rpp-card"><div style="text-align:center"><div style="font-size:40px">🧩</div><h3>Chamado #'+RPP.ok.n+' — tente estes passos</h3></div>'+
+    (RPP.ok.parecer?'<div class="rpp-parecer">'+rppEsc(RPP.ok.parecer)+'</div>':'')+rppHtmlPassos(RPP.ok.passos,RPP.ok.fontes)+
+    (RPP.ok.k?rppHtmlTeste(RPP.ok.k):'')+
+    '<p style="color:#6b7280;font-size:13px;margin:12px 0 0">Pode fazer com calma: os passos ficam guardados em <b>Meus chamados</b>, onde você também responde depois.</p>'+
+    '<div style="margin-top:12px"><button class="rpp-btn sec" data-a="outro">Reportar outro problema</button> <button class="rpp-btn sec" data-a="voltar">Voltar ao que eu estava fazendo</button></div></div>';
   if(RPP.ok)return '<div class="rpp-card rpp-okbox"><div class="big">'+(RPP.ok.resolvido?'⚡':RPP.ok.corrigindo?'🤖':'✅')+'</div><h3>Chamado #'+RPP.ok.n+(RPP.ok.resolvido?' resolvido!':RPP.ok.corrigindo?' — corrigindo agora':' recebido — pendente')+'</h3>'+
     '<div class="rpp-parecer'+(RPP.ok.resolvido?' ok':'')+'"><b>Parecer do T.I.:</b><br>'+rppEsc(RPP.ok.parecer||'')+'</div>'+
     '<p style="color:#6b7280;margin:0 0 16px">'+(RPP.ok.resolvido?'Se o erro continuar, abra <b>Meus chamados</b> e clique em <b>🔁 Reabrir</b>.':'O T.I. já foi avisado. Você acompanha a situação em <b>Meus chamados</b>.')+'</p>'+
@@ -4961,10 +5019,13 @@ function rppHtmlNovo(){
   if(rppAdmin()||(STATE.abasPermitidas&&STATE.abasPermitidas.indexOf('ext')>=0))telas.push('ext');
   var orig=RPP.origem||RPP_TRILHA[RPP_TRILHA.length-1];var sel=orig&&telas.indexOf(orig)>=0?orig:'';
   var ant=function(id){var e=document.getElementById(id);return e?rppEsc(e.value):'';};
-  var h='<div class="rpp-card"><h3>🛠️ Reportar um problema no app</h3><p class="s">Deu erro? Mande o print e conte o que aconteceu. O T.I. recebe na hora.</p>'+
-    '<label>1. Onde aconteceu? *</label><select id="rppTela"><option value="">Escolha a tela...</option>'+
-    telas.map(function(t){return '<option value="'+t+'"'+(t===(ant('rppTela')||sel)?' selected':'')+'>'+rppEsc(rppNomeTela(t))+'</option>';}).join('')+'</select>'+
-    '<label>2. Print do erro * <span style="font-weight:500;color:#6b7280">(até 3)</span></label>'+
+  var vSel=RPP.telaSel||ant('rppTela')||sel;var sup=rppEhSuporte(vSel);
+  var h='<div class="rpp-card"><h3>🛠️ Reportar um problema</h3><p class="s">Deu erro? Mande o print e conte o que aconteceu. O T.I. recebe na hora.</p>'+
+    '<label>1. Onde aconteceu? *</label><select id="rppTela"><option value="">Escolha...</option>'+
+    '<optgroup label="📱 No app (telas do sistema)">'+telas.map(function(t){return '<option value="'+t+'"'+(t===vSel?' selected':'')+'>'+rppEsc(rppNomeTela(t))+'</option>';}).join('')+'</optgroup>'+
+    '<optgroup label="🖥️ Suporte técnico (equipamentos e programas)">'+RPP_SUPORTE.map(function(x){return '<option value="'+x[0]+'"'+(x[0]===vSel?' selected':'')+'>'+rppEsc(x[1])+'</option>';}).join('')+'</optgroup></select>'+
+    (sup?'<div class="rpp-msg rpp-passos-aviso" style="background:#f0fdfa;color:#115e59;margin-top:8px">🖥️ <b>Suporte técnico:</b> você recebe na hora o passo a passo para resolver. Depois é só dizer se funcionou — se não funcionar, o T.I. é avisado.</div>':'')+
+    '<label>2. '+(sup?'Foto ou print do problema <span style="font-weight:500;color:#6b7280">(opcional — pode ser foto da tela tirada com o celular)</span>':'Print do erro * <span style="font-weight:500;color:#6b7280">(até 3)</span>')+'</label>'+
     '<div class="rpp-drop" id="rppDrop" tabindex="0"><b>📋 Aperte Ctrl+V para colar o print</b><small>ou clique aqui para escolher a imagem · também pode arrastar</small></div>'+
     '<input type="file" id="rppArq" accept="image/*" multiple style="display:none">'+
     (RPP.fotos.length?'<div class="rpp-th">'+RPP.fotos.map(function(b,i){return '<div><img src="data:image/jpeg;base64,'+b+'" alt="print '+(i+1)+'"><button data-rm="'+i+'" title="Tirar">✕</button></div>';}).join('')+'</div>':'')+
@@ -4991,9 +5052,23 @@ function rppHtmlMeus(){
       var nova=!adm&&c.avisoColab&&!(c.vistoColab>=c.avisoColab);
       return '<div class="rpp-li'+(nova?' rpp-nova':'')+'" style="cursor:default;flex-wrap:wrap"><span class="nn">#'+c.n+'</span>'+(nova?'<span class="rpp-novatag">🔔 Resposta nova</span>':'')+'<div class="tt"><b>'+rppEsc((c.aconteceu||'').slice(0,120))+'</b><small>'+(adm?rppEsc(c.u)+' · ':'')+rppEsc(c.telaNome)+' · '+rppData(c.t)+(c.autoResolvido?' · ⚡ resolvido na hora':'')+(c.reaberturas?' · reaberto '+c.reaberturas.length+'x':'')+'</small>'+
         (c.parecer?'<div class="rpp-parecer'+(pend?'':' ok')+'" style="margin:8px 0 0;text-align:left"><b>Parecer do T.I.:</b> '+rppEsc(c.parecer)+'</div>':'')+
+        (c.passos&&c.passos.length&&(c.status==='aguardando'||adm)?'<details'+(c.status==='aguardando'?' open':'')+' style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;font-size:13px">🧩 Passo a passo para resolver</summary>'+rppHtmlPassos(c.passos,c.fontes)+'</details>':'')+
+        (c.status==='aguardando'&&c.u===eu?rppHtmlTeste(c.k):'')+
+        (c.suporteResultado?'<div style="font-size:12px;margin-top:6px;color:'+(c.suporteResultado==='resolveu'?'#16a34a':'#dc2626')+'">'+(c.suporteResultado==='resolveu'?'✅ Resolveu com os passos':'❌ Os passos não resolveram'+(c.suporteObs?': '+rppEsc(c.suporteObs):''))+'</div>':'')+
         (!pend&&(c.u===eu||adm)?'<button class="rpp-btn mini sec" data-reabrir="'+c.k+'" style="margin-top:8px">🔁 Reabrir — o erro continua</button>':'')+
       '</div>'+rppStatusTag(c.status)+'</div>';
     }).join('')+'</div>';
+}
+async function rppSuporteResposta(k,ok){
+  var c=(RPP.lista||[]).filter(function(x){return x.k===k;})[0]||(RPP.ok&&RPP.ok.k===k?{k:k}:null);if(!c)return;
+  var agora=Date.now(),d;
+  if(ok)d={status:'resolvido',suporteResultado:'resolveu',fim:agora,lido:true,parecer:'Que bom que resolveu! Se o problema voltar, use o botão Reabrir.'};
+  else{
+    var obs=prompt('O que aconteceu quando você tentou? (opcional — ajuda o T.I.)','');if(obs===null)return;
+    d={status:'novo',suporteResultado:'nao_resolveu',suporteObs:String(obs).slice(0,500),lido:false,ta:agora,parecer:'Os passos não resolveram — o T.I. já foi avisado e vai te ajudar. Você acompanha a resposta aqui.'};
+  }
+  try{await rppPatch(k,d);Object.assign(c,d);if(RPP.ok&&RPP.ok.k===k){RPP.ok.aguardando=false;RPP.ok.resolvido=!!ok;RPP.ok.parecer=d.parecer;}}catch(e){alert('Não consegui registrar: '+(e.message||e));}
+  rppDraw();
 }
 async function rppReabrir(k){
   var c=(RPP.lista||[]).filter(function(x){return x.k===k;})[0];if(!c)return;
@@ -5003,7 +5078,7 @@ async function rppReabrir(k){
   try{await rppPatch(k,d);Object.assign(c,d);RPP.msg='';}catch(e){alert('Não consegui reabrir: '+(e.message||e));}
   rppDraw();
 }
-function rppAbertos(c){return c.status==='novo'||c.status==='analise'||c.status==='reaberto'||c.status==='corrigindo';}
+function rppAbertos(c){return c.status==='aguardando'||c.status==='novo'||c.status==='analise'||c.status==='reaberto'||c.status==='corrigindo';}
 function rppHtmlChamados(){
   if(RPP.erro)return '<div class="rpp-msg err">'+rppEsc(RPP.erro)+'</div>';
   if(!RPP.lista)return '<div class="rpp-card">⏳ Carregando...</div>';
@@ -5038,13 +5113,16 @@ function rppHtmlDetalhe(c){
   if(c.status==='corrigindo')h+='<div class="rpp-msg" style="background:#ecfeff;color:#155e75">🤖 O robô está corrigindo (tentativa '+(c.autoTentativas||1)+', desde '+rppData(c.autoInicio||c.t)+'). O resultado aparece aqui sozinho.</div>';
   if(c.autoResumo||c.autoMotivo)h+=rppSec('🤖 Correção automática',(c.autoResumo?'O que mudou: '+c.autoResumo:'')+(c.autoMotivo?(c.autoResumo?'\n':'')+'Não aplicada: '+c.autoMotivo:'')+(c.autoExecucao?'\nDetalhes: '+c.autoExecucao:''));
   if(c.reaberturas&&c.reaberturas.length)h+=rppSec('🔁 Reaberto pelo colaborador',c.reaberturas.map(function(r){return rppData(r.t)+' — '+r.u+(r.obs?': '+r.obs:'');}).join('\n'));
+  if(c.tipoChamado==='suporte'){h+=rppSec('🧩 Passo a passo enviado ao colaborador',(c.passos||[]).map(function(p,i){return (i+1)+'. '+String(p).replace(/\*\*/g,'');}).join('\n')||'(nenhum)');if(c.suporteResultado)h+=rppSec('Resultado',c.suporteResultado==='resolveu'?'✅ Resolveu com os passos':'❌ Não resolveu'+(c.suporteObs?' — '+c.suporteObs:''));}
   h+=rppSec('O que o colaborador disse','Estava fazendo: '+(c.fazendo||'-')+'\nAconteceu: '+(c.aconteceu||'-')+(c.esperado?'\nEsperava: '+c.esperado:''));
   h+=rppSec('📸 O que o print mostra',i.print_mostra)+rppSec('Print x relato',i.confere)+rppSec('🔍 Causa provável',i.causa)+
      rppSec('🔧 Correção sugerida',i.correcao)+rppSec('🛡️ Como evitar que se repita',i.prevencao)+rppSec('🎓 Orientação para o colaborador',i.treinamento);
-  if(c.logs&&c.logs.length)h+=rppSec('Erros técnicos capturados',c.logs.map(function(l){return new Date(l.t).toLocaleTimeString('pt-BR')+' ['+l.k+(l.tl?' em '+rppNomeTela(l.tl):'')+(l.x?' x'+l.x:'')+'] '+l.m;}).join('\n'),'rpp-logs');
+  if(c.tipoChamado==='suporte'){}
+  else if(c.logs&&c.logs.length)h+=rppSec('Erros técnicos capturados',c.logs.map(function(l){return new Date(l.t).toLocaleTimeString('pt-BR')+' ['+l.k+(l.tl?' em '+rppNomeTela(l.tl):'')+(l.x?' x'+l.x:'')+'] '+l.m;}).join('\n'),'rpp-logs');
   else h+=rppSec('Erros técnicos capturados','Nenhum erro técnico registrado pelo app antes do chamado.');
   if(c.trilha&&c.trilha.length)h+=rppSec('Telas abertas antes',c.trilha.map(rppNomeTela).join(' → '));
-  h+=rppHtmlChat(c);
+  if(c.tipoChamado!=='suporte')h+=rppHtmlChat(c);
+  else if(c.fontes&&c.fontes.length)h+=rppSec('Fontes pesquisadas',c.fontes.map(function(f){return (f.titulo||'')+' — '+f.url;}).join('\n'));
   h+='<label>Situação</label><select id="rppStatus">'+Object.keys(RPP_STATUS).map(function(s){return '<option value="'+s+'"'+(c.status===s?' selected':'')+'>'+RPP_STATUS[s][0]+' '+RPP_STATUS[s][1]+'</option>';}).join('')+'</select>'+
      '<label>Parecer para o colaborador <span style="font-weight:500;color:#6b7280">(é o que ele vê)</span></label><textarea id="rppParecer">'+rppEsc(c.parecer||'')+'</textarea>'+
      '<label>Sua anotação interna (o que foi feito, versão corrigida...)</label><textarea id="rppNota">'+rppEsc(c.nota||'')+'</textarea>'+
@@ -5055,7 +5133,7 @@ function rppHtmlDetalhe(c){
      '<button class="rpp-btn mini sec" data-a="copiar">📋 Copiar relatório</button>'+
      '<button class="rpp-btn mini sec" data-a="claude" title="Copia o relatório pronto para colar no chat do Claude e ele corrigir o código">🤖 Copiar para o Claude corrigir</button>'+
      '<button class="rpp-btn mini sec" data-a="imprimir">🖨️ Imprimir</button>'+
-     (rppAutoPode(RPP.cfg)&&['novo','analise','reaberto'].indexOf(c.status)>=0?'<button class="rpp-btn mini" data-a="autoCorrigir" style="background:#0891b2" title="Aprova e manda o robô corrigir este chamado (com as mesmas travas e testes)">🤖 Corrigir automaticamente</button>':'')+'</div>'+
+     (rppAutoPode(RPP.cfg)&&c.tipoChamado!=='suporte'&&['novo','analise','reaberto'].indexOf(c.status)>=0?'<button class="rpp-btn mini" data-a="autoCorrigir" style="background:#0891b2" title="Aprova e manda o robô corrigir este chamado (com as mesmas travas e testes)">🤖 Corrigir automaticamente</button>':'')+'</div>'+
      (RPP.msg?'<div class="rpp-msg '+RPP.msgTipo+'">'+rppEsc(RPP.msg)+'</div>':'')+
      '<p style="font-size:11.5px;color:#9ca3af;margin:10px 0 0">'+rppEsc(c.amb||'')+'</p></div>';
   return h;
@@ -5119,12 +5197,14 @@ function rppLigar(w){
   if(RPP.aba==='chamados')rppLigarChat(w);
   w.querySelectorAll('[data-aba]').forEach(function(b){b.onclick=function(){RPP.aba=b.getAttribute('data-aba');RPP.msg='';if(RPP.aba!=='novo'&&!RPP.lista)rppCarregar();if(RPP.aba==='aprendizado')rppCarregarPlano();rppDraw();};});
   w.querySelectorAll('[data-f]').forEach(function(b){b.onclick=function(){RPP.filtro=b.getAttribute('data-f');RPP.sel=null;rppDraw();};});
+  w.querySelectorAll('[data-suporte]').forEach(function(b){b.onclick=function(){rppSuporteResposta(b.getAttribute('data-suporte'),b.getAttribute('data-ok')==='1');};});
   w.querySelectorAll('[data-reabrir]').forEach(function(b){b.onclick=function(){rppReabrir(b.getAttribute('data-reabrir'));};});
   w.querySelectorAll('[data-rm]').forEach(function(b){b.onclick=function(e){e.stopPropagation();RPP.fotos.splice(+b.getAttribute('data-rm'),1);rppDraw();};});
   w.querySelectorAll('[data-sel]').forEach(function(b){b.onclick=function(){
     RPP.sel=b.getAttribute('data-sel');RPP.msg='';
     rppDraw();
   };});
+  var selT=w.querySelector('#rppTela');if(selT)selT.onchange=function(){RPP.telaSel=selT.value;var foi=rppEhSuporte(selT.value);if(foi!==!!w.querySelector('.rpp-passos-aviso'))rppDraw();};
   var drop=w.querySelector('#rppDrop'),arq=w.querySelector('#rppArq');
   if(drop&&arq){
     drop.onclick=function(){arq.click();};
@@ -5137,7 +5217,7 @@ function rppLigar(w){
     var a=b.getAttribute('data-a');
     var c=RPP.lista&&RPP.lista.filter(function(x){return x.k===RPP.sel;})[0];
     if(a==='enviar')rppEnviar();
-    else if(a==='outro'){RPP.ok=null;RPP.msg='';rppDraw();}
+    else if(a==='outro'){RPP.ok=null;RPP.msg='';RPP.telaSel='';rppDraw();}
     else if(a==='voltar'){RPP.ok=null;irParaModulo(RPP.origem&&RPP.origem!=='mod18'?RPP.origem:'inicio');}
     else if(a==='recarregar'){RPP.lista=null;rppDraw();rppCarregar();}
     else if((a==='salvar'||a==='enviarResposta')&&c){
