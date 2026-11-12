@@ -181,13 +181,29 @@ function coletarWA() {
     var labels = {};
     C.Label.getModelsArray().forEach(function(l) { labels[l.id] = l.name; });
     var SIS = { notification_template: 1, e2e_notification: 1, gp2: 1, revoked: 1, ciphertext: 1, protocol: 1, notification: 1, call_log: 1 };
-    var out = [], docs = [], pdfs = [], vistoDoc = {};
+    var out = [], docs = [], pdfs = [], vistoDoc = {}, vistos = {};
+    // v2.3.3: diagnóstico (quantas conversas o WhatsApp Web tem e quantas ficaram de fora) + etiquetas lidas também da lista de etiquetas
+    var diag = { chats: 0, grupos: 0, semFone: 0, contatos: 0, contatosSalvos: 0, porEtiqueta: {}, extras: 0, fontes: [] };
+    function foneDe(id) {
+      try {
+        if (!id) return '';
+        var srv = id.server || String(id._serialized || id).split('@')[1];
+        if (srv === 'g.us' || srv === 'broadcast' || srv === 'newsletter') return '';
+        var ct = C.Contact.get(id);
+        var pn = ct && ct.phoneNumber;
+        if (pn) return String(pn.user || String(pn._serialized || pn).split('@')[0]).replace(/\D/g, '');
+        if (srv === 'c.us') return String(id.user || String(id._serialized || id).split('@')[0]).replace(/\D/g, '');
+      } catch (e) {}
+      return '';
+    }
     C.Chat.getModelsArray().forEach(function(c) {
-      if (c.isGroup || !c.id || c.id.server === 'broadcast' || c.id.server === 'newsletter' || c.id.server === 'g.us') return;
+      diag.chats++;
+      if (c.isGroup || !c.id || c.id.server === 'broadcast' || c.id.server === 'newsletter' || c.id.server === 'g.us') { diag.grupos++; return; }
       var ct = c.contact || C.Contact.get(c.id);
       var pn = ct && ct.phoneNumber;
       pn = pn ? (pn.user || String(pn._serialized || pn).split('@')[0]) : (c.id.server === 'c.us' ? c.id.user : '');
-      if (!pn) return;
+      if (!pn) { diag.semFone++; return; }
+      vistos[String(pn).replace(/\D/g, '')] = 1;
       var uc = 0, un = 0;
       (c.msgs ? c.msgs.getModelsArray() : []).forEach(function(mm) {
         if (SIS[mm.type]) return;
@@ -205,7 +221,40 @@ function coletarWA() {
       out.push({ p: String(pn).replace(/\D/g, ''), n: (ct && (ct.name || ct.verifiedName || ct.pushname)) || c.formattedTitle || '',
         e: (c.labels || []).map(function(id) { return labels[id] || String(id); }), uc: uc, un: un, t: c.t || 0, nl: c.unreadCount || 0 });
     });
-    return { ok: true, chats: out, docs: docs, pdfs: pdfs, labels: Object.keys(labels).map(function(k) { return labels[k]; }) };
+    // Etiquetas de contatos cuja conversa NÃO está carregada no WhatsApp Web (o Web só traz ~3 meses de conversas,
+    // mas as etiquetas são sincronizadas inteiras). Tenta 3 fontes; cada uma protegida, nada quebra a sincronização.
+    var extra = {};
+    function addExtra(id, nomeEtq, nome) {
+      var p = foneDe(id); if (!p || p.length < 10 || vistos[p]) return;
+      var o = extra[p] || (extra[p] = { p: p, n: '', e: [], uc: 0, un: 0, t: 0, nl: 0, x: 1 });
+      if (nomeEtq && o.e.indexOf(nomeEtq) === -1) o.e.push(nomeEtq);
+      if (!o.n) { try { var ct = C.Contact.get(id); o.n = (ct && (ct.name || ct.verifiedName || ct.pushname)) || nome || ''; } catch (e) {} }
+    }
+    try {
+      C.Label.getModelsArray().forEach(function(l) {
+        var nm = l.name, info = { count: l.count != null ? l.count : null, itens: null };
+        try {
+          var col = l.labelItemCollection || l.labelItems;
+          var arr = col ? (col.getModelsArray ? col.getModelsArray() : (Array.isArray(col) ? col : [])) : [];
+          info.itens = arr.length;
+          if (arr.length && diag.fontes.indexOf('labelItem') === -1) diag.fontes.push('labelItem');
+          arr.forEach(function(it) { var pid = it.parentId || it.parentJid || (it.id && it.id.parentId) || it.id; addExtra(pid, nm); });
+        } catch (e) { info.erro = String(e && e.message || e).slice(0, 80); }
+        diag.porEtiqueta[nm] = info;
+      });
+    } catch (e) { diag.erroLabel = String(e && e.message || e).slice(0, 120); }
+    try {
+      C.Contact.getModelsArray().forEach(function(ct) {
+        diag.contatos++;
+        if (ct.isMyContact) diag.contatosSalvos++;
+        var ls = ct.labels || [];
+        if (ls.length && diag.fontes.indexOf('contato') === -1) diag.fontes.push('contato');
+        ls.forEach(function(id) { addExtra(ct.id, labels[id] || String(id)); });
+      });
+    } catch (e) { diag.erroContato = String(e && e.message || e).slice(0, 120); }
+    Object.keys(extra).forEach(function(p) { if (extra[p].e.length) { out.push(extra[p]); diag.extras++; } });
+    try { diag.modulosLabel = Object.keys(C).filter(function(k) { return /label/i.test(k); }); } catch (e) {}
+    return { ok: true, chats: out, docs: docs, pdfs: pdfs, diag: diag, labels: Object.keys(labels).map(function(k) { return labels[k]; }) };
   } catch (e) { return { ok: false, erro: String(e && e.message || e) }; }
 }
 
@@ -220,10 +269,11 @@ async function sincronizarWA(manual) {
   if (!r || !r.ok) return { ok: false, erro: (r && r.erro) || 'Não consegui ler o WhatsApp Web (ele terminou de carregar?)' };
   if (!r.chats.length) return { ok: false, erro: 'WhatsApp Web aberto mas sem conversas (não está logado ou ainda carregando)' }; // v2.1.7: não apaga a sincronização boa
   var dados = {};
-  r.chats.forEach(function(c) { if (c.p) dados[c.p] = { n: c.n, e: c.e, uc: c.uc, un: c.un, t: c.t, nl: c.nl }; });
+  // conversa carregada: grava tudo; contato só pela etiqueta (conversa antiga): grava só nome/etiquetas, sem apagar as datas que já existiam
+  r.chats.forEach(function(c) { if (!c.p) return; if (c.x) { dados[c.p + '/e'] = c.e; dados[c.p + '/x'] = 1; if (c.n) dados[c.p + '/n'] = c.n; } else dados[c.p] = { n: c.n, e: c.e, uc: c.uc, un: c.un, t: c.t, nl: c.nl }; });
   var x = await fetch(FB + '/waChats.json', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados) });
   if (!x.ok) return { ok: false, erro: 'Firebase ' + x.status };
-  var meta = { ts: Date.now(), conversas: r.chats.length, etiquetas: r.labels, maquina: cfg.waNome || '' };
+  var meta = { ts: Date.now(), conversas: r.chats.length - ((r.diag && r.diag.extras) || 0), etiquetas: r.labels, maquina: cfg.waNome || '', diag: r.diag || null };
   await fetch(FB + '/waMeta.json', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(meta) });
   await chrome.storage.local.set({ waUltima: meta.ts, waUltimaQtd: meta.conversas });
   vincularPropostas(r.docs || [], r.pdfs || []).catch(function() {});

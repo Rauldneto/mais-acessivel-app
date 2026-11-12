@@ -13987,7 +13987,7 @@ function rvMontar(){
   if(RV.rows)return RV.rows;
   var waIdx={},nomeIdx={};
   Object.keys(RV.wa||{}).forEach(function(p){var k=cqWaChave(p);if(!k)return;var o=RV.wa[p]||{};
-    if(waIdx[k]&&(waIdx[k].t||0)>(o.t||0))return;waIdx[k]={p:String(p).replace(/\D/g,''),n:o.n||'',e:o.e||[],uc:o.uc||0,un:o.un||0,t:o.t||0};});
+    if(waIdx[k]&&(waIdx[k].t||0)>(o.t||0))return;waIdx[k]={p:String(p).replace(/\D/g,''),n:o.n||'',e:o.e||[],uc:o.uc||0,un:o.un||0,t:o.t||0,x:!!o.x&&!o.t};});
   Object.keys(waIdx).forEach(function(k){String(waIdx[k].n||'').split(/\s[-–|\/]\s|\s*[|\/]\s*/).forEach(function(seg){var s=cqNorm(seg);if(s.length>=5)(nomeIdx[s]=nomeIdx[s]||[]).push(k);});});
   RV._vn=null;var rows=[],usados={},cli=(RV.bl&&RV.bl.cli)||{};
   Object.keys(cli).forEach(function(id){var c=cli[id],ks=(c.f||[]).map(cqWaChave).filter(Boolean),wk='',via='';
@@ -14098,6 +14098,7 @@ function rvHtmlClientes(){
     '<div style="flex:1;min-width:260px"><div style="font-weight:900;font-size:15px">Fontes</div><div class="rv-mut" style="margin-top:3px">'+
     '💬 WhatsApp: '+(wm&&wm.ts?'<b>'+(wm.conversas||Object.keys(RV.wa).length)+'</b> conversas, atualizado há '+cqTempo((ag-wm.ts)/1000):'não sincronizado')+
     ' · 🧾 Bling: '+(bl&&bl.ts?'<b>'+(bl.clientes||Object.keys(bl.cli||{}).length)+'</b> clientes com compra em '+(bl.meses||24)+' meses ('+(bl.vendas||0)+' vendas), lido em '+new Date(bl.ts).toLocaleDateString('pt-BR')+(bl.u?' por '+cqEsc(bl.u):''):'nunca lido')+'</div>'+
+    (wm&&wm.diag?'<div style="margin-top:3px">🔎 WhatsApp Web: '+(wm.diag.chats||0)+' conversas carregadas'+(wm.diag.semFone?' ('+wm.diag.semFone+' sem número visível)':'')+(wm.diag.contatos?' · '+(wm.diag.contatosSalvos||0)+' contatos salvos':'')+' · <b>'+(wm.diag.extras||0)+'</b> contatos antigos trazidos pela etiqueta</div>':'')+
     (RV.blStatus?'<div style="margin-top:6px;font-weight:700;color:#1d4ed8">'+cqEsc(RV.blStatus)+'</div>':'')+'</div>'+
     '<select id="rvMeses" class="rv-in" style="width:auto">'+[['12','12 meses'],['24','24 meses'],['36','36 meses'],['60','5 anos']].map(function(o){return '<option value="'+o[0]+'"'+(RV.meses===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>'+
     '<button class="rv-btn pri" data-a="lerBling"'+(RV.blReq?' disabled':'')+'>🧾 '+(RV.blReq?'Lendo o Bling…':'Ler compras do Bling')+'</button></div>';
@@ -14145,7 +14146,7 @@ function rvHtmlClientes(){
       '<td>'+(r.k?'<a href="#" data-a="abrirWa" data-id="'+cqEsc(r.id)+'" style="color:#15803d;font-weight:700;text-decoration:none">'+cqEsc(rvFone(w?w.p:r.k))+'</a>':'<span class="rv-mut">sem celular'+(r.fone?' ('+cqEsc(rvFone(r.fone))+')':'')+'</span>')+
         (w&&w.n&&r.orig==='bling'?'<div class="rv-mut">'+cqEsc(w.n)+(r.via==='nome'?' (achado pelo nome)':'')+'</div>':'')+
 '</td>'+
-      '<td>'+(r.dv!=null?'há <b>'+r.dv+'</b> dias'+(r.ultCli!=null?'<div class="rv-mut">cliente falou há '+r.ultCli+' d</div>':''):'<span class="rv-mut">—</span>')+'</td>'+
+      '<td>'+(r.w&&r.w.x&&r.dv==null?'<span class="rv-mut" title="A conversa é antiga e não está carregada no WhatsApp Web; o contato veio pela etiqueta.">mais de 3 meses<br>(conversa antiga)</span>':r.dv!=null?'há <b>'+r.dv+'</b> dias'+(r.ultCli!=null?'<div class="rv-mut">cliente falou há '+r.ultCli+' d</div>':''):'<span class="rv-mut">—</span>')+'</td>'+
       '<td>'+(r.uc?rvDataBr(r.uc)+'<div class="rv-mut">há '+r.dc+' dias · '+rvMoeda(r.uv)+'</div>':'<span class="rv-mut">'+(r.orig==='wa'?'não achado no Bling':'—')+'</span>')+'</td>'+
       '<td>'+(r.q?'<b>'+r.q+'</b>×<div class="rv-mut">'+rvMoeda(r.tot)+'</div>':'<span class="rv-mut">—</span>')+'</td>'+
       '<td class="rv-hide-m">'+(ue?'<span class="rv-mut">'+new Date(ue.ts).toLocaleDateString('pt-BR')+' por '+cqEsc(ue.u)+'</span>':'')+'<div><a href="#" data-a="optout" data-k="'+cqEsc(r.k)+'" data-n="'+cqEsc(r.nome)+'" class="rv-mut" style="color:#b91c1c">🚫 não quer</a></div></td></tr>';
