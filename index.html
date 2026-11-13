@@ -21532,25 +21532,8 @@ function renderModeloEmTeste(){
     sv.style.display='block';
     sv.scrollIntoView({behavior:'smooth'});
     var c=calcCond();
-    setTimeout(function(){ gerarParecerIA(); }, 800);
-    // Salvar no Firebase com responsavel
-    try{
-      var _agora=new Date();
-      var _dtStr=_agora.toLocaleDateString('pt-BR')+' '+_agora.toLocaleTimeString('pt-BR');
-      var _reg={
-        cnpj:D.cnpj,empresa:D.nome,fantasia:D.fantasia,socio:D.socio,capital:D.capital,
-        situacao:S.sit,meses_empresa:S.mE,meses_socio:S.mS,
-        responsavel:STATE.usuarioLogado||'desconhecido',
-        dataHora:_dtStr,
-        condicao_pagamento:calcCond(),
-        excecao1:S.excecao1||null,
-        excecao2:S.excecao2||null,
-        protestoDiretor:S.protestoDiretor,
-        negado:S.negado,
-        modulo:'Modelo em Teste'
-      };
-      fbSaveHistoricoAnalise(D.cnpj.replace(/\D/g,''),_reg);
-    }catch(_esave){console.warn('Erro ao salvar historico:',_esave);}
+    // NOVO FLUXO: NAO gera parecer IA automatico. Delega para mostrarVeredito.
+    if(typeof mostrarVeredito==='function'){ mostrarVeredito(); return; }
     var M={
       '100':{bg:'#E8F5E9',br:'#2E7D32',co:'#1B5E20',ic:'\u2705',t:'Aprovado \u2014 100% boleto sem entrada',s:'Todas as etapas positivas.',p:'Faturamento integral no boleto, sem entrada.'},
       '30': {bg:'#E3F2FD',br:'#1565C0',co:'#1565C0',ic:'\u2705',t:'Aprovado \u2014 30% entrada + boleto',s:'Protesto liberado pelo diretor.',p:'30% de entrada + restante no boleto.'},
@@ -21725,40 +21708,70 @@ function renderModeloEmTeste(){
       +', CNPJ '+D.cnpj+', <strong>'+S.sit+'</strong>, <strong>'+tStr(S.mE)+'</strong> de exist\u00eancia.'
       +' S\u00f3cio: <strong>'+D.socio+'</strong> h\u00e1 <strong>'+tStr(S.mS)+'</strong>. Capital: <strong>'+D.capital+'</strong>.';
 
-    var ativa=S.sit==='ATIVA',m2=S.mE>=24,m12=S.mE>=12,sOk=S.mS>=12;
+    // REGRAS NOVAS (triagem IA - 3 verificacoes):
+    // 1) Empresa ATIVA na Receita Federal
+    // 2) Empresa com >=12 meses de existencia
+    // 3) Socio com >=18 meses desde a ultima alteracao contratual
+    var ativa=S.sit==='ATIVA',m12=S.mE>=12,sOk=S.mS>=18;
     var its=[],negs=[],ats=[];
 
-    if(!ativa){its.push(it('neg','ti-x','Empresa <strong>'+S.sit+'</strong> \u2014 inativa na Receita Federal'));negs.push('Empresa '+S.sit+' \u2014 impossibilidade de emiss\u00e3o de NF. Sem exce\u00e7\u00e3o.');}
+    if(!ativa){its.push(it('neg','ti-x','Empresa <strong>'+S.sit+'</strong> \u2014 inativa na Receita Federal'));negs.push('Empresa '+S.sit+' \u2014 imposs\u00edvel emitir NF. REGRA RIGIDA: sem exce\u00e7\u00e3o.');}
     else its.push(it('ok','ti-check','Empresa <strong>ATIVA</strong> na Receita Federal'));
 
-    if(!m12){its.push(it('warn','ti-alert-triangle','Apenas <strong>'+tStr(S.mE)+'</strong> de exist\u00eancia (menos de 12 meses)'));ats.push('empresa_menos12m');}
-    else if(!m2){its.push(it('warn','ti-alert-triangle','<strong>'+tStr(S.mE)+'</strong> de exist\u00eancia (12\u201324 meses \u2014 aten\u00e7\u00e3o)'));ats.push('empresa_12_24m');}
-    else its.push(it('ok','ti-check','<strong>'+tStr(S.mE)+'</strong> de exist\u00eancia (acima de 24 meses)'));
+    if(!m12){its.push(it('neg','ti-x','Apenas <strong>'+tStr(S.mE)+'</strong> de exist\u00eancia (menos de 12 meses)'));negs.push('Empresa com menos de 12 meses de exist\u00eancia. REGRA RIGIDA: sem exce\u00e7\u00e3o.');}
+    else its.push(it('ok','ti-check','<strong>'+tStr(S.mE)+'</strong> de exist\u00eancia (m\u00ednimo 12 meses atingido)'));
 
     if(!sOk){
-      if(S.nS===1&&m2){its.push(it('neg','ti-x','S\u00f3cio \u00fanico alterado h\u00e1 <strong>'+tStr(S.mS)+'</strong>. Sem exce\u00e7\u00e3o.'));negs.push('S\u00f3cio \u00fanico com altera\u00e7\u00e3o nos \u00faltimos 12m. Sem exce\u00e7\u00e3o.');}
-      else{its.push(it('warn','ti-alert-triangle','S\u00f3cio alterado h\u00e1 <strong>'+tStr(S.mS)+'</strong>. Aten\u00e7\u00e3o.'));ats.push('socio_menos12m');}
-    } else its.push(it('ok','ti-check','S\u00f3cio est\u00e1vel h\u00e1 <strong>'+tStr(S.mS)+'</strong> (acima de 12 meses)'));
+      its.push(it('neg','ti-x','S\u00f3cio com altera\u00e7\u00e3o contratual h\u00e1 apenas <strong>'+tStr(S.mS)+'</strong> (menos de 18 meses)'));
+      negs.push('Altera\u00e7\u00e3o contratual do s\u00f3cio h\u00e1 menos de 18 meses. REGRA RIGIDA: sem exce\u00e7\u00e3o.');
+    } else its.push(it('ok','ti-check','S\u00f3cio est\u00e1vel h\u00e1 <strong>'+tStr(S.mS)+'</strong> (m\u00ednimo 18 meses atingido)'));
 
-    var html=card('#0f6e56',sec(1,'#0f6e56','Triagem Inicial \u2014 Dados da Receita Federal')+its.join(''));
+    var html=card('#0f6e56',sec(1,'#0f6e56','Triagem IA \u2014 3 Verifica\u00e7\u00f5es Autom\u00e1ticas')+its.join(''));
 
     if(negs.length){
       S.negado=true;
-      html+=negBox('Venda faturada negada \u2014 sem exce\u00e7\u00e3o',negs.join('<br>'));
+      html+=negBox('An\u00e1lise interrompida \u2014 regra r\u00edgida violada',negs.join('<br>')+'<br><br><strong>Esta an\u00e1lise n\u00e3o pode prosseguir.</strong> Encaminhe o cliente para op\u00e7\u00e3o de venda \u00e0 vista.');
       negs.forEach(function(n){addCk('neg','ti-x',n);});
       q('#m5s1').innerHTML=html;show('m5s1');
-      veredito();
+      // Nao chama veredito() mais - mostra apenas o bloqueio por regra rigida
+      mostrarBloqueioTriagem();
     } else {
-      if(ats.length){
-        html+=resBox('warn','Etapa 1 \u2014 aten\u00e7\u00e3o','Prossiga com cautela.');
-        ats.forEach(function(a){addCk('warn','ti-alert-triangle',a);});
-      } else {
-        html+=resBox('ok','Etapa 1 aprovada','Todos os crit\u00e9rios atendidos.');
-        addCk('ok','ti-check','Triagem: '+S.sit+', '+tStr(S.mE)+', s\u00f3cio h\u00e1 '+tStr(S.mS));
-      }
+      html+=resBox('ok','Triagem IA aprovada','Prossiga com a coleta de informa\u00e7\u00f5es.');
+      addCk('ok','ti-check','Triagem IA: '+S.sit+', '+tStr(S.mE)+' empresa, s\u00f3cio h\u00e1 '+tStr(S.mS));
       q('#m5s1').innerHTML=html;show('m5s1');
       setTimeout(buildE2,400);
     }
+  }
+
+  // Bloqueio por regra rigida na triagem IA - nao chama veredito/parecer IA
+  function mostrarBloqueioTriagem(){
+    var sv=q('#m5sv');if(!sv)return;
+    sv.style.display='block';
+    sv.innerHTML='<div style="background:#fff;border:3px solid #b71c1c;border-radius:14px;padding:20px;margin-bottom:16px;box-shadow:0 4px 16px rgba(183,28,28,0.2)">'
+      +'<div style="font-size:16px;font-weight:800;color:#b71c1c;margin-bottom:10px;display:flex;align-items:center;gap:8px"><i class="ti ti-ban" style="font-size:22px"></i> An\u00e1lise bloqueada por regra r\u00edgida</div>'
+      +'<p style="font-size:13px;color:#7f1d1d;line-height:1.7;margin-bottom:14px">A triagem inicial identificou crit\u00e9rio(s) sem exce\u00e7\u00e3o. N\u00e3o h\u00e1 necessidade de prosseguir com a coleta de documentos ou refer\u00eancias.</p>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +'<button onclick="novaConsultaMod5()" style="background:#b71c1c;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer"><i class="ti ti-refresh"></i> Nova consulta</button>'
+      +'<button onclick="imprimirMod5(this)" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer"><i class="ti ti-file-type-pdf"></i> Gerar relat\u00f3rio</button>'
+      +'</div>'
+      +'</div>';
+    sv.scrollIntoView({behavior:'smooth'});
+    // Salvar no Firebase como NEGADO
+    try{
+      var _agora=new Date();
+      var _dtStr=_agora.toLocaleDateString('pt-BR')+' '+_agora.toLocaleTimeString('pt-BR');
+      fbSaveHistoricoAnalise(D.cnpj.replace(/\D/g,''),{
+        cnpj:D.cnpj,empresa:D.nome,fantasia:D.fantasia,socio:D.socio,capital:D.capital,
+        situacao:S.sit,meses_empresa:S.mE,meses_socio:S.mS,
+        responsavel:STATE.usuarioLogado||'desconhecido',
+        dataHora:_dtStr,
+        condicao_pagamento:'av',
+        negado:true,
+        bloqueio_triagem:true,
+        checks:S.checks,
+        modulo:'Modelo em Teste'
+      });
+    }catch(e){console.warn('Erro ao salvar bloqueio:',e);}
   }
 
   function buildE2(){
@@ -22924,7 +22937,7 @@ function upDoc(n,inp){
     '<div style="background:linear-gradient(135deg,#1a3a5c,#0f6e56);color:#fff;border-radius:0 0 14px 14px;padding:14px 18px;margin-bottom:18px">'
     +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><i class="ti ti-flask" style="font-size:20px"></i>'
     +'<span style="font-size:15px;font-weight:600">Modelo em Teste \u2014 Novo Fluxo de An\u00e1lise de Cr\u00e9dito</span></div>'
-    +'<div style="font-size:12px;opacity:.85">6 etapas \u00b7 Consulta Receita Federal em tempo real \u00b7 Verifica\u00e7\u00e3o manual \u00b7 Veredito autom\u00e1tico com condi\u00e7\u00e3o de pagamento</div>'
+    +'<div style="font-size:12px;opacity:.85">\ud83e\udd16 IA faz s\u00f3 a triagem (3 verifica\u00e7\u00f5es) \u00b7 \ud83d\udc64 Colaborador coleta informa\u00e7\u00f5es \u00b7 \u2705 Diretor escreve o parecer final</div>'
     +'</div>'
     +'<div style="padding:0 4px">'
     +'<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;box-shadow:0 1px 4px rgba(0,0,0,0.06)">'
@@ -22960,43 +22973,12 @@ function upDoc(n,inp){
     var sv=q('#m5sv');if(!sv)return;
     sv.style.display='block';
     sv.scrollIntoView({behavior:'smooth'});
-    var cond=calcCond();
 
-    // Salvar no Firebase com responsavel
-    try{
-      var _agora=new Date();
-      var _dtStr=_agora.toLocaleDateString('pt-BR')+' '+_agora.toLocaleTimeString('pt-BR');
-      var _reg={
-        cnpj:D.cnpj,empresa:D.nome,fantasia:D.fantasia,socio:D.socio,capital:D.capital,
-        situacao:S.sit,meses_empresa:S.mE,meses_socio:S.mS,
-        responsavel:STATE.usuarioLogado||'desconhecido',
-        dataHora:_dtStr,
-        condicao_pagamento:cond,
-        excecao1:S.excecao1||null,
-        excecao2:S.excecao2||null,
-        excecao_doc:S.excecao_doc||null,
-        justificativa_terceiro:S.justTerceiro||null,
-        justificativa_atencao:S.justWarn||null,
-        justificativa_maps:S.justMaps||null,
-        justificativa_end_terceiro:S.justEndTerceiro||null,
-        aprovacao_dir_terceiro:S.aprovDir||null,
-        protestoDiretor:S.protestoDiretor,
-        negado:S.negado,
-        modulo:'Modelo em Teste'
-      };
-      fbSaveHistoricoAnalise(D.cnpj.replace(/\D/g,''),_reg);
-    }catch(_esave){console.warn('Erro ao salvar:',_esave);}
+    // NOVO FLUXO: NAO gera veredito/parecer IA automatico.
+    // A IA fez apenas a triagem (3 verificacoes). Agora o colaborador conclui
+    // a coleta e envia para o Diretor que escrevera o parecer com SUAS palavras.
 
-    var M={
-      '100':{bg:'#e8f5e9',br:'#2e7d32',co:'#1b5e20',ic:'\u2705',t:'Aprovado \u2014 100% boleto sem entrada',s:'Todas as etapas com resultado positivo. Empresa ativa com tempo e s\u00f3cio est\u00e1veis.',p:'Faturamento integral no boleto parcelado. Sem necessidade de entrada.'},
-      '30': {bg:'#e3f2fd',br:'#1565c0',co:'#1565c0',ic:'\u2705',t:'Aprovado \u2014 30% entrada + boleto',s:'Protesto em cart\u00f3rio liberado por diretor. Demais etapas positivas.',p:'30% de entrada no pedido + restante faturado no boleto.'},
-      '50': {bg:'#fff8e1',br:'#f9a825',co:'#7b4f00',ic:'\u26a0\ufe0f',t:'Aprovado com aten\u00e7\u00e3o \u2014 50% entrada + boleto',s:'Empresa entre 12 e 24 meses de exist\u00eancia.',p:'50% de entrada na aprova\u00e7\u00e3o do pedido + restante no boleto.'},
-      '70': {bg:'#fff3e0',br:'#e65100',co:'#bf360c',ic:'\u26a0\ufe0f',t:'Aprovado com aten\u00e7\u00e3o \u2014 70% entrada + 1 parcela',s:'Empresa ou s\u00f3cio com menos de 12 meses.',p:'70% de entrada + saldo em 1 parcela no boleto.'},
-      'av': {bg:'#ffebee',br:'#b71c1c',co:'#b71c1c',ic:'\u274c',t:'Negado \u2014 somente \u00e0 vista',s:'Negativa identificada no processo de an\u00e1lise.',p:'Venda somente \u00e0 vista. Faturamento: apenas com aprova\u00e7\u00e3o da diretoria.'}
-    };
-    var v=M[cond];
-
-    // Montar resumo das etapas concluidas
+    // Montar resumo das etapas concluidas pela coleta
     var resumoEtapas='';
     S.checks.forEach(function(ck){
       var bg=ck.cls==='ok'?'#dcfce7':ck.cls==='neg'?'#fee2e2':'#fef9c3';
@@ -23006,28 +22988,79 @@ function upDoc(n,inp){
         +'<i class="ti '+ic+'" style="flex-shrink:0;margin-top:1px"></i><span>'+ck.txt+'</span></div>';
     });
 
-    // Veredito no topo - sv apenas ancora para os botoes
-    sv.innerHTML=''
-
-    // Atualizar o parecer no topo com o veredito + resumo
+    // Atualizar o painel do topo com o resumo (sem veredito)
     var pb=q('#m5pb');
     if(pb){
-      pb.innerHTML=
-        '<div style="padding:14px 16px;border-radius:10px;background:'+(cond==='av'?'#ffebee':cond==='100'?'#dcfce7':'#fff8e1')+';border:2px solid '+(cond==='av'?'#b71c1c':cond==='100'?'#16a34a':'#f59e0b')+';margin-bottom:12px">'
-        +'<div style="font-size:17px;font-weight:800;color:'+(cond==='av'?'#b71c1c':cond==='100'?'#166534':'#92400e')+'">'+v.ic+' '+v.t+'</div>'
-        +'<div style="font-size:13px;font-weight:600;margin-top:6px;color:'+(cond==='av'?'#7f1d1d':cond==='100'?'#166534':'#78350f')+'">'+v.p+'</div>'
+      pb.innerHTML='<div style="padding:12px 14px;border-radius:10px;background:#eff6ff;border:1.5px solid #93c5fd;margin-bottom:10px">'
+        +'<div style="font-size:14px;font-weight:700;color:#1e40af;display:flex;align-items:center;gap:8px"><i class="ti ti-user-check"></i> Coleta conclu\u00edda \u2014 pronto para enviar ao Diretor</div>'
+        +'<div style="font-size:12px;color:#1e3a5f;margin-top:4px">O Diretor analisar\u00e1 e escrever\u00e1 o parecer com suas pr\u00f3prias palavras.</div>'
         +'</div>'
-        +'<div style="font-size:12px;color:#475569;margin-bottom:8px"><strong>'+D.nome+'</strong>, CNPJ '+D.cnpj+', '+S.sit+', '+tStr(S.mE)+' exist\u00eancia.</div>'
+        +'<div style="font-size:12px;color:#475569;margin-bottom:8px"><strong>'+D.nome+'</strong>, CNPJ '+D.cnpj+', '+S.sit+', '+tStr(S.mE)+' exist\u00eancia.</div>';
       var _card=document.querySelector('#m5card_resultado');
       if(_card){
-        _card.style.background=cond==='av'?'linear-gradient(135deg,#ffebee,#fee2e2)':cond==='100'?'linear-gradient(135deg,#e8f5e9,#dcfce7)':'linear-gradient(135deg,#fffbeb,#fef3c7)';
-        _card.style.borderColor=cond==='av'?'#b71c1c':cond==='100'?'#16a34a':'#f59e0b';
+        _card.style.background='linear-gradient(135deg,#eff6ff,#dbeafe)';
+        _card.style.borderColor='#3b82f6';
       }
       if(resumoEtapas){
         var cl=q('#m5cl');
         if(cl) cl.innerHTML=resumoEtapas;
       }
     }
+
+    // Botao principal: Enviar para Aprovacao do Diretor
+    sv.innerHTML='<div style="background:#fff;border:2.5px solid #1565c0;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 2px 10px rgba(21,101,192,0.15)">'
+      +'<div style="font-size:15px;font-weight:700;color:#1565c0;margin-bottom:8px;display:flex;align-items:center;gap:8px"><i class="ti ti-send" style="font-size:20px"></i> Finalizar an\u00e1lise</div>'
+      +'<p style="font-size:13px;color:#1e3a5f;line-height:1.7;margin-bottom:14px">Todos os dados foram coletados. Envie agora para que o <strong>Diretor</strong> analise e escreva o parecer final com sua decis\u00e3o e palavras pr\u00f3prias. A IA aprender\u00e1 com cada parecer ao longo do tempo.</p>'
+      +'<div style="margin-bottom:12px">'
+      +'<label style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;display:block;margin-bottom:6px">Mensagem para o Diretor (opcional)</label>'
+      +'<textarea id="m5msgDiretor" rows="3" placeholder="Ex: Cliente antigo, sempre pagou em dia. Gostaria da aprova\u00e7\u00e3o para 50% entrada." style="width:100%;border:1.5px solid #93c5fd;border-radius:8px;padding:10px 12px;font-size:13px;background:#f0f9ff;color:#0f172a;outline:none;resize:vertical;box-sizing:border-box;font-family:inherit"></textarea>'
+      +'</div>'
+      +'<button id="m5btnEnviarAprov" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:10px;padding:14px 18px;width:100%;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 2px 10px rgba(21,101,192,0.3)"><i class="ti ti-send" style="font-size:18px"></i> Enviar para Aprova\u00e7\u00e3o do Diretor</button>'
+      +'<div id="m5msgEnviar" style="font-size:12px;margin-top:10px;min-height:14px;text-align:center"></div>'
+      +'</div>';
+
+    setTimeout(function(){
+      var btnEnv=q('#m5btnEnviarAprov');
+      if(btnEnv) btnEnv.onclick=function(){
+        var msgTa=q('#m5msgDiretor');
+        var msgTxt=msgTa?msgTa.value.trim():'';
+        var msgEl=q('#m5msgEnviar');
+        btnEnv.disabled=true;
+        btnEnv.innerHTML='<i class="ti ti-loader"></i> Enviando...';
+        var _ag=new Date();
+        var _dt=_ag.toLocaleDateString('pt-BR')+' '+_ag.toLocaleTimeString('pt-BR');
+        var _op=STATE.usuarioLogado||'desconhecido';
+        var _refs=(typeof coletarReferenciasM5==='function')?coletarReferenciasM5():[];
+        var _id='aprov_'+(D.cnpj||'').replace(/\D/g,'')+'_'+Date.now();
+        var _dados={
+          cnpj:D.cnpj,empresa:D.nome,fantasia:D.fantasia,socio:D.socio,capital:D.capital,
+          endereco:D.endereco,cidade:D.cidade,estado:D.estado,cep:D.cep,
+          situacao:S.sit,meses_empresa:S.mE,meses_socio:S.mS,
+          checks:S.checks,
+          referencias:_refs,
+          orcamento:S.orcamento||0,
+          verifManual:S.verifManual||null,
+          temProtesto:S.temProtesto||false,
+          relatoProtesto:S.relatoProtesto||null,
+          defesaCliente:S.defesaCliente||null,
+          mensagem_colaborador:msgTxt,
+          solicitante:_op,
+          dataHoraSolicitacao:_dt,
+          timestamp:new Date().toISOString(),
+          status:'pendente',
+          modulo:'Modelo em Teste'
+        };
+        fbSalvarAprovacaoPendente(_id,_dados).then(function(){
+          btnEnv.innerHTML='<i class="ti ti-check"></i> Enviado! Aguardando Diretor';
+          btnEnv.style.background='#16a34a';
+          if(msgEl){msgEl.style.color='#16a34a';msgEl.innerHTML='<i class="ti ti-circle-check"></i> An\u00e1lise enviada para a aba <b>Aprova\u00e7\u00e3o</b>. O Diretor ir\u00e1 escrever o parecer final.';}
+        }).catch(function(){
+          btnEnv.disabled=false;
+          btnEnv.innerHTML='<i class="ti ti-send"></i> Tentar novamente';
+          if(msgEl){msgEl.style.color='#dc2626';msgEl.textContent='Erro ao enviar. Verifique a conex\u00e3o e tente novamente.';}
+        });
+      };
+    },100);
 
     // Se precisaAprovDir: adicionar bloco de aprovacao do diretor antes dos botoes
     if(S.precisaAprovDir&&!S.aprovDir){
@@ -23175,15 +23208,27 @@ function renderAprovacoes(){
 
       var decisaoOptions=DECISOES.map(function(d){return '<option value="'+d.v+'">'+d.label+'</option>';}).join('');
 
-      body.innerHTML='<div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;margin-bottom:8px">Pontos verificados</div>'
+      // Mensagem do colaborador
+      var msgColabHtml='';
+      if(v.mensagem_colaborador){
+        msgColabHtml='<div style="margin-top:14px;background:#eff6ff;border:1px solid #93c5fd;border-left:4px solid #3b82f6;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e3a5f;line-height:1.6">'
+          +'<div style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;margin-bottom:4px"><i class="ti ti-message-circle"></i> Mensagem do colaborador ('+(v.solicitante||'?')+')</div>'
+          +'<em>'+v.mensagem_colaborador+'</em></div>';
+      }
+
+      body.innerHTML='<div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;margin-bottom:8px">Pontos verificados na triagem IA</div>'
         +checksHtml
+        +msgColabHtml
         +refsHtml
-        +'<div style="margin-top:10px;font-size:12px;color:#475569"><strong>Condi\u00e7\u00e3o sugerida pelo sistema:</strong> '+(condTxt[v.condicao_sugerida]||v.condicao_sugerida||'\u2014')+'</div>'
-        +'<div id="parecerIni_'+item.id+'" style="margin-top:10px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px"></div>'
-        +'<div style="margin-top:14px;border-top:1.5px solid #e2e8f0;padding-top:14px">'
-        +'<label style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;display:block;margin-bottom:6px">Decis\u00e3o do Diretor *</label>'
-        +'<select id="dec_'+item.id+'" style="width:100%;border:2px solid #cbd5e1;border-radius:8px;padding:10px 12px;font-size:13px;background:#fff;color:#0f172a;outline:none;box-sizing:border-box"><option value="">Selecione uma op\u00e7\u00e3o...</option>'+decisaoOptions+'</select>'
-        +'<button id="confirmar_'+item.id+'" style="margin-top:10px;width:100%;background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">\u2713 Confirmar decis\u00e3o</button>'
+        +'<div style="margin-top:18px;border-top:1.5px solid #e2e8f0;padding-top:16px">'
+        +'<div style="background:#fffbeb;border:1.5px solid #fbbf24;border-radius:10px;padding:14px 16px;margin-bottom:12px">'
+        +'<div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-pencil"></i> Parecer do Diretor \u2014 escreva com suas pr\u00f3prias palavras</div>'
+        +'<p style="font-size:11px;color:#78350f;line-height:1.6;margin-bottom:10px">Explique <strong>por que</strong> voc\u00ea tomou esta decis\u00e3o. Seu parecer ser\u00e1 usado pela IA para aprender ao longo do tempo (RAG).</p>'
+        +'<textarea id="parecer_'+item.id+'" rows="5" placeholder="Ex: Cliente antigo da casa, sempre pagou em dia. Mesmo com o protesto de R$ 450 no CENPROT (j\u00e1 em processo de regulariza\u00e7\u00e3o conforme carta de an\u00eancia anexa), aprovo venda com 50% entrada + boleto. Hist\u00f3rico de boa \u00edndole compensa o apontamento." style="width:100%;border:1.5px solid #fbbf24;border-radius:8px;padding:10px 12px;font-size:13px;background:#fff;color:#0f172a;outline:none;resize:vertical;box-sizing:border-box;font-family:inherit;line-height:1.6"></textarea>'
+        +'</div>'
+        +'<label style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;display:block;margin-bottom:6px">Decis\u00e3o final *</label>'
+        +'<select id="dec_'+item.id+'" style="width:100%;border:2px solid #cbd5e1;border-radius:8px;padding:10px 12px;font-size:13px;background:#fff;color:#0f172a;outline:none;box-sizing:border-box;margin-bottom:10px"><option value="">Selecione uma op\u00e7\u00e3o...</option>'+decisaoOptions+'</select>'
+        +'<button id="confirmar_'+item.id+'" style="width:100%;background:linear-gradient(135deg,#0f6e56,#16a34a);color:#fff;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 8px rgba(22,163,74,0.3)"><i class="ti ti-circle-check"></i> Confirmar parecer e decis\u00e3o</button>'
         +'</div><p id="msg_'+item.id+'" style="font-size:12px;margin-top:8px;min-height:14px"></p></div>';
 
       head.onclick=function(){
@@ -23209,56 +23254,36 @@ function renderAprovacoes(){
             return;
           }
           var opt=DECISOES.filter(function(d){return d.v===val;})[0];
-          processarAprovacao(item.id,v,opt);
+          // Captura o parecer livre do diretor
+          var parecerEl=document.getElementById('parecer_'+item.id);
+          var parecerLivre=parecerEl?parecerEl.value.trim():'';
+          if(!parecerLivre||parecerLivre.length<20){
+            if(parecerEl){parecerEl.style.borderColor='#dc2626';parecerEl.focus();}
+            var mm=document.getElementById('msg_'+item.id);
+            if(mm){mm.style.color='#dc2626';mm.textContent='Escreva seu parecer (mínimo 20 caracteres) explicando a decisão.';}
+            return;
+          }
+          processarAprovacao(item.id,v,opt,parecerLivre);
         };
       },100);
     });
   }
 
-  async function processarAprovacao(id,v,opt){
+  async function processarAprovacao(id,v,opt,parecerLivre){
     var msgEl=document.getElementById('msg_'+id);
     var btnC=document.getElementById('confirmar_'+id), sel=document.getElementById('dec_'+id);
-    if(btnC)btnC.disabled=true; if(sel)sel.disabled=true;
-    if(msgEl){msgEl.style.color='#2563eb';msgEl.textContent='Atualizando parecer com sua decis\u00e3o...';}
+    var parecerEl=document.getElementById('parecer_'+id);
+    if(btnC)btnC.disabled=true; if(sel)sel.disabled=true; if(parecerEl)parecerEl.disabled=true;
+    if(msgEl){msgEl.style.color='#2563eb';msgEl.textContent='Registrando parecer e decis\u00e3o do diretor...';}
 
     var decisaoTipo=opt.v==='negado'?'recusado':'aprovado';
     var resp=opt.label;
-
-    var checks_txt=(v.checks||[]).map(function(ck){
-      return (ck.cls==='ok'?'[OK]':ck.cls==='neg'?'[NEG]':'[ATEN]')+' '+ck.txt;
-    }).join('\n');
     var diretor=STATE.usuarioLogado||'diretor';
     var dtR=new Date().toLocaleDateString('pt-BR')+' '+new Date().toLocaleTimeString('pt-BR');
 
-    var prompt='Voce e um analista de credito empresarial experiente.\n'
-      +'Um parecer inicial ja foi gerado para esta analise, e o DIRETOR agora registrou sua decisao final ('+(decisaoTipo==='aprovado'?'APROVADO':'RECUSADO')+').\n'
-      +'Reescreva o PARECER INTELIGENTE completo, refletindo a decisao do diretor como definitiva.\n\n'
-      +'EMPRESA: '+(v.empresa||'')+' ('+(v.fantasia||'')+')\n'
-      +'CNPJ: '+(v.cnpj||'')+'\n'
-      +'SITUACAO: '+(v.situacao||'')+'\n'
-      +'SOCIO: '+(v.socio||'')+'\n\n'
-      +'PONTOS VERIFICADOS (com justificativas ja vinculadas):\n'+checks_txt+'\n\n'
-      +'MENSAGEM DO COLABORADOR AO SOLICITAR APROVACAO:\n'+(v.mensagem_colaborador||'')+'\n\n'
-      +'PARECER INICIAL GERADO ANTES DA DECISAO DO DIRETOR:\n'+(v.parecer_ia_texto||'')+'\n\n'
-      +'DECISAO DO DIRETOR ('+diretor+'): '+resp+'\n\n'
-      +'ESTRUTURA OBRIGATORIA (use EXATAMENTE estes marcadores em linhas separadas):\n'
-      +'##RESULTADO## <resultado final em uma linha clara, refletindo a decisao do diretor>\n'
-      +'##EMPRESA## <nome, CNPJ, situacao e tempo>\n'
-      +'##POSITIVOS## <item1 >> item2 >> item3>\n'
-      +'##ATENCAO## <ponto de atencao >> justificativa correspondente >> ... ou NENHUM>\n'
-      +'##CONDICAO## <exatamente a condicao escolhida pelo diretor: "'+resp+'">\n'
-      +'##CONCLUSAO## <2-3 frases finais objetivas, mencionando a decisao do diretor>\n'
-      +'\nIMPORTANTE: para cada item de ##ATENCAO##, junte sempre o motivo e sua justificativa correspondente no mesmo item (nunca separe). APENAS esses marcadores, max 350 palavras, portugues brasileiro.';
-
-    var textoFinal='';
-    try{
-      var resp2=await fetch('https://soft-limit-b3a1.rauldias.workers.dev',{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,messages:[{role:'user',content:prompt}]})
-      });
-      var data=await resp2.json();
-      textoFinal=(data.content&&data.content[0])?data.content[0].text:'';
-    }catch(e){}
+    // NOVO FLUXO: NAO gera parecer IA reformulado.
+    // O parecer eh o texto livre que o diretor escreveu.
+    // Esse texto sera usado futuramente para RAG (IA aprende com decisoes).
 
     try{
       await fbSaveHistoricoAnalise((v.cnpj||'').replace(/\D/g,''),{
@@ -23272,14 +23297,33 @@ function renderAprovacoes(){
         solicitante:v.solicitante,
         decisao:decisaoTipo,
         parecer_diretor:resp,
-        parecer_atualizado:textoFinal,
-        aprovacao_diretor:{diretor:diretor,decisao:decisaoTipo,condicaoEscolhida:opt.label,dataHoraRegistro:dtR},
+        parecer_livre_diretor:parecerLivre||'',
+        aprovacao_diretor:{diretor:diretor,decisao:decisaoTipo,condicaoEscolhida:opt.label,parecerLivre:parecerLivre||'',dataHoraRegistro:dtR},
         responsavel:diretor,
         dataHora:dtR,
         timestamp:new Date().toISOString(),
         modulo:'Modelo em Teste'
       });
     }catch(e){}
+
+    // Salvar na base de aprendizado (RAG - Fase 2 futura)
+    try{
+      await fetch(FIREBASE_DB+'/pareceres_diretor.json',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          cnpj:v.cnpj,empresa:v.empresa,
+          checks:v.checks,
+          referencias:v.referencias||[],
+          decisao:decisaoTipo,
+          condicao:opt.v,
+          condicao_label:opt.label,
+          parecer_livre:parecerLivre||'',
+          diretor:diretor,
+          dataHora:dtR,
+          timestamp:new Date().toISOString()
+        })
+      });
+    }catch(e){console.warn('Erro ao salvar na base de aprendizado:',e);}
 
     try{ await fbDeleteAprovacaoPendente(id); }catch(e){}
 
