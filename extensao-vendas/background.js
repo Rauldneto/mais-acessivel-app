@@ -1085,3 +1085,170 @@ chrome.runtime.onMessage.addListener(function(msg, sender, responder) {
   if (msg && msg.action === 'chatAtualizar') { chatVerificar().catch(function() {}); return false; }
   return false;
 });
+
+// ============================================================
+// FIREWALL DE DOMINIOS (v2.4.0)
+// ============================================================
+// - Registra esta maquina no Firebase quando a extensao inicia
+// - Baixa a politica (perfil + lista de dominios bloqueados) a cada 60s
+// - Responde ao content script firewall-block.js com sim/nao
+// - Loga navegacao em dominios monitorados
+// ============================================================
+
+var FW_FB = 'https://maisacessivel-1d0ad-default-rtdb.firebaseio.com';
+var FW = {
+  hostname: 'desconhecida',
+  usuario: 'desconhecido',
+  perfilId: null,
+  bloqueados: [],
+  liberados: [],
+  perfis: {},
+  todosDominiosMonitorados: [],
+  ultimaAtualizacao: 0
+};
+
+function fwHostname() {
+  // Chrome nao expoe hostname direto; usa navigator.userAgent + chrome.runtime.id como ID estavel
+  // + guarda em storage pra persistir
+  return new Promise(function(res){
+    try{
+      chrome.storage.local.get(['fwHostname','fwUsuario'],function(st){
+        if(st && st.fwHostname){ FW.hostname=st.fwHostname; FW.usuario=st.fwUsuario||'desconhecido'; return res(FW.hostname); }
+        var h='PC-'+(chrome.runtime.id||'').slice(0,8)+'-'+Date.now().toString(36).slice(-4);
+        chrome.storage.local.set({fwHostname:h},function(){ FW.hostname=h; res(h); });
+      });
+    }catch(_){ res('desconhecida'); }
+  });
+}
+
+async function fwRegistrarMaquina(){
+  try{
+    await fwHostname();
+    // Tenta descobrir usuario logado do app Mais Acessivel
+    try{
+      chrome.storage.local.get(['appUsuario'],function(st){
+        if(st && st.appUsuario) FW.usuario=st.appUsuario;
+      });
+    }catch(_){}
+    await fetch(FW_FB+'/firewall/maquinas/'+encodeURIComponent(FW.hostname)+'.json',{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        usuario:FW.usuario,
+        lastSeen:new Date().toISOString(),
+        extVersion:chrome.runtime.getManifest().version
+      })
+    });
+  }catch(e){ console.warn('[FW] registrar',e); }
+}
+
+async function fwBaixarPolitica(){
+  try{
+    var r=await fetch(FW_FB+'/firewall.json');
+    if(!r.ok) return;
+    var dados=await r.json()||{};
+    FW.perfis=dados.perfis||{};
+    var m=(dados.maquinas||{})[FW.hostname];
+    FW.perfilId=m && m.perfil ? m.perfil : null;
+    if(FW.perfilId && FW.perfis[FW.perfilId]){
+      FW.bloqueados=FW.perfis[FW.perfilId].bloqueados||[];
+      FW.liberados=FW.perfis[FW.perfilId].liberados||[];
+    } else {
+      FW.bloqueados=[]; FW.liberados=[];
+    }
+    // Lista de dominios monitorados (bloqueados ou liberados) - usado pra decidir se loga
+    FW.todosDominiosMonitorados=FW.bloqueados.concat(FW.liberados);
+    FW.ultimaAtualizacao=Date.now();
+  }catch(e){ console.warn('[FW] politica',e); }
+}
+
+function fwDominioBate(hostname, lista){
+  if(!hostname || !lista || !lista.length) return false;
+  for(var i=0;i<lista.length;i++){
+    var alvo=(lista[i]||'').toLowerCase();
+    if(!alvo) continue;
+    // Match exato ou subdominio
+    if(hostname===alvo || hostname.endsWith('.'+alvo)) return true;
+  }
+  return false;
+}
+
+function fwDecidirBloqueio(hostname){
+  hostname=(hostname||'').toLowerCase();
+  // Se o dominio esta explicitamente liberado, nao bloqueia (whitelist prioritaria)
+  if(fwDominioBate(hostname, FW.liberados)) return false;
+  // Se esta na lista de bloqueio, bloqueia
+  if(fwDominioBate(hostname, FW.bloqueados)) return true;
+  return false;
+}
+
+async function fwLogar(hostname, url, acao){
+  try{
+    // So loga dominios da lista monitorada (nao enche o Firebase com todos os sites normais)
+    if(!fwDominioBate(hostname, FW.todosDominiosMonitorados)) return;
+    var id='log_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
+    await fetch(FW_FB+'/firewall/logs/'+id+'.json',{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        hora:new Date().toISOString(),
+        hostname:FW.hostname,
+        usuario:FW.usuario,
+        dominio:hostname,
+        url:url,
+        acao:acao
+      })
+    });
+  }catch(_){}
+}
+
+// Mensageria com content scripts
+chrome.runtime.onMessage.addListener(function(msg, sender, responder){
+  if(msg && msg.tipo==='fw_check'){
+    (async function(){
+      // Se a politica esta velha, atualiza antes
+      if(Date.now()-FW.ultimaAtualizacao>60000) await fwBaixarPolitica();
+      var bloquear=fwDecidirBloqueio(msg.hostname);
+      responder({bloquear:bloquear});
+      // Loga a navegacao (so os monitorados)
+      fwLogar(msg.hostname, msg.url, bloquear?'bloqueado':'permitido');
+    })();
+    return true; // async
+  }
+  if(msg && msg.tipo==='cenprot_resultado'){
+    // Repassa pra aba(s) do app Mais Acessivel
+    try{
+      chrome.tabs.query({url:'https://rauldneto.github.io/mais-acessivel-app/*'},function(abas){
+        abas.forEach(function(t){
+          try{ chrome.tabs.sendMessage(t.id,{tipo:'cenprot_resultado',cnpj:msg.cnpj,resultado:msg.resultado}); }catch(_){}
+        });
+      });
+    }catch(_){}
+    responder({ok:true});
+    return true;
+  }
+  if(msg && msg.tipo==='fw_set_usuario'){
+    FW.usuario=msg.usuario||'desconhecido';
+    try{ chrome.storage.local.set({appUsuario:FW.usuario,fwUsuario:FW.usuario}); }catch(_){}
+    fwRegistrarMaquina();
+    responder({ok:true});
+    return true;
+  }
+  return false;
+});
+
+// Boot: registra a maquina e baixa a politica
+(async function fwBoot(){
+  await fwHostname();
+  await fwRegistrarMaquina();
+  await fwBaixarPolitica();
+})();
+
+// Heartbeat: a cada 60s re-registra e re-baixa politica
+chrome.alarms.create('fwHeartbeat',{periodInMinutes:1});
+chrome.alarms.onAlarm.addListener(function(a){
+  if(a.name!=='fwHeartbeat') return;
+  fwRegistrarMaquina();
+  fwBaixarPolitica();
+});
+

@@ -1421,7 +1421,8 @@ var ACESSO_ABAS=[
     {id:'ext',n:'Botão Extensão'},
     {id:'mod18',n:'Reportar Problema',fixo:true},
     {id:'mod25',n:'Chat',fixo:true},
-    {id:'mod15',n:'Controle',admin:true}]},
+    {id:'mod15',n:'Controle',admin:true},
+    {id:'mod28',n:'Firewall de Domínios',admin:true}]},
   {g:'Particular',e:'🏠',c:'#af52de',itens:[
     {id:'mod12',n:'Leilão de imóveis',admin:true},
     {id:'mod11',n:'Energia solar',admin:true}]}
@@ -3807,7 +3808,7 @@ function renderModuloNav(){
     {id:'mod25', icon:'💬', label:'Chat'}
   ];
   // Mapeamento id antigo -> novo
-  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13','mod14':'mod14','mod15':'mod15','mod16':'mod16','mod17':'mod17','mod22':'mod22','mod18':'mod18','mod19':'mod19','mod20':'mod20','mod21':'mod17','mod23':'mod23','mod24':'mod24','mod25':'mod25','mod27':'mod27'};
+  var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13','mod14':'mod14','mod15':'mod15','mod16':'mod16','mod17':'mod17','mod22':'mod22','mod18':'mod18','mod19':'mod19','mod20':'mod20','mod21':'mod17','mod23':'mod23','mod24':'mod24','mod25':'mod25','mod27':'mod27','mod28':'mod28'};
   // Admin ve tudo; outros so veem abas permitidas
   var MODULOS=TODOS_MODULOS;
   if(STATE.roleLogado!=='admin' && STATE.abasPermitidas && STATE.abasPermitidas.length>0){
@@ -4430,7 +4431,7 @@ var RPP_SUPORTE=[['sup_email','📧 E-mail'],['sup_windows','🪟 Windows'],['su
 function rppEhSuporte(id){return /^sup_/.test(String(id||''));}
 function rppNomeTela(id){
   if(rppEhSuporte(id)){var x=RPP_SUPORTE.filter(function(s){return s[0]===id;})[0];return x?x[1].replace(/^\S+\s/,'Suporte › '):'Suporte técnico';}
-  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod26:'Reativação WhatsApp',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod23:'Conciliação contas a Pagar',mod27:'Baixa Contas a Pagar',mod17:'Baixa Contas a Receber',mod22:'Pagamentos (gerar PIX / link)',mod15:'Controle',mod18:'Reportar Problema',mod25:'Chat',ext:'Extensão do Chrome',outro:'Outra / não sei'};
+  var nomes={inicio:'Início',frete:'Frete',mod10:'Cotações',mod2:'Análise de Crédito',mod7:'Norma NBR 9050',mod8:'Produtos',mod9:'Licitação',mod26:'Reativação WhatsApp',mod3:'Ace IA',mod4:'Cotação avulsa',mod5:'Modelo em Teste',mod11:'Energia solar',mod12:'Leilão de imóveis',mod13:'Formação de preço',mod20:'Cotação compra',mod14:'Lançamento de despesas',mod16:'Lançamento de frete',mod23:'Conciliação contas a Pagar',mod27:'Baixa Contas a Pagar',mod17:'Baixa Contas a Receber',mod22:'Pagamentos (gerar PIX / link)',mod15:'Controle',mod18:'Reportar Problema',mod25:'Chat',mod28:'Firewall de Domínios',ext:'Extensão do Chrome',outro:'Outra / não sei'};
   return nomes[id]||id||'?';
 }
 
@@ -18190,6 +18191,8 @@ function renderApp(){
     main.appendChild(renderFinanceiro());
   } else if(STATE.modulo==='mod15'&&STATE.roleLogado==='admin'){
     main.appendChild(renderControle());
+  } else if(STATE.modulo==='mod28'&&STATE.roleLogado==='admin'){
+    main.appendChild(renderFirewall());
   } else if(STATE.modulo==='mod16'&&STATE.roleLogado==='admin'){
     main.appendChild(renderFretes());
   } else if(STATE.modulo==='mod19'&&STATE.roleLogado==='admin'){
@@ -23946,6 +23949,242 @@ function mostrarHistoricoMod5(){
 function novaConsultaMod5(){
   STATE.modulo='mod5';
   render();
+}
+
+
+// ============================================================
+// FIREWALL DE DOMINIOS - aba T.I. (mod28, admin-only)
+// ============================================================
+// Lista regras e logs do Firebase. A extensao ouve essas regras e bloqueia
+// os dominios localmente em cada maquina.
+// Paths Firebase:
+//   /firewall/regras/{id}      -> {dominio, acao: 'block'|'allow', perfil, criadoEm}
+//   /firewall/perfis/{id}      -> {nome, dominiosBloqueados:[], dominiosLiberados:[]}
+//   /firewall/maquinas/{host}  -> {usuario, lastSeen, perfil}
+//   /firewall/logs/{id}        -> {hora, hostname, usuario, dominio, url, acao}
+
+var FIREBASE_FW_PATH='firewall';
+
+// Perfis padrao (criados na primeira execucao se nao existirem)
+var FW_PERFIS_PADRAO = {
+  'vendedor': {
+    nome: 'Vendedor padrão (CENPROT ok, sistemas fiscais bloqueados)',
+    bloqueados: [
+      'cav.receita.fazenda.gov.br',
+      'cav1.receita.fazenda.gov.br',
+      'login.esocial.gov.br',
+      'www.sefaz.go.gov.br',
+      'www.pgfn.fazenda.gov.br',
+      'www8.receita.fazenda.gov.br',
+      'internetbanking.sicoob.com.br'
+    ],
+    liberados: [
+      'site.cenprotnacional.org.br',
+      'pesquisaprotesto.com.br',
+      'www.bling.com.br',
+      'rauldneto.github.io',
+      'web.whatsapp.com'
+    ]
+  },
+  'admin': {
+    nome: 'Administrador (sem bloqueios)',
+    bloqueados: [],
+    liberados: []
+  }
+};
+
+async function fwCarregarRegras(){
+  try{
+    var r=await fetch(FIREBASE_DB+'/'+FIREBASE_FW_PATH+'.json');
+    return r.ok?(await r.json())||{}:{};
+  }catch(e){return {};}
+}
+async function fwSalvarPerfil(id,perfil){
+  await fetch(FIREBASE_DB+'/'+FIREBASE_FW_PATH+'/perfis/'+id+'.json',{
+    method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(perfil)
+  });
+}
+async function fwAtribuirPerfil(hostname,perfilId){
+  await fetch(FIREBASE_DB+'/'+FIREBASE_FW_PATH+'/maquinas/'+hostname+'/perfil.json',{
+    method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(perfilId)
+  });
+}
+async function fwLimparLogs(){
+  await fetch(FIREBASE_DB+'/'+FIREBASE_FW_PATH+'/logs.json',{method:'DELETE'});
+}
+
+function renderFirewall(){
+  var wrap=document.createElement('div');
+  wrap.style.cssText='padding:20px;max-width:1100px;margin:0 auto';
+
+  wrap.innerHTML=
+    '<div style="background:linear-gradient(135deg,#5856d6,#4a3fa8);color:#fff;border-radius:0 0 14px 14px;padding:16px 20px;margin-bottom:20px">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><i class="ti ti-shield-lock" style="font-size:22px"></i>'
+    +'<span style="font-size:17px;font-weight:700">Firewall de Domínios</span></div>'
+    +'<div style="font-size:12px;opacity:.9">Controle de acesso dos colaboradores · Extensão age como firewall local em cada máquina</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">'
+    +'<button data-aba="maquinas" class="fwAba" style="background:#5856d6;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-device-desktop"></i> Máquinas</button>'
+    +'<button data-aba="perfis" class="fwAba" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-shield"></i> Perfis de bloqueio</button>'
+    +'<button data-aba="logs" class="fwAba" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-list"></i> Log de navegação</button>'
+    +'</div>'
+    +'<div id="fwConteudo"><p style="font-size:13px;color:#94a3b8">Carregando firewall...</p></div>';
+
+  var STATE_FW={aba:'maquinas',dados:{}};
+
+  async function carregar(){
+    STATE_FW.dados=await fwCarregarRegras();
+    // Inicializa perfis padrao se nao existirem
+    if(!STATE_FW.dados.perfis){
+      for(var pid in FW_PERFIS_PADRAO){
+        await fwSalvarPerfil(pid,FW_PERFIS_PADRAO[pid]);
+      }
+      STATE_FW.dados=await fwCarregarRegras();
+    }
+    desenhar();
+  }
+
+  function desenhar(){
+    var cont=wrap.querySelector('#fwConteudo');
+    if(STATE_FW.aba==='maquinas') cont.innerHTML=htmlMaquinas();
+    else if(STATE_FW.aba==='perfis') cont.innerHTML=htmlPerfis();
+    else cont.innerHTML=htmlLogs();
+    bindAcoes();
+  }
+
+  function htmlMaquinas(){
+    var m=STATE_FW.dados.maquinas||{};
+    var perfis=STATE_FW.dados.perfis||{};
+    var perfisOpts=Object.keys(perfis).map(function(k){return '<option value="'+k+'">'+perfis[k].nome+'</option>';}).join('');
+    var linhas=Object.keys(m).map(function(host){
+      var mq=m[host]||{};
+      var lastSeen=mq.lastSeen?new Date(mq.lastSeen).toLocaleString('pt-BR'):'-';
+      var statusOn=mq.lastSeen&&(Date.now()-new Date(mq.lastSeen).getTime())<120000;
+      return '<tr style="border-bottom:1px solid #e2e8f0">'
+        +'<td style="padding:10px 12px;font-size:13px">'+(statusOn?'🟢':'⚫')+' '+host+'</td>'
+        +'<td style="padding:10px 12px;font-size:13px;color:#475569">'+(mq.usuario||'?')+'</td>'
+        +'<td style="padding:10px 12px;font-size:12px;color:#64748b">'+lastSeen+'</td>'
+        +'<td style="padding:10px 12px"><select data-host="'+host+'" class="fwPerfilSel" style="border:1.5px solid #cbd5e1;border-radius:6px;padding:6px 10px;font-size:12px;background:#fff">'
+        +'<option value="">— sem perfil —</option>'
+        +perfisOpts.replace('value="'+(mq.perfil||'')+'"','value="'+(mq.perfil||'')+'" selected')
+        +'</select></td>'
+        +'</tr>';
+    }).join('');
+    if(!linhas) linhas='<tr><td colspan="4" style="padding:30px;text-align:center;color:#94a3b8;font-size:13px">Nenhuma máquina conectada ainda. Instale a extensão 2.4.0+ nas máquinas dos colaboradores.</td></tr>';
+    return '<div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;overflow:hidden">'
+      +'<table style="width:100%;border-collapse:collapse">'
+      +'<thead style="background:#f8fafc"><tr>'
+      +'<th style="padding:11px 12px;text-align:left;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase">Máquina</th>'
+      +'<th style="padding:11px 12px;text-align:left;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase">Colaborador</th>'
+      +'<th style="padding:11px 12px;text-align:left;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase">Última atividade</th>'
+      +'<th style="padding:11px 12px;text-align:left;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase">Perfil aplicado</th>'
+      +'</tr></thead><tbody>'+linhas+'</tbody></table>'
+      +'</div>';
+  }
+
+  function htmlPerfis(){
+    var perfis=STATE_FW.dados.perfis||{};
+    var html='';
+    Object.keys(perfis).forEach(function(pid){
+      var p=perfis[pid]||{bloqueados:[],liberados:[]};
+      html+='<div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:12px">'
+        +'<div style="font-size:14px;font-weight:700;color:#5856d6;margin-bottom:10px">'+p.nome+'</div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+        +'<div><div style="font-size:11px;font-weight:700;color:#991b1b;text-transform:uppercase;margin-bottom:6px">🚫 Bloqueados ('+(p.bloqueados||[]).length+')</div>'
+        +'<textarea data-perfil="'+pid+'" data-tipo="bloqueados" rows="6" style="width:100%;border:1.5px solid #fca5a5;border-radius:8px;padding:8px 10px;font-size:12px;font-family:monospace;resize:vertical;box-sizing:border-box">'+(p.bloqueados||[]).join('\n')+'</textarea></div>'
+        +'<div><div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;margin-bottom:6px">✅ Liberados ('+(p.liberados||[]).length+')</div>'
+        +'<textarea data-perfil="'+pid+'" data-tipo="liberados" rows="6" style="width:100%;border:1.5px solid #86efac;border-radius:8px;padding:8px 10px;font-size:12px;font-family:monospace;resize:vertical;box-sizing:border-box">'+(p.liberados||[]).join('\n')+'</textarea></div>'
+        +'</div>'
+        +'<button class="fwSalvarPerfil" data-perfil="'+pid+'" style="margin-top:10px;background:#5856d6;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer">💾 Salvar perfil</button>'
+        +'</div>';
+    });
+    return html;
+  }
+
+  function htmlLogs(){
+    var logs=STATE_FW.dados.logs||{};
+    var arr=Object.keys(logs).map(function(k){return logs[k];}).sort(function(a,b){return (b.hora||'').localeCompare(a.hora||'');}).slice(0,100);
+    var linhas=arr.map(function(l){
+      var ic=l.acao==='bloqueado'?'🚫':'✅';
+      var co=l.acao==='bloqueado'?'#991b1b':'#166534';
+      var dt=l.hora?new Date(l.hora).toLocaleString('pt-BR'):'-';
+      return '<tr style="border-bottom:1px solid #e2e8f0">'
+        +'<td style="padding:8px 10px;font-size:11px;color:#64748b;white-space:nowrap">'+dt+'</td>'
+        +'<td style="padding:8px 10px;font-size:12px">'+(l.hostname||'?')+'</td>'
+        +'<td style="padding:8px 10px;font-size:12px;color:#475569">'+(l.usuario||'?')+'</td>'
+        +'<td style="padding:8px 10px;font-size:12px;color:'+co+';font-family:monospace">'+ic+' '+(l.dominio||'?')+'</td>'
+        +'</tr>';
+    }).join('');
+    if(!linhas) linhas='<tr><td colspan="4" style="padding:30px;text-align:center;color:#94a3b8;font-size:13px">Nenhum log de navegação ainda. A extensão enviará conforme os colaboradores navegarem.</td></tr>';
+    return '<div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:10px">'
+      +'<table style="width:100%;border-collapse:collapse">'
+      +'<thead style="background:#f8fafc"><tr>'
+      +'<th style="padding:11px 10px;text-align:left;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase">Hora</th>'
+      +'<th style="padding:11px 10px;text-align:left;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase">Máquina</th>'
+      +'<th style="padding:11px 10px;text-align:left;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase">Colab</th>'
+      +'<th style="padding:11px 10px;text-align:left;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase">Domínio</th>'
+      +'</tr></thead><tbody>'+linhas+'</tbody></table>'
+      +'</div>'
+      +'<button id="fwLimparLogs" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">🗑️ Limpar logs</button>';
+  }
+
+  function bindAcoes(){
+    // Trocar aba
+    wrap.querySelectorAll('.fwAba').forEach(function(b){
+      b.onclick=function(){
+        STATE_FW.aba=b.getAttribute('data-aba');
+        wrap.querySelectorAll('.fwAba').forEach(function(bb){
+          var ativo=bb.getAttribute('data-aba')===STATE_FW.aba;
+          bb.style.background=ativo?'#5856d6':'#f1f5f9';
+          bb.style.color=ativo?'#fff':'#475569';
+          bb.style.border=ativo?'none':'1.5px solid #e2e8f0';
+        });
+        desenhar();
+      };
+    });
+    // Atribuir perfil a maquina
+    wrap.querySelectorAll('.fwPerfilSel').forEach(function(s){
+      s.onchange=async function(){
+        var host=s.getAttribute('data-host');
+        await fwAtribuirPerfil(host,s.value);
+        s.style.background='#dcfce7';
+        setTimeout(function(){s.style.background='#fff';},1500);
+      };
+    });
+    // Salvar perfil
+    wrap.querySelectorAll('.fwSalvarPerfil').forEach(function(b){
+      b.onclick=async function(){
+        var pid=b.getAttribute('data-perfil');
+        var tB=wrap.querySelector('textarea[data-perfil="'+pid+'"][data-tipo="bloqueados"]');
+        var tL=wrap.querySelector('textarea[data-perfil="'+pid+'"][data-tipo="liberados"]');
+        var bloqueados=tB.value.split('\n').map(function(x){return x.trim();}).filter(Boolean);
+        var liberados=tL.value.split('\n').map(function(x){return x.trim();}).filter(Boolean);
+        var atual=STATE_FW.dados.perfis[pid]||{};
+        atual.bloqueados=bloqueados; atual.liberados=liberados;
+        await fwSalvarPerfil(pid,atual);
+        b.innerHTML='✅ Salvo!'; b.style.background='#16a34a';
+        setTimeout(function(){b.innerHTML='💾 Salvar perfil';b.style.background='#5856d6';},1500);
+      };
+    });
+    var bL=wrap.querySelector('#fwLimparLogs');
+    if(bL) bL.onclick=async function(){
+      if(!confirm('Apagar TODOS os logs de navegação? (não afeta os bloqueios)')) return;
+      await fwLimparLogs();
+      STATE_FW.dados.logs={};
+      desenhar();
+    };
+  }
+
+  carregar();
+  // Auto-refresh a cada 15s
+  var refreshId=setInterval(function(){
+    if(STATE.modulo!=='mod28'){clearInterval(refreshId);return;}
+    carregar();
+  },15000);
+
+  return wrap;
 }
 
 </script>
