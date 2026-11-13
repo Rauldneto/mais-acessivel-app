@@ -17686,10 +17686,68 @@ function blgPodePag(){try{return typeof iniPode==='function'?iniPode('mod22'):tr
 function blgDataHora(ms){var d=new Date(ms);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
 // PIX já gerado (de outra vez/tela/aparelho) que ainda vale: volta a aparecer com o QR Code e o acompanhamento
 function blgRestaurarPix(x){
-  var k=blgChave(x);if(BLG.pix[k]||!x.pixAtivos||!x.pixAtivos.length||BLG.demo)return;
+  var k=blgChave(x);if(BLG.pix[k]||BLG.pixFechado[k]||!x.pixAtivos||!x.pixAtivos.length||BLG.demo)return;
+  if(blgParcelas(x).length>1||(x.extras||[]).length)return;   // várias cobranças: mostra a lista e o PIX de cada uma
   var v=x.pixAtivos[0];
   BLG.pix[k]={valor:v.valor,copia:v.copia,txid:v.txid,curto:v.curto||'',validade:blgDataHora(v.validoAte),restaurado:true,criado:v.criado,usuario:v.usuario};
   blgAcompanhar(k,v.txid);
+}
+// ---- cobranças do pedido/nota: cada parcela é uma cobrança (PIX hoje + PIX daqui a 10 dias = 2 PIX) ----
+BLG.pixFechado=BLG.pixFechado||{};BLG.extraForm=BLG.extraForm||{};
+function blgParcelas(x){
+  var L=[];
+  if(x.tipo==='nota'&&(x.contas||[]).length){
+    x.contas.forEach(function(c){L.push({chave:'c'+c.id,contaId:c.id,valor:Number(c.valor||0),venc:c.venc||'',t:c.t||((x.formas||[]).indexOf('pix')>=0?'pix':''),forma:c.forma||x.formaNome||'',boleto:c.boleto||''});});
+  }else if((x.parcelas||[]).length){
+    var pago=Number(x.pago||0);
+    x.parcelas.forEach(function(c){var v=Number(c.valor||0),q=Math.min(pago,v);pago=Math.round((pago-q)*100)/100;
+      L.push({chave:'v'+c.venc+'|'+v.toFixed(2),valor:v,venc:c.venc||'',t:c.t||'',forma:c.forma||'',pago:q>=v-0.009,pagoParte:q>0.009&&q<v-0.009?q:0});});
+  }else{
+    var falta=Math.max(0,Number(x.aReceber||0)-Number(x.pago||0));
+    if(falta>0.009)L.push({chave:'u',valor:falta,venc:x.venc||'',t:blgTemPix(x)?'pix':((x.formas||[])[0]||''),forma:x.formaNome||''});
+  }
+  L.forEach(function(c){c.pix=(x.pixAtivos||[]).filter(function(v){return v.parcela===c.chave||(!v.parcela&&L.length===1&&!v.extra);})[0]||null;});
+  return L;
+}
+function blgFormaTxt(t,f){return t==='pix'?'PIX':t==='boleto'?'Boleto':t==='credito'?'Cartão de crédito':(f||'—');}
+function blgPainelCobrancas(x){
+  var k=blgChave(x),L=blgParcelas(x),ex=x.extras||[],h='';
+  if(L.length){
+    h+='<div style="margin-top:12px;font-weight:700;font-size:12.5px">'+(L.length>1?'Cobranças ('+L.length+' parcelas)':'Cobrança')+'</div>';
+    L.forEach(function(c,i){
+      var acao='';
+      if(c.pago)acao='<span style="color:#15803d;font-weight:700">✅ Paga</span>';
+      else if(c.t==='pix'&&c.pix)acao='<button class="blg-btn sec" style="height:26px;width:auto;margin:0;padding:0 8px;white-space:nowrap;flex-shrink:0;font-size:11.5px" data-a="verPixParc" data-k="'+blgEsc(c.pix.txid)+'">Ver PIX</button>';
+      else if(c.t==='pix')acao='<button class="blg-btn" style="height:26px;width:auto;margin:0;padding:0 8px;white-space:nowrap;flex-shrink:0;font-size:11.5px" data-a="gerarPix" data-k="'+blgEsc(c.chave)+'"'+((BLG.pixAtivo||BLG.demo)&&!(BLG.pix[k]&&BLG.pix[k].gerando)?'':' disabled')+'>Gerar PIX</button>';
+      else if(c.t==='boleto'&&c.boleto)acao='<a class="blg-btn sec" style="height:26px;width:auto;margin:0;padding:0 8px;white-space:nowrap;flex-shrink:0;font-size:11.5px;display:inline-flex;align-items:center;text-decoration:none" href="'+blgEsc(c.boleto)+'" target="_blank">📄 Abrir boleto</a>';
+      else if(c.t==='boleto')acao='<span style="color:#666;font-size:11px">Boleto (sai pelo Bling)</span>';
+      else if(c.t==='credito')acao='<span style="color:#666;font-size:11px">Link de cartão em breve</span>';
+      h+='<div class="ln" style="align-items:center;gap:6px;padding:6px 0;border-bottom:1px dashed #e5e7eb"><span style="line-height:1.35">'+(L.length>1?'<b>'+(i+1)+'ª</b> · ':'')+(c.venc?'venc. '+blgData(c.venc)+' · ':'')+'<b style="color:#111">R$ '+blgMoeda(c.valor)+'</b><br><small style="color:#666">'+blgEsc(blgFormaTxt(c.t,c.forma))+(c.pix?' · PIX ativo até '+blgDataHora(c.pix.validoAte):'')+(c.pagoParte?' · pago R$ '+blgMoeda(c.pagoParte):'')+'</small></span>'+acao+'</div>';
+    });
+    if(L.length>1)h+='<div class="nota">Cada parcela tem o seu PIX, com validade até o vencimento dela + 1 dia útil. Quando o cliente paga, o app dá baixa só naquela parcela.</div>';
+  }
+  if(ex.length){
+    h+='<div style="margin-top:10px;font-weight:700;font-size:12.5px">Cobranças extras</div>';
+    ex.forEach(function(e){var pv=(x.pixAtivos||[]).filter(function(v){return v.parcela==='x'+e.contaId;})[0];
+      h+='<div class="ln" style="align-items:center;gap:6px;padding:6px 0;border-bottom:1px dashed #e5e7eb"><span style="line-height:1.35"><b style="color:#111">R$ '+blgMoeda(e.valor)+'</b> · '+(e.forma==='pix'?'PIX':'Boleto')+' · venc. '+blgData(e.venc)+(e.motivo?'<br><small style="color:#666">'+blgEsc(e.motivo)+'</small>':'')+'</span>'+
+        (pv?'<button class="blg-btn sec" style="height:26px;width:auto;margin:0;padding:0 8px;white-space:nowrap;flex-shrink:0;font-size:11.5px" data-a="verPixParc" data-k="'+blgEsc(pv.txid)+'">Ver PIX</button>':'<span style="color:#666;font-size:11px">'+(e.forma==='pix'?'sem PIX ativo':'boleto no Bling')+'</span>')+'</div>';});
+  }
+  if(BLG.extraForm[k]){
+    var f=BLG.extraForm[k];
+    h+='<div style="margin-top:12px;padding:10px;border:1px solid #d1fae5;border-radius:10px;background:#f0fdf4">'+
+      '<div style="font-weight:700;font-size:12.5px;margin-bottom:6px">➕ Nova cobrança (despesa extra)</div>'+
+      '<label for="blgExV">Valor (R$)</label><input id="blgExV" inputmode="decimal" placeholder="0,00" value="'+blgEsc(f.valor||'')+'">'+
+      '<label for="blgExM">O que é (aparece no Bling)</label><input id="blgExM" placeholder="Ex.: frete adicional, item a mais" value="'+blgEsc(f.motivo||'')+'">'+
+      '<label for="blgExD">Vencimento</label><input id="blgExD" type="date" value="'+blgEsc(f.venc||'')+'">'+
+      '<label>Como o cliente vai pagar</label><div style="display:flex;gap:6px;margin:4px 0 8px">'+
+        ['pix','boleto','cartao'].map(function(o){var nm=o==='pix'?'PIX':o==='boleto'?'Boleto':'Cartão';var dis=o==='cartao';return '<button class="blg-btn'+(f.forma===o?'':' sec')+'" style="height:30px;margin:0;flex:1;padding:0 4px;font-size:12px;white-space:nowrap" data-a="extraForma" data-k="'+o+'"'+(dis?' disabled title="Link de cartão: entra com a nova maquininha"':'')+'>'+nm+'</button>';}).join('')+'</div>'+'<div class="nota" style="margin-top:-4px">Link de cartão entra com a nova maquininha.</div>'+
+      '<div class="nota">O app cria a conta a receber no Bling (com o nº '+(x.tipo==='nota'?'da nota':'do pedido')+' no histórico) e gera '+(f.forma==='boleto'?'o boleto pela Bling Conta':'o PIX')+'. Quando o cliente pagar, a baixa é automática.</div>'+
+      '<button class="blg-btn" data-a="extraCriar"'+(f.criando?' disabled':'')+'>'+(f.criando?'<span class="blg-spin"></span> Criando…':'Criar cobrança')+'</button>'+
+      '<button class="blg-btn sec" data-a="extraFechar">Cancelar</button>'+
+      (f.erro?'<div class="blg-msg err" style="margin-top:8px">'+blgEsc(f.erro)+'</div>':'')+
+      (f.ok?'<div class="blg-msg ok" style="margin-top:8px">'+f.ok+'</div>':'')+'</div>';
+  }else h+='<button class="blg-btn sec" style="margin-top:12px" data-a="extraAbrir" title="Surgiu uma despesa nova depois (frete, item a mais…)? Gere outra cobrança por PIX ou boleto">➕ Nova cobrança (despesa extra)</button>';
+  return h;
 }
 function blgPainelPix(x){
   if(blgPag())blgRestaurarPix(x);
@@ -17712,7 +17770,7 @@ function blgPainelPix(x){
     return h+'</div>';
   }
   if(blgSit(x)==='pago'&&!pg.copia){
-    return h+'<div class="blg-msg ok" style="margin-top:12px">✅ <b>Já está pago</b> (R$ '+blgMoeda(x.pago)+'). Não dá para gerar outro PIX para '+(x.tipo==='nota'?'esta nota':'este pedido')+'.</div></div>';
+    return h+'<div class="blg-msg ok" style="margin-top:12px">✅ <b>Já está pago</b> (R$ '+blgMoeda(x.pago)+'). Se surgiu uma despesa nova, gere outra cobrança abaixo.</div>'+blgPainelCobrancas(x)+'</div>';
   }
   if(pg.cancelado){
     h+='<div class="blg-msg" style="margin-top:12px">🚫 <b>PIX de R$ '+blgMoeda(pg.valor)+' cancelado.</b> O QR Code não aceita mais pagamento e o app parou de conferir.</div>'+
@@ -17721,9 +17779,10 @@ function blgPainelPix(x){
     if(pg.pagoAgora)h+='<div class="blg-msg ok" style="margin-top:10px">✅ <b>PIX pago!</b> R$ '+blgMoeda(pg.valor)+' confirmado pelo Sicoob.</div>';
     else h+='<div class="nota" style="margin-top:8px"><span class="blg-spin"></span> Aguardando pagamento… (confere sozinho a cada 10 s)</div>';
     if(pg.restaurado)h+='<div class="nota" style="color:#111">ℹ️ Este PIX foi gerado em <b>'+blgDataHora(pg.criado)+'</b>'+(pg.usuario?' por '+blgEsc(pg.usuario):'')+' e <b>continua valendo</b> — pode reenviar o mesmo.</div>';
-    var outros=(x.pixAtivos||[]).filter(function(v){return v.txid!==pg.txid;});
+    var outros=(x.pixAtivos||[]).filter(function(v){return v.txid!==pg.txid&&(v.parcela||'')===(pg.parcela||'');});
     if(outros.length)h+='<div class="blg-msg" style="margin-top:8px;font-size:11.5px">⚠️ <b>Há mais '+outros.length+' PIX ativo(s)</b> para '+(x.tipo==='nota'?'esta nota':'este pedido')+' (o cliente pode pagar duas vezes):'+
       outros.map(function(v){return '<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;margin-top:4px">R$ '+blgMoeda(v.valor)+' · '+blgDataHora(v.criado)+' <button class="blg-btn sec" style="height:24px;width:auto;margin:0;padding:0 8px" data-a="cancelarOutro" data-k="'+blgEsc(v.txid)+'">Cancelar</button></div>';}).join('')+'</div>';
+    if(pg.rotulo)h+='<div class="nota" style="color:#111;margin-top:6px">📌 '+blgEsc(pg.rotulo)+'</div>';
     h+='<div class="qr" id="blgQr"></div>'+
        (blgLinkPix(pg)?'<label for="blgMsg">Mensagem para o cliente (com o link de pagamento)</label><textarea id="blgMsg" style="height:150px;font-family:arial,sans-serif;font-size:11px">'+blgEsc(pg.msg!=null?pg.msg:blgMsgPix(x,pg))+'</textarea>'+
          '<button class="blg-btn" data-a="copiarMsg" title="Copia a mensagem com o link para colar no WhatsApp (Ctrl+V)">'+BLG_IC.copiar+' Copiar mensagem</button>'+
@@ -17735,22 +17794,14 @@ function blgPainelPix(x){
        '<button class="blg-btn" data-a="copiarImg" title="Copia a imagem do QR Code (com valor e pedido/nota) para colar no WhatsApp com Ctrl+V">'+BLG_IC.qr+' Copiar QR Code</button>'+
        '<div class="nota">Valor: <b style="color:#111">R$ '+blgMoeda(pg.valor)+'</b> · vale até '+blgEsc(pg.validade||'hoje 23:59')+'.'+(BLG.demo?'<br><b style="color:#b45309">Prévia: código de exemplo, não paga nada.</b>':'')+'</div>'+
        (pg.pagoAgora?'':'<button class="blg-btn sec" data-a="cancelarPix" style="color:#dc2626;border-color:#f3c2bd" title="Cancela o PIX no Sicoob: o QR Code e o código param de aceitar pagamento e o app para de conferir">'+(pg.cancelando?'<span class="blg-spin"></span> Cancelando…':'🚫 Cancelar este PIX')+'</button>')+
-       (pg.erroCancelar?'<div class="blg-msg err" style="margin-top:8px">'+blgEsc(pg.erroCancelar)+'</div>':'');
-  }else if(!blgTemPix(x)){
-    h+='<div class="blg-msg" style="margin-top:12px">💳 A forma de pagamento '+(x.tipo==='nota'?'desta nota':'deste pedido')+' é <b>'+blgEsc(x.formaNome||'cartão de crédito')+'</b>, não PIX — por isso não dá para gerar PIX aqui.</div>'+
-       '<button class="blg-btn sec" data-a="credSel" disabled>'+BLG_IC.card+' Link de crédito (em breve)</button>';
+       (pg.erroCancelar?'<div class="blg-msg err" style="margin-top:8px">'+blgEsc(pg.erroCancelar)+'</div>':'')+
+       '<button class="blg-btn sec" data-a="fecharPix" title="Volta para a lista de cobranças (o PIX continua valendo)">‹ Ver todas as cobranças</button>';
   }else{
-    var faltaG=Math.max(0,Number(x.aReceber||0)-Number(x.pago||0));
-    h+='<div class="ln" style="margin-top:10px;font-size:13px"><span>Valor do PIX</span><b>R$ '+blgMoeda(faltaG)+'</b></div>'+
-       '<div class="nota">É sempre o valor '+(x.pago>0?'que falta pagar d':'d')+(x.tipo==='nota'?'a nota fiscal':'o pedido')+'. Vale até '+(x.venc?'o vencimento ('+blgData(x.venc)+')':'hoje')+' + 1 dia útil.</div>'+
-       '<button class="blg-btn" data-a="gerarPix"'+(pixAtivo&&!pg.gerando?'':' disabled')+'>'+(pg.gerando?'<span class="blg-spin"></span> Gerando…':BLG_IC.pix+' Gerar PIX')+'</button>'+
-       '<button class="blg-btn sec" data-a="credSel" disabled>'+BLG_IC.card+' Link de crédito</button>'+
-       (pixAtivo?'':'<div class="nota">⏳ O PIX pelo Sicoob é ativado na próxima etapa (certificado no Worker). Por enquanto você já confere a lista.</div>')+
+    h+=blgPainelCobrancas(x)+(BLG.pixAtivo||BLG.demo?'':'<div class="nota">⏳ O PIX pelo Sicoob é ativado na próxima etapa (certificado no Worker).</div>')+
        (pg.erro?'<div class="blg-msg err" style="margin-top:10px">'+blgEsc(pg.erro)+'</div>':'');
   }
   return h+'</div>';
 }
-
 function blgAcompanhar(k,txid){
   var ini=Date.now(),t=setInterval(function(){
     var p=BLG.pix[k];
@@ -17784,6 +17835,7 @@ var PAG_SITE='https://maisacessivel.pages.dev';
 function blgLinkPix(p){return p&&p.curto?((BLG.cfg&&BLG.cfg.sitePix)||PAG_SITE).replace(/\/+$/,'')+'/p/'+p.curto:'';}
 function blgMsgPix(x,p){
   var nome=blgNomeCliente(x),ref=x.tipo==='nota'?'da *nota fiscal nº '+x.numero+'*':'do *pedido nº '+x.numero+'*';
+  if(p.rotulo)ref+=' ('+String(p.rotulo).charAt(0).toLowerCase()+String(p.rotulo).slice(1)+')';
   return 'Olá'+(nome?', '+nome:'')+'! 👋\n\n'+
     'Segue o link seguro para pagamento '+ref+(nome||!x.cliente?'':' ('+x.cliente+')')+' — *Mais Acessível*.\n\n'+
     '💰 *Valor:* R$ '+blgMoeda(p.valor)+'\n'+
@@ -17987,7 +18039,7 @@ function blgAcao(a){
   }
   if(a==='abrirBling'&&x){window.open(x.tipo==='nota'?'https://www.bling.com.br/notas.fiscais.php#edit/'+x.id:'https://www.bling.com.br/vendas.php#edit/'+x.id,'_blank');return;}
   if(a==='irPagamentos'){var keep=BLG.sel;irParaModulo('mod22');if(keep){BLG.sel=keep;blgDraw();}return;}
-  if(!blgPag()&&['pixSel','gerarPix','credSel','novoPix','cancelarPix','cancelarOutro','wpp','wppCodigo','baixarQr','copiar','copiarImg','copiarMsg','copiarCod','verLink'].indexOf(a)>=0)return;
+  if(!blgPag()&&['verPixParc','fecharPix','extraAbrir','extraFechar','extraForma','extraCriar','pixSel','gerarPix','credSel','novoPix','cancelarPix','cancelarOutro','wpp','wppCodigo','baixarQr','copiar','copiarImg','copiarMsg','copiarCod','verLink'].indexOf(a)>=0)return;
   if(a==='pixSel'){if(!x)return;blgDraw();var i=BLG.root.querySelector('#blgValor');if(i){i.focus();i.select();}return;}
   if(a==='novoPix'&&x){
     var pn=BLG.pix[BLG.sel];
@@ -18027,15 +18079,46 @@ function blgAcao(a){
   if(a==='copiarImg'&&x){var pi=BLG.pix[BLG.sel];if(!pi)return;blgCopiarImagem(x,pi);return;}
   if(a==='copiar'){var t=BLG.root.querySelector('#blgCopia');if(t){t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand('copy');}var bt=BLG.root.querySelector('[data-a="copiar"]');if(bt){bt.innerHTML='✓ Código copiado';setTimeout(function(){if(bt)bt.innerHTML=BLG_IC.copiar+' Copiar só o código';},1800);}}return;}
   if(a==='wpp'&&x){var p=BLG.pix[BLG.sel];if(!p)return;blgWhatsPix(x,p);return;}
+  if(a==='fecharPix'&&x){var kf=BLG.sel;BLG.pixFechado[kf]=1;delete BLG.pix[kf];blgDraw();return;}
+  if(a==='verPixParc'&&x){var v=(x.pixAtivos||[]).filter(function(q){return q.txid===BLG._k;})[0];if(!v)return;var kv=BLG.sel;
+    var pr=blgParcelas(x).filter(function(c){return c.chave===v.parcela;})[0];
+    BLG.pix[kv]={valor:v.valor,copia:v.copia,txid:v.txid,curto:v.curto||'',validade:blgDataHora(v.validoAte),restaurado:true,criado:v.criado,usuario:v.usuario,parcela:v.parcela||'',
+      rotulo:v.extra?'Cobrança extra':pr&&blgParcelas(x).length>1?'Parcela com vencimento '+blgData(pr.venc):''};
+    blgAcompanhar(kv,v.txid);blgDraw();return;}
+  if(a==='extraAbrir'&&x){BLG.extraForm[BLG.sel]={forma:'pix',venc:new Date(Date.now()-3*3600e3).toISOString().slice(0,10)};blgDraw();var iv=BLG.root.querySelector('#blgExV');if(iv)iv.focus();return;}
+  if(a==='extraFechar'&&x){delete BLG.extraForm[BLG.sel];blgDraw();return;}
+  var exLer=function(f){var g=function(id){var e=BLG.root.querySelector(id);return e?e.value:'';};f.valor=g('#blgExV');f.motivo=g('#blgExM');f.venc=g('#blgExD');};
+  if(a==='extraForma'&&x){var fe=BLG.extraForm[BLG.sel];if(!fe)return;exLer(fe);fe.forma=BLG._k;blgDraw();return;}
+  if(a==='extraCriar'&&x){var kx=BLG.sel,fx=BLG.extraForm[kx];if(!fx||fx.criando)return;exLer(fx);fx.erro='';fx.ok='';
+    var vx=blgValorNum(fx.valor);if(!(vx>0)){fx.erro='Informe o valor.';blgDraw();return;}
+    if(!fx.motivo.trim()){fx.erro='Diga o que é a cobrança (ex.: frete adicional).';blgDraw();return;}
+    if(!confirm('Criar no Bling uma conta a receber de R$ '+blgMoeda(vx)+' ('+(fx.forma==='boleto'?'boleto Bling Conta':'PIX')+') para '+(x.cliente||'o cliente')+'?'))return;
+    if(BLG.demo){fx.ok='Prévia: nada foi criado.';blgDraw();return;}
+    fx.criando=true;blgDraw();
+    blgApi('/cobranca/extra',{method:'POST',body:{tipo:x.tipo,id:x.id,numero:x.numero,contatoId:x.contatoId||0,cliente:x.cliente||'',doc:x.doc||'',valor:vx,venc:fx.venc,motivo:fx.motivo,forma:fx.forma,usuario:STATE.usuarioLogado||''}}).then(function(r){
+      fx.criando=false;
+      if(!r||!r.ok){fx.erro=(r&&r.erro)||'Não criou a cobrança.';blgDraw();return;}
+      x.extras=(x.extras||[]).concat([{contaId:r.contaId,valor:vx,venc:r.venc,forma:fx.forma,motivo:fx.motivo}]);
+      if(fx.forma==='pix'&&r.txid){delete BLG.extraForm[kx];
+        x.pixAtivos=(x.pixAtivos||[]).concat([{txid:r.txid,curto:r.curto||'',valor:vx,criado:Date.now(),copia:r.copiaECola,validoAte:r.expira,parcela:'x'+r.contaId,extra:true}]);
+        BLG.pix[kx]={valor:vx,copia:r.copiaECola,validade:r.validade,txid:r.txid,curto:r.curto||'',parcela:'x'+r.contaId,rotulo:'Cobrança extra: '+fx.motivo};blgAcompanhar(kx,r.txid);}
+      else fx.ok=r.boleto?'✅ Boleto criado na Bling Conta. <a href="'+blgEsc(r.boleto)+'" target="_blank" style="color:#15803d;font-weight:700">Abrir boleto</a>':'✅ Conta criada no Bling. '+blgEsc(r.aviso||'');
+      blgDraw();blgCarregar(true);
+    }).catch(function(e){fx.criando=false;fx.erro='Sem conexão: '+(e&&e.message||e);blgDraw();});return;}
   if(a==='gerarPix'&&x){
-    if(!blgTemPix(x)){BLG.pix[BLG.sel]={erro:'A forma de pagamento não é PIX.'};blgDraw();return;}
-    var falta=Math.max(0,Number(x.aReceber||0)-Number(x.pago||0));var val=Math.round(falta*100)/100;   // valor fixo: sempre o que falta do pedido/nota (sem edição)
-    if(!(val>0)){BLG.pix[BLG.sel]={erro:'Não há valor a receber neste pedido/nota.'};blgDraw();return;}
-    if(val>falta+0.009){BLG.pix[BLG.sel]={erro:'O valor passa do que falta receber (R$ '+blgMoeda(falta)+').'};blgDraw();return;}
-    if(BLG.demo){BLG.pix[BLG.sel]={curto:'DEMO01',valor:val,copia:'00020101021226870014br.gov.bcb.pix2565pix.exemplo.com.br/qr/v3/PREVIA-'+x.numero+'-SEM-VALOR-REAL5204000053039865802BR5915MAIS ACESSIVEL6007GOIANIA62070503***6304ABCD',validade:'hoje 23:59'};blgDraw();return;}
-    var k=BLG.sel;BLG.pix[k]={gerando:true};blgDraw();
-    blgApi('/pix',{method:'POST',body:{tipo:x.tipo,id:x.id,numero:x.numero,valor:val,venc:x.venc||'',cliente:x.cliente||'',doc:x.doc||'',total:x.total||0,aReceber:x.aReceber||0,contas:x.contas||[],usuario:STATE.usuarioLogado||''}}).then(function(r){
-      BLG.pix[k]=r&&r.ok?{valor:val,copia:r.copiaECola,validade:r.validade,txid:r.txid,curto:r.curto||''}:{erro:(r&&r.erro)||'Não gerou o PIX.'};blgDraw();
+    var Lp=blgParcelas(x),pc=Lp.filter(function(c){return c.chave===BLG._k;})[0]||(Lp.length===1?Lp[0]:null);
+    if(!pc){BLG.pix[BLG.sel]={erro:'Escolha a parcela.'};blgDraw();return;}
+    if(pc.t!=='pix'){BLG.pix[BLG.sel]={erro:'A forma de pagamento desta parcela não é PIX.'};blgDraw();return;}
+    var val=Math.round((pc.valor-(pc.pagoParte||0))*100)/100;   // valor fixo: o da parcela (sem edição)
+    if(!(val>0)){BLG.pix[BLG.sel]={erro:'Não há valor a receber nesta parcela.'};blgDraw();return;}
+    var rot=Lp.length>1?'Parcela com vencimento '+blgData(pc.venc):'';
+    if(BLG.demo){BLG.pix[BLG.sel]={curto:'DEMO01',valor:val,parcela:pc.chave,rotulo:rot,copia:'00020101021226870014br.gov.bcb.pix2565pix.exemplo.com.br/qr/v3/PREVIA-'+x.numero+'-SEM-VALOR-REAL5204000053039865802BR5915MAIS ACESSIVEL6007GOIANIA62070503***6304ABCD',validade:'hoje 23:59'};blgDraw();return;}
+    var k=BLG.sel;delete BLG.pixFechado[k];BLG.pix[k]={gerando:true};blgDraw();
+    blgApi('/pix',{method:'POST',body:{tipo:x.tipo,id:x.id,numero:x.numero,valor:val,venc:pc.venc||x.venc||'',cliente:x.cliente||'',doc:x.doc||'',total:x.total||0,aReceber:x.aReceber||0,contas:x.contas||[],
+      parcela:{chave:pc.chave,venc:pc.venc,valor:pc.valor,contaId:pc.contaId||0},nParcelas:Lp.length,usuario:STATE.usuarioLogado||''}}).then(function(r){
+      BLG.pix[k]=r&&r.ok?{valor:val,copia:r.copiaECola,validade:r.validade,txid:r.txid,curto:r.curto||'',parcela:pc.chave,rotulo:rot}:{erro:(r&&r.erro)||'Não gerou o PIX.'};
+      if(r&&r.ok)x.pixAtivos=(x.pixAtivos||[]).concat([{txid:r.txid,curto:r.curto||'',valor:val,criado:Date.now(),copia:r.copiaECola,validoAte:r.expira,parcela:pc.chave}]);
+      blgDraw();
       if(r&&r.ok&&r.txid)blgAcompanhar(k,r.txid);
     }).catch(function(e){BLG.pix[k]={erro:'Sem conexão: '+(e&&e.message||e)};blgDraw();});
     return;

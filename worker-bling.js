@@ -124,6 +124,7 @@ export default {
         const b = await req.json();
         return resp(await gerarPix(env, b || {}));
       }
+      if (url.pathname === '/cobranca/extra' && req.method === 'POST') return resp(await cobrancaExtra(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/pagamentos') {
         let acoes = (await env.BLING_KV.get('acoes', 'json')) || [];
         if (acoes.some(x => x.acao === 'erro')) { acoes = acoes.filter(x => x.acao !== 'erro'); await env.BLING_KV.put('acoes', JSON.stringify(acoes)); }
@@ -569,7 +570,7 @@ async function listarAbertos(env) {
       if (d) await env.BLING_KV.put(ck, JSON.stringify({ ts: Date.now(), d }), { expirationTtl: 3 * 3600 });
     } else faltaram++;
     if (!d) continue;
-    const parc = (d.parcelas || []).map(x => ({ valor: Number(x.valor || 0), venc: x.dataVencimento, forma: fp[x.formaPagamento && x.formaPagamento.id] }));
+    const parc = (d.parcelas || []).map(x => ({ valor: Number(x.valor || 0), venc: x.dataVencimento, forma: fp[x.formaPagamento && x.formaPagamento.id], formaId: (x.formaPagamento && x.formaPagamento.id) || 0 }));
     const tipos = [...new Set(parc.map(x => tipoForma(x.forma)).filter(Boolean))];
     if (!tipos.length) continue;
     itens.push({
@@ -580,6 +581,9 @@ async function listarAbertos(env) {
       vendedor: vend[d.vendedor && d.vendedor.id] || '', situacao: 'Em aberto', loja: (d.loja && d.loja.id) || 0,
       nf: (d.notaFiscal && d.notaFiscal.id) ? true : false,
       venc: parc.filter(x => tipoForma(x.forma)).map(x => x.venc).filter(Boolean).sort()[0] || '',
+      contatoId: (d.contato && d.contato.id) || 0,
+      // cada parcela é uma cobrança separada (ex.: PIX hoje + PIX daqui a 10 dias)
+      parcelas: parc.filter(x => tipoForma(x.forma)).map(x => ({ valor: r2(x.valor), venc: x.venc || '', t: tipoForma(x.forma), forma: (x.forma && x.forma.nome) || '' })).sort((a, b) => String(a.venc).localeCompare(String(b.venc))),
     });
   }
 
@@ -598,14 +602,14 @@ async function listarAbertos(env) {
       tipo: o.tipoOrigem === 'venda' ? 'pedido' : 'nota', id: o.id, numero: String(o.numero || ''), data: o.dataEmissao || c.dataEmissao, prevista: '',
       cliente: (c.contato && c.contato.nome) || '', doc: (c.contato && c.contato.numeroDocumento) || '',
       total: Number(o.valor || 0), aReceber: 0, formas: [], formaNome: f.nome || '', vendedor: '', situacao: 'Em aberto',
-      contas: [], link: o.url || '',
+      contas: [], link: o.url || '', contatoId: (c.contato && c.contato.id) || 0,
     };
     const n = porNota[k];
     n.aReceber += Number(c.valor || 0);
     if (!n.formas.includes(t)) n.formas.push(t);
-    n.contas.push({ id: c.id, valor: Number(c.valor || 0), venc: c.vencimento, pixBling: c.linkQRCodePix || '' });
+    n.contas.push({ id: c.id, valor: Number(c.valor || 0), venc: c.vencimento, pixBling: c.linkQRCodePix || '', t, forma: f.nome || '', boleto: c.linkBoleto || '' });
   }
-  Object.values(porNota).forEach(n => { n.venc = n.contas.map(c => c.venc).filter(Boolean).sort()[0] || ''; });
+  Object.values(porNota).forEach(n => { n.contas.sort((a, b) => String(a.venc).localeCompare(String(b.venc))); n.venc = n.contas.map(c => c.venc).filter(Boolean).sort()[0] || ''; });
   itens.push(...Object.values(porNota));
 
   // 3) Pedidos/notas já pagos pelo app que saíram do "em aberto" do Bling (ex.: conta baixada) — continuam na lista como "pago"
@@ -648,9 +652,12 @@ async function listarAbertos(env) {
       const reg = await env.BLING_KV.get('pix:' + x.txid, 'json');
       if (!reg || reg.status === 'PAGO' || reg.status === 'CANCELADA') continue;
       if (!reg.curto) { reg.curto = await linkCurto(env, x.txid, Number(reg.expira || (Number(reg.criado || 0) + 86400e3))); await env.BLING_KV.put('pix:' + x.txid, JSON.stringify(reg), { expirationTtl: 90 * 86400 }); }
-      vivos.push({ txid: x.txid, curto: reg.curto, valor: reg.valor, criado: reg.criado, copia: reg.copia, usuario: reg.usuario || '', validoAte: Number(reg.expira || (Number(reg.criado || 0) + 86400e3)) });
+      vivos.push({ txid: x.txid, curto: reg.curto, valor: reg.valor, criado: reg.criado, copia: reg.copia, usuario: reg.usuario || '', validoAte: Number(reg.expira || (Number(reg.criado || 0) + 86400e3)),
+        parcela: (reg.parcela && reg.parcela.chave) || '', extra: !!reg.extraConta });
     }
     if (vivos.length) it.pixAtivos = vivos.sort((a, b) => b.criado - a.criado);
+    const ex = await env.BLING_KV.get('extras:' + it.tipo + ':' + it.id, 'json');
+    if (ex && ex.length) it.extras = ex;
     const pg = (await env.BLING_KV.get('pagosdoc:' + it.tipo + ':' + it.id, 'json')) || [];
     if (pg.length) { it.pago = Math.round(pg.reduce((s, x) => s + Number(x.valor || 0), 0) * 100) / 100; it.pagos = pg; }
     // TEF/ECONF (evento 110750): quantos PIX recebidos deste pedido/nota já foram informados à Sefaz
@@ -869,31 +876,81 @@ async function gerarPix(env, b) {
   const txid = txidNovo(b.tipo, b.id);
   const doc = String(b.doc || '').replace(/\D/g, '');
   const nome = String(b.cliente || '').slice(0, 200);
-  const vencs = [b.venc].concat(Array.isArray(b.contas) ? b.contas.map(c => c && c.venc) : []).filter(v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''))).sort();
+  const parcela = b.parcela && typeof b.parcela === 'object' ? { chave: String(b.parcela.chave || '').slice(0, 60), venc: soData(b.parcela.venc), valor: r2(b.parcela.valor), contaId: b.parcela.contaId || 0 } : null;
+  // PIX de uma parcela: vale até o vencimento DELA + 1 dia útil
+  const vencs = (parcela && parcela.venc ? [parcela.venc] : [b.venc].concat(Array.isArray(b.contas) ? b.contas.map(c => c && c.venc) : [])).filter(v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''))).sort();
   const val = validadePix(vencs[0]);
   const corpo = {
     calendario: { expiracao: Math.max(3600, Math.floor((val.ms - Date.now()) / 1000)) },
     valor: { original: valor.toFixed(2) },
     chave: env.PIX_CHAVE,
-    solicitacaoPagador: ((b.tipo === 'nota' ? 'NF ' : 'Pedido ') + String(b.numero || '')).slice(0, 140),
+    solicitacaoPagador: ((b.tipo === 'nota' ? 'NF ' : 'Pedido ') + String(b.numero || '') + (b.extraConta ? ' - cobrança extra' : parcela && b.nParcelas > 1 ? ' - parcela venc. ' + brData(parcela.venc) : '')).slice(0, 140),
     infoAdicionais: [{ nome: b.tipo === 'nota' ? 'Nota fiscal' : 'Pedido', valor: String(b.numero || '').slice(0, 50) }],
   };
   if (nome && (doc.length === 11 || doc.length === 14)) corpo.devedor = doc.length === 14 ? { cnpj: doc, nome } : { cpf: doc, nome };
   const c = await sicoob(env, 'PUT', '/cob/' + txid, corpo);
-  const contas = Array.isArray(b.contas) ? b.contas.slice(0, 24).map(x => ({ id: x.id, valor: Number(x.valor || 0), venc: x.venc || '' })) : [];
+  let contas = Array.isArray(b.contas) ? b.contas.slice(0, 24).map(x => ({ id: x.id, valor: Number(x.valor || 0), venc: x.venc || '' })) : [];
+  if (parcela && parcela.contaId) contas = contas.filter(x => String(x.id) === String(parcela.contaId));   // baixa só a conta desta parcela
   const reg = { txid, tipo: b.tipo, id: b.id, numero: b.numero || '', valor, cliente: nome, doc, usuario: String(b.usuario || '').slice(0, 60),
-    total: Number(b.total || 0), aReceber: Number(b.aReceber || 0), contas,
+    total: Number(b.total || 0), aReceber: Number(b.aReceber || 0), contas, parcela, extraConta: b.extraConta || 0,
     criado: Date.now(), expira: val.ms, venc: vencs[0] || '', copia: c.brcode || '', status: c.status || 'ATIVA' };
   await env.BLING_KV.put('pix:' + txid, JSON.stringify(reg), { expirationTtl: 90 * 86400 });
   // lista por pedido/nota, para mostrar no app e conciliar pagamentos parciais
   const k = 'pixdoc:' + b.tipo + ':' + b.id;
   const lista = (await env.BLING_KV.get(k, 'json')) || [];
-  lista.push({ txid, valor, criado: reg.criado, expira: val.ms });
+  lista.push({ txid, valor, criado: reg.criado, expira: val.ms, parcela: (parcela && parcela.chave) || '' });
   await env.BLING_KV.put(k, JSON.stringify(lista.slice(-20)), { expirationTtl: 90 * 86400 });
   await abertosVelho(env);
   reg.curto = await linkCurto(env, txid, val.ms);
   await env.BLING_KV.put('pix:' + txid, JSON.stringify(reg), { expirationTtl: 90 * 86400 });
   return { ok: true, txid, curto: reg.curto, copiaECola: c.brcode || '', validade: val.dia.slice(8, 10) + '/' + val.dia.slice(5, 7) + '/' + val.dia.slice(0, 4) + ' 23:59', expira: val.ms };
+}
+
+// ---- Cobrança extra: despesa nova depois do pedido/nota (ex.: já pagou e surgiu outro item/frete) ----
+// Cria a conta a receber no Bling (para a baixa automática ter onde cair) e gera a cobrança:
+//  pix    → conta com forma PIX na conta Sicoob + PIX do Sicoob (baixa sozinha quando pagar)
+//  boleto → conta com forma "Boleto - Bling Conta" (a Bling Conta emite o boleto e dá a baixa sozinha quando pagar)
+const FORMA_EXTRA = { pix: { forma: 3901857, portador: 14890739452 }, boleto: { forma: 11272919, portador: 14893994469 } };
+const CAT_VENDAS = 14634451775;   // Vendas de mercadorias
+async function cobrancaExtra(env, b) {
+  const valor = r2(b.valor);
+  if (!(valor > 0) || valor > 1e6) return { ok: false, erro: 'Informe o valor da cobrança.' };
+  const f = FORMA_EXTRA[b.forma];
+  if (!f) return { ok: false, erro: 'Escolha PIX ou boleto (link de cartão entra com a nova maquininha).' };
+  if (!b.contatoId) return { ok: false, erro: 'Cliente sem cadastro no Bling (falta o contato).' };
+  const hoje = hojeLocal();
+  const venc = soData(b.venc) && soData(b.venc) >= hoje ? soData(b.venc) : (b.forma === 'boleto' ? somaDias(hoje, 3) : hoje);
+  const ref = (b.tipo === 'nota' ? 'NF nº ' : 'pedido de venda nº ') + String(b.numero || '');
+  const motivo = String(b.motivo || '').trim().slice(0, 200);
+  const historico = 'Ref. ao ' + ref + ' | ' + (b.forma === 'pix' ? 'PIX' : 'BOLETO') + ' - cobrança extra' + (motivo ? ': ' + motivo : '') + ' (app Mais Acessível' + (b.usuario ? ', ' + String(b.usuario).slice(0, 40) : '') + ')';
+  const tok = await tokenValido(env);
+  const r = await fetch(API + '/contas/receber', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ vencimento: venc, valor, contato: { id: Number(b.contatoId) }, formaPagamento: { id: f.forma }, portador: { id: f.portador }, categoria: { id: CAT_VENDAS },
+      dataEmissao: hoje, competencia: hoje, historico, numeroDocumento: String(b.numero || '').slice(0, 20) + '-EXTRA' }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) return { ok: false, erro: 'O Bling não criou a conta a receber: ' + ((j.error && (j.error.description || j.error.message || JSON.stringify(j.error.fields || ''))) || r.status) };
+  const contaId = (j.data && j.data.id) || j.id;
+  await logAcao(env, { acao: 'cobranca_extra', tipo: b.tipo, id: b.id, numero: b.numero, cliente: b.cliente, valor, contaId, forma: b.forma, por: b.usuario || '',
+    detalhe: 'Cobrança extra de R$ ' + valor.toFixed(2) + ' (' + (b.forma === 'pix' ? 'PIX' : 'boleto Bling Conta') + ', venc. ' + brData(venc) + ') criada no Contas a Receber do Bling' + (motivo ? ' — ' + motivo : '') + (b.usuario ? ' por ' + b.usuario : '') + '.' });
+  const extras = (await env.BLING_KV.get('extras:' + b.tipo + ':' + b.id, 'json')) || [];
+  extras.push({ contaId, valor, venc, forma: b.forma, motivo, criado: Date.now(), por: b.usuario || '' });
+  await env.BLING_KV.put('extras:' + b.tipo + ':' + b.id, JSON.stringify(extras.slice(-20)), { expirationTtl: 180 * 86400 });
+  if (b.forma === 'pix') {
+    const px = await gerarPix(env, { tipo: b.tipo, id: b.id, numero: b.numero, valor, venc, cliente: b.cliente, doc: b.doc, total: valor, aReceber: valor,
+      contas: [{ id: contaId, valor, venc }], extraConta: contaId, parcela: { chave: 'x' + contaId, venc, valor, contaId }, usuario: b.usuario });
+    return Object.assign({}, px, { contaId, venc });
+  }
+  // boleto: a Bling Conta emite sozinha; confere se o link do boleto já saiu
+  let link = '';
+  for (let i = 0; i < 3 && !link; i++) {
+    await new Promise(x => setTimeout(x, 2000 * (i + 1)));
+    const c = ((await bling(env, '/contas/receber/' + contaId).catch(() => null)) || {}).data || {};
+    link = c.linkBoleto || '';
+  }
+  await abertosVelho(env);
+  return { ok: true, contaId, venc, boleto: link, aviso: link ? '' : 'Conta criada no Bling com a forma Boleto - Bling Conta. O boleto ainda não apareceu: abra a conta no Bling e clique em emitir boleto.' };
 }
 
 // cancela a cobrança no Sicoob (o QR Code para de aceitar pagamento). Padrão do Banco Central: PATCH /cob/{txid} status REMOVIDA_PELO_USUARIO_RECEBEDOR
@@ -1191,7 +1248,14 @@ async function planejarAcoes(env, reg, valor, p, pagosDoc, origem) {
   const data = diaLocal(p.horario);
   const dataBr = data.split('-').reverse().join('/');
   const como = origem === 'direto' ? ' (PIX direto na chave — CNPJ e valor conferem)' : origem === 'direto-apelido' ? ' (PIX direto — pagador já conhecido deste cliente)' : origem === 'manual' ? ' (vinculado manualmente)' : '';
-  await logAcao(env, Object.assign({}, base, { acao: 'pix_pago', detalhe: 'PIX de R$ ' + valor.toFixed(2) + ' recebido em ' + dataBr + (base.pagador ? ' de ' + base.pagador : '') + como }));
+  await logAcao(env, Object.assign({}, base, { acao: 'pix_pago', detalhe: 'PIX de R$ ' + valor.toFixed(2) + ' recebido em ' + dataBr + (base.pagador ? ' de ' + base.pagador : '') + como + (reg.extraConta ? ' — cobrança extra' : '') }));
+  if (reg.extraConta) {
+    // cobrança extra: a conta a receber foi criada pelo app no Bling — baixa exatamente ela
+    const acao = { acao: 'baixa', contaId: reg.extraConta, valorBaixa: valor, data, detalhe: 'Baixa de R$ ' + valor.toFixed(2) + ' na conta da cobrança extra (' + reg.extraConta + '), conta Sicoob' };
+    if (modo === 'real') acao.resultado = await executarBaixa(env, reg.extraConta, valor, data, reg).catch(e => 'ERRO: ' + (e.message || e));
+    await logAcao(env, Object.assign({}, base, acao));
+    return;
+  }
   if (reg.tipo === 'nota') {
     // reparte o valor pelas parcelas em aberto da nota, da mais antiga para a mais nova
     let resto = valor;
@@ -1282,6 +1346,11 @@ async function executarContasPedido(env, reg, valor, data) {
   if (contas.some(ehPix)) contas = contas.filter(ehPix);
   else if (contas.length > 1 || Math.abs(Number(contas[0].valor || 0) - valor) > 0.01) throw new Error('Nenhuma parcela em PIX ' + (nfId ? 'na nota' : 'no pedido') + ' para baixar este PIX — conferir à mão.');
   const abertas = contas.filter(c => [1, 3].includes(Number(c.situacao))).sort((a, b) => String(a.vencimento).localeCompare(String(b.vencimento)));
+  // PIX de uma parcela: baixa primeiro a conta com o mesmo vencimento e valor dessa parcela
+  if (reg.parcela && reg.parcela.venc) {
+    const i = abertas.findIndex(c => soData(c.vencimento) === reg.parcela.venc && Math.abs(Number(c.valor || 0) - reg.parcela.valor) < 0.01);
+    if (i > 0) abertas.unshift(abertas.splice(i, 1)[0]);
+  }
   if (!abertas.length) return 'já estava baixada no Bling (nada feito)';
   let resto = valor, feitas = 0;
   for (const c of abertas) {
