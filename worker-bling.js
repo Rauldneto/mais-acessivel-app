@@ -1995,7 +1995,9 @@ function ehBlingConta(c) { return Number(c.formaId) === 11272919 || Number(c.por
 async function tratarBoletoReal(env, x0, ctx) {
   if (!x0.nossoNumero && x0.seuNumero) x0 = Object.assign({}, x0, { nossoNumero: 'S' + x0.seuNumero.replace(/\W/g, '') + '-' + Math.round(x0.valorTitulo * 100) });
   if (!x0.nossoNumero) return 'ignorado';
-  if (await env.BLING_KV.get('bolpago:' + x0.nossoNumero)) return 'ja';
+  // 'bling-conta' é reavaliado: a versão de 13/11 à tarde confundia boleto Sicoob emitido pelo Bling com Bling Conta
+  const marca = await env.BLING_KV.get('bolpago:' + x0.nossoNumero);
+  if (marca && marca !== 'bling-conta') return 'ja';
   const x = await completarBoleto(env, x0);
   const m = await casarBoleto(env, x, ctx, true);
   // conta de boleto da Bling Conta: a própria Bling dá a baixa — o app não mexe (decisão do Raul, 13/11/2026)
