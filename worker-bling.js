@@ -1915,7 +1915,8 @@ async function simularPasso(env) {
         vencimento: x.dataVencimento, liquidacao: x.dataLiquidacao, credito: x.dataCredito, valorTitulo: x.valorTitulo, mora: x.mora, desconto: x.desconto,
         pago: x.pago, tarifa: x.tarifa, liquido: x.valorLiquido, tipo: m.tipo, motivo: m.motivo, bruto: x.bruto };
       sim.resumo.boletos++; sim.resumo.valor = r2(sim.resumo.valor + x.pago); sim.resumo.tarifas = r2(sim.resumo.tarifas + x.tarifa);
-      if (m.tipo === 'auto') {
+      if (m.tipo === 'auto' && m.conta.boleto) { linha.tipo = 'bling'; linha.motivo = 'Conta de boleto da Bling Conta (NF ' + m.conta.numero + ') — a Bling dá a baixa sozinha, o app não mexe.'; linha.contaId = m.conta.id; sim.resumo.blingConta = (sim.resumo.blingConta || 0) + 1; }
+      else if (m.tipo === 'auto') {
         const pl = planoBoleto(x, m.conta);
         Object.assign(linha, { contaId: m.conta.id, nf: m.conta.numero, origemTipo: m.conta.origemTipo, cliente: m.conta.cliente, valorConta: m.conta.valor,
           situacaoBling: SIT_CONTA[m.conta.situacao] || m.conta.situacao, dataBaixa: pl.data, valorBaixa: pl.principal, parcial: pl.parcial, acoes: pl.acoes.map(a => a.detalhe) });
@@ -1993,6 +1994,11 @@ async function tratarBoletoReal(env, x0, ctx) {
   if (await env.BLING_KV.get('bolpago:' + x0.nossoNumero)) return 'ja';
   const x = await completarBoleto(env, x0);
   const m = await casarBoleto(env, x, ctx, true);
+  // conta de boleto da Bling Conta: a própria Bling dá a baixa — o app não mexe (decisão do Raul, 13/11/2026)
+  if (m.tipo === 'auto' && (m.conta.boleto || Number(m.conta.portador) === 14893994469)) {
+    await env.BLING_KV.put('bolpago:' + x.nossoNumero, 'bling-conta', { expirationTtl: 400 * 86400 });
+    return 'ja';
+  }
   if (m.tipo === 'auto' && m.conta.situacao === 2) {
     // já estava recebida no Bling (baixa manual): só registra, nada a fazer
     await env.BLING_KV.put('bolpago:' + x.nossoNumero, 'ja-recebida', { expirationTtl: 400 * 86400 });
