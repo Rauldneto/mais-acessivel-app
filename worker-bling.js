@@ -1658,25 +1658,43 @@ async function deszipar(bytes) {
   return saida;
 }
 
+// os nomes dos campos do arquivo de movimentação do Sicoob variam: procura por vários nomes (e um nível dentro de objetos)
+function campoMov(x, nomes, re) {
+  for (const n of nomes) if (x[n] != null && x[n] !== '') return x[n];
+  const planos = [];
+  for (const [k, v] of Object.entries(x)) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) for (const [k2, v2] of Object.entries(v)) planos.push([k + '.' + k2, v2]);
+    else planos.push([k, v]);
+  }
+  for (const n of nomes) { const a = planos.find(([k]) => k.toLowerCase().endsWith(n.toLowerCase())); if (a && a[1] != null && a[1] !== '') return a[1]; }
+  if (re) { const a = planos.find(([k, v]) => re.test(k) && v != null && v !== '' && typeof v !== 'object'); if (a) return a[1]; }
+  return '';
+}
 function normalizarLiquidacao(x) {
-  const n = k => r2(x[k]);
-  const valorTitulo = n('valorTitulo'), juros = r2(Number(x.valorMora || 0) + Number(x.valorJuros || 0)), multa = r2(Number(x.valorMulta || 0)), mora = r2(juros + multa);
-  const desconto = r2(Number(x.valorDesconto || 0) + Number(x.valorAbatimento || 0));
-  const tarifa = n('valorTarifaMovimento');
-  const pago = r2(Number(x.valorPago || 0) || (valorTitulo + mora - desconto));
+  const num = (nomes, re) => r2(Number(String(campoMov(x, nomes, re) || 0).replace(',', '.')) || 0);
+  const valorTitulo = num(['valorTitulo', 'valorBoleto', 'valorNominal', 'valor']);
+  const juros = r2(num(['valorMora', 'valorJurosMora']) + num(['valorJuros']));
+  const multa = num(['valorMulta']), mora = r2(juros + multa);
+  const desconto = r2(num(['valorDesconto']) + num(['valorAbatimento']));
+  const tarifa = num(['valorTarifaMovimento', 'valorTarifa', 'valorTarifaBancaria'], /tarifa/i);
+  const pago = r2(num(['valorPago', 'valorLiquidado', 'valorRecebido', 'valorLiquidacao']) || (valorTitulo + mora - desconto));
+  const bruto = {};
+  for (const [k, v] of Object.entries(x)) bruto[k] = v && typeof v === 'object' ? JSON.stringify(v).slice(0, 200) : v;
   return {
-    nossoNumero: String(x.nossoNumero || '').trim(), seuNumero: String(x.seuNumero || '').trim(),
-    dataLiquidacao: soData(x.dataLiquidacao || x.dataPagamento || x.dataMovimento),
-    dataCredito: soData(x.dataPrevisaoCredito || x.dataCredito),
-    dataVencimento: soData(x.dataVencimento), valorTitulo, juros, multa, mora, desconto, tarifa, pago, valorLiquido: n('valorLiquido'),
-    pagadorDoc: dig(x.numeroCpfCnpjPagador || x.cpfCnpjPagador || (x.pagador && x.pagador.numeroCpfCnpj)),
-    pagadorNome: String(x.nomePagador || (x.pagador && x.pagador.nome) || '').trim(),
+    nossoNumero: String(campoMov(x, ['nossoNumero', 'numeroNossoNumero', 'numeroTitulo', 'numeroTituloBanco', 'identificacaoBoletoBanco'], /nosso/i) || '').trim(),
+    seuNumero: String(campoMov(x, ['seuNumero', 'numeroSeuNumero', 'numeroDocumento'], /seu/i) || '').trim(),
+    dataLiquidacao: soData(campoMov(x, ['dataLiquidacao', 'dataPagamento', 'dataMovimento', 'dataMovimentacao'], /liquida|pagamento/i)),
+    dataCredito: soData(campoMov(x, ['dataPrevisaoCredito', 'dataCredito', 'dataEfetivacaoCredito'], /credito/i)),
+    dataVencimento: soData(campoMov(x, ['dataVencimento', 'dataVencimentoTitulo', 'vencimento'], /venc/i)), valorTitulo, juros, multa, mora, desconto, tarifa, pago, valorLiquido: num(['valorLiquido']),
+    pagadorDoc: dig(campoMov(x, ['numeroCpfCnpjPagador', 'cpfCnpjPagador', 'numeroCpfCnpj', 'cpfCnpj'], /cpf|cnpj/i)),
+    pagadorNome: String(campoMov(x, ['nomePagador', 'nome', 'nomeRazaoSocialPagador'], /nome/i) || '').trim(),
+    bruto,
   };
 }
 
 // completa com os dados do boleto (vencimento, seuNumero, pagador). Guardado 1 ano.
 async function completarBoleto(env, b) {
-  if (!b.nossoNumero || (b.dataVencimento && b.pagadorDoc && b.seuNumero)) return b;
+  if (!b.nossoNumero || /^S/.test(b.nossoNumero) || (b.dataVencimento && b.pagadorDoc && b.seuNumero)) return b;
   const ck = 'bolinfo:' + b.nossoNumero;
   let info = await env.BLING_KV.get(ck, 'json');
   if (!info) {
@@ -1717,9 +1735,45 @@ async function contasPorVencimento(env, venc, ctx, incluirRecebidas) {
 const SIT_CONTA = { 1: 'Em aberto', 2: 'Recebido', 3: 'Parcialmente recebido', 4: 'Devolvido', 5: 'Cancelado' };
 
 // decide a conta do Bling para um boleto liquidado
+// contas a receber de uma janela larga de vencimentos (para achar pelo nº da NF quando o arquivo não traz o vencimento)
+async function contasJanela(env, ctx, incluirRecebidas) {
+  const k = incluirRecebidas ? 'janT' : 'janA';
+  if (ctx[k]) return ctx[k];
+  const ck = 'bolJanela:' + k, c = await env.BLING_KV.get(ck, 'json');
+  if (c && Date.now() - c.ts < 30 * 60e3) return (ctx[k] = c.l);
+  const hoje = hojeLocal();
+  const sits = '&situacoes[]=1&situacoes[]=3' + (incluirRecebidas ? '&situacoes[]=2' : '');
+  const lista = await paginas(env, '/contas/receber?tipoFiltroData=V&dataInicial=' + somaDias(hoje, -150) + '&dataFinal=' + somaDias(hoje, 90) + sits, 15);
+  ctx[k] = lista.map(x => ({ id: x.id, valor: r2(x.valor), venc: x.vencimento, situacao: Number(x.situacao),
+    cliente: (x.contato && x.contato.nome) || '', doc: dig(x.contato && x.contato.numeroDocumento),
+    origemTipo: (x.origem && x.origem.tipoOrigem) || '', origemId: (x.origem && x.origem.id) || 0, numero: String((x.origem && x.origem.numero) || ''),
+    boleto: !!x.linkBoleto, forma: Number(x.formaPagamento && x.formaPagamento.codigoFiscal) || 0 }));
+  await env.BLING_KV.put(ck, JSON.stringify({ ts: Date.now(), l: ctx[k] }), { expirationTtl: 3600 });
+  return ctx[k];
+}
+// seuNumero "003849/02" = NF 3849, parcela 2
+async function casarPorNf(env, b, ctx, simulacao) {
+  const m = String(b.seuNumero || '').match(/^\s*0*(\d{1,9})\s*[\/-]\s*0*(\d{1,3})\s*$/) || String(b.seuNumero || '').match(/^\s*0*(\d{1,9})\s*$/);
+  if (!m) return null;
+  const nf = String(Number(m[1])), parc = m[2] ? Number(m[2]) : 0;
+  const todas = (await contasJanela(env, ctx, true)).filter(c => c.numero && String(Number(c.numero)) === nf);
+  if (!todas.length) return { tipo: 'sem', motivo: 'Nenhuma conta a receber da NF ' + nf + ' no Bling (seu nº ' + b.seuNumero + ').', candidatos: [] };
+  const ord = todas.slice().sort((a, c) => String(a.venc).localeCompare(String(c.venc)));
+  const valorOk = c => Math.abs(c.valor - b.valorTitulo) <= 0.01;
+  let c = parc && ord[parc - 1] && valorOk(ord[parc - 1]) ? ord[parc - 1] : null;
+  if (!c) { const v = ord.filter(valorOk); if (v.length === 1) c = v[0]; }
+  if (c) return { tipo: 'auto', conta: c, motivo: 'seuNumero ' + b.seuNumero + ' = NF ' + nf + (parc ? ' parcela ' + parc : '') + ' + mesmo valor', pontos: 2 };
+  return { tipo: 'sem', motivo: 'NF ' + nf + ' encontrada, mas nenhuma parcela com o valor R$ ' + b.valorTitulo.toFixed(2) + '.',
+    candidatos: ord.slice(0, 6).map(a => ({ contaId: a.id, numero: a.numero, origemTipo: a.origemTipo, cliente: a.cliente, valor: a.valor, situacao: a.situacao, motivo: 'mesma NF' })) };
+}
+
 async function casarBoleto(env, b, ctx, simulacao) {
   const vinculo = await env.BLING_KV.get('bolvinc:' + b.nossoNumero, 'json');
-  if (!b.dataVencimento && !vinculo) return { tipo: 'sem', motivo: 'Sem vencimento do boleto (consulta ao Sicoob falhou' + (b.infoErro ? ': ' + b.infoErro : '') + ').', candidatos: [] };
+  if (!b.dataVencimento && !vinculo) {
+    const pn = await casarPorNf(env, b, ctx, simulacao).catch(e => ({ tipo: 'sem', motivo: 'Erro ao procurar pela NF: ' + (e.message || e), candidatos: [] }));
+    if (pn) return pn;
+    return { tipo: 'sem', motivo: 'Sem vencimento do boleto (consulta ao Sicoob falhou' + (b.infoErro ? ': ' + b.infoErro : '') + ').', candidatos: [] };
+  }
   const cands = b.dataVencimento ? await contasPorVencimento(env, b.dataVencimento, ctx, simulacao) : [];
   if (vinculo) {
     const c = cands.find(x => String(x.id) === String(vinculo.contaId)) || vinculo.conta;
@@ -1742,6 +1796,7 @@ async function casarBoleto(env, b, ctx, simulacao) {
     const m = [a.seu ? (a.seuConta ? 'seuNumero = id da conta' : 'seuNumero = nº da NF') : '', a.doc ? 'mesmo CPF/CNPJ' : '', 'mesmo valor e vencimento'].filter(Boolean).join(' + ');
     return { tipo: 'auto', conta: a.c, motivo: m, pontos: 1 + Number(a.doc) + Number(a.seu) };
   }
+  if (!fortes.length) { const pn = await casarPorNf(env, b, ctx, simulacao).catch(() => null); if (pn && pn.tipo === 'auto') return pn; }
   const sug = av.filter(a => a.valor || a.doc || a.seu).slice(0, 6).map(a => ({
     contaId: a.c.id, numero: a.c.numero, origemTipo: a.c.origemTipo, cliente: a.c.cliente, valor: a.c.valor, situacao: a.c.situacao,
     motivo: [a.valor ? 'valor' : '', a.doc ? 'CPF/CNPJ' : '', a.seu ? 'seuNumero' : ''].filter(Boolean).join(' + ') + ' conferem' }));
@@ -1858,7 +1913,7 @@ async function simularPasso(env) {
       const m = await casarBoleto(env, x, ctx, true);
       const linha = { dia: job.dia, nossoNumero: x.nossoNumero, seuNumero: x.seuNumero, pagador: x.pagadorNome, doc: x.pagadorDoc,
         vencimento: x.dataVencimento, liquidacao: x.dataLiquidacao, credito: x.dataCredito, valorTitulo: x.valorTitulo, mora: x.mora, desconto: x.desconto,
-        pago: x.pago, tarifa: x.tarifa, liquido: x.valorLiquido, tipo: m.tipo, motivo: m.motivo };
+        pago: x.pago, tarifa: x.tarifa, liquido: x.valorLiquido, tipo: m.tipo, motivo: m.motivo, bruto: x.bruto };
       sim.resumo.boletos++; sim.resumo.valor = r2(sim.resumo.valor + x.pago); sim.resumo.tarifas = r2(sim.resumo.tarifas + x.tarifa);
       if (m.tipo === 'auto') {
         const pl = planoBoleto(x, m.conta);
@@ -1933,6 +1988,7 @@ async function verificarBoletos(env, forcar) {
 }
 
 async function tratarBoletoReal(env, x0, ctx) {
+  if (!x0.nossoNumero && x0.seuNumero) x0 = Object.assign({}, x0, { nossoNumero: 'S' + x0.seuNumero.replace(/\W/g, '') + '-' + Math.round(x0.valorTitulo * 100) });
   if (!x0.nossoNumero) return 'ignorado';
   if (await env.BLING_KV.get('bolpago:' + x0.nossoNumero)) return 'ja';
   const x = await completarBoleto(env, x0);
