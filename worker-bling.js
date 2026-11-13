@@ -1727,7 +1727,8 @@ async function contasPorVencimento(env, venc, ctx, incluirRecebidas) {
   const l = lista.map(x => ({ id: x.id, valor: r2(x.valor), venc: x.vencimento, situacao: Number(x.situacao),
     cliente: (x.contato && x.contato.nome) || '', doc: dig(x.contato && x.contato.numeroDocumento),
     origemTipo: (x.origem && x.origem.tipoOrigem) || '', origemId: (x.origem && x.origem.id) || 0, numero: String((x.origem && x.origem.numero) || ''),
-    boleto: !!x.linkBoleto, forma: Number(x.formaPagamento && x.formaPagamento.codigoFiscal) || 0 }));
+    boleto: !!x.linkBoleto, forma: Number(x.formaPagamento && x.formaPagamento.codigoFiscal) || 0,
+    formaId: (x.formaPagamento && x.formaPagamento.id) || 0, portador: (x.contaContabil && x.contaContabil.id) || (x.portador && x.portador.id) || 0 }));
   await env.BLING_KV.put(ck, JSON.stringify({ ts: Date.now(), l }), { expirationTtl: 6 * 3600 });
   return (ctx.venc[k] = l);
 }
@@ -1747,7 +1748,8 @@ async function contasJanela(env, ctx, incluirRecebidas) {
   ctx[k] = lista.map(x => ({ id: x.id, valor: r2(x.valor), venc: x.vencimento, situacao: Number(x.situacao),
     cliente: (x.contato && x.contato.nome) || '', doc: dig(x.contato && x.contato.numeroDocumento),
     origemTipo: (x.origem && x.origem.tipoOrigem) || '', origemId: (x.origem && x.origem.id) || 0, numero: String((x.origem && x.origem.numero) || ''),
-    boleto: !!x.linkBoleto, forma: Number(x.formaPagamento && x.formaPagamento.codigoFiscal) || 0 }));
+    boleto: !!x.linkBoleto, forma: Number(x.formaPagamento && x.formaPagamento.codigoFiscal) || 0,
+    formaId: (x.formaPagamento && x.formaPagamento.id) || 0, portador: (x.contaContabil && x.contaContabil.id) || (x.portador && x.portador.id) || 0 }));
   await env.BLING_KV.put(ck, JSON.stringify({ ts: Date.now(), l: ctx[k] }), { expirationTtl: 3600 });
   return ctx[k];
 }
@@ -1915,7 +1917,7 @@ async function simularPasso(env) {
         vencimento: x.dataVencimento, liquidacao: x.dataLiquidacao, credito: x.dataCredito, valorTitulo: x.valorTitulo, mora: x.mora, desconto: x.desconto,
         pago: x.pago, tarifa: x.tarifa, liquido: x.valorLiquido, tipo: m.tipo, motivo: m.motivo, bruto: x.bruto };
       sim.resumo.boletos++; sim.resumo.valor = r2(sim.resumo.valor + x.pago); sim.resumo.tarifas = r2(sim.resumo.tarifas + x.tarifa);
-      if (m.tipo === 'auto' && m.conta.boleto) { linha.tipo = 'bling'; linha.motivo = 'Conta de boleto da Bling Conta (NF ' + m.conta.numero + ') — a Bling dá a baixa sozinha, o app não mexe.'; linha.contaId = m.conta.id; sim.resumo.blingConta = (sim.resumo.blingConta || 0) + 1; }
+      if (m.tipo === 'auto' && ehBlingConta(m.conta)) { linha.tipo = 'bling'; linha.motivo = 'Conta de boleto da Bling Conta (NF ' + m.conta.numero + ') — a Bling dá a baixa sozinha, o app não mexe.'; linha.contaId = m.conta.id; sim.resumo.blingConta = (sim.resumo.blingConta || 0) + 1; }
       else if (m.tipo === 'auto') {
         const pl = planoBoleto(x, m.conta);
         Object.assign(linha, { contaId: m.conta.id, nf: m.conta.numero, origemTipo: m.conta.origemTipo, cliente: m.conta.cliente, valorConta: m.conta.valor,
@@ -1988,6 +1990,8 @@ async function verificarBoletos(env, forcar) {
   return { novos, pendentes, dias: Object.values(st.jobs).map(j => ({ dia: j.dia, etapa: j.etapa, msg: j.msg || '', qtd: (j.itens || []).length })) };
 }
 
+// conta de boleto da Bling Conta (forma "Boleto - Bling Conta" ou conta financeira Bling Conta) — a Bling baixa sozinha
+function ehBlingConta(c) { return Number(c.formaId) === 11272919 || Number(c.portador) === 14893994469; }
 async function tratarBoletoReal(env, x0, ctx) {
   if (!x0.nossoNumero && x0.seuNumero) x0 = Object.assign({}, x0, { nossoNumero: 'S' + x0.seuNumero.replace(/\W/g, '') + '-' + Math.round(x0.valorTitulo * 100) });
   if (!x0.nossoNumero) return 'ignorado';
@@ -1995,7 +1999,7 @@ async function tratarBoletoReal(env, x0, ctx) {
   const x = await completarBoleto(env, x0);
   const m = await casarBoleto(env, x, ctx, true);
   // conta de boleto da Bling Conta: a própria Bling dá a baixa — o app não mexe (decisão do Raul, 13/11/2026)
-  if (m.tipo === 'auto' && (m.conta.boleto || Number(m.conta.portador) === 14893994469)) {
+  if (m.tipo === 'auto' && ehBlingConta(m.conta)) {
     await env.BLING_KV.put('bolpago:' + x.nossoNumero, 'bling-conta', { expirationTtl: 400 * 86400 });
     return 'ja';
   }
