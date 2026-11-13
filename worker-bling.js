@@ -1224,14 +1224,30 @@ async function executarBaixa(env, contaId, valor, data, reg) {
   // se alguém já baixou essa conta no Bling (à mão), não baixa de novo
   const atual = ((await bling(env, '/contas/receber/' + contaId).catch(() => null)) || {}).data;
   if (atual && ![1, 3].includes(Number(atual.situacao))) return 'já estava baixada no Bling (nada feito)';
+  // campos do Bling (API v3, ContasBaixarContaDTO): valorRecebido = parte da conta que está sendo quitada;
+  // juros, acréscimo (multa) e desconto vão separados — igual ao recebimento que a Bling Conta grava.
+  // A tarifa do boleto NÃO entra aqui: já é lançada sozinha como "Tarifa bancária" a partir do extrato (não duplica).
+  const cent = v => Math.round(Number(v || 0) * 100) / 100;
+  const hist = reg.historico ? ((reg.historicoConta && atual && atual.historico ? String(atual.historico).trim() + ' - ' : '') + reg.historico)
+    : ('PIX ' + (reg.txid || 'direto') + ' - app Mais Acessível');
+  const corpo = { data, usarDataVencimento: false, portador: { id: PORTADOR_SICOOB }, historico: hist.slice(0, 1990), valorRecebido: cent(valor),
+    juros: cent(reg.juros != null ? reg.juros : reg.juro), acrescimo: cent(reg.acrescimo), desconto: cent(reg.desconto), tarifa: 0 };
+  const cat = atual && atual.categoria && atual.categoria.id;
+  if (cat) corpo.categoria = { id: cat };
   const r = await fetch(API + '/contas/receber/' + contaId + '/baixar', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ data, usarDataVencimento: false, portador: { id: PORTADOR_SICOOB }, historico: reg.historico || ('PIX ' + (reg.txid || 'direto') + ' - app Mais Acessível'), valorRecebido: Math.round(valor * 100) / 100, juro: Math.round(Number(reg.juro || 0) * 100) / 100, desconto: Math.round(Number(reg.desconto || 0) * 100) / 100, acrescimo: 0, taxa: 0 }),
+    body: JSON.stringify(corpo),
   });
   const t = await r.text();
   if (!r.ok) throw new Error('Bling ' + r.status + ': ' + t.slice(0, 200));
-  return 'ok';
+  if (!reg.conferir) return 'ok';
+  // confere como ficou no Bling
+  await new Promise(x => setTimeout(x, 1200));
+  const dep = ((await bling(env, '/contas/receber/' + contaId).catch(() => null)) || {}).data;
+  const sit = dep ? Number(dep.situacao) : 0;
+  return 'ok — ' + (sit === 2 ? 'conta Recebida no Bling' : sit === 3 ? 'conta PARCIALMENTE recebida no Bling (conferir)' : 'situação no Bling: ' + (SIT_CONTA[sit] || sit || '?'))
+    + (corpo.juros ? ' · juros R$ ' + corpo.juros.toFixed(2) : '') + (corpo.acrescimo ? ' · multa R$ ' + corpo.acrescimo.toFixed(2) : '') + (corpo.desconto ? ' · desconto R$ ' + corpo.desconto.toFixed(2) : '');
 }
 
 async function executarContasPedido(env, reg, valor, data) {
@@ -1575,7 +1591,7 @@ async function deszipar(bytes) {
 
 function normalizarLiquidacao(x) {
   const n = k => r2(x[k]);
-  const valorTitulo = n('valorTitulo'), mora = r2(Number(x.valorMora || 0) + Number(x.valorMulta || 0) + Number(x.valorJuros || 0));
+  const valorTitulo = n('valorTitulo'), juros = r2(Number(x.valorMora || 0) + Number(x.valorJuros || 0)), multa = r2(Number(x.valorMulta || 0)), mora = r2(juros + multa);
   const desconto = r2(Number(x.valorDesconto || 0) + Number(x.valorAbatimento || 0));
   const tarifa = n('valorTarifaMovimento');
   const pago = r2(Number(x.valorPago || 0) || (valorTitulo + mora - desconto));
@@ -1583,7 +1599,7 @@ function normalizarLiquidacao(x) {
     nossoNumero: String(x.nossoNumero || '').trim(), seuNumero: String(x.seuNumero || '').trim(),
     dataLiquidacao: soData(x.dataLiquidacao || x.dataPagamento || x.dataMovimento),
     dataCredito: soData(x.dataPrevisaoCredito || x.dataCredito),
-    dataVencimento: soData(x.dataVencimento), valorTitulo, mora, desconto, tarifa, pago, valorLiquido: n('valorLiquido'),
+    dataVencimento: soData(x.dataVencimento), valorTitulo, juros, multa, mora, desconto, tarifa, pago, valorLiquido: n('valorLiquido'),
     pagadorDoc: dig(x.numeroCpfCnpjPagador || x.cpfCnpjPagador || (x.pagador && x.pagador.numeroCpfCnpj)),
     pagadorNome: String(x.nomePagador || (x.pagador && x.pagador.nome) || '').trim(),
   };
@@ -1668,11 +1684,18 @@ function planoBoleto(b, conta) {
   const data = b.dataCredito || b.dataLiquidacao;   // data em que o dinheiro entrou na conta
   const principal = r2(Math.min(r2(b.pago - b.mora + b.desconto), conta.valor));
   const parcial = principal < conta.valor - 0.009;
-  const acoes = [{ acao: 'baixa', contaId: conta.id, data, valorBaixa: principal, juro: b.mora, desconto: b.desconto,
-    detalhe: 'Baixa de R$ ' + principal.toFixed(2) + (b.mora ? ' + juros/multa R$ ' + b.mora.toFixed(2) : '') + (b.desconto ? ' − desconto R$ ' + b.desconto.toFixed(2) : '') +
+  // multa separada quando o Sicoob informa; senão tudo vai como juros
+  const multa = r2(b.multa || 0), juros = r2(b.mora - multa);
+  const venc = b.dataVencimento || conta.venc || '';
+  const atraso = venc && b.dataLiquidacao > venc ? Math.round((Date.parse(b.dataLiquidacao) - Date.parse(venc)) / 864e5) : 0;
+  const historico = 'Boleto Sicoob nº ' + b.nossoNumero + ' pago em ' + brData(b.dataLiquidacao) + (atraso ? ' com ' + atraso + (atraso === 1 ? ' dia' : ' dias') + ' de atraso (venc. ' + brData(venc) + ')' : '') +
+    (b.mora ? ' - juros/multa R$ ' + b.mora.toFixed(2).replace('.', ',') : '') + (b.desconto ? ' - desconto R$ ' + b.desconto.toFixed(2).replace('.', ',') : '') + ' - total pago R$ ' + b.pago.toFixed(2).replace('.', ',') +
+    (b.tarifa ? ' (tarifa R$ ' + b.tarifa.toFixed(2).replace('.', ',') + ' lançada à parte)' : '') + ' - baixa automática app Mais Acessível';
+  const acoes = [{ acao: 'baixa', contaId: conta.id, data, valorBaixa: principal, juros, acrescimo: multa, desconto: b.desconto, atraso, historico,
+    detalhe: (atraso ? 'PAGO COM ' + atraso + (atraso === 1 ? ' DIA' : ' DIAS') + ' DE ATRASO — ' : '') + 'Baixa de R$ ' + principal.toFixed(2) + (juros ? ' + juros R$ ' + juros.toFixed(2) : '') + (multa ? ' + multa R$ ' + multa.toFixed(2) : '') + (b.desconto ? ' − desconto R$ ' + b.desconto.toFixed(2) : '') +
       ' na conta ' + conta.id + (conta.numero ? ' (' + (conta.origemTipo === 'notafiscal' ? 'NF ' : 'pedido ') + conta.numero + ')' : '') + ', data ' + brData(data) + ', conta Sicoob' + (parcial ? ' — PARCIAL' : '') }];
   if (b.tarifa > 0) acoes.push({ acao: 'tarifa', data, valor: b.tarifa,
-    detalhe: 'Despesa R$ ' + b.tarifa.toFixed(2) + ' em "Tarifa bancária", data ' + brData(data) + ', conta Sicoob (boleto ' + b.nossoNumero + ').' });
+    detalhe: 'Tarifa R$ ' + b.tarifa.toFixed(2) + ' do boleto ' + b.nossoNumero + ': entra sozinha em "Tarifa bancária" (Contas a Pagar) pelo extrato Sicoob, às 13h/18h.' });
   return { data, principal, parcial, acoes };
 }
 
@@ -1688,6 +1711,8 @@ async function passoDia(env, job) {
       job.etapa = 'aguardando'; job.pedidoEm = Date.now(); job.tentativas = 0;
     } catch (e) {
       if (/nenhum|n[aã]o (foram )?encontrad|sem movimenta/i.test(e.msg || e.message)) { job.etapa = 'vazio'; job.msg = 'Sem liquidações neste dia.'; }
+      // o Sicoob só aceita um pedido de movimentação por vez: espera e tenta de novo na próxima rodada
+      else if (/solicita[cç][aã]o em processamento/i.test(e.msg || e.message)) { job.etapa = 'novo'; job.msg = 'Na fila: o Sicoob ainda está preparando outro dia.'; }
       else { job.etapa = 'erro'; job.msg = String(e.message || e).slice(0, 200); }
     }
     return job;
@@ -1810,9 +1835,13 @@ async function verificarBoletos(env, forcar) {
   for (const dia of dias) {
     let job = st.jobs[dia];
     // dia ainda "vivo": pede de novo a cada leitura (hora em hora) para pegar liquidações novas
-    if (!job || (['feito', 'vazio', 'erro'].includes(job.etapa) && Date.now() - (job.pedidoEm || 0) > 60 * 60e3 && dia >= somaDias(hoje, -1)))
+    // dia com erro: tenta de novo depois de 30 min (qualquer dia da janela)
+    if (!job || (['feito', 'vazio'].includes(job.etapa) && Date.now() - (job.pedidoEm || 0) > 60 * 60e3 && dia >= somaDias(hoje, -1))
+        || (job.etapa === 'erro' && Date.now() - (job.pedidoEm || 0) > 30 * 60e3))
       job = st.jobs[dia] = { dia, etapa: 'novo', pedidoEm: Date.now() };
     if (passos >= 2) break;
+    // o Sicoob só processa um pedido por vez: não abre outro dia enquanto um está aguardando o arquivo
+    if (job.etapa === 'novo' && Object.values(st.jobs).some(j => j !== job && j.etapa === 'aguardando')) continue;
     if (job.etapa === 'tratar') {
       const fatia = job.itens.slice(job.idx, job.idx + BOL_POR_PASSO);
       for (const x0 of fatia) {
@@ -1870,8 +1899,8 @@ async function executarPlanoBoleto(env, x, m, como) {
   for (const a of pl.acoes) {
     const reg = Object.assign({}, a);
     if (modo === 'real') {
-      if (a.acao === 'baixa') reg.resultado = await executarBaixa(env, a.contaId, a.valorBaixa, a.data, { historico: 'Boleto Sicoob ' + x.nossoNumero + ' - app Mais Acessível', juro: a.juro, desconto: a.desconto }).catch(e => 'ERRO: ' + (e.message || e));
-      else if (a.acao === 'tarifa') reg.resultado = 'PENDENTE: lançamento da tarifa ainda não ligado no modo real';
+      if (a.acao === 'baixa') reg.resultado = await executarBaixa(env, a.contaId, a.valorBaixa, a.data, { historico: a.historico, historicoConta: true, conferir: true, juros: a.juros, acrescimo: a.acrescimo, desconto: a.desconto }).catch(e => 'ERRO: ' + (e.message || e));
+      else if (a.acao === 'tarifa') reg.resultado = 'fica com a automação de tarifas do extrato';
     }
     await logAcao(env, Object.assign({}, base, reg));
   }
