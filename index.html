@@ -17228,6 +17228,7 @@ function crzLateral(){
     '<div class="sub">Um lado o banco, o outro o Bling</div><span class="lk">À esquerda, cada entrada do extrato Sicoob do dia (PIX, boleto Sicoob, cartão). À direita, a conta a receber do Bling que foi baixada com ela.</span>'+
     '<div class="sub">Cruzado</div><span class="lk">Mesmo valor (ou valor + juros/multa) e mesmo CPF/CNPJ. Pagamento adiantado ou atrasado é normal: o app mostra quantos dias.</span>'+
     '<div class="sub">Pendências</div><span class="lk">🟡 entrou no Sicoob e falta baixar no Bling (o app sugere a conta e você baixa com um clique).<br>🔴 baixado no Bling na conta Sicoob sem entrada no extrato.</span>'+
+    '<div class="sub">Boletos Sicoob</div><span class="lk">No extrato o Sicoob mostra só a soma do dia (“Créd. liquidação cobrança”). O app abre essa soma em cada boleto pago, pelo arquivo de cobrança do Sicoob: nº do boleto, NF/parcela, juros e multa.</span>'+
     '<div class="sub">Fica de fora</div><span class="lk">Boletos da Bling Conta (a Bling baixa sozinha) e transferências entre contas próprias.</span>';
 }
 function crzLigar(w){var m=w.querySelector('#crzMes');if(m)m.onchange=function(){if(!/^\d{4}-\d{2}$/.test(m.value))return;CRZ.mes=m.value;var ds=crzDiasUteis(CRZ.mes);CRZ.dia=ds[ds.length-1]||CRZ.mes+'-01';crzCarregarMes();blgDraw();};
@@ -18207,7 +18208,7 @@ function blgAcao(a){
   if(a==='crzMesConf'){crzConferirMes();return;}
   if(a==='crzDia'){CRZ.dia=BLG._k;CRZ.msg='';if(!CRZ.det[CRZ.dia])crzCarregarDia(CRZ.dia,false);blgDraw();return;}
   if(a==='crzRecarregar'){CRZ.msg='';crzCarregarDia(CRZ.dia,true);return;}
-  if(a==='crzBaixarSel'){var Dd=CRZ.det[CRZ.dia];if(!Dd)return;crzBaixar((Dd.sicoob||[]).filter(function(q){return !q.par&&q.baixar&&CRZ.sel[q.chave]!==false;}).map(function(q){var b=q.baixar;return {contaId:b.contaId,valor:b.valor,juros:b.juros,data:q.data,atraso:b.atraso,venc:b.venc,desc:crzTipoTxt(q.tipo)+(q.nome?' de '+q.nome:'')};}));return;}
+  if(a==='crzBaixarSel'){var Dd=CRZ.det[CRZ.dia];if(!Dd)return;crzBaixar((Dd.sicoob||[]).filter(function(q){return !q.par&&q.baixar&&CRZ.sel[q.chave]!==false;}).map(function(q){var b=q.baixar;return {contaId:b.contaId,valor:b.valor,juros:b.juros,desconto:b.desconto||0,data:q.data,atraso:b.atraso,venc:b.venc,desc:crzTipoTxt(q.tipo)+(q.nome?' de '+q.nome:'')};}));return;}
   if(a==='crzBaixarSug'){var Ds=CRZ.det[CRZ.dia];if(!Ds)return;var pz=String(BLG._k).split('|'),q2=(Ds.sicoob||[]).filter(function(q){return q.chave===pz[0];})[0];if(!q2)return;var sg=(q2.sugestoes||[]).filter(function(z){return String(z.contaId)===pz[1];})[0];if(!sg)return;
     var at=Math.round((Date.parse(q2.data)-Date.parse(sg.venc||q2.data))/864e5);crzBaixar([{contaId:sg.contaId,valor:Math.min(sg.valor,q2.valor),juros:Math.max(0,Math.round((q2.valor-sg.valor)*100)/100),data:q2.data,atraso:at,venc:sg.venc,desc:crzTipoTxt(q2.tipo)+(q2.nome?' de '+q2.nome:'')}]);return;}
   if(a==='fecharPix'&&x){var kf=BLG.sel;BLG.pixFechado[kf]=1;delete BLG.pix[kf];blgDraw();return;}
