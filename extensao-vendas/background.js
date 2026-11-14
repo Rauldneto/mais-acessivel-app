@@ -1124,19 +1124,22 @@ function fwHostname() {
 async function fwRegistrarMaquina(){
   try{
     await fwHostname();
-    // Tenta descobrir usuario logado do app Mais Acessivel
+    // Tenta descobrir usuario logado do app Mais Acessivel - AGUARDA antes de usar
     try{
-      chrome.storage.local.get(['appUsuario'],function(st){
-        if(st && st.appUsuario) FW.usuario=st.appUsuario;
-      });
+      var st = await chrome.storage.local.get(['appUsuario','appRole']);
+      if(st && st.appUsuario) FW.usuario=st.appUsuario;
+      if(st && st.appRole) FW.role=st.appRole;
     }catch(_){}
     await fetch(FW_FB+'/firewall/maquinas/'+encodeURIComponent(FW.hostname)+'.json',{
       method:'PATCH',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        usuario:FW.usuario,
+        usuario:FW.usuario||'desconhecido',
+        role:FW.role||'',
         lastSeen:new Date().toISOString(),
-        extVersion:chrome.runtime.getManifest().version
+        extVersion:chrome.runtime.getManifest().version,
+        // navigator.userAgent nao da hostname real, mas da pistas uteis
+        platform:(navigator && navigator.platform)||''
       })
     });
   }catch(e){ console.warn('[FW] registrar',e); }
