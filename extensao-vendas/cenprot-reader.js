@@ -23,7 +23,8 @@
     console.log('[CENPROT reader v2.4.2] ativo pra CNPJ', cnpj);
 
     var STATUS = { preencheu: false, consultou: false, leu: false };
-    var MAX_TENTATIVAS = 40;
+    var MAX_TENTATIVAS = 60;  // 60 x 300ms = 18s para preencher, 60 x 300ms para ler
+    var POLL_MS = 300;        // Antes era 500ms — acelera a detecção
 
     function fmt(cnpj) {
       return cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
@@ -94,41 +95,68 @@
           if (btn) {
             btn.click();
             STATUS.consultou = true;
-            setTimeout(function(){ lerResultado(0); }, 1500);
+            setTimeout(function(){ lerResultado(0); }, 800); // antes 1500
           } else {
-            setTimeout(function(){ preencherEConsultar(tent+1); }, 500);
+            setTimeout(function(){ preencherEConsultar(tent+1); }, POLL_MS);
           }
         }
-      }, 400);
+      }, 300);
     }
 
     function lerResultado(tent) {
       tent = tent || 0;
       if (tent > MAX_TENTATIVAS) {
-        reportar({ erro: 'não consegui ler o resultado após 20s — veja o resultado manualmente' });
+        reportar({ erro: 'não consegui ler o resultado após 20s — veja manualmente' });
         return;
       }
       var corpo = (document.body.innerText || '').trim();
       var temProtesto = /(consta|existem?|possui|há)\s+(protest|apontament|t[ií]tul)/i.test(corpo);
       var naoConsta = /(n[aã]o\s+consta|sem\s+protest|nenhum\s+protest|sem\s+apontament|n[aã]o\s+h[aá]|n[aã]o\s+foram\s+encontrados?|n[aã]o\s+possui)/i.test(corpo);
       if (!temProtesto && !naoConsta) {
-        setTimeout(function(){ lerResultado(tent+1); }, 500);
+        setTimeout(function(){ lerResultado(tent+1); }, POLL_MS);
         return;
       }
       var qtdMatch = corpo.match(/(\d+)\s+(apontament|protest|t[ií]tul)/i);
       var valorMatch = corpo.match(/R\$\s*([\d.,]+)/);
       var cartorios = [];
+      var porEstado = {}; // UF -> {qtd, valor_num}
       var linhas = corpo.split('\n');
+      var UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
       linhas.forEach(function(l) {
-        if (/(tabelionato|cart[oó]rio|\dº\s*(of[ií]cio|tab))/i.test(l) && l.length < 180) {
-          cartorios.push(l.trim());
+        var lt = l.trim();
+        if (/(tabelionato|cart[oó]rio|\dº\s*(of[ií]cio|tab))/i.test(lt) && lt.length < 200) {
+          cartorios.push(lt);
+          // Tenta extrair UF (procura "- UF" no fim ou "/UF" ou " UF")
+          var ufMatch = lt.match(/[\s\-\/\(]\b(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)\b[\s\-\/\),]/i) ||
+                        lt.match(/\b(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)\s*$/i);
+          if (ufMatch) {
+            var uf = ufMatch[1].toUpperCase();
+            if (!porEstado[uf]) porEstado[uf] = { qtd: 0, valor_num: 0 };
+            porEstado[uf].qtd++;
+            // Tenta achar valor na mesma linha
+            var vm = lt.match(/R\$\s*([\d.,]+)/);
+            if (vm) {
+              var v = parseFloat(vm[1].replace(/\./g,'').replace(',','.')) || 0;
+              porEstado[uf].valor_num += v;
+            }
+          }
         }
+      });
+      // Formata porEstado em valor legível
+      var porEstadoFmt = {};
+      Object.keys(porEstado).forEach(function(uf){
+        var v = porEstado[uf].valor_num;
+        porEstadoFmt[uf] = {
+          qtd: porEstado[uf].qtd,
+          valor: v > 0 ? v.toLocaleString('pt-BR', {minimumFractionDigits:2}) : '?'
+        };
       });
       reportar({
         temProtesto: temProtesto && !naoConsta,
-        quantidade: qtdMatch ? parseInt(qtdMatch[1], 10) : (temProtesto ? 1 : 0),
+        quantidade: qtdMatch ? parseInt(qtdMatch[1], 10) : (temProtesto ? Math.max(1, cartorios.length) : 0),
         valorTotal: valorMatch ? valorMatch[1] : '',
-        cartorios: cartorios.slice(0, 5),
+        cartorios: cartorios.slice(0, 10),
+        porEstado: porEstadoFmt,
         urlResultado: location.href
       });
       try{ sessionStorage.removeItem(SESSION_KEY); }catch(_){}
