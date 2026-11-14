@@ -22034,10 +22034,13 @@ function renderModeloEmTeste(){
     if(boxManual) boxManual.style.display='none';
     if(status){status.style.display='block';status.style.background='#eff6ff';status.style.color='#1e40af';status.innerHTML='\ud83e\udd16 Consultando CENPROT automaticamente em segundo plano... <span style="font-weight:400;font-size:11px">(pode pedir permiss\u00e3o do certificado 1x no in\u00edcio do dia)</span>';}
     var reqId='cenprot_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
+    // Timeout do frontend: maior que o do backend (120s), pra deixar backend
+    // responder "precisaLogin" antes de cair aqui
     var timeoutId=setTimeout(function(){
       window.removeEventListener('message',receber);
-      mostrarErro('\u23f3 Timeout. Poss\u00edvel motivo: voc\u00ea ainda n\u00e3o logou no CENPROT hoje. Abra manualmente 1 vez ou tente de novo.');
-    },75000);
+      // Se chegamos aqui sem resposta, provavelmente a sess\u00e3o expirou
+      mostrarErro('Nenhuma resposta do CENPROT em 2min. Provavelmente a sess\u00e3o expirou.', true);
+    },130000);
     function mostrarErro(txt, precisaLogin){
       if(status){
         status.style.background='#fef3c7';status.style.color='#92400e';
