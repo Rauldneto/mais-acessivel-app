@@ -3454,7 +3454,7 @@ function iniEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){re
 function iniAdmin(){return STATE.roleLogado==='admin';}
 // Mesma regra do menu (renderModuloNav): quais abas este usuário enxerga
 function iniModulos(){
-  var todos=['frete','mod10','mod2','mod7','mod8','mod9','mod26','mod3','mod4','mod11','mod12','mod13','mod20','mod14','mod16','mod19','mod23','mod27','mod17','mod22','mod5','mod15'];
+  var todos=['frete','mod10','mod2','mod7','mod8','mod9','mod26','mod3','mod4','mod11','mod12','mod13','mod20','mod14','mod16','mod19','mod23','mod27','mod17','mod22','mod5','mod15','mod28'];
   if(iniAdmin())return todos;
   var ids=todos;
   if(STATE.abasPermitidas&&STATE.abasPermitidas.length){
@@ -3463,7 +3463,7 @@ function iniModulos(){
     if(p.indexOf('_v2')<0&&p.indexOf('mod17')>=0&&p.indexOf('mod22')<0)p.push('mod22');
     ids=todos.filter(function(id){return p.indexOf(id)>=0;});
   }
-  var soAdmin=['mod11','mod12','mod13','mod14','mod15','mod16','mod19','mod23','mod27'];
+  var soAdmin=['mod11','mod12','mod13','mod14','mod15','mod16','mod19','mod23','mod27','mod28'];
   return ids.filter(function(id){return soAdmin.indexOf(id)<0;});
 }
 function iniPode(id){return iniModulos().indexOf(id)>=0;}
