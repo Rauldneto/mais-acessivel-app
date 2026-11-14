@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mais Acessível — Vendas e Atendimento",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "description": "Assistente de vendas da Mais Acessível: Bling, WhatsApp, consulta automática CENPROT e firewall de domínios.",
   "permissions": [
     "activeTab",
@@ -59,7 +59,10 @@
     {
       "matches": [
         "https://site.cenprotnacional.org.br/*",
-        "https://*.cenprotnacional.org.br/*"
+        "https://*.cenprotnacional.org.br/*",
+        "https://www.pesquisaprotesto.com.br/*",
+        "https://pesquisaprotesto.com.br/*",
+        "https://*.pesquisaprotesto.com.br/*"
       ],
       "js": [
         "cenprot-reader.js"
