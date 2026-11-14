@@ -53,7 +53,8 @@
       try {
         chrome.runtime.sendMessage({ action: 'cenprotAuto', cnpj: req.cnpj || '' }, function(resp) {
           var erro = chrome.runtime.lastError ? chrome.runtime.lastError.message : null;
-          window.postMessage(Object.assign({ source: 'ma-ext', type: 'cenprotResp', reqId: req.reqId }, resp || { ok: false, erro: erro || 'Sem resposta da extensão' }), '*');
+          var r = resp || { ok: false, erro: erro || 'Sem resposta da extensão' };
+          window.postMessage(Object.assign({ source: 'ma-ext', type: 'cenprotResp', reqId: req.reqId }, r), '*');
         });
       } catch (err) {
         window.postMessage({ source: 'ma-ext', type: 'cenprotResp', reqId: req.reqId, ok: false, erro: 'Extensão foi atualizada: recarregue o app (🔄 Atualizar).' }, '*');

@@ -1208,27 +1208,48 @@ async function fwLogar(hostname, url, acao){
 // Consulta CENPROT em segundo plano (aba invisível)
 var CENPROT_PENDING = {}; // cnpj -> {resolve, timeoutId, tabId}
 
+// Verifica se já autenticamos hoje (sessão válida há < 6h)
+async function cenprotPrecisaAutenticar(){
+  try{
+    var st = await chrome.storage.local.get(['cenprotUltimoLogin']);
+    if (!st.cenprotUltimoLogin) return true;
+    var idadeMs = Date.now() - new Date(st.cenprotUltimoLogin).getTime();
+    return idadeMs > 6*60*60*1000; // 6 horas
+  }catch(_){ return true; }
+}
+
 function cenprotAutoConsultar(cnpj){
-  return new Promise(function(resolve){
+  return new Promise(async function(resolve){
     cnpj = (cnpj||'').replace(/\D/g,'');
     if (cnpj.length !== 14) return resolve({ok:false, erro:'CNPJ inválido'});
-    // URL do CENPROT com param - content script detecta e automatiza
-    var url = 'https://site.cenprotnacional.org.br/consulta-publica?cnpj='+cnpj+'&from=maisacessivel';
-    // Abre aba em segundo plano, não ativada
-    chrome.tabs.create({url: url, active: false}, function(tab){
+    var precisaAut = await cenprotPrecisaAutenticar();
+    // URL correta - pesquisaprotesto.com.br é onde o certificado funciona
+    var url = 'https://www.pesquisaprotesto.com.br/?cnpj='+cnpj+'&from=maisacessivel';
+    // 1ª do dia: aba ATIVA pra popup do cert aparecer. Demais: aba invisível.
+    var opcoes = { url: url, active: precisaAut };
+    var timeoutMs = precisaAut ? 120000 : 45000;
+    chrome.tabs.create(opcoes, function(tab){
       if (!tab || chrome.runtime.lastError) {
         return resolve({ok:false, erro:'não consegui abrir a aba'});
       }
       var timeoutId = setTimeout(function(){
         try{ chrome.tabs.remove(tab.id); }catch(_){}
         delete CENPROT_PENDING[cnpj];
-        resolve({ok:false, erro:'timeout: 60s sem resposta — pode ser que você precise logar no CENPROT uma vez primeiro'});
-      }, 60000);
+        resolve({
+          ok: false,
+          precisaLogin: precisaAut,
+          erro: precisaAut
+            ? 'Primeira consulta do dia - faça login no CENPROT com o certificado uma vez e tente de novo'
+            : 'timeout: ' + (timeoutMs/1000) + 's sem resposta'
+        });
+      }, timeoutMs);
       CENPROT_PENDING[cnpj] = {
         resolve: function(resultado){
           clearTimeout(timeoutId);
           try{ chrome.tabs.remove(tab.id); }catch(_){}
           delete CENPROT_PENDING[cnpj];
+          // Marca que autenticou com sucesso agora (vale por 6h)
+          try{ chrome.storage.local.set({cenprotUltimoLogin: new Date().toISOString()}); }catch(_){}
           resolve({ok:true, resultado: resultado});
         },
         tabId: tab.id
@@ -1237,11 +1258,20 @@ function cenprotAutoConsultar(cnpj){
   });
 }
 
+// Reset manual da autenticação (chamado quando usuário clica "Autenticar agora")
+async function cenprotResetAuth(){
+  try{ await chrome.storage.local.remove('cenprotUltimoLogin'); }catch(_){}
+}
+
 // Mensageria com content scripts
 chrome.runtime.onMessage.addListener(function(msg, sender, responder){
   if(msg && msg.action==='cenprotAuto'){
     cenprotAutoConsultar(msg.cnpj).then(function(r){ responder(r); });
     return true; // async
+  }
+  if(msg && msg.action==='cenprotResetAuth'){
+    cenprotResetAuth().then(function(){ responder({ok:true}); });
+    return true;
   }
   if(msg && msg.tipo==='fw_check'){
     (async function(){
