@@ -1221,6 +1221,8 @@ async function cenprotPrecisaAutenticar(){
 // Abre popup pequeno de login GOV.BR → CENPROT. Detecta sucesso e fecha sozinho.
 var CENPROT_LOGIN_POPUP = null;
 async function cenprotAbrirLoginGovBr(){
+  // Marca flag no storage pra content script saber que é modo login (sobrevive redirects)
+  try{ await chrome.storage.local.set({cenprotLoginEmAndamento: new Date().toISOString()}); }catch(_){}
   return new Promise(function(resolve){
     if (CENPROT_LOGIN_POPUP) {
       try{ chrome.windows.remove(CENPROT_LOGIN_POPUP.windowId); }catch(_){}
@@ -1249,6 +1251,8 @@ async function cenprotAbrirLoginGovBr(){
         resolve: function(ok, erro){
           clearTimeout(timeoutId);
           try{ chrome.windows.remove(win.id); }catch(_){}
+          // Limpa flag de modo login
+          try{ chrome.storage.local.remove('cenprotLoginEmAndamento'); }catch(_){}
           if (ok) {
             chrome.storage.local.set({cenprotUltimoLogin: new Date().toISOString()});
             // Log no Firebase pra medir duração real da sessão (monitoramento)

@@ -12,18 +12,92 @@
     var modoLogin = url.searchParams.get('login') === 'govbr';
     var SESSION_KEY = 'ma_cenprot_cnpj';
 
-    // MODO LOGIN: detecta sucesso e avisa background
+    // Modo login persiste entre redirects via chrome.storage (todos os domínios compartilham)
+    // Se a flag estiver setada, considera modo login mesmo sem URL param
+    chrome.storage.local.get(['cenprotLoginEmAndamento'], function(st){
+      var flagAtiva = st && st.cenprotLoginEmAndamento;
+      if (flagAtiva) {
+        // Se a flag foi setada < 5 min atrás, considera login em andamento
+        var idade = Date.now() - new Date(flagAtiva).getTime();
+        if (idade < 5*60*1000) {
+          modoLogin = true;
+          processar();
+          return;
+        }
+      }
+      processar();
+    });
+
+    function processar(){
+
+    // MODO LOGIN: esconde CENPROT + clica "Entrar com GOV.BR" automático + detecta sucesso
     if (modoLogin) {
-      console.log('[CENPROT] modo login - aguardando autenticação');
+      console.log('[CENPROT] modo login - escondendo página + buscando botão GOV.BR');
+      // 1) Esconde o corpo da página do CENPROT com overlay "Redirecionando pro GOV.BR..."
+      function mostrarOverlay(txt){
+        var ov = document.getElementById('ma_overlay_login');
+        if (!ov) {
+          ov = document.createElement('div');
+          ov.id = 'ma_overlay_login';
+          ov.style.cssText = 'position:fixed;inset:0;background:linear-gradient(135deg,#1565c0,#1d4ed8);z-index:2147483647;display:flex;align-items:center;justify-content:center;color:#fff;font-family:-apple-system,"Segoe UI",sans-serif;text-align:center;padding:20px';
+          document.documentElement.appendChild(ov);
+        }
+        ov.innerHTML = '<div style="max-width:380px"><div style="font-size:48px;margin-bottom:12px">🛡️</div><div style="font-size:18px;font-weight:700;margin-bottom:8px">'+txt+'</div><div style="font-size:13px;opacity:.85;line-height:1.6">Aguarde, estamos levando você direto pro GOV.BR...</div><div style="margin-top:20px;width:40px;height:40px;border:4px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;margin:20px auto 0"></div></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
+      }
+      function esconderOverlay(){
+        var ov = document.getElementById('ma_overlay_login');
+        if (ov) ov.remove();
+      }
+
+      mostrarOverlay('Mais Acessível · Autenticação CENPROT');
+
+      // 2) Procura e clica no botão "Entrar com GOV.BR"
+      function clicarEntrarGovBr(tent) {
+        tent = tent || 0;
+        if (tent > 20) { esconderOverlay(); return; } // desiste após 10s, mostra a página pro user
+        // Procura por botões/links com texto "gov.br" ou "entrar"
+        var alvos = document.querySelectorAll('a, button, [role="button"]');
+        var candidatos = [];
+        for (var i = 0; i < alvos.length; i++) {
+          var el = alvos[i];
+          var t = (el.textContent || '').trim().toLowerCase();
+          var h = (el.getAttribute('href') || '').toLowerCase();
+          if (/gov\.?br/.test(t) || /gov\.?br/.test(h) || /entrar\s+com\s+gov/i.test(t)) {
+            candidatos.push({el: el, score: 10});
+          } else if (/^(entrar|login|acessar)$/i.test(t)) {
+            candidatos.push({el: el, score: 1});
+          }
+        }
+        // Prioriza quem tem "gov.br"
+        candidatos.sort(function(a,b){return b.score-a.score;});
+        for (var j = 0; j < candidatos.length; j++) {
+          if (candidatos[j].el.offsetParent !== null) {
+            console.log('[CENPROT] clicando em:', candidatos[j].el.textContent.trim());
+            candidatos[j].el.click();
+            setTimeout(function(){ clicarEntrarGovBr(tent+5); }, 1500);
+            return;
+          }
+        }
+        setTimeout(function(){ clicarEntrarGovBr(tent+1); }, 500);
+      }
+      setTimeout(function(){ clicarEntrarGovBr(0); }, 300);
+
+      // 3) Fica monitorando: quando chegar no GOV.BR, tira overlay (pro user ver login). Quando voltar logado, avisa background.
       var checagemLogin = 0;
       var intervalLogin = setInterval(function(){
         checagemLogin++;
-        if (checagemLogin > 180) { clearInterval(intervalLogin); return; } // 3min
-        // Verifica se tem sinais de usuário logado
+        if (checagemLogin > 300) { clearInterval(intervalLogin); return; } // 5min
+        var host = location.hostname;
+        // Se chegou no gov.br → remove overlay pra user ver tela de login
+        if (/gov\.br/.test(host)) {
+          esconderOverlay();
+          return;
+        }
+        // Se voltou pra pesquisaprotesto depois do login
         var corpo = document.body.innerText || '';
-        var logado = /\b(sair|logout|meus\s+dados|meu\s+perfil|minhas\s+consultas)\b/i.test(corpo) ||
+        var logado = /\b(sair|logout|meus\s+dados|meu\s+perfil|minhas\s+consultas|bem.vindo)\b/i.test(corpo) ||
                      document.querySelector('a[href*="logout"],a[href*="sair"],[class*="logout"]');
-        if (logado) {
+        if (logado && !/gov\.br/.test(host)) {
           clearInterval(intervalLogin);
           console.log('[CENPROT] detectou login OK');
           try{ chrome.runtime.sendMessage({tipo: 'cenprot_logado_detectado', url: location.href}); }catch(_){}
@@ -200,6 +274,7 @@
 
     // Começa depois que a página respirar
     setTimeout(function(){ preencherEConsultar(0); }, 800);
+    } // fim de processar()
   }catch(e){
     console.error('[CENPROT reader] falhou', e);
   }
