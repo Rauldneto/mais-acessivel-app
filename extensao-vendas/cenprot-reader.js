@@ -1,7 +1,7 @@
-// cenprot-reader.js (v2.4.2)
-// Content script injetado em TODAS as páginas do CENPROT (Nacional e SP/pesquisaprotesto).
-// Fluxo: app Mais Acessível abre nova aba com ?cnpj=XXX&from=maisacessivel
-//        content script detecta → tenta preencher automaticamente → lê resultado → devolve pro app.
+// cenprot-reader.js (v2.4.6)
+// Content script em TODAS as páginas do CENPROT. 2 modos:
+// 1) Modo login (login=govbr): detecta quando usuário autenticou e avisa o background pra fechar popup
+// 2) Modo consulta (cnpj=X): preenche formulário, consulta, lê resultado
 
 (function(){
   'use strict';
@@ -9,8 +9,29 @@
     var url = new URL(location.href);
     var cnpj = url.searchParams.get('cnpj') || url.searchParams.get('CNPJ') || url.searchParams.get('documento');
     var fromApp = (url.searchParams.get('from') || '') === 'maisacessivel';
-    // Marcador sessao: permite continuar o fluxo mesmo depois de redirect/login
+    var modoLogin = url.searchParams.get('login') === 'govbr';
     var SESSION_KEY = 'ma_cenprot_cnpj';
+
+    // MODO LOGIN: detecta sucesso e avisa background
+    if (modoLogin) {
+      console.log('[CENPROT] modo login - aguardando autenticação');
+      var checagemLogin = 0;
+      var intervalLogin = setInterval(function(){
+        checagemLogin++;
+        if (checagemLogin > 180) { clearInterval(intervalLogin); return; } // 3min
+        // Verifica se tem sinais de usuário logado
+        var corpo = document.body.innerText || '';
+        var logado = /\b(sair|logout|meus\s+dados|meu\s+perfil|minhas\s+consultas)\b/i.test(corpo) ||
+                     document.querySelector('a[href*="logout"],a[href*="sair"],[class*="logout"]');
+        if (logado) {
+          clearInterval(intervalLogin);
+          console.log('[CENPROT] detectou login OK');
+          try{ chrome.runtime.sendMessage({tipo: 'cenprot_logado_detectado', url: location.href}); }catch(_){}
+        }
+      }, 1000);
+      return;
+    }
+
     if (cnpj && fromApp) {
       try{ sessionStorage.setItem(SESSION_KEY, cnpj); }catch(_){}
     } else {

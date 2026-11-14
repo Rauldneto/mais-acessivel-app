@@ -49,6 +49,26 @@
       window.postMessage({ source: 'ma-ext', type: 'recarregando', versao: versao }, '*');
       return;
     }
+    if (req.type === 'cenprotStatus') {
+      try {
+        chrome.runtime.sendMessage({ action: 'cenprotStatus' }, function(resp) {
+          window.postMessage(Object.assign({ source: 'ma-ext', type: 'cenprotStatusResp', reqId: req.reqId }, resp || {}), '*');
+        });
+      } catch (err) {
+        window.postMessage({ source: 'ma-ext', type: 'cenprotStatusResp', reqId: req.reqId, precisaLogin: true }, '*');
+      }
+      return;
+    }
+    if (req.type === 'cenprotLogar') {
+      try {
+        chrome.runtime.sendMessage({ action: 'cenprotLogar' }, function(resp) {
+          window.postMessage(Object.assign({ source: 'ma-ext', type: 'cenprotLogarResp', reqId: req.reqId }, resp || { ok: false }), '*');
+        });
+      } catch (err) {
+        window.postMessage({ source: 'ma-ext', type: 'cenprotLogarResp', reqId: req.reqId, ok: false, erro: 'Extensão foi atualizada: recarregue o app.' }, '*');
+      }
+      return;
+    }
     if (req.type === 'cenprotAuto') {
       try {
         chrome.runtime.sendMessage({ action: 'cenprotAuto', cnpj: req.cnpj || '' }, function(resp) {

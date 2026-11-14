@@ -1208,14 +1208,86 @@ async function fwLogar(hostname, url, acao){
 // Consulta CENPROT em segundo plano (aba invisível)
 var CENPROT_PENDING = {}; // cnpj -> {resolve, timeoutId, tabId}
 
-// Verifica se já autenticamos hoje (sessão válida há < 6h)
+// Verifica se já autenticamos hoje (sessão válida há < 7 dias — vamos medir o real)
 async function cenprotPrecisaAutenticar(){
   try{
     var st = await chrome.storage.local.get(['cenprotUltimoLogin']);
     if (!st.cenprotUltimoLogin) return true;
     var idadeMs = Date.now() - new Date(st.cenprotUltimoLogin).getTime();
-    return idadeMs > 6*60*60*1000; // 6 horas
+    return idadeMs > 7*24*60*60*1000; // 7 dias — se CENPROT expirar antes, consulta vai falhar e re-dispara login
   }catch(_){ return true; }
+}
+
+// Abre popup pequeno de login GOV.BR → CENPROT. Detecta sucesso e fecha sozinho.
+var CENPROT_LOGIN_POPUP = null;
+async function cenprotAbrirLoginGovBr(){
+  return new Promise(function(resolve){
+    if (CENPROT_LOGIN_POPUP) {
+      try{ chrome.windows.remove(CENPROT_LOGIN_POPUP.windowId); }catch(_){}
+      CENPROT_LOGIN_POPUP = null;
+    }
+    // Abre janela popup pequena, centralizada, focada
+    chrome.windows.create({
+      url: 'https://www.pesquisaprotesto.com.br/?login=govbr&from=maisacessivel',
+      type: 'popup',
+      width: 520,
+      height: 680,
+      focused: true
+    }, function(win){
+      if (!win || chrome.runtime.lastError) {
+        return resolve({ok: false, erro: 'não consegui abrir popup de login'});
+      }
+      var timeoutId = setTimeout(function(){
+        if (CENPROT_LOGIN_POPUP && CENPROT_LOGIN_POPUP.windowId === win.id){
+          try{ chrome.windows.remove(win.id); }catch(_){}
+          CENPROT_LOGIN_POPUP = null;
+          resolve({ok: false, erro: 'timeout: login não concluído em 3 minutos'});
+        }
+      }, 180000);
+      CENPROT_LOGIN_POPUP = {
+        windowId: win.id,
+        resolve: function(ok, erro){
+          clearTimeout(timeoutId);
+          try{ chrome.windows.remove(win.id); }catch(_){}
+          if (ok) {
+            chrome.storage.local.set({cenprotUltimoLogin: new Date().toISOString()});
+            // Log no Firebase pra medir duração real da sessão (monitoramento)
+            try{
+              chrome.storage.local.get(['appUsuario'], function(st){
+                var payload = {
+                  hora: new Date().toISOString(),
+                  usuario: (st && st.appUsuario) || 'desconhecido',
+                  tipo: 'login_cenprot_govbr'
+                };
+                fetch(FW_FB+'/cenprot_logs/'+Date.now()+'.json',{
+                  method:'PUT',
+                  headers:{'Content-Type':'application/json'},
+                  body: JSON.stringify(payload)
+                }).catch(function(){});
+              });
+            }catch(_){}
+          }
+          CENPROT_LOGIN_POPUP = null;
+          resolve({ok: ok, erro: erro || null});
+        }
+      };
+    });
+  });
+}
+
+// Testa se sessão CENPROT ainda tá válida (fetch simples)
+async function cenprotTestarSessao(){
+  try{
+    var r = await fetch('https://www.pesquisaprotesto.com.br/', {
+      credentials: 'include',
+      redirect: 'manual'
+    });
+    // Se redirect pra login → sessão expirou
+    if (r.type === 'opaqueredirect' || r.status >= 300) return false;
+    var txt = await r.text();
+    // Heurística: página logada tem links tipo "Sair", "Meus dados"
+    return /sair|logout|meus\s+dados|meu\s+perfil/i.test(txt);
+  }catch(_){ return false; }
 }
 
 function cenprotAutoConsultar(cnpj){
@@ -1271,6 +1343,25 @@ chrome.runtime.onMessage.addListener(function(msg, sender, responder){
   }
   if(msg && msg.action==='cenprotResetAuth'){
     cenprotResetAuth().then(function(){ responder({ok:true}); });
+    return true;
+  }
+  if(msg && msg.action==='cenprotStatus'){
+    (async function(){
+      var precisaAut = await cenprotPrecisaAutenticar();
+      responder({precisaLogin: precisaAut, ultimoLogin: null});
+    })();
+    return true;
+  }
+  if(msg && msg.action==='cenprotLogar'){
+    cenprotAbrirLoginGovBr().then(function(r){ responder(r); });
+    return true;
+  }
+  if(msg && msg.tipo==='cenprot_logado_detectado'){
+    // Content script detectou que a página voltou logada
+    if (CENPROT_LOGIN_POPUP) {
+      CENPROT_LOGIN_POPUP.resolve(true);
+    }
+    responder({ok:true});
     return true;
   }
   if(msg && msg.tipo==='fw_check'){
