@@ -125,6 +125,7 @@ export default {
         return resp(await gerarPix(env, b || {}));
       }
       if (url.pathname === '/receber/dia') return resp(await receberDia(env, url.searchParams.get('dia'), url.searchParams.get('forcar') === '1'));
+      if (url.pathname === '/receber/liq') return resp({ ok: true, l: (await env.BLING_KV.get('bolliq:' + soData(url.searchParams.get('dia')), 'json')) || [] });
       if (url.pathname === '/receber/mes') return resp(await receberMes(env, url.searchParams.get('mes')));
       if (url.pathname === '/receber/baixar' && req.method === 'POST') return resp(await receberBaixar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/cobranca/extra' && req.method === 'POST') return resp(await cobrancaExtra(env, (await req.json().catch(() => ({}))) || {}));
@@ -3034,6 +3035,7 @@ async function receberDia(env, dia, forcar) {
   const ligar = (x, cs, como) => { cs.forEach(c => usadosB.add(String(c.id))); x.par = cs.map(c => c.id); x.como = como;
     const soma = r2(cs.reduce((t, c) => t + c.valor, 0)); x.juros = r2(Math.max(0, x.valor - soma)); x.desconto = r2(Math.max(0, soma - x.valor));
     x.auto = cs.some(c => autoContas.has(String(c.id))); pares.push(x); };
+  const livresB = () => bling.filter(c => !usadosB.has(String(c.id)));
   // 0) boleto Sicoob: mesma conta (lida no arquivo) ou mesma NF/parcela + valor do título
   const nfDe = seu => { const m = String(seu || '').match(/^\s*0*(\d{1,9})\s*(?:[\/-]\s*0*(\d{1,3}))?/); return m ? String(Number(m[1])) : ''; };
   for (const x of S.filter(x => x.bol)) {
@@ -3042,7 +3044,6 @@ async function receberDia(env, dia, forcar) {
     if (c) { ligar(x, [c], 'boleto Sicoob da NF ' + (c.numero || nfDe(l.seu)) + ' (arquivo do Sicoob)'); x.juros = r2(l.juros + l.multa); x.desconto = r2(l.desconto); }
   }
   // 1) mesmo valor + mesmo CPF/CNPJ  2) valor + juros (até 15%) com mesmo CPF/CNPJ  3) mesmo valor, único no dia
-  const livresB = () => bling.filter(c => !usadosB.has(String(c.id)));
   for (const x of S) { const c = livresB().find(c => Math.abs(c.valor - x.valor) <= 0.01 && mesmoDoc(x.doc, c.doc)); if (c) ligar(x, [c], 'mesmo valor e CPF/CNPJ'); }
   for (const x of S.filter(x => !x.par)) { const c = livresB().find(c => mesmoDoc(x.doc, c.doc) && x.valor > c.valor && x.valor - c.valor <= c.valor * 0.15); if (c) ligar(x, [c], 'valor + juros/multa, mesmo CPF/CNPJ'); }
   for (const x of S.filter(x => !x.par)) {
