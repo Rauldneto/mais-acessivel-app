@@ -1914,8 +1914,10 @@ async function simularPasso(env) {
   if (job.etapa === 'tratar') {
     const fatia = job.itens.slice(job.idx, job.idx + BOL_POR_PASSO);
     for (const x0 of fatia) {
-      const x = await completarBoleto(env, x0);
+      const x0b = !x0.nossoNumero && x0.seuNumero ? Object.assign({}, x0, { nossoNumero: 'S' + x0.seuNumero.replace(/\W/g, '') + '-' + Math.round(x0.valorTitulo * 100) }) : x0;
+      const x = await completarBoleto(env, x0b);
       const m = await casarBoleto(env, x, ctx, true);
+      await guardarLiq(env, x, m.tipo === 'auto' ? m.conta : null).catch(() => {});
       const linha = { dia: job.dia, nossoNumero: x.nossoNumero, seuNumero: x.seuNumero, pagador: x.pagadorNome, doc: x.pagadorDoc,
         vencimento: x.dataVencimento, liquidacao: x.dataLiquidacao, credito: x.dataCredito, valorTitulo: x.valorTitulo, mora: x.mora, desconto: x.desconto,
         pago: x.pago, tarifa: x.tarifa, liquido: x.valorLiquido, tipo: m.tipo, motivo: m.motivo, bruto: x.bruto };
@@ -1995,6 +1997,16 @@ async function verificarBoletos(env, forcar) {
 
 // conta de boleto da Bling Conta (forma "Boleto - Bling Conta" ou conta financeira Bling Conta) — a Bling baixa sozinha
 function ehBlingConta(c) { return Number(c.formaId) === 11272919 || Number(c.portador) === 14893994469; }
+// cada boleto Sicoob liquidado fica guardado pelo dia em que o dinheiro entrou (o extrato só mostra a soma do dia)
+async function guardarLiq(env, x, conta) {
+  const dia = x.dataCredito || x.dataLiquidacao; if (!dia || !x.nossoNumero) return;
+  const k = 'bolliq:' + dia, l = (await env.BLING_KV.get(k, 'json')) || [];
+  const i = l.findIndex(y => y.nn === x.nossoNumero);
+  const reg = { nn: x.nossoNumero, seu: x.seuNumero, venc: x.dataVencimento, liq: x.dataLiquidacao, credito: dia, titulo: x.valorTitulo, pago: x.pago, juros: x.juros || 0, multa: x.multa || 0,
+    desconto: x.desconto || 0, tarifa: x.tarifa || 0, nome: x.pagadorNome || '', doc: x.pagadorDoc || '', contaId: (conta && conta.id) || (i >= 0 ? l[i].contaId : 0), numero: (conta && conta.numero) || (i >= 0 ? l[i].numero : '') };
+  if (i >= 0) { if (JSON.stringify(l[i]) === JSON.stringify(reg)) return; l[i] = reg; } else l.push(reg);
+  await env.BLING_KV.put(k, JSON.stringify(l), { expirationTtl: 400 * 86400 });
+}
 async function tratarBoletoReal(env, x0, ctx) {
   if (!x0.nossoNumero && x0.seuNumero) x0 = Object.assign({}, x0, { nossoNumero: 'S' + x0.seuNumero.replace(/\W/g, '') + '-' + Math.round(x0.valorTitulo * 100) });
   if (!x0.nossoNumero) return 'ignorado';
@@ -2003,6 +2015,7 @@ async function tratarBoletoReal(env, x0, ctx) {
   if (marca && marca !== 'bling-conta') return 'ja';
   const x = await completarBoleto(env, x0);
   const m = await casarBoleto(env, x, ctx, true);
+  await guardarLiq(env, x, m.tipo === 'auto' ? m.conta : null).catch(() => {});
   // conta de boleto da Bling Conta: a própria Bling dá a baixa — o app não mexe (decisão do Raul, 13/11/2026)
   if (m.tipo === 'auto' && ehBlingConta(m.conta)) {
     await env.BLING_KV.put('bolpago:' + x.nossoNumero, 'bling-conta', { expirationTtl: 400 * 86400 });
@@ -2965,8 +2978,10 @@ async function lerCreditos(env, de, ate) {
         const docs = (x.compl.match(/\d{2}\.?\d{3}\.?\d{3}[\s\/]?\d{4}-?\d{2}|\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g) || []).map(dig).filter(d => (d.length === 14 || d.length === 11) && d !== ECONF_CNPJ);
         if (docs.length) x.doc = docs[0];
       }
-      const partes = x.compl.split('|').map(z => z.replace(/^@/, '').trim()).filter(z => z && !/^\d[\d.\/\s-]+$/.test(z));
-      x.nome = (partes[0] || '').replace(/^(REM\.?|DE|PAGADOR)\s*:?\s*/i, '').slice(0, 80);
+      // nome de quem pagou: pula "Recebimento Pix", "Transferência Pix", CPF mascarado etc.
+      const partes = x.compl.split('|').map(z => z.replace(/^@/, '').replace(/^(REM\.?|DE|PAGADOR|FAV\.?)\s*:?\s*/i, '').trim())
+        .filter(z => z && !/^[\d.*\/\s-]+$/.test(z) && !/^(recebimento|transfer[eê]ncia|pagamento|pix|cr[eé]dito)\b/i.test(z));
+      x.nome = (partes[0] || '').slice(0, 80);
       x.tipo = tipoCredito(x.desc + ' ' + x.compl, x.doc);
       out.push(x);
     }
@@ -2998,12 +3013,34 @@ async function receberDia(env, dia, forcar) {
   const autos = log.filter(a => a.modo === 'real' && ['baixa', 'contas_pedido'].includes(a.acao) && a.data === dia && /^ok/.test(String(a.resultado || '')));
   const autoContas = new Set(autos.map(a => String(a.contaId || '')).filter(Boolean));
 
+  // crédito de cobrança do extrato = soma dos boletos Sicoob do dia: troca pela lista de boletos (arquivo de movimentação)
+  const liqs = (await env.BLING_KV.get('bolliq:' + dia, 'json')) || [];
+  const usadosL = new Set();
+  const expandidos = [];
+  for (const x of creditos) {
+    if (x.tipo !== 'boleto' || !liqs.length) { expandidos.push(x); continue; }
+    const livres = liqs.filter(l => !usadosL.has(l.nn));
+    let filhos = livres.filter(l => Math.abs(l.pago - x.valor) <= 0.01).slice(0, 1);
+    if (!filhos.length && Math.abs(r2(livres.reduce((t, l) => t + l.pago, 0)) - x.valor) <= 0.01) filhos = livres;
+    if (!filhos.length) { x.liqAviso = 'O valor não bate com os boletos lidos do Sicoob para este dia.'; expandidos.push(x); continue; }
+    filhos.forEach((l, i) => { usadosL.add(l.nn); expandidos.push({ chave: x.chave + '-' + i, data: x.data, valor: l.pago, desc: 'Boleto Sicoob nº ' + l.nn + (l.seu ? ' · seu nº ' + l.seu : ''),
+      compl: (filhos.length > 1 ? 'parte do crédito de cobrança de R$ ' + x.valor.toFixed(2).replace('.', ',') + ' · ' : '') + 'pago em ' + brData(l.liq) + (l.venc ? ' · venc. ' + brData(l.venc) : ''),
+      doc: l.doc, nome: l.nome, tipo: 'boleto', bol: l }); });
+  }
+  creditos.length = 0; creditos.push(...expandidos);
   const S = creditos.filter(x => x.tipo !== 'transf');
   const transf = creditos.filter(x => x.tipo === 'transf');
   const usadosB = new Set(), pares = [];
   const ligar = (x, cs, como) => { cs.forEach(c => usadosB.add(String(c.id))); x.par = cs.map(c => c.id); x.como = como;
     const soma = r2(cs.reduce((t, c) => t + c.valor, 0)); x.juros = r2(Math.max(0, x.valor - soma)); x.desconto = r2(Math.max(0, soma - x.valor));
     x.auto = cs.some(c => autoContas.has(String(c.id))); pares.push(x); };
+  // 0) boleto Sicoob: mesma conta (lida no arquivo) ou mesma NF/parcela + valor do título
+  const nfDe = seu => { const m = String(seu || '').match(/^\s*0*(\d{1,9})\s*(?:[\/-]\s*0*(\d{1,3}))?/); return m ? String(Number(m[1])) : ''; };
+  for (const x of S.filter(x => x.bol)) {
+    const l = x.bol;
+    const c = livresB().find(c => String(c.id) === String(l.contaId)) || livresB().find(c => nfDe(l.seu) && String(Number(c.numero)) === nfDe(l.seu) && Math.abs(c.valor - l.titulo) <= 0.01);
+    if (c) { ligar(x, [c], 'boleto Sicoob da NF ' + (c.numero || nfDe(l.seu)) + ' (arquivo do Sicoob)'); x.juros = r2(l.juros + l.multa); x.desconto = r2(l.desconto); }
+  }
   // 1) mesmo valor + mesmo CPF/CNPJ  2) valor + juros (até 15%) com mesmo CPF/CNPJ  3) mesmo valor, único no dia
   const livresB = () => bling.filter(c => !usadosB.has(String(c.id)));
   for (const x of S) { const c = livresB().find(c => Math.abs(c.valor - x.valor) <= 0.01 && mesmoDoc(x.doc, c.doc)); if (c) ligar(x, [c], 'mesmo valor e CPF/CNPJ'); }
@@ -3026,9 +3063,18 @@ async function receberDia(env, dia, forcar) {
   // o que sobrou do Sicoob: procura a conta em aberto no Bling (pode ter sido paga adiantada ou atrasada)
   const sobraS = S.filter(x => !x.par);
   let abertas = [];
-  if (sobraS.length) abertas = (await contasJanela(env, {}, true).catch(() => [])).filter(c => [1, 3].includes(c.situacao) && !ehBlingConta(c));
+  if (sobraS.length) abertas = (await contasAbertasJanela(env).catch(() => [])).filter(c => !ehBlingConta(c));
   const reservadas = new Set();
-  for (const x of sobraS) {
+  for (const x of sobraS.filter(x => x.bol)) {
+    const l = x.bol, nf = nfDe(l.seu);
+    const c = abertas.find(c => String(c.id) === String(l.contaId)) || abertas.find(c => nf && String(Number(c.numero)) === nf && Math.abs(c.valor - l.titulo) <= 0.01);
+    if (!c) continue;
+    reservadas.add(String(c.id));
+    const venc = l.venc || c.venc, atraso = venc && l.liq > venc ? Math.round((Date.parse(l.liq) - Date.parse(venc)) / 864e5) : 0;
+    x.baixar = { contaId: c.id, valor: Math.min(c.valor, r2(l.pago - l.juros - l.multa + l.desconto)), juros: r2(l.juros + l.multa), desconto: r2(l.desconto), data: dia, venc, atraso, cliente: c.cliente, numero: c.numero, origemTipo: c.origemTipo,
+      motivo: 'boleto Sicoob nº ' + l.nn + ' da NF ' + c.numero + ' (arquivo do Sicoob)' + (l.juros + l.multa ? ' · juros R$ ' + l.juros.toFixed(2).replace('.', ',') + ' + multa R$ ' + l.multa.toFixed(2).replace('.', ',') : '') };
+  }
+  for (const x of sobraS.filter(x => !x.baixar)) {
     const cand = abertas.filter(c => !reservadas.has(String(c.id))).map(c => {
       const exato = Math.abs(c.valor - x.valor) <= 0.01, doc = mesmoDoc(x.doc, c.doc), juros = x.valor > c.valor && x.valor - c.valor <= c.valor * 0.15;
       if (!exato && !(juros && doc)) return null;
@@ -3050,7 +3096,7 @@ async function receberDia(env, dia, forcar) {
     cruzados: pares.length, autos: autos.length, aBaixar: sobraS.filter(x => x.baixar).length, semConta: sobraS.filter(x => !x.baixar).length,
     blingSemBanco: sobraB.length, blingConta: blingConta.length, valorBlingConta: r2(blingConta.reduce((t, c) => t + c.valor, 0)), transferencias: transf.length,
   };
-  const limpa = x => ({ chave: x.chave, data: x.data, valor: x.valor, desc: x.desc, compl: x.compl, doc: x.doc, nome: x.nome, tipo: x.tipo,
+  const limpa = x => ({ chave: x.chave, data: x.data, valor: x.valor, desc: x.desc, compl: x.compl, doc: x.doc, nome: x.nome, tipo: x.tipo, bol: x.bol, liqAviso: x.liqAviso,
     par: x.par, como: x.como, juros: x.juros, desconto: x.desconto, auto: x.auto, baixar: x.baixar, sugestoes: x.sugestoes });
   const out = { ts: Date.now(), dia, resumo, sicoob: S.map(limpa), bling: bling.map(c => Object.assign({}, c, { auto: autoContas.has(String(c.id)), ligado: usadosB.has(String(c.id)) })),
     blingConta: blingConta.map(c => ({ id: c.id, valor: c.valor, cliente: c.cliente, numero: c.numero })), outrasContas: outrasContas.map(c => ({ id: c.id, valor: c.valor, cliente: c.cliente, numero: c.numero, portadorNome: c.portadorNome })),
@@ -3061,6 +3107,18 @@ async function receberDia(env, dia, forcar) {
   mm[dia] = Object.assign({ ts: out.ts }, resumo);
   await env.BLING_KV.put(km, JSON.stringify(mm), { expirationTtl: 400 * 86400 });
   return Object.assign({ ok: true }, out);
+}
+// todas as contas a receber em aberto (vencimento de 1 ano atrás a 6 meses à frente) — guardado 15 min
+async function contasAbertasJanela(env) {
+  const c = await env.BLING_KV.get('recAbertas', 'json');
+  if (c && Date.now() - c.ts < 15 * 60e3) return c.l;
+  const hoje = hojeLocal();
+  const lista = await paginas(env, '/contas/receber?situacoes[]=1&situacoes[]=3&tipoFiltroData=V&dataInicial=' + somaDias(hoje, -365) + '&dataFinal=' + somaDias(hoje, 180), 20);
+  const l = lista.map(x => ({ id: x.id, valor: r2(x.valor), venc: soData(x.vencimento), situacao: Number(x.situacao), cliente: (x.contato && x.contato.nome) || '', doc: dig(x.contato && x.contato.numeroDocumento),
+    origemTipo: (x.origem && x.origem.tipoOrigem) || '', numero: String((x.origem && x.origem.numero) || ''), forma: Number(x.formaPagamento && x.formaPagamento.codigoFiscal) || 0,
+    formaId: (x.formaPagamento && x.formaPagamento.id) || 0, portador: (x.contaContabil && x.contaContabil.id) || 0 }));
+  await env.BLING_KV.put('recAbertas', JSON.stringify({ ts: Date.now(), l }), { expirationTtl: 3600 });
+  return l;
 }
 async function receberMes(env, mes) {
   if (!/^\d{4}-\d{2}$/.test(String(mes || ''))) mes = hojeLocal().slice(0, 7);
@@ -3085,6 +3143,7 @@ async function receberBaixar(env, b) {
     } catch (e) { out.push({ contaId: it.contaId, ok: false, erro: String(e.message || e).slice(0, 200) }); }
   }
   if (b.dia) await env.BLING_KV.delete('recdia:' + soData(b.dia)).catch(() => {});
+  await env.BLING_KV.delete('recAbertas').catch(() => {});
   await abertosVelho(env);
   return { ok: out.every(x => x.ok), itens: out };
 }
