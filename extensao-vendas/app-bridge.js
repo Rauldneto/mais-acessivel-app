@@ -49,6 +49,17 @@
       window.postMessage({ source: 'ma-ext', type: 'recarregando', versao: versao }, '*');
       return;
     }
+    if (req.type === 'cenprotAuto') {
+      try {
+        chrome.runtime.sendMessage({ action: 'cenprotAuto', cnpj: req.cnpj || '' }, function(resp) {
+          var erro = chrome.runtime.lastError ? chrome.runtime.lastError.message : null;
+          window.postMessage(Object.assign({ source: 'ma-ext', type: 'cenprotResp', reqId: req.reqId }, resp || { ok: false, erro: erro || 'Sem resposta da extensão' }), '*');
+        });
+      } catch (err) {
+        window.postMessage({ source: 'ma-ext', type: 'cenprotResp', reqId: req.reqId, ok: false, erro: 'Extensão foi atualizada: recarregue o app (🔄 Atualizar).' }, '*');
+      }
+      return;
+    }
     if (req.type === 'finBling') {
       try {
         chrome.runtime.sendMessage({ action: 'finBling', op: req.op, dados: req.dados || {} }, function(resp) {

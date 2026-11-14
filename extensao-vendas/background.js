@@ -1205,8 +1205,44 @@ async function fwLogar(hostname, url, acao){
   }catch(_){}
 }
 
+// Consulta CENPROT em segundo plano (aba invisível)
+var CENPROT_PENDING = {}; // cnpj -> {resolve, timeoutId, tabId}
+
+function cenprotAutoConsultar(cnpj){
+  return new Promise(function(resolve){
+    cnpj = (cnpj||'').replace(/\D/g,'');
+    if (cnpj.length !== 14) return resolve({ok:false, erro:'CNPJ inválido'});
+    // URL do CENPROT com param - content script detecta e automatiza
+    var url = 'https://site.cenprotnacional.org.br/consulta-publica?cnpj='+cnpj+'&from=maisacessivel';
+    // Abre aba em segundo plano, não ativada
+    chrome.tabs.create({url: url, active: false}, function(tab){
+      if (!tab || chrome.runtime.lastError) {
+        return resolve({ok:false, erro:'não consegui abrir a aba'});
+      }
+      var timeoutId = setTimeout(function(){
+        try{ chrome.tabs.remove(tab.id); }catch(_){}
+        delete CENPROT_PENDING[cnpj];
+        resolve({ok:false, erro:'timeout: 60s sem resposta — pode ser que você precise logar no CENPROT uma vez primeiro'});
+      }, 60000);
+      CENPROT_PENDING[cnpj] = {
+        resolve: function(resultado){
+          clearTimeout(timeoutId);
+          try{ chrome.tabs.remove(tab.id); }catch(_){}
+          delete CENPROT_PENDING[cnpj];
+          resolve({ok:true, resultado: resultado});
+        },
+        tabId: tab.id
+      };
+    });
+  });
+}
+
 // Mensageria com content scripts
 chrome.runtime.onMessage.addListener(function(msg, sender, responder){
+  if(msg && msg.action==='cenprotAuto'){
+    cenprotAutoConsultar(msg.cnpj).then(function(r){ responder(r); });
+    return true; // async
+  }
   if(msg && msg.tipo==='fw_check'){
     (async function(){
       // Se a politica esta velha, atualiza antes
@@ -1219,14 +1255,20 @@ chrome.runtime.onMessage.addListener(function(msg, sender, responder){
     return true; // async
   }
   if(msg && msg.tipo==='cenprot_resultado'){
-    // Repassa pra aba(s) do app Mais Acessivel
-    try{
-      chrome.tabs.query({url:'https://rauldneto.github.io/mais-acessivel-app/*'},function(abas){
-        abas.forEach(function(t){
-          try{ chrome.tabs.sendMessage(t.id,{tipo:'cenprot_resultado',cnpj:msg.cnpj,resultado:msg.resultado}); }catch(_){}
+    // Se vier de uma consulta automatica em andamento, resolve a promise
+    var cnpjKey = (msg.cnpj||'').replace(/\D/g,'');
+    if (cnpjKey && CENPROT_PENDING[cnpjKey]) {
+      CENPROT_PENDING[cnpjKey].resolve(msg.resultado);
+    } else {
+      // Fallback: repassa pra aba(s) do app Mais Acessivel
+      try{
+        chrome.tabs.query({url:'https://rauldneto.github.io/mais-acessivel-app/*'},function(abas){
+          abas.forEach(function(t){
+            try{ chrome.tabs.sendMessage(t.id,{tipo:'cenprot_resultado',cnpj:msg.cnpj,resultado:msg.resultado}); }catch(_){}
+          });
         });
-      });
-    }catch(_){}
+      }catch(_){}
+    }
     responder({ok:true});
     return true;
   }
