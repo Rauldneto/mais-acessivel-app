@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Mais Acessível — Vendas e Atendimento",
-  "version": "2.4.8",
-  "description": "Assistente de vendas da Mais Acessível: Bling, WhatsApp, consulta automática CENPROT e firewall de domínios.",
+  "version": "2.4.9",
+  "description": "Assistente de vendas da Mais Acessível: Bling, WhatsApp, firewall de domínios.",
   "permissions": [
     "activeTab",
     "scripting",
@@ -20,11 +20,6 @@
     "https://web.whatsapp.com/*",
     "https://maisacessivel-1d0ad-default-rtdb.firebaseio.com/*",
     "https://soft-limit-b3a1.rauldias.workers.dev/*",
-    "https://site.cenprotnacional.org.br/*",
-    "https://*.cenprotnacional.org.br/*",
-    "https://www.pesquisaprotesto.com.br/*",
-    "https://*.pesquisaprotesto.com.br/*",
-    "https://*.gov.br/*",
     "<all_urls>"
   ],
   "background": {
@@ -57,22 +52,6 @@
         "app-bridge.js"
       ],
       "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "https://site.cenprotnacional.org.br/*",
-        "https://*.cenprotnacional.org.br/*",
-        "https://www.pesquisaprotesto.com.br/*",
-        "https://pesquisaprotesto.com.br/*",
-        "https://*.pesquisaprotesto.com.br/*",
-        "https://sso.acesso.gov.br/*",
-        "https://*.acesso.gov.br/*",
-        "https://*.gov.br/*"
-      ],
-      "js": [
-        "cenprot-reader.js"
-      ],
-      "run_at": "document_start"
     },
     {
       "matches": [
