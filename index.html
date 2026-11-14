@@ -17188,7 +17188,7 @@ function crzTela(){
   if(R.blingSemBanco)h+='<div class="blg-msg err">⚠️ <b>'+R.blingSemBanco+' recebimento(s) baixado(s) no Bling na conta Sicoob sem entrada no extrato deste dia.</b> Confira a data da baixa ou a conta financeira.</div>';
   if(CRZ.msg)h+='<div class="blg-msg">'+CRZ.msg+'</div>';
   var S=D.sicoob||[],B={};(D.bling||[]).forEach(function(c){B[c.id]=c;});
-  var lado=function(x){return '<div class="crz-s"><div class="crz-v">R$ '+blgMoeda(x.valor)+'</div><div><span class="crz-tp '+x.tipo+'">'+crzTipoTxt(x.tipo)+'</span> '+blgEsc(x.nome||x.desc)+'</div><small>'+blgEsc(x.desc)+(x.doc?' · '+crzDoc(x.doc):'')+'</small></div>';};
+  var lado=function(x){return '<div class="crz-s"><div class="crz-v">R$ '+blgMoeda(x.valor)+'</div><div><span class="crz-tp '+x.tipo+'">'+crzTipoTxt(x.tipo)+'</span> '+blgEsc(x.nome||x.desc)+'</div><small>'+blgEsc(x.desc)+(x.doc?' · '+crzDoc(x.doc):'')+'</small>'+(x.bol||x.liqAviso?'<small>'+blgEsc(x.compl||'')+(x.bol&&(x.bol.juros||x.bol.multa)?' · <b style="color:#b91c1c">juros R$ '+blgMoeda(x.bol.juros)+' + multa R$ '+blgMoeda(x.bol.multa)+'</b>':'')+(x.liqAviso?' <b style="color:#b45309">'+blgEsc(x.liqAviso)+'</b>':'')+'</small>':'')+'</div>';};
   // pendências primeiro
   var pend=S.filter(function(x){return !x.par;});
   if(pend.length){
