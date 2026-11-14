@@ -30,6 +30,31 @@
     });
   } catch (e) {}
 
+  // Recebe pedidos do app pra ler/gravar credenciais CENPROT via chrome.storage
+  window.addEventListener('message', function(e) {
+    if (e.source !== window || !e.data || e.data.source !== 'ma-app') return;
+    var req = e.data;
+    if (req.type === 'cenprotCredGet') {
+      try {
+        chrome.storage.local.get(['cenprotUsuario', 'cenprotSenha'], function(st) {
+          window.postMessage({ source: 'ma-ext', type: 'cenprotCredGetResp', reqId: req.reqId, usuario: (st && st.cenprotUsuario) || '', temSenha: !!(st && st.cenprotSenha) }, '*');
+        });
+      } catch (err) {
+        window.postMessage({ source: 'ma-ext', type: 'cenprotCredGetResp', reqId: req.reqId, usuario: '', temSenha: false }, '*');
+      }
+    }
+    if (req.type === 'cenprotCredSet') {
+      try {
+        chrome.storage.local.set({ cenprotUsuario: req.usuario || '', cenprotSenha: req.senha || '' }, function() {
+          window.postMessage({ source: 'ma-ext', type: 'cenprotCredSetResp', reqId: req.reqId, ok: true }, '*');
+        });
+      } catch (err) {
+        window.postMessage({ source: 'ma-ext', type: 'cenprotCredSetResp', reqId: req.reqId, ok: false, erro: String(err) }, '*');
+      }
+    }
+  });
+
+
   // guarda quem está logado no app neste computador (usado para mostrar/esconder botões do popup)
   function salvarUsuarioApp() {
     try {
