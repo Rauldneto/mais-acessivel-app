@@ -22002,15 +22002,70 @@ function renderModeloEmTeste(){
   function buildE2(){
     q('#m5s2').innerHTML=card('#1565C0',
       sec(2,'#1565C0','Protestos em Cart\u00f3rio \u2014 CENPROT')
-      +'<p style="font-size:12px;color:#475569;margin-bottom:10px;padding:8px 12px;background:#f8fafc;border-radius:8px;border-left:3px solid #3b82f6"><strong>Passo 1:</strong> Acesse o CENPROT e consulte o CNPJ. <strong>Passo 2:</strong> Marque o resultado abaixo.</p>'+'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
-      +'<a href="https://www.pesquisaprotesto.com.br/" target="_blank" style="display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#1e40af;text-decoration:none;padding:10px 16px;border:2px dashed #93c5fd;border-radius:10px;background:#f0f9ff;box-shadow:0 1px 4px rgba(59,130,246,0.1)"><i class="ti ti-external-link" style="font-size:15px"></i><i class="ti ti-building-bank" style="font-size:16px"></i> Consultar CENPROT</a>'
+      +'<p style="font-size:12px;color:#475569;margin-bottom:10px;padding:8px 12px;background:#f8fafc;border-radius:8px;border-left:3px solid #3b82f6"><strong>Op\u00e7\u00e3o 1 (recomendada):</strong> Clique em "Consultar autom\u00e1tico" \u2014 exige certificado da JDFER instalado. <strong>Op\u00e7\u00e3o 2:</strong> Acesse manual pelo link e marque o resultado abaixo.</p>'
+      +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+      +'<button id="m5bAuto" style="background:linear-gradient(135deg,#1565c0,#1d4ed8);color:#fff;border:none;border-radius:10px;padding:11px 20px;font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 2px 8px rgba(21,101,192,0.3)"><i class="ti ti-robot" style="font-size:18px"></i> \ud83e\udd16 Consultar autom\u00e1tico</button>'
+      +'<a href="https://site.cenprotnacional.org.br/" target="_blank" style="display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#1e40af;text-decoration:none;padding:9px 14px;border:2px dashed #93c5fd;border-radius:10px;background:#f0f9ff"><i class="ti ti-external-link" style="font-size:14px"></i> Consultar manual</a>'
       +'<button id="m5bSP" style="border:2.5px solid #16a34a;border-radius:10px;padding:11px 20px;font-size:13px;font-weight:700;cursor:pointer;background:#f0fdf4;color:#15803d;display:inline-flex;align-items:center;gap:8px;box-shadow:0 2px 8px rgba(22,163,74,0.25);transition:all .15s"><i class="ti ti-circle-check" style="font-size:18px"></i> Sem protesto</button>'
       +'<button id="m5bCP" style="border:2.5px solid #dc2626;border-radius:10px;padding:11px 20px;font-size:13px;font-weight:700;cursor:pointer;background:#fff5f5;color:#b91c1c;display:inline-flex;align-items:center;gap:8px;box-shadow:0 2px 8px rgba(220,38,38,0.25);transition:all .15s"><i class="ti ti-circle-x" style="font-size:18px"></i> H\u00e1 protesto</button>'
-      +'</div><div id="m5cst" style="display:none;font-size:12px;font-weight:500;margin-top:6px"></div>'
+      +'</div><div id="m5autoStatus" style="display:none;margin-top:8px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600"></div>'
+      +'<div id="m5cst" style="display:none;font-size:12px;font-weight:500;margin-top:6px"></div>'
     )+'<div id="m5re2" style="display:none"></div>';
     show('m5s2');
     q('#m5bSP').onclick=function(){cenprot(true);};
     q('#m5bCP').onclick=function(){cenprot(false);};
+    q('#m5bAuto').onclick=function(){consultarCenprotAuto();};
+  }
+
+  // Consulta CENPROT autom\u00e1tica via extens\u00e3o 2.4.0+ (cenprot-reader.js)
+  function consultarCenprotAuto(){
+    var btn=q('#m5bAuto'); var status=q('#m5autoStatus');
+    var cnpjLimpo=(D.cnpj||'').replace(/\D/g,'');
+    if(cnpjLimpo.length!==14){
+      if(status){status.style.display='block';status.style.background='#fee2e2';status.style.color='#991b1b';status.textContent='CNPJ inv\u00e1lido. Consulte a Receita Federal primeiro.';}
+      return;
+    }
+    btn.disabled=true;
+    btn.innerHTML='<i class="ti ti-loader"></i> Abrindo CENPROT...';
+    if(status){status.style.display='block';status.style.background='#eff6ff';status.style.color='#1e40af';status.innerHTML='\ud83e\udd16 Abrindo nova aba do CENPROT com seu certificado. Aguarde...';}
+    // Abre nova aba pro CENPROT com o CNPJ na URL \u2014 a extens\u00e3o vai detectar e preencher sozinha
+    var urlCenprot='https://site.cenprotnacional.org.br/consulta-publica?cnpj='+cnpjLimpo+'&from=maisacessivel';
+    var janela=window.open(urlCenprot,'cenprot_auto','width=1000,height=700');
+    // Timeout: se n\u00e3o receber resposta em 30s, avisa
+    var timeoutId=setTimeout(function(){
+      btn.disabled=false; btn.innerHTML='<i class="ti ti-robot"></i> \ud83e\udd16 Consultar autom\u00e1tico';
+      if(status){status.style.background='#fef9c3';status.style.color='#854d0e';status.innerHTML='\u23f3 Nenhuma resposta ainda. Se logou no CENPROT, aguarde mais 30s. Ou consulte manual.';}
+    },30000);
+    // Listener do resultado (uma vez)
+    function receber(e){
+      if(!e.data||e.data.tipo!=='cenprot_resultado') return;
+      if(e.data.cnpj&&e.data.cnpj.replace(/\D/g,'')!==cnpjLimpo) return;
+      clearTimeout(timeoutId);
+      window.removeEventListener('message',receber);
+      var r=e.data.resultado||{};
+      if(r.erro){
+        btn.disabled=false; btn.innerHTML='<i class="ti ti-robot"></i> \ud83e\udd16 Consultar autom\u00e1tico';
+        if(status){status.style.background='#fee2e2';status.style.color='#991b1b';status.textContent='\u274c '+(r.erro||'Erro ao consultar');}
+        return;
+      }
+      try{ if(janela && !janela.closed) janela.close(); }catch(_){}
+      btn.innerHTML='<i class="ti ti-check"></i> Consultado';
+      btn.style.background='#16a34a';
+      if(status){
+        status.style.background=r.temProtesto?'#fee2e2':'#dcfce7';
+        status.style.color=r.temProtesto?'#991b1b':'#166534';
+        var txt=r.temProtesto
+          ?'\u274c CONSTA PROTESTO \u2014 Qtd: '+(r.quantidade||'?')+', Valor: R$ '+(r.valorTotal||'?')
+          :'\u2705 N\u00c3O CONSTA protesto';
+        if(r.cartorios&&r.cartorios.length) txt+='. Cart\u00f3rios: '+r.cartorios.slice(0,3).join('; ');
+        status.innerHTML=txt;
+      }
+      // Dispara o mesmo fluxo do bot\u00e3o manual conforme o resultado
+      cenprot(!r.temProtesto);
+      if(r.temProtesto && r.quantidade) S.cenprotQtd=r.quantidade;
+      if(r.temProtesto && r.valorTotal) S.cenprotValor=r.valorTotal;
+    }
+    window.addEventListener('message',receber);
   }
 
   function cenprot(ok){
