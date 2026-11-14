@@ -1225,6 +1225,19 @@ chrome.runtime.onMessage.addListener(function(msg, sender, responder){
     responder({ok:true});
     return true;
   }
+  // Resultado do CENPROT: content script leu a tela e nos manda o texto cru.
+  // Repassamos pra todas as abas do app Mais Acessível.
+  if(msg && msg.tipo==='cenprot_resultado_raw'){
+    try{
+      chrome.tabs.query({url:'https://rauldneto.github.io/mais-acessivel-app/*'},function(abas){
+        abas.forEach(function(t){
+          try{ chrome.tabs.sendMessage(t.id,{tipo:'cenprot_resultado_raw',cnpj:msg.cnpj,texto:msg.texto,url:msg.url}); }catch(_){}
+        });
+      });
+    }catch(_){}
+    responder({ok:true});
+    return true;
+  }
   return false;
 });
 

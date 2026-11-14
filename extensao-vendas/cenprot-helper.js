@@ -74,11 +74,36 @@
             console.log('[CENPROT helper] clicou buscar');
             // Limpa storage pra não repetir
             try{ sessionStorage.removeItem(KEY); }catch(_){}
+            // Aguarda resultado carregar e envia texto da tela pro app
+            setTimeout(function(){ coletarEEnviarResultado(0); }, 3000);
           }
         }, 400);
         return;
       }
       setTimeout(procurarECpliClicar, 500);
+    }
+
+    // Lê o resultado da tela e envia pro app Mais Acessível
+    function coletarEEnviarResultado(tent){
+      tent = tent || 0;
+      if (tent > 30) return; // 30 tentativas = 30s
+      var corpo = (document.body.innerText || '').trim();
+      // Heurística: resultado carregou quando tem "constam" / "não consta" / "protesto" muito
+      var temResultado = /constam?|n[aã]o\s+consta|protest|apontament|t[ií]tul|sem\s+apontamento/i.test(corpo) && corpo.length > 500;
+      if (!temResultado) {
+        setTimeout(function(){ coletarEEnviarResultado(tent+1); }, 1000);
+        return;
+      }
+      console.log('[CENPROT helper] resultado detectado, enviando pro app');
+      // Envia o texto cru do resultado pro background
+      try{
+        chrome.runtime.sendMessage({
+          tipo: 'cenprot_resultado_raw',
+          cnpj: cnpj,
+          texto: corpo.slice(0, 15000), // limita tamanho
+          url: location.href
+        });
+      }catch(_){}
     }
 
     // Só roda se a URL for de consulta (não no login/home)

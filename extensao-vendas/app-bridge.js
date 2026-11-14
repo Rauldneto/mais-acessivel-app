@@ -17,6 +17,19 @@
   marcar();
   setTimeout(marcar, 3000);
   setInterval(marcar, 20000);
+
+  // Repassa mensagens do background para a página do app
+  // (resultado cru do CENPROT que o cenprot-helper.js capturou)
+  try {
+    chrome.runtime.onMessage.addListener(function(msg, sender, responder) {
+      if (msg && msg.tipo === 'cenprot_resultado_raw') {
+        window.postMessage({ source: 'ma-ext', type: 'cenprotResultadoRaw', cnpj: msg.cnpj, texto: msg.texto, url: msg.url }, '*');
+        responder && responder({ ok: true });
+      }
+      return false;
+    });
+  } catch (e) {}
+
   // guarda quem está logado no app neste computador (usado para mostrar/esconder botões do popup)
   function salvarUsuarioApp() {
     try {
