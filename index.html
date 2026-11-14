@@ -3805,7 +3805,8 @@ function renderModuloNav(){
     {id:'mod5',  icon:'🧪', label:'Modelo em Teste'},
     {id:'mod15', icon:'📊', label:'Controle'},
     {id:'mod18', icon:'🛠️', label:'Reportar Problema'},
-    {id:'mod25', icon:'💬', label:'Chat'}
+    {id:'mod25', icon:'💬', label:'Chat'},
+    {id:'mod28', icon:'🛡️', label:'Firewall de Domínios'}
   ];
   // Mapeamento id antigo -> novo
   var MAPA_IDS={'mod1':'frete','frete':'frete','mod2':'mod2','mod3':'mod3','mod4':'mod4','mod5':'mod5','mod6':'mod6','mod7':'mod7','mod8':'mod8','mod9':'mod9','mod10':'mod10','mod11':'mod11','mod12':'mod12','mod13':'mod13','mod14':'mod14','mod15':'mod15','mod16':'mod16','mod17':'mod17','mod22':'mod22','mod18':'mod18','mod19':'mod19','mod20':'mod20','mod21':'mod17','mod23':'mod23','mod24':'mod24','mod25':'mod25','mod27':'mod27','mod28':'mod28'};
@@ -3824,7 +3825,7 @@ function renderModuloNav(){
     }
   }
   // Abas só do administrador: Energia solar e Leilão (pessoais) e Formação de preço (mostra custos)
-  var ABAS_SO_ADMIN=['mod11','mod12','mod13','mod14','mod15','mod16','mod19','mod23','mod27'];
+  var ABAS_SO_ADMIN=['mod11','mod12','mod13','mod14','mod15','mod16','mod19','mod23','mod27','mod28'];
   if(STATE.roleLogado!=='admin'){
     MODULOS=MODULOS.filter(function(m){return ABAS_SO_ADMIN.indexOf(m.id)<0;});
     if(ABAS_SO_ADMIN.indexOf(STATE.modulo)>=0&&MODULOS.length)STATE.modulo=MODULOS[0].id;
@@ -3836,10 +3837,10 @@ function renderModuloNav(){
     {n:'Compras',i:'ti-shopping-cart',c:'#34c759',ids:['mod13','mod20','mod24']},
     {n:'Financeiro',i:'ti-cash',c:'#0a7d6b',ids:['mod16','mod19','mod23','mod27','mod14','mod17','mod22'],
      sub:[{n:'Contas a pagar',i:'ti-arrow-up-right',e:'📤',ids:['mod27','mod23','mod16','mod19','mod14']},{n:'Contas a receber',i:'ti-arrow-down-left',e:'📥',ids:['mod17','mod22']}]},
-    {n:'T.I.',i:'ti-cpu',c:'#5856d6',ids:['mod3','mod15','mod18','mod25']},
+    {n:'T.I.',i:'ti-cpu',c:'#5856d6',ids:['mod3','mod15','mod28','mod18','mod25']},
     {n:'Particular',i:'ti-home',c:'#af52de',ids:['mod12','mod11']}
   ];
-  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod26:'ti-speakerphone',mod13:'ti-currency-dollar',mod20:'ti-scale',mod24:'ti-truck-loading',mod14:'ti-receipt-2',mod16:'ti-truck-delivery',mod17:'ti-building-bank',mod22:'ti-credit-card',mod19:'ti-report-money',mod23:'ti-arrows-exchange',mod27:'ti-file-dollar',mod15:'ti-gauge',mod18:'ti-bug',mod25:'ti-message-circle',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun'};
+  var ICONES={frete:'ti-truck',mod10:'ti-file-invoice',mod2:'ti-shield-check',mod7:'ti-ruler-2',mod8:'ti-package',mod4:'ti-receipt',mod5:'ti-flask',mod9:'ti-gavel',mod26:'ti-speakerphone',mod13:'ti-currency-dollar',mod20:'ti-scale',mod24:'ti-truck-loading',mod14:'ti-receipt-2',mod16:'ti-truck-delivery',mod17:'ti-building-bank',mod22:'ti-credit-card',mod19:'ti-report-money',mod23:'ti-arrows-exchange',mod27:'ti-file-dollar',mod15:'ti-gauge',mod18:'ti-bug',mod25:'ti-message-circle',mod3:'ti-sparkles',mod12:'ti-building-estate',mod11:'ti-sun',mod28:'ti-shield-lock'};
   if(!document.getElementById('navIosCss')){
     var lk=document.createElement('link');lk.rel='stylesheet';lk.href='https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css';lk.onload=function(){document.documentElement.classList.add('ti-ok');};document.head.appendChild(lk);
     var st=document.createElement('style');st.id='navIosCss';
