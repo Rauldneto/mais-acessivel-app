@@ -124,6 +124,9 @@ export default {
         const b = await req.json();
         return resp(await gerarPix(env, b || {}));
       }
+      if (url.pathname === '/receber/dia') return resp(await receberDia(env, url.searchParams.get('dia'), url.searchParams.get('forcar') === '1'));
+      if (url.pathname === '/receber/mes') return resp(await receberMes(env, url.searchParams.get('mes')));
+      if (url.pathname === '/receber/baixar' && req.method === 'POST') return resp(await receberBaixar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/cobranca/extra' && req.method === 'POST') return resp(await cobrancaExtra(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/pagamentos') {
         let acoes = (await env.BLING_KV.get('acoes', 'json')) || [];
@@ -2917,4 +2920,171 @@ async function ddaPendenteResolver(env, b) {
   p.resolvido = { por: String(b.usuario || '').slice(0, 60), em: Date.now(), contaId: b.contaId || null };
   await env.BLING_KV.put('dda:pendentes', JSON.stringify(pend));
   return { ok: true };
+}
+
+
+// ======================================================================================================
+// ---------------- Cruzamento do dia: entradas do extrato Sicoob × recebimentos no Contas a Receber do Bling ----------------
+// Um lado: cada crédito do extrato Sicoob do dia (PIX recebido, boleto Sicoob liquidado, cartão, transferências).
+// Outro lado: cada conta a receber do Bling recebida nesse dia na conta financeira Sicoob.
+// Liga um ao outro por valor (ou valor + juros) e CPF/CNPJ; pagamento adiantado ou atrasado é normal (o vencimento não precisa bater).
+// O que entrou no Sicoob e não tem baixa no Bling: procura a conta em aberto e sugere a baixa (o Raul confirma).
+// O que foi baixado no Bling (conta Sicoob) e não aparece no extrato: aparece para corrigir.
+const CONTA_SICOOB_BLING = 14890739452;
+function tipoCredito(desc, doc) {
+  const d = semAcento(desc);
+  if (doc && doc === ECONF_CNPJ) return 'transf';
+  if (/RESGATE|APLICACAO|APLIC\.|ENTRE CONTAS|MESMA TIT|CONTA PROPRIA|POUPANCA|ESTORNO|DEVOL|CANCEL/.test(d)) return 'transf';
+  if (/CIELO|STONE|\bREDE\b|GETNET|SIPAG|CARTAO|CARTOES|\bVISA\b|MASTERCARD|\bELO\b|PAGSEGURO|MERCADO ?PAGO|SUMUP|SAFRAPAY|ANTECIP/.test(d)) return 'cartao';
+  if (/\bPIX\b|PIX\./.test(d)) return 'pix';
+  if (/COBRAN|LIQ|BOLETO|\bTIT\b|TITULO|COMPE|CNAB/.test(d)) return 'boleto';
+  if (/\bTED\b|\bDOC\b|TRANSF|DEPOSITO|DEP\./.test(d)) return 'ted';
+  return 'outro';
+}
+async function lerCreditos(env, de, ate) {
+  const out = [];
+  let cur = de;
+  while (cur <= ate) {
+    const [a, m] = cur.split('-');
+    const fimMes = new Date(Date.UTC(+a, +m, 0)).toISOString().slice(0, 10);
+    const fim = fimMes < ate ? fimMes : ate;
+    // sem agrupar: cada boleto liquidado / PIX aparece numa linha
+    let lista = await sicoobExtrato(env, +m, +a, +cur.slice(8), +fim.slice(8), true).catch(() => null);
+    if (!lista) lista = await sicoobExtrato(env, +m, +a, +cur.slice(8), +fim.slice(8));
+    const vistos = {};
+    for (const t of lista) {
+      const ehDeb = /DEB/i.test(String(t.tipo || '')) || Number(String(t.valor).replace(',', '.')) < 0;
+      if (ehDeb) continue;
+      const x = { data: soData(t.data || t.dataLote), valor: r2(numBR(t.valor)), desc: String(t.descricao || '').trim(), compl: String(t.descInfComplementar || '').trim(),
+        doc: dig(t.cpfCnpj), ndoc: String(t.numeroDocumento || '').trim() };
+      if (!x.data || x.data < de || x.data > ate || !x.valor) continue;
+      if (/SALDO/i.test(x.desc)) continue;
+      const base = [x.data, x.valor, x.desc, x.ndoc, x.compl].join('|'); x.seq = vistos[base] = (vistos[base] || 0) + 1;
+      x.chave = (await sha256hex(base + '|' + x.seq)).slice(0, 20);
+      if (!x.doc) {
+        const docs = (x.compl.match(/\d{2}\.?\d{3}\.?\d{3}[\s\/]?\d{4}-?\d{2}|\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g) || []).map(dig).filter(d => (d.length === 14 || d.length === 11) && d !== ECONF_CNPJ);
+        if (docs.length) x.doc = docs[0];
+      }
+      const partes = x.compl.split('|').map(z => z.replace(/^@/, '').trim()).filter(z => z && !/^\d[\d.\/\s-]+$/.test(z));
+      x.nome = (partes[0] || '').replace(/^(REM\.?|DE|PAGADOR)\s*:?\s*/i, '').slice(0, 80);
+      x.tipo = tipoCredito(x.desc + ' ' + x.compl, x.doc);
+      out.push(x);
+    }
+    cur = somaDias(fimMes, 1);
+  }
+  return out;
+}
+async function receberBlingDia(env, dia) {
+  const l = await paginas(env, '/contas/receber?situacoes[]=2&situacoes[]=3&tipoFiltroData=R&dataInicial=' + dia + '&dataFinal=' + dia, 4);
+  return l.map(c => ({ id: c.id, valor: r2(c.valor), venc: soData(c.vencimento), situacao: Number(c.situacao), cliente: (c.contato && c.contato.nome) || '',
+    doc: dig(c.contato && c.contato.numeroDocumento), numero: String((c.origem && c.origem.numero) || ''), origemTipo: (c.origem && c.origem.tipoOrigem) || '',
+    formaId: (c.formaPagamento && c.formaPagamento.id) || 0, forma: Number(c.formaPagamento && c.formaPagamento.codigoFiscal) || 0,
+    portador: (c.contaContabil && c.contaContabil.id) || 0, portadorNome: (c.contaContabil && c.contaContabil.descricao) || '' }));
+}
+const mesmoDoc = (a, b) => !!(a && b && (a === b || (a.length === 14 && b.length === 14 && a.slice(0, 8) === b.slice(0, 8))));
+
+async function receberDia(env, dia, forcar) {
+  dia = soData(dia) || hojeLocal();
+  if (dia > hojeLocal()) return { ok: false, erro: 'Dia no futuro.' };
+  const ck = 'recdia:' + dia;
+  if (!forcar) { const c = await env.BLING_KV.get(ck, 'json'); if (c && (dia < somaDias(hojeLocal(), -2) || Date.now() - c.ts < 10 * 60e3)) return Object.assign({ ok: true, cache: true }, c); }
+  const [creditos, blingTodos] = await Promise.all([lerCreditos(env, dia, dia), receberBlingDia(env, dia)]);
+  // Bling Conta tem baixa própria: fica fora do cruzamento (só aparece no resumo)
+  const blingConta = blingTodos.filter(ehBlingConta);
+  const bling = blingTodos.filter(c => !ehBlingConta(c) && (!c.portador || Number(c.portador) === CONTA_SICOOB_BLING));
+  const outrasContas = blingTodos.filter(c => !ehBlingConta(c) && c.portador && Number(c.portador) !== CONTA_SICOOB_BLING);
+  // baixas automáticas feitas pelo app neste dia (data da baixa = dia)
+  const log = (await env.BLING_KV.get('acoes', 'json')) || [];
+  const autos = log.filter(a => a.modo === 'real' && ['baixa', 'contas_pedido'].includes(a.acao) && a.data === dia && /^ok/.test(String(a.resultado || '')));
+  const autoContas = new Set(autos.map(a => String(a.contaId || '')).filter(Boolean));
+
+  const S = creditos.filter(x => x.tipo !== 'transf');
+  const transf = creditos.filter(x => x.tipo === 'transf');
+  const usadosB = new Set(), pares = [];
+  const ligar = (x, cs, como) => { cs.forEach(c => usadosB.add(String(c.id))); x.par = cs.map(c => c.id); x.como = como;
+    const soma = r2(cs.reduce((t, c) => t + c.valor, 0)); x.juros = r2(Math.max(0, x.valor - soma)); x.desconto = r2(Math.max(0, soma - x.valor));
+    x.auto = cs.some(c => autoContas.has(String(c.id))); pares.push(x); };
+  // 1) mesmo valor + mesmo CPF/CNPJ  2) valor + juros (até 15%) com mesmo CPF/CNPJ  3) mesmo valor, único no dia
+  const livresB = () => bling.filter(c => !usadosB.has(String(c.id)));
+  for (const x of S) { const c = livresB().find(c => Math.abs(c.valor - x.valor) <= 0.01 && mesmoDoc(x.doc, c.doc)); if (c) ligar(x, [c], 'mesmo valor e CPF/CNPJ'); }
+  for (const x of S.filter(x => !x.par)) { const c = livresB().find(c => mesmoDoc(x.doc, c.doc) && x.valor > c.valor && x.valor - c.valor <= c.valor * 0.15); if (c) ligar(x, [c], 'valor + juros/multa, mesmo CPF/CNPJ'); }
+  for (const x of S.filter(x => !x.par)) {
+    const cs = livresB().filter(c => Math.abs(c.valor - x.valor) <= 0.01);
+    const outrosS = S.filter(y => !y.par && y !== x && Math.abs(y.valor - x.valor) <= 0.01);
+    if (cs.length === 1 && !outrosS.length) ligar(x, cs, 'mesmo valor (único no dia)');
+  }
+  // 4) um crédito pagando várias parcelas do mesmo cliente (soma)
+  for (const x of S.filter(x => !x.par && x.doc)) {
+    const cs = livresB().filter(c => mesmoDoc(x.doc, c.doc));
+    if (cs.length > 1 && Math.abs(r2(cs.reduce((t, c) => t + c.valor, 0)) - x.valor) <= 0.01) ligar(x, cs, 'soma de ' + cs.length + ' parcelas do mesmo cliente');
+  }
+  // 5) crédito de cobrança agrupado (vários boletos numa linha): soma dos recebimentos de boleto do dia
+  for (const x of S.filter(x => !x.par && x.tipo === 'boleto')) {
+    const cs = livresB().filter(c => c.forma === 15);
+    if (cs.length > 1 && Math.abs(r2(cs.reduce((t, c) => t + c.valor, 0)) - x.valor) <= 0.01) ligar(x, cs, 'crédito de cobrança agrupado = soma de ' + cs.length + ' boletos');
+  }
+  // o que sobrou do Sicoob: procura a conta em aberto no Bling (pode ter sido paga adiantada ou atrasada)
+  const sobraS = S.filter(x => !x.par);
+  let abertas = [];
+  if (sobraS.length) abertas = (await contasJanela(env, {}, true).catch(() => [])).filter(c => [1, 3].includes(c.situacao) && !ehBlingConta(c));
+  const reservadas = new Set();
+  for (const x of sobraS) {
+    const cand = abertas.filter(c => !reservadas.has(String(c.id))).map(c => {
+      const exato = Math.abs(c.valor - x.valor) <= 0.01, doc = mesmoDoc(x.doc, c.doc), juros = x.valor > c.valor && x.valor - c.valor <= c.valor * 0.15;
+      if (!exato && !(juros && doc)) return null;
+      const dias = c.venc ? Math.round((Date.parse(x.data) - Date.parse(c.venc)) / 864e5) : 0;
+      return { c, p: (exato ? 50 : 20) + (doc ? 40 : 0) - Math.min(30, Math.abs(dias)), doc, exato, dias };
+    }).filter(Boolean).sort((a, b) => b.p - a.p);
+    x.sugestoes = cand.slice(0, 5).map(o => ({ contaId: o.c.id, valor: o.c.valor, venc: o.c.venc, cliente: o.c.cliente, numero: o.c.numero, origemTipo: o.c.origemTipo, doc: o.doc, dias: o.dias }));
+    const m = cand[0];
+    if (m && (m.doc || cand.length === 1) && (cand.length === 1 || m.p - cand[1].p >= 15)) {
+      reservadas.add(String(m.c.id));
+      x.baixar = { contaId: m.c.id, valor: m.c.valor, juros: r2(Math.max(0, x.valor - m.c.valor)), data: dia, venc: m.c.venc, atraso: Math.max(0, m.dias), cliente: m.c.cliente, numero: m.c.numero, origemTipo: m.c.origemTipo,
+        motivo: (m.exato ? 'mesmo valor' : 'valor + juros/multa') + (m.doc ? ' e mesmo CPF/CNPJ' : ' (única conta em aberto com esse valor)') };
+    }
+  }
+  const sobraB = livresB();
+  const resumo = {
+    entradas: S.length, valorEntradas: r2(S.reduce((t, x) => t + x.valor, 0)),
+    recebidosBling: bling.length, valorBling: r2(bling.reduce((t, c) => t + c.valor, 0)),
+    cruzados: pares.length, autos: autos.length, aBaixar: sobraS.filter(x => x.baixar).length, semConta: sobraS.filter(x => !x.baixar).length,
+    blingSemBanco: sobraB.length, blingConta: blingConta.length, valorBlingConta: r2(blingConta.reduce((t, c) => t + c.valor, 0)), transferencias: transf.length,
+  };
+  const limpa = x => ({ chave: x.chave, data: x.data, valor: x.valor, desc: x.desc, compl: x.compl, doc: x.doc, nome: x.nome, tipo: x.tipo,
+    par: x.par, como: x.como, juros: x.juros, desconto: x.desconto, auto: x.auto, baixar: x.baixar, sugestoes: x.sugestoes });
+  const out = { ts: Date.now(), dia, resumo, sicoob: S.map(limpa), bling: bling.map(c => Object.assign({}, c, { auto: autoContas.has(String(c.id)), ligado: usadosB.has(String(c.id)) })),
+    blingConta: blingConta.map(c => ({ id: c.id, valor: c.valor, cliente: c.cliente, numero: c.numero })), outrasContas: outrasContas.map(c => ({ id: c.id, valor: c.valor, cliente: c.cliente, numero: c.numero, portadorNome: c.portadorNome })),
+    transferencias: transf.map(limpa) };
+  await env.BLING_KV.put(ck, JSON.stringify(out), { expirationTtl: 120 * 86400 });
+  // resumo do mês (para o calendário)
+  const km = 'recmes:' + dia.slice(0, 7), mm = (await env.BLING_KV.get(km, 'json')) || {};
+  mm[dia] = Object.assign({ ts: out.ts }, resumo);
+  await env.BLING_KV.put(km, JSON.stringify(mm), { expirationTtl: 400 * 86400 });
+  return Object.assign({ ok: true }, out);
+}
+async function receberMes(env, mes) {
+  if (!/^\d{4}-\d{2}$/.test(String(mes || ''))) mes = hojeLocal().slice(0, 7);
+  return { ok: true, mes, dias: (await env.BLING_KV.get('recmes:' + mes, 'json')) || {} };
+}
+// POST /receber/baixar {dia, itens:[{contaId, valor, juros, desconto, data, atraso, venc, desc}], usuario}
+async function receberBaixar(env, b) {
+  const itens = Array.isArray(b.itens) ? b.itens.slice(0, 12) : [];
+  if (!itens.length) return { ok: false, erro: 'Nada para baixar.' };
+  const out = [];
+  for (const it of itens) {
+    const data = soData(it.data);
+    if (!it.contaId || !data) { out.push({ contaId: it.contaId, ok: false, erro: 'Dados incompletos.' }); continue; }
+    const atraso = Number(it.atraso || 0);
+    const historico = 'Recebido no Sicoob em ' + brData(data) + (it.desc ? ' (' + String(it.desc).slice(0, 60) + ')' : '') + (atraso > 0 ? ' com ' + atraso + (atraso === 1 ? ' dia' : ' dias') + ' de atraso (venc. ' + brData(it.venc) + ')' : atraso < 0 ? ' adiantado' : '') +
+      (Number(it.juros) ? ' - juros/multa R$ ' + Number(it.juros).toFixed(2).replace('.', ',') : '') + ' - baixa pelo cruzamento Sicoob × Bling (app Mais Acessível' + (b.usuario ? ', ' + String(b.usuario).slice(0, 40) : '') + ')';
+    try {
+      const r = await executarBaixa(env, it.contaId, r2(it.valor), data, { historico, historicoConta: true, conferir: true, juros: r2(it.juros || 0), desconto: r2(it.desconto || 0) });
+      await logAcao(env, { modo: 'real', origem: 'cruzamento', acao: 'baixa', contaId: it.contaId, valorBaixa: r2(it.valor), valor: r2(Number(it.valor) + Number(it.juros || 0)), data, resultado: r, por: b.usuario || '',
+        detalhe: 'Baixa pelo cruzamento Sicoob × Bling: R$ ' + r2(it.valor).toFixed(2) + (Number(it.juros) ? ' + juros/multa R$ ' + Number(it.juros).toFixed(2) : '') + ', data ' + brData(data) + ' (conta ' + it.contaId + ')' });
+      out.push({ contaId: it.contaId, ok: /^ok/.test(r), resultado: r });
+    } catch (e) { out.push({ contaId: it.contaId, ok: false, erro: String(e.message || e).slice(0, 200) }); }
+  }
+  if (b.dia) await env.BLING_KV.delete('recdia:' + soData(b.dia)).catch(() => {});
+  await abertosVelho(env);
+  return { ok: out.every(x => x.ok), itens: out };
 }
