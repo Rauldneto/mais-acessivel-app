@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mais Acessível — Vendas e Atendimento",
-  "version": "2.4.7",
+  "version": "2.4.8",
   "description": "Assistente de vendas da Mais Acessível: Bling, WhatsApp, consulta automática CENPROT e firewall de domínios.",
   "permissions": [
     "activeTab",
@@ -72,7 +72,7 @@
       "js": [
         "cenprot-reader.js"
       ],
-      "run_at": "document_idle"
+      "run_at": "document_start"
     },
     {
       "matches": [
