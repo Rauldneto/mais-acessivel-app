@@ -1,4 +1,6 @@
-// cenprot-helper.js (v2.6.0) - Janela oculta + captura HTML + iterativo p/ garantir valores
+// cenprot-helper.js (v2.6.4) - MODO MANUAL: so pre-preenche CNPJ, sem automacao
+// O colaborador faz login, consulta e volta no app marcar o resultado manualmente.
+// Automacao desativada a pedido do usuario (demorava demais).
 // Mapeados em 14/11/2026 inspecionando o site ao vivo.
 //
 // TELA LOGIN (pesquisaprotesto.com.br/login):
@@ -409,23 +411,27 @@
       }
     }
 
-    // === LOOP: tenta a ação apropriada ===
-    function ciclo(){
+    // === v2.6.4: MODO MANUAL - helper SO PRE-PREENCHE O CNPJ ===
+    // Nao faz login automatico, nao clica buscar, nao expande Detalhes, nao envia resultado.
+    // O colaborador faz tudo manualmente e marca o resultado no app sozinho.
+    var preenchido = false;
+    function cicloManual(){
       try{
-        // Modal "Continuar" pode aparecer sobre qualquer tela, sempre verifica primeiro
-        tentarContinuarModal();
-        detectarLoginFalhou();
-        detectarErroVisivel();
-        // v2.6.2: se a aba ficou visivel pra login manual, re-ocultar assim que login termina
-        tentarReocultarAposLogin();
-        if (ehTelaLogin()) tentarLogin();
-        else if (ehPainelPosLogin()) tentarIrParaConsulta();
-        else if (ehTelaConsulta()) tentarConsulta();
-        else if (ehTelaResultado()) extrairEEnviar(0);
+        if (preenchido) return;
+        if (ehTelaConsulta()){
+          var inp = document.getElementById('cpf_cnpj');
+          if (inp && !inp.value.trim()){
+            preencher(inp, fmt(cnpj));
+            preenchido = true;
+            console.log('[CENPROT helper] CNPJ pre-preenchido (modo manual):', fmt(cnpj));
+          } else if (inp && inp.value.trim()){
+            preenchido = true;
+          }
+        }
       }catch(_){}
     }
-    setTimeout(ciclo, 1200);
-    setInterval(ciclo, 1500);
+    setTimeout(cicloManual, 1000);
+    setInterval(cicloManual, 2000);
   }catch(e){
     console.error('[CENPROT helper] erro', e);
   }
