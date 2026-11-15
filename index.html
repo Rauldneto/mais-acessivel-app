@@ -21772,7 +21772,7 @@ function renderModeloEmTeste(){
   }
 
   function limpar(){
-    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,precisaAprovDir:false,justEndTerceiro:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},docsOk:{1:false,2:false,3:false},simLoc:0,orcamento:0,mOk:false,lOk:false,verifManual:{maps:null,google:null,insta:null,googleSite:'',instaPerfil:''},temProtesto:false,relatoProtesto:null,defesaCliente:null};
+    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,precisaAprovDir:false,justEndTerceiro:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},docsOk:{1:false,2:false,3:false},docsNegados:{},simLoc:0,orcamento:0,mOk:false,lOk:false,verifManual:{maps:null,google:null,insta:null,googleSite:'',instaPerfil:'',obsMaps:'',obsGoogle:'',obsInsta:''},temProtesto:false,relatoProtesto:null,defesaCliente:null};
     window._mod5S=S;
     S_DOCS={contrato:null,comprovante:null,docSocio:null};
     window._mod5S_DOCS = S_DOCS;
@@ -22593,7 +22593,7 @@ function renderModeloEmTeste(){
   // ======= ETAPA 3: VERIFICACAO MANUAL (Google Maps, Google, Instagram) =======
   function buildVM(){
     // Reset dos valores ao (re)entrar
-    S.verifManual={maps:null,google:null,insta:null,googleSite:'',instaPerfil:''};
+    S.verifManual={maps:null,google:null,insta:null,googleSite:'',instaPerfil:'',obsMaps:'',obsGoogle:'',obsInsta:''};
     var nomeBusca=(D.fantasia||D.nome||'').trim();
     // Google Maps: usa o ENDERECO COMPLETO pra levar DIRETO ao local (fachada),
     // nao a busca por nome da empresa (que mostrava rota ou lugares errados).
@@ -22610,7 +22610,7 @@ function renderModeloEmTeste(){
     var urlInsta='https://www.google.com/search?q='+encodeURIComponent('"'+nomeBusca+'" site:instagram.com');
     var urlFace='https://www.google.com/search?q='+encodeURIComponent('"'+nomeBusca+'" site:facebook.com');
 
-    // v2.6.9: vmRow com INSTRUCAO do que avaliar + suporte a varios links na mesma linha
+    // v2.7.0: vmRow com INSTRUCAO + suporte a varios links + CAMPO DE OBSERVACAO em todos
     // linksExtra: array opcional [{icon, titulo, url}] pra abrir multiplos destinos no mesmo item
     function vmRow(id,icon,titulo,url,instrucao,temCampo,campoLabel,campoPh,linksExtra){
       var html='<div style="background:#ffffff;border:0.5px solid #cffafe;border-radius:10px;padding:12px 14px;margin-bottom:8px">'
@@ -22637,6 +22637,11 @@ function renderModeloEmTeste(){
           +'<label style="font-size:11px;color:#64748b;min-width:130px;display:inline-block">'+campoLabel+':</label>'
           +'<input type="text" id="vm-'+id+'-in" placeholder="'+campoPh+'" style="flex:1;min-width:200px;padding:6px 9px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;background:#fff;color:#1e293b;outline:none">'
           +'</div>':'')
+        // v2.7.0: campo de OBSERVACAO sempre visivel
+        +'<div style="margin-top:8px;padding-top:8px;border-top:0.5px dashed #e2e8f0">'
+        +'<label style="font-size:10px;color:#64748b;display:block;margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.04em"><i class="ti ti-note" style="font-size:11px;vertical-align:-1px"></i> Observa\u00e7\u00e3o (opcional)</label>'
+        +'<textarea id="vm-'+id+'-obs" rows="2" placeholder="Anote algo que chamou aten\u00e7\u00e3o: ex. \u201cs\u00f3 1 avalia\u00e7\u00e3o 1 estrela\u201d, \u201ciltima postagem em 2019\u201d, \u201cvista aerea mostra terreno vazio\u201d, etc." style="width:100%;padding:6px 9px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;background:#fff;color:#1e293b;outline:none;resize:vertical;box-sizing:border-box;font-family:inherit;line-height:1.5"></textarea>'
+        +'</div>'
         +'</div>';
       return html;
     }
@@ -22695,6 +22700,10 @@ function renderModeloEmTeste(){
     // Capturar valores dos campos opcionais ao digitar
     var inpG=q('#vm-google-in');if(inpG)inpG.addEventListener('input',function(){S.verifManual.googleSite=this.value.trim();});
     var inpI=q('#vm-insta-in');if(inpI)inpI.addEventListener('input',function(){S.verifManual.instaPerfil=this.value.trim();});
+    // v2.7.0: capturar observacoes de cada item
+    var obsM=q('#vm-maps-obs');if(obsM)obsM.addEventListener('input',function(){S.verifManual.obsMaps=this.value.trim();});
+    var obsG=q('#vm-google-obs');if(obsG)obsG.addEventListener('input',function(){S.verifManual.obsGoogle=this.value.trim();});
+    var obsI=q('#vm-insta-obs');if(obsI)obsI.addEventListener('input',function(){S.verifManual.obsInsta=this.value.trim();});
     // Botao prosseguir -> registra checks e vai para documentos
     q('#m5btnVM').onclick=function(){
       var vm=S.verifManual;
@@ -22710,24 +22719,23 @@ function renderModeloEmTeste(){
   }
 
   function buildE3(){
-    S.simDoc={1:0,2:0,3:0};S.docsOk={1:false,2:false,3:false};S.endTerceiro=false;
+    S.simDoc={1:0,2:0,3:0};S.docsOk={1:false,2:false,3:false};S.docsNegados={};S.endTerceiro=false;
     function dRow(bid,eid,ico,lbl,sub,n){
       return '<div style="background:#f1f5f9;border:0.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:8px">'
         +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
         +'<div style="width:34px;height:34px;border-radius:8px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti '+ico+'" style="font-size:17px;color:#1d4ed8"></i></div>'
-        +'<div><div style="font-size:13px;font-weight:500">'+lbl+' <span style="background:#fee2e2;color:#991b1b;font-size:10px;padding:2px 8px;border-radius:20px">Obrigat\u00f3rio</span></div>'
+        +'<div><div style="font-size:13px;font-weight:500">'+lbl+' <span style="background:#fef3c7;color:#92400e;font-size:10px;padding:2px 8px;border-radius:20px">Recomendado</span></div>'
         +'<div style="font-size:11px;color:#94a3b8;margin-top:2px">'+sub+'</div></div></div>'
-        +'<div style="display:flex;align-items:center;gap:8px">'
+        +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
         +'<span id="'+bid+'" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:#f8fafc;color:#94a3b8;border:0.5px solid #e2e8f0"><i class="ti ti-clock"></i> Aguardando</span>'
         +'<label style="background:#ffffff;border:0.5px solid #94a3b8;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:500;cursor:pointer;color:#0f172a;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-upload"></i> Selecionar<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none" data-n="'+n+'"></label>'
+        +'<button type="button" data-neg="'+n+'" style="background:#ffffff;color:#b91c1c;border:1px dashed #fca5a5;border-radius:6px;padding:5px 11px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-ban" style="font-size:13px"></i> Cliente negou envio</button>'
         +'</div><div id="'+eid+'" style="display:none;margin-top:8px"></div></div>';
     }
     q('#m5s3').innerHTML=card('#6A1B9A',
-      sec(4,'#6A1B9A','Documentos Obrigat\u00f3rios \u2014 An\u00e1lise pela IA')
-      +'<p style="font-size:12px;color:#475569;margin-bottom:12px;padding:8px 10px;background:#f1f5f9;border-radius:6px;line-height:1.6">'
-      +'<strong>Simulado:</strong> Contrato (1\u00ba=ok / 2\u00ba=CNPJ diverge / 3\u00ba=s\u00f3cio diverge) \u00b7 '
-      +'Endere\u00e7o (1\u00ba=empresa / 2\u00ba=s\u00f3cio / 3\u00ba=terceiro / 4\u00ba=inv\u00e1lido / 5\u00ba=vencido) \u00b7 '
-      +'Doc s\u00f3cio (1\u00ba=ok / 2\u00ba=diverge)</p>'
+      sec(4,'#6A1B9A','Documentos Recomendados \u2014 An\u00e1lise pela IA')
+      +'<p style="font-size:12px;color:#92400e;margin-bottom:12px;padding:10px 12px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:6px;line-height:1.6">'
+      +'<b>\u26a0\ufe0f Cobre os documentos do cliente.</b> Se o cliente se recusar a enviar algum, clique em <b>\u201cCliente negou envio\u201d</b> e isso entra como ressalva no parecer final. Lembre-se: cliente que se recusa a enviar documentos b\u00e1sicos de identifica\u00e7\u00e3o/endere\u00e7o j\u00e1 \u00e9 um <b>sinal de alerta</b> para a diretoria.</p>'
       +dRow('m5eb1','m5ei1','ti-file-certificate','Contrato Social Alterado','IA verifica: CNPJ, s\u00f3cio e capital','1')
       +dRow('m5eb2','m5ei2','ti-home','Comprovante de Endere\u00e7o','Conta \u00e1gua/energia/telefone/cart\u00e3o (at\u00e9 90 dias) ou contrato de loca\u00e7\u00e3o','2')
       +dRow('m5eb3','m5ei3','ti-id-badge','Documento do S\u00f3cio (RG, CNH ou Carteira)','IA verifica se nome confere com a Receita Federal','3')
@@ -22739,20 +22747,51 @@ function renderModeloEmTeste(){
     wrap.querySelectorAll('#m5s3 input[type=file]').forEach(function(inp){
       inp.addEventListener('change',function(){upDoc(parseInt(this.getAttribute('data-n')),this);});
     });
+    // v2.7.0: botoes "Cliente negou envio" (marca doc como negado pra permitir prosseguir)
+    wrap.querySelectorAll('#m5s3 [data-neg]').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        var n=parseInt(this.getAttribute('data-neg'));
+        if(!confirm('Marcar que o cliente SE RECUSOU a enviar este documento?\n\nEssa recusa vai aparecer como ressalva no parecer final.')) return;
+        S.docsOk[n]='negado';
+        if(!S.docsNegados) S.docsNegados={};
+        S.docsNegados[n]=true;
+        // Atualiza visual do badge
+        var bid='m5eb'+n;
+        var b=q('#'+bid);
+        if(b){
+          b.innerHTML='<i class="ti ti-ban"></i> Cliente negou envio';
+          b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:#fee2e2;color:#991b1b;border:0.5px solid #fca5a5';
+        }
+        // Desabilita o Selecionar e esse proprio botao
+        this.disabled=true;
+        this.style.opacity='0.4';
+        this.style.cursor='not-allowed';
+        var operador=STATE.usuarioLogado||'desconhecido';
+        var nomes={1:'Contrato Social',2:'Comprovante de Endere\u00e7o',3:'Documento do S\u00f3cio'};
+        addCk('warn','ti-ban',nomes[n]+': cliente negou envio (registrado por '+operador+')');
+        updateBtnDocState();
+      });
+    });
     q('#m5btnDoc').onclick=function(){ if(q('#m5btnDoc').disabled) return; concluirE3(); };
   }
 
-  // Habilita o botao "Concluir analise documental" somente quando os 3 documentos
-  // ja tiverem sido efetivamente analisados (S_DOCS populado), nao apenas selecionados
+  // Habilita o botao "Concluir analise documental" quando os 3 documentos tiverem
+  // sido analisados pela IA OU marcados como "cliente negou envio".
   function updateBtnDocState(){
     var btn=q('#m5btnDoc');
     if(!btn)return;
-    var pronto = S.docsOk[1]===true && S.docsOk[2]===true && S.docsOk[3]===true;
-    btn.disabled=!pronto;
-    if(pronto){
+    function pronto(v){ return v===true || v==='negado'; }
+    var ok = pronto(S.docsOk[1]) && pronto(S.docsOk[2]) && pronto(S.docsOk[3]);
+    btn.disabled=!ok;
+    if(ok){
       btn.style.cssText='background:#2563eb;color:#ffffff;border:0.5px solid #2563eb;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;opacity:1';
     } else {
       btn.style.cssText='background:#cbd5e1;color:#64748b;border:0.5px solid #cbd5e1;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:not-allowed;display:inline-flex;align-items:center;gap:6px;opacity:0.7';
+    }
+    // Mostra o container do botao apos qualquer interacao
+    var box=q('#m5bdoc');
+    if(box && (S.docsOk[1]!==false || S.docsOk[2]!==false || S.docsOk[3]!==false)){
+      box.style.display='block';
     }
   }
 
