@@ -22023,19 +22023,77 @@ function renderModeloEmTeste(){
     window.addEventListener('message', function(e){
       if(!e.data || e.data.source!=='ma-ext' || e.data.type!=='cenprotResultadoRaw') return;
       var r=e.data.resultado||{};
+      var texto=e.data.texto||'';
       var statusEl=document.getElementById('m5cenStatus');
       if(!statusEl) return;
       statusEl.style.display='block';
       if(r.temProtesto){
         statusEl.style.background='#fef2f2';statusEl.style.color='#991b1b';statusEl.style.border='1px solid #fca5a5';
-        statusEl.innerHTML='<i class="ti ti-alert-triangle"></i> <b>CONSTAM PROTESTOS</b>'+(r.documento?' - Doc: '+r.documento:'')+(r.dataConsulta?' - '+r.dataConsulta:'');
+        statusEl.innerHTML='<i class="ti ti-alert-triangle"></i> <b>CONSTAM PROTESTOS</b>'+(r.documento?' - Doc: '+r.documento:'')+(r.dataConsulta?' - '+r.dataConsulta:'')+'<div style="margin-top:8px;font-size:12px;font-weight:500">\u231b Analisando detalhes por estado via IA...</div>';
         if(typeof cenprot==='function') cenprot(false);
+        // Chama IA pra extrair estrutura por estado
+        extrairDetalhesComIA(texto, r);
       } else {
         statusEl.style.background='#dcfce7';statusEl.style.color='#166534';statusEl.style.border='1px solid #86efac';
         statusEl.innerHTML='<i class="ti ti-circle-check"></i> <b>N\u00c3O CONSTAM protestos</b>'+(r.documento?' - Doc: '+r.documento:'')+(r.dataConsulta?' - '+r.dataConsulta:'');
         if(typeof cenprot==='function') cenprot(true);
       }
     });
+  }
+
+  // Chama IA (Claude via Worker) pra extrair estrutura por estado do texto CENPROT
+  function extrairDetalhesComIA(texto, resultadoBase){
+    var prompt='Voce recebeu o texto bruto de uma pagina de resultado de consulta CENPROT (protestos em cartorio) onde CONSTAM protestos. '
+      +'Extraia APENAS em JSON valido (sem markdown, sem comentario): {porEstado:[{uf:string,estado:string,totalTitulos:number,cartorios:[{nome:string,cidade:string,qtd:number,periodo:string}]}],totalGeral:number}. '
+      +'uf e a sigla do estado (GO, SP, PA, MG etc). estado e o nome completo (Goias, Para, Sao Paulo). '
+      +'Se nao achar detalhes de cartorios, retorne {porEstado:[],totalGeral:0}.\n\n'
+      +'TEXTO:\n"""'+texto.slice(0,8000)+'"""';
+    fetch('https://soft-limit-b3a1.rauldias.workers.dev',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,messages:[{role:'user',content:prompt}]})
+    }).then(function(r){return r.json();}).then(function(data){
+      var raw=(data.content && data.content[0]) ? data.content[0].text : '';
+      var json=null;
+      try{ var m=raw.match(/\{[\s\S]*\}/); if(m) json=JSON.parse(m[0]); }catch(_){}
+      if(!json || !json.porEstado) return;
+      renderResumoPorEstado(resultadoBase, json);
+      // Guarda no state pra salvar
+      try{
+        var S2=window._mod5S;
+        if(S2){
+          S2.cenprotDetalhes=json;
+          S2.cenprotResumo=resultadoBase;
+        }
+      }catch(_){}
+    }).catch(function(){
+      var statusEl=document.getElementById('m5cenStatus');
+      if(statusEl) statusEl.innerHTML+='<div style="margin-top:4px;font-size:11px;color:#78350f">(n\u00e3o consegui analisar detalhes automaticamente)</div>';
+    });
+  }
+
+  function renderResumoPorEstado(base, detalhes){
+    var statusEl=document.getElementById('m5cenStatus');
+    if(!statusEl) return;
+    var html='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><i class="ti ti-alert-triangle" style="font-size:18px"></i> <b>CONSTAM PROTESTOS</b>'+(detalhes.totalGeral?' - Total: '+detalhes.totalGeral+' t\u00edtulo(s)':'')+(base.dataConsulta?' - '+base.dataConsulta:'')+'</div>';
+    if(detalhes.porEstado && detalhes.porEstado.length){
+      html+='<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:6px;overflow:hidden;margin-top:6px;border:1px solid #fca5a5">'
+        +'<thead><tr style="background:#fef2f2"><th style="padding:6px 10px;text-align:left;font-size:11px;color:#991b1b">Estado</th><th style="padding:6px 10px;text-align:left;font-size:11px;color:#991b1b">Cart\u00f3rio</th><th style="padding:6px 10px;text-align:left;font-size:11px;color:#991b1b">Cidade</th><th style="padding:6px 10px;text-align:center;font-size:11px;color:#991b1b">Qtd</th><th style="padding:6px 10px;text-align:left;font-size:11px;color:#991b1b">Per\u00edodo</th></tr></thead><tbody>';
+      detalhes.porEstado.forEach(function(e){
+        var c=e.cartorios||[];
+        if(c.length===0){
+          html+='<tr style="border-top:1px solid #fecaca"><td style="padding:6px 10px;font-size:12px;font-weight:700"><b>'+(e.uf||'?')+'</b> '+(e.estado||'')+'</td><td colspan="4" style="padding:6px 10px;font-size:11px;color:#7f1d1d">Total: '+(e.totalTitulos||'?')+' t\u00edtulo(s)</td></tr>';
+        } else {
+          c.forEach(function(ct,ix){
+            html+='<tr style="border-top:1px solid #fecaca">';
+            if(ix===0) html+='<td rowspan="'+c.length+'" style="padding:6px 10px;font-size:12px;font-weight:700;vertical-align:top;background:#fef2f2"><b>'+(e.uf||'?')+'</b> '+(e.estado||'')+'</td>';
+            html+='<td style="padding:6px 10px;font-size:11px">'+(ct.nome||'?')+'</td><td style="padding:6px 10px;font-size:11px">'+(ct.cidade||'?')+'</td><td style="padding:6px 10px;font-size:12px;text-align:center;font-weight:700">'+(ct.qtd||'?')+'</td><td style="padding:6px 10px;font-size:11px">'+(ct.periodo||'?')+'</td></tr>';
+          });
+        }
+      });
+      html+='</tbody></table>';
+    }
+    statusEl.innerHTML=html;
   }
 
   function iniciarConsultaCenprotAuto(){
