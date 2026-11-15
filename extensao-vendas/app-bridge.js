@@ -25,6 +25,16 @@
         window.postMessage({ source: 'ma-ext', type: 'cenprotResultadoRaw', cnpj: msg.cnpj, resultado: msg.resultado, texto: msg.texto }, '*');
         responder && responder({ ok: true });
       }
+      // v2.5.9: helper avisou que precisa login (aba foi tornada visivel)
+      if (msg && msg.tipo === 'cenprot_precisa_login') {
+        window.postMessage({ source: 'ma-ext', type: 'cenprotPrecisaLogin', cnpj: msg.cnpj, motivo: msg.motivo || '' }, '*');
+        responder && responder({ ok: true });
+      }
+      // v2.5.9: background avisou que a aba oculta estourou timeout (90s)
+      if (msg && msg.tipo === 'cenprot_timeout_oculto') {
+        window.postMessage({ source: 'ma-ext', type: 'cenprotTimeoutOculto', cnpj: msg.cnpj }, '*');
+        responder && responder({ ok: true });
+      }
       return false;
     });
   } catch (e) {}
@@ -49,6 +59,17 @@
         });
       } catch (err) {
         window.postMessage({ source: 'ma-ext', type: 'cenprotCredSetResp', reqId: req.reqId, ok: false, erro: String(err) }, '*');
+      }
+    }
+    // v2.5.9: app pede pra abrir CENPROT em background (aba invisivel)
+    if (req.type === 'cenprotAbrirOculto') {
+      try {
+        chrome.runtime.sendMessage({ tipo: 'cenprot_abrir_oculto', cnpj: req.cnpj || '' }, function(r) {
+          var erro = chrome.runtime.lastError ? chrome.runtime.lastError.message : null;
+          window.postMessage({ source: 'ma-ext', type: 'cenprotAbrirOcultoResp', reqId: req.reqId, ok: !!(r && r.ok), erro: erro || (r && r.erro) || '' }, '*');
+        });
+      } catch (err) {
+        window.postMessage({ source: 'ma-ext', type: 'cenprotAbrirOcultoResp', reqId: req.reqId, ok: false, erro: String(err) }, '*');
       }
     }
   });

@@ -1234,11 +1234,76 @@ chrome.runtime.onMessage.addListener(function(msg, sender, responder){
         });
       });
     }catch(_){}
+    // v2.5.9: se a aba era OCULTA, fecha ela depois de 1.5s
+    try{
+      var cnpjKey=msg.cnpj;
+      if(cenprotAbasOcultas[cnpjKey]){
+        var tabId=cenprotAbasOcultas[cnpjKey];
+        delete cenprotAbasOcultas[cnpjKey];
+        setTimeout(function(){
+          try{ chrome.tabs.remove(tabId); }catch(_){}
+        },1500);
+      }
+    }catch(_){}
+    responder({ok:true});
+    return true;
+  }
+  // v2.5.9: app pede pra abrir CENPROT em background (aba invisivel)
+  if(msg && msg.tipo==='cenprot_abrir_oculto'){
+    var cnpjX=(msg.cnpj||'').replace(/\D/g,'');
+    if(cnpjX.length!==14){ responder({ok:false,erro:'CNPJ invalido'}); return true; }
+    var urlX='https://www.pesquisaprotesto.com.br/servico/consulta-documento?ma_cnpj='+cnpjX+'&ma_oculto=1';
+    try{
+      chrome.tabs.create({url:urlX,active:false},function(tab){
+        if(chrome.runtime.lastError || !tab){ responder({ok:false,erro:String(chrome.runtime.lastError && chrome.runtime.lastError.message || 'falha ao abrir aba')}); return; }
+        cenprotAbasOcultas[cnpjX]=tab.id;
+        // Timeout 90s: se nao terminar, torna aba visivel pro usuario
+        setTimeout(function(){
+          if(cenprotAbasOcultas[cnpjX]){
+            var tid=cenprotAbasOcultas[cnpjX];
+            delete cenprotAbasOcultas[cnpjX];
+            try{ chrome.tabs.update(tid,{active:true}); }catch(_){}
+            // Avisa app que precisou cair no modo visivel (timeout)
+            try{
+              chrome.tabs.query({url:'https://rauldneto.github.io/mais-acessivel-app/*'},function(abas){
+                abas.forEach(function(t){
+                  try{ chrome.tabs.sendMessage(t.id,{tipo:'cenprot_timeout_oculto',cnpj:cnpjX}); }catch(_){}
+                });
+              });
+            }catch(_){}
+          }
+        },90000);
+        responder({ok:true,tabId:tab.id});
+      });
+    }catch(e){
+      responder({ok:false,erro:String(e)});
+    }
+    return true;
+  }
+  // v2.5.9: helper avisa que precisa de login manual - torna aba visivel
+  if(msg && msg.tipo==='cenprot_precisa_login'){
+    var cnpjY=(msg.cnpj||'').replace(/\D/g,'');
+    if(cenprotAbasOcultas[cnpjY]){
+      var tidY=cenprotAbasOcultas[cnpjY];
+      delete cenprotAbasOcultas[cnpjY];
+      try{ chrome.tabs.update(tidY,{active:true}); }catch(_){}
+      // Avisa o app pra atualizar status
+      try{
+        chrome.tabs.query({url:'https://rauldneto.github.io/mais-acessivel-app/*'},function(abas){
+          abas.forEach(function(t){
+            try{ chrome.tabs.sendMessage(t.id,{tipo:'cenprot_precisa_login',cnpj:cnpjY,motivo:msg.motivo||'login'}); }catch(_){}
+          });
+        });
+      }catch(_){}
+    }
     responder({ok:true});
     return true;
   }
   return false;
 });
+
+// v2.5.9: Mapa cnpj -> tabId das abas ocultas CENPROT
+var cenprotAbasOcultas={};
 
 // Boot: registra a maquina e baixa a politica
 (async function fwBoot(){

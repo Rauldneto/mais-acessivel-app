@@ -1,4 +1,4 @@
-// cenprot-helper.js (v2.5.8) - Seletores REAIS do CENPROT + expansão de Detalhes
+// cenprot-helper.js (v2.5.9) - Modo OCULTO (background) + fallback login visivel
 // Mapeados em 14/11/2026 inspecionando o site ao vivo.
 //
 // TELA LOGIN (pesquisaprotesto.com.br/login):
@@ -22,16 +22,34 @@
     // 1) Captura CNPJ via URL ?ma_cnpj=XXX
     var url = new URL(location.href);
     var cnpjParam = url.searchParams.get('ma_cnpj');
+    var ocultoParam = url.searchParams.get('ma_oculto');
     if (cnpjParam) {
       try{
         sessionStorage.setItem(KEY_CNPJ, cnpjParam);
+        sessionStorage.setItem('ma_cenprot_oculto_v2', ocultoParam==='1'?'1':'0');
         sessionStorage.removeItem(JA_CONSULTOU);
         sessionStorage.removeItem(JA_ENVIOU);
       }catch(_){}
     }
     var cnpj = '';
-    try{ cnpj = (sessionStorage.getItem(KEY_CNPJ) || '').replace(/\D/g, ''); }catch(_){}
+    var ehOculto = false;
+    try{
+      cnpj = (sessionStorage.getItem(KEY_CNPJ) || '').replace(/\D/g, '');
+      ehOculto = sessionStorage.getItem('ma_cenprot_oculto_v2') === '1';
+    }catch(_){}
     if (!cnpj || cnpj.length !== 14) return;
+
+    // Helper pra avisar background que precisa tornar a aba visivel
+    function avisarPrecisaLogin(motivo){
+      if (!ehOculto) return;
+      try{
+        chrome.runtime.sendMessage({tipo:'cenprot_precisa_login',cnpj:cnpj,motivo:motivo||''});
+        console.log('[CENPROT helper] avisou background: precisa login -', motivo);
+      }catch(_){}
+      // Depois de tornar visivel, nao eh mais oculto
+      ehOculto = false;
+      try{ sessionStorage.setItem('ma_cenprot_oculto_v2','0'); }catch(_){}
+    }
 
     function fmt(c){ return c.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5'); }
 
@@ -77,6 +95,7 @@
       chrome.storage.local.get(['cenprotUsuario', 'cenprotSenha', 'cenprotAutoEntrar'], function(st){
         if (!st || !st.cenprotUsuario || !st.cenprotSenha) {
           console.log('[CENPROT helper] sem credenciais salvas - colab digita manualmente');
+          avisarPrecisaLogin('sem_credenciais');
           return;
         }
         var inpUsr = document.getElementById('usario');
@@ -329,11 +348,38 @@
       location.href = 'https://www.pesquisaprotesto.com.br/servico/consulta-documento';
     }
 
+    // === DETECTOR: se login falhou (ainda na tela de login apos 15s = credencial errada) ===
+    var tsInicioLogin = 0;
+    function detectarLoginFalhou(){
+      if (!ehOculto) return;
+      if (!ehTelaLogin()) { tsInicioLogin = 0; return; }
+      if (tsInicioLogin === 0){ tsInicioLogin = Date.now(); return; }
+      // Mais de 18s na tela de login (com credenciais salvas) = credencial errada
+      if (Date.now() - tsInicioLogin > 18000 && loginFeito){
+        console.warn('[CENPROT helper] login nao concluiu em 18s - credencial pode estar errada');
+        avisarPrecisaLogin('credencial_invalida');
+      }
+    }
+
+    // === DETECTOR: mensagens de erro visiveis (ex: "Dados invalidos", "CAPTCHA") ===
+    var jaAvisouErro = false;
+    function detectarErroVisivel(){
+      if (!ehOculto || jaAvisouErro) return;
+      var txt = ((document.body && document.body.innerText) || '').toLowerCase();
+      if (/(usu[aá]rio\s+ou\s+senha\s+(inv[aá]lid|incorret)|dados\s+inv[aá]lidos|captcha|recaptcha|verifique\s+se\s+voc[eê]|robô)/i.test(txt)){
+        jaAvisouErro = true;
+        console.warn('[CENPROT helper] erro visivel detectado');
+        avisarPrecisaLogin('erro_pagina');
+      }
+    }
+
     // === LOOP: tenta a ação apropriada ===
     function ciclo(){
       try{
         // Modal "Continuar" pode aparecer sobre qualquer tela, sempre verifica primeiro
         tentarContinuarModal();
+        detectarLoginFalhou();
+        detectarErroVisivel();
         if (ehTelaLogin()) tentarLogin();
         else if (ehPainelPosLogin()) tentarIrParaConsulta();
         else if (ehTelaConsulta()) tentarConsulta();
