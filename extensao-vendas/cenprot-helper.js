@@ -1,4 +1,4 @@
-// cenprot-helper.js (v2.5.4) - Seletores REAIS do CENPROT
+// cenprot-helper.js (v2.5.8) - Seletores REAIS do CENPROT + expansão de Detalhes
 // Mapeados em 14/11/2026 inspecionando o site ao vivo.
 //
 // TELA LOGIN (pesquisaprotesto.com.br/login):
@@ -9,6 +9,8 @@
 //
 // TELA RESULTADO (pesquisaprotesto.com.br/consulta):
 //   Contém "Constam protestos" ou "Não constam" + "Documento informado"
+//   Lista cartórios com botão "Detalhes" que expande inline mostrando:
+//   "Documento: XXX  Valor Protestado: R$ Y,YY"
 
 (function(){
   'use strict';
@@ -148,18 +150,96 @@
       }, 400);
     }
 
+    // === AÇÃO NOVA: EXPANDIR TODOS OS "DETALHES" (v2.5.8) ===
+    var jaExpandiu = false;
+    var tsExpansao = 0;
+    function expandirTodosDetalhes(){
+      if (jaExpandiu) return true;
+      if (!ehTelaResultado()) return false;
+
+      // Procura TODOS elementos clicáveis com texto "Detalhes"
+      var tudo = document.querySelectorAll('button, a, [role="button"], .btn, span[onclick]');
+      var cliquesPendentes = [];
+      for (var i=0; i<tudo.length; i++){
+        var el = tudo[i];
+        if (!el.offsetParent) continue;
+        var txt = (el.textContent || '').trim();
+        // Match: começa com "Detalhes" (opcionalmente com ▼, seta, ícone)
+        // Não pega "Detalhes do Título" ou textos longos
+        if (/^detalhes(\s|$)/i.test(txt) && txt.length < 30){
+          cliquesPendentes.push(el);
+        }
+      }
+
+      if (cliquesPendentes.length === 0){
+        // Sem botões Detalhes (pode ser "Não constam") - segue direto
+        jaExpandiu = true;
+        tsExpansao = Date.now();
+        return true;
+      }
+
+      jaExpandiu = true;
+      tsExpansao = Date.now();
+      console.log('[CENPROT helper] expandindo', cliquesPendentes.length, 'cartório(s)');
+
+      // Clica em cada um com 250ms de delay entre eles
+      cliquesPendentes.forEach(function(el, idx){
+        setTimeout(function(){
+          try {
+            el.click();
+            console.log('[CENPROT helper] clicou Detalhes', idx+1);
+          } catch(e){
+            console.warn('[CENPROT helper] erro clique', e);
+          }
+        }, idx * 250);
+      });
+
+      return false; // ainda precisa esperar carregar
+    }
+
     // === AÇÃO: EXTRAIR RESULTADO E ENVIAR PRO APP ===
     var enviou = false;
     function extrairEEnviar(tent){
       if (enviou) return;
       try{ if (sessionStorage.getItem(JA_ENVIOU)) { enviou = true; return; } }catch(_){}
       tent = tent || 0;
-      if (tent > 20) return;
+      if (tent > 30) {
+        console.warn('[CENPROT helper] timeout extração');
+        return;
+      }
       if (!ehTelaResultado()) {
         setTimeout(function(){ extrairEEnviar(tent+1); }, 1000);
         return;
       }
+
+      // PASSO 1: Expande todos os "Detalhes" antes de capturar
+      if (!jaExpandiu){
+        expandirTodosDetalhes();
+        // Agenda próxima tentativa após expandir
+        setTimeout(function(){ extrairEEnviar(tent+1); }, 1200);
+        return;
+      }
+
+      // PASSO 2: Espera pelo menos 3.5s depois da expansão pros detalhes carregarem
+      var agora = Date.now();
+      var msDesdeExpansao = agora - tsExpansao;
+      if (msDesdeExpansao < 3500){
+        setTimeout(function(){ extrairEEnviar(tent+1); }, 500);
+        return;
+      }
+
+      // PASSO 3: Captura texto completo (já com todos detalhes expandidos)
       var corpo = ((document.body && document.body.innerText) || '').trim();
+
+      // Verifica se os valores apareceram (confirma expansão)
+      var temValores = /valor\s+protestado/i.test(corpo);
+      if (!temValores && tent < 15){
+        // Pode ainda estar carregando - tenta de novo
+        console.log('[CENPROT helper] aguardando valores carregarem...');
+        setTimeout(function(){ extrairEEnviar(tent+1); }, 1000);
+        return;
+      }
+
       // Parse direto: tem ou não tem protesto?
       var constam = /\bconstam\s+protestos\b/i.test(corpo);
       var naoConstam = /\bn[aã]o\s+constam\b/i.test(corpo);
@@ -170,12 +250,17 @@
       var dataMatch = corpo.match(/Data\s+da\s+consulta:\s*([\d\/\s:]+)/i);
       var userMatch = corpo.match(/Pesquisa\s+realizada\s+pelo\s+usu[aá]rio:\s*([^,\n]+)/i);
 
+      // Conta quantos valores foram capturados (feedback visual)
+      var matchValores = corpo.match(/valor\s+protestado/gi);
+      var totalValores = matchValores ? matchValores.length : 0;
+
       var resultado = {
         temProtesto: temProtesto,
         documento: docMatch ? docMatch[1].trim() : fmt(cnpj),
         dataConsulta: dataMatch ? dataMatch[1].trim() : '',
         usuarioPesquisa: userMatch ? userMatch[1].trim() : '',
-        textoCompleto: corpo.slice(0, 5000),
+        totalValoresCapturados: totalValores,
+        textoCompleto: corpo.slice(0, 8000),
         urlResultado: location.href
       };
 
@@ -186,10 +271,10 @@
           tipo: 'cenprot_resultado_raw',
           cnpj: cnpj,
           resultado: resultado,
-          texto: corpo.slice(0, 15000)
+          texto: corpo.slice(0, 60000) // v2.5.8: aumenta pra caber todos valores
         });
       }catch(_){}
-      console.log('[CENPROT helper] resultado enviado:', resultado);
+      console.log('[CENPROT helper] resultado enviado:', resultado.totalValoresCapturados, 'valores');
       // Limpa sessionStorage pra não repetir
       try{ sessionStorage.removeItem(KEY_CNPJ); }catch(_){}
     }
