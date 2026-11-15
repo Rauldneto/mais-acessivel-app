@@ -56,6 +56,11 @@
       return !!(cnpjInp && cnpjInp.offsetParent);
     }
 
+    function ehPainelPosLogin(){
+      // Após login, CENPROT vai pra /painel. Precisa navegar pra consulta.
+      return /\/painel\b/i.test(location.pathname);
+    }
+
     function ehTelaResultado(){
       if (!/\/consulta\b/.test(location.pathname)) return false;
       var txt = (document.body && document.body.innerText) || '';
@@ -229,12 +234,23 @@
       }
     }
 
+    // === AÇÃO EXTRA: navegar de /painel pra /servico/consulta-documento ===
+    var navegouPraConsulta = false;
+    function tentarIrParaConsulta(){
+      if (navegouPraConsulta) return;
+      if (!ehPainelPosLogin()) return;
+      navegouPraConsulta = true;
+      console.log('[CENPROT helper] no painel - navegando pra consulta-documento');
+      location.href = 'https://www.pesquisaprotesto.com.br/servico/consulta-documento';
+    }
+
     // === LOOP: tenta a ação apropriada ===
     function ciclo(){
       try{
         // Modal "Continuar" pode aparecer sobre qualquer tela, sempre verifica primeiro
         tentarContinuarModal();
         if (ehTelaLogin()) tentarLogin();
+        else if (ehPainelPosLogin()) tentarIrParaConsulta();
         else if (ehTelaConsulta()) tentarConsulta();
         else if (ehTelaResultado()) extrairEEnviar(0);
       }catch(_){}
