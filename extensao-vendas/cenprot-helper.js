@@ -75,29 +75,45 @@
         var inpUsr = document.getElementById('usario');
         var inpSenha = document.getElementById('senha');
         if (!inpUsr || !inpSenha) return;
-        // Não sobrescreve se já tiver algo
-        if (inpUsr.value.trim() && inpSenha.value.trim()) { loginFeito = true; return; }
-        preencher(inpUsr, st.cenprotUsuario);
-        preencher(inpSenha, st.cenprotSenha);
+        // Preenche usuário e senha (só se vazios)
+        if (!inpUsr.value.trim()) preencher(inpUsr, st.cenprotUsuario);
+        if (!inpSenha.value.trim()) preencher(inpSenha, st.cenprotSenha);
+
+        // SEMPRE marca "Manter-me conectado" (sessão dura dias)
+        try {
+          var toggleWrap = document.querySelector('.manter-logado-selection');
+          if (toggleWrap) {
+            var chkManter = toggleWrap.querySelector('input[type="checkbox"]');
+            if (chkManter && !chkManter.checked) {
+              chkManter.click();
+              console.log('[CENPROT helper] marcou Manter-me conectado');
+            }
+          }
+        } catch(_) {}
+
         loginFeito = true;
         console.log('[CENPROT helper] login preenchido');
-        // Opcional: auto-entrar
-        if (st.cenprotAutoEntrar) {
-          setTimeout(function(){
-            // Procura o botão Entrar
-            var botoes = document.querySelectorAll('button.btn-primary.btn-block, button');
-            for (var i=0; i<botoes.length; i++) {
-              var t = (botoes[i].textContent || '').trim().toLowerCase();
-              if (t === 'entrar' || /^entrar$/i.test(t)) {
-                if (botoes[i].offsetParent) {
-                  botoes[i].click();
-                  console.log('[CENPROT helper] clicou Entrar auto');
-                  break;
-                }
-              }
+
+        // SEMPRE clica Entrar (sem precisar de cenprotAutoEntrar - é o fluxo padrão)
+        setTimeout(function(){
+          // Procura o botão Entrar específico (btn-primary.btn-block)
+          var botao = document.querySelector('button.btn-primary.btn-block');
+          if (botao && /^\s*Entrar\s*$/i.test(botao.textContent || '')) {
+            botao.click();
+            console.log('[CENPROT helper] clicou Entrar auto');
+            return;
+          }
+          // Fallback: procura qualquer botão com texto "Entrar"
+          var botoes = document.querySelectorAll('button');
+          for (var i=0; i<botoes.length; i++) {
+            var t = (botoes[i].textContent || '').trim().toLowerCase();
+            if (t === 'entrar' && botoes[i].offsetParent) {
+              botoes[i].click();
+              console.log('[CENPROT helper] clicou Entrar (fallback)');
+              return;
             }
-          }, 500);
-        }
+          }
+        }, 800);
       });
     }
 
