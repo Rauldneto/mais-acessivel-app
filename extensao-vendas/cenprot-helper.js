@@ -46,9 +46,33 @@
         chrome.runtime.sendMessage({tipo:'cenprot_precisa_login',cnpj:cnpj,motivo:motivo||''});
         console.log('[CENPROT helper] avisou background: precisa login -', motivo);
       }catch(_){}
-      // Depois de tornar visivel, nao eh mais oculto
+      // Marca que ficou visivel, pra re-ocultar depois quando login for feito
       ehOculto = false;
-      try{ sessionStorage.setItem('ma_cenprot_oculto_v2','0'); }catch(_){}
+      try{
+        sessionStorage.setItem('ma_cenprot_oculto_v2','0');
+        sessionStorage.setItem('ma_cenprot_foi_visivel_v2','1');
+      }catch(_){}
+    }
+
+    // v2.6.2: Depois do login manual, re-oculta a janela e devolve foco pro app
+    var jaReocultou = false;
+    function tentarReocultarAposLogin(){
+      if (jaReocultou) return;
+      // So faz sentido se a aba foi tornada visivel antes (precisa login) E saiu da tela de login
+      var foiVisivel = false;
+      try{ foiVisivel = sessionStorage.getItem('ma_cenprot_foi_visivel_v2') === '1'; }catch(_){}
+      if (!foiVisivel) return;
+      // Login terminou quando NAO esta mais na tela de login e nao tem modal de "continuar" aberto
+      if (ehTelaLogin()) return;
+      // Esta em /painel ou /servico/consulta-documento ou /consulta -> logou com sucesso
+      var logado = ehPainelPosLogin() || ehTelaConsulta() || /\/consulta\b/.test(location.pathname) || /\/servico\b/.test(location.pathname);
+      if (!logado) return;
+      jaReocultou = true;
+      try{
+        chrome.runtime.sendMessage({tipo:'cenprot_login_ok',cnpj:cnpj});
+        console.log('[CENPROT helper] login manual detectado - avisou background pra re-ocultar');
+      }catch(_){}
+      try{ sessionStorage.setItem('ma_cenprot_foi_visivel_v2','0'); }catch(_){}
     }
 
     function fmt(c){ return c.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5'); }
@@ -392,6 +416,8 @@
         tentarContinuarModal();
         detectarLoginFalhou();
         detectarErroVisivel();
+        // v2.6.2: se a aba ficou visivel pra login manual, re-ocultar assim que login termina
+        tentarReocultarAposLogin();
         if (ehTelaLogin()) tentarLogin();
         else if (ehPainelPosLogin()) tentarIrParaConsulta();
         else if (ehTelaConsulta()) tentarConsulta();

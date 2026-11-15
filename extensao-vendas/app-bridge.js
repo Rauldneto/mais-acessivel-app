@@ -35,6 +35,11 @@
         window.postMessage({ source: 'ma-ext', type: 'cenprotTimeoutOculto', cnpj: msg.cnpj }, '*');
         responder && responder({ ok: true });
       }
+      // v2.6.2: login manual concluido - janela foi re-ocultada, app mostra "realizando conferencia"
+      if (msg && msg.tipo === 'cenprot_login_ok') {
+        window.postMessage({ source: 'ma-ext', type: 'cenprotLoginOk', cnpj: msg.cnpj }, '*');
+        responder && responder({ ok: true });
+      }
       return false;
     });
   } catch (e) {}

@@ -1290,21 +1290,20 @@ chrome.runtime.onMessage.addListener(function(msg, sender, responder){
     }
     return true;
   }
-  // v2.6.1: helper avisa que precisa de login manual - traz JANELA PRA FRENTE DE TUDO
+  // v2.6.2: helper avisa que precisa de login manual - traz JANELA PRA FRENTE
+  // (mantem no mapa cenprotAbasOcultas para re-ocultar apos login)
   if(msg && msg.tipo==='cenprot_precisa_login'){
     var cnpjY=(msg.cnpj||'').replace(/\D/g,'');
     if(cenprotAbasOcultas[cnpjY]){
       var info=cenprotAbasOcultas[cnpjY];
-      delete cenprotAbasOcultas[cnpjY];
+      // Marca que esta no modo "visivel aguardando login" (nao deleta - precisa re-ocultar depois)
+      info.aguardandoLogin=true;
       try{
         if(info.windowId){
-          // Passo 1: restaura state=normal + focused (traz pra frente)
           chrome.windows.update(info.windowId,{state:'normal',focused:true,drawAttention:true},function(){
-            // Passo 2: ativa a aba dentro da janela
             if(info.tabId){
               try{ chrome.tabs.update(info.tabId,{active:true,highlighted:true}); }catch(_){}
             }
-            // Passo 3: re-afirma foco apos 250ms (alguns SOs ignoram o primeiro)
             setTimeout(function(){
               try{ chrome.windows.update(info.windowId,{focused:true,drawAttention:true}); }catch(_){}
             },250);
@@ -1313,12 +1312,41 @@ chrome.runtime.onMessage.addListener(function(msg, sender, responder){
           chrome.tabs.update(info.tabId,{active:true,highlighted:true});
         }
       }catch(_){}
-      // Avisa o app pra atualizar status
       try{
         chrome.tabs.query({url:'https://rauldneto.github.io/mais-acessivel-app/*'},function(abas){
           abas.forEach(function(t){
             try{ chrome.tabs.sendMessage(t.id,{tipo:'cenprot_precisa_login',cnpj:cnpjY,motivo:msg.motivo||'login'}); }catch(_){}
           });
+        });
+      }catch(_){}
+    }
+    responder({ok:true});
+    return true;
+  }
+  // v2.6.2: helper detectou que login manual foi concluido - re-oculta janela + devolve foco pro app
+  if(msg && msg.tipo==='cenprot_login_ok'){
+    var cnpjL=(msg.cnpj||'').replace(/\D/g,'');
+    if(cenprotAbasOcultas[cnpjL] && cenprotAbasOcultas[cnpjL].aguardandoLogin){
+      var infoL=cenprotAbasOcultas[cnpjL];
+      infoL.aguardandoLogin=false;
+      // Re-oculta a janela do CENPROT (minimiza)
+      try{
+        if(infoL.windowId){
+          chrome.windows.update(infoL.windowId,{state:'minimized',focused:false});
+        }
+      }catch(_){}
+      // Devolve o foco pra janela do APP (pra o colaborador ver o status "realizando conferencia")
+      try{
+        chrome.tabs.query({url:'https://rauldneto.github.io/mais-acessivel-app/*'},function(abas){
+          if(abas && abas.length){
+            var appTab=abas[0];
+            try{ chrome.windows.update(appTab.windowId,{focused:true,drawAttention:true}); }catch(_){}
+            try{ chrome.tabs.update(appTab.id,{active:true,highlighted:true}); }catch(_){}
+            // Avisa o app pra mostrar "realizando conferencia"
+            abas.forEach(function(t){
+              try{ chrome.tabs.sendMessage(t.id,{tipo:'cenprot_login_ok',cnpj:cnpjL}); }catch(_){}
+            });
+          }
         });
       }catch(_){}
     }
