@@ -435,7 +435,7 @@
           +'<span style="font-size:22px">📊</span> Mais Acessível'
         +'</div>'
         +'<div style="font-size:12px;color:#334155;margin-bottom:12px;line-height:1.5">'
-          +'<b>Dica:</b> expanda os “Detalhes” dos cartórios que você quer incluir (opcional) e clique no botão abaixo para trazer tudo pro app.'
+          +'Clique abaixo e o sistema vai expandir todos os <b>Detalhes</b> automaticamente, capturar os valores e enviar pro app com a mensagem pronta pro WhatsApp do cliente.'
         +'</div>'
         +'<button id="ma-cen-enviar" style="width:100%;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:8px;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 2px 8px rgba(22,163,74,0.35)">'
           +'<span style="font-size:18px">📤</span> Enviar resultado pro app'
@@ -447,41 +447,91 @@
         var btn = this;
         btn.disabled = true;
         btn.style.opacity = '0.7';
-        btn.innerHTML = '<span style="font-size:18px">⏳</span> Enviando...';
-        try{
-          var corpo = ((document.body && document.body.innerText) || '').trim();
-          var html = (document.body && document.body.innerHTML) || '';
-          var constam = /\bconstam\s+protestos\b/i.test(corpo);
-          var naoConstam = /\bn[aã]o\s+constam\b/i.test(corpo);
-          var temProtesto = constam && !naoConstam;
-          var docMatch = corpo.match(/Documento\s+informado:\s*([\d.\/-]+)/i);
-          var dataMatch = corpo.match(/Data\s+da\s+consulta:\s*([\d\/\s:]+)/i);
-          var totalValores = (corpo.match(/valor\s+protestado/gi) || []).length;
 
-          chrome.runtime.sendMessage({
-            tipo: 'cenprot_resultado_raw',
-            cnpj: cnpj,
-            resultado: {
-              temProtesto: temProtesto,
-              documento: docMatch ? docMatch[1].trim() : fmt(cnpj),
-              dataConsulta: dataMatch ? dataMatch[1].trim() : '',
-              totalValoresCapturados: totalValores,
-              urlResultado: location.href
-            },
-            texto: corpo.slice(0, 60000),
-            htmlBruto: html.slice(0, 30000)
-          }, function(){
-            btn.innerHTML = '<span style="font-size:18px">✅</span> Enviado! Volte pro app';
-            btn.style.background = '#166534';
-            setTimeout(function(){
-              try{ var p=document.getElementById('ma-cen-painel'); if(p) p.remove(); }catch(_){}
-            }, 3000);
-          });
-        }catch(e){
-          btn.disabled = false;
-          btn.style.opacity = '1';
-          btn.innerHTML = '<span style="font-size:18px">⚠️</span> Erro - tente de novo';
-          console.error('[CENPROT helper] erro ao enviar:', e);
+        // 1) Expande TODOS os botoes "Detalhes" primeiro (pra garantir que os valores R$ apareçam)
+        function coletarBotoesDetalhes(){
+          var tudo = document.querySelectorAll('button, a, [role="button"], .btn, span[onclick]');
+          var out = [];
+          for (var i=0; i<tudo.length; i++){
+            var el = tudo[i];
+            if (!el.offsetParent) continue;
+            var txt = (el.textContent || '').trim();
+            if (/^detalhes(\s|$)/i.test(txt) && txt.length < 30){ out.push(el); }
+          }
+          return out;
+        }
+        var botoes = coletarBotoesDetalhes();
+        var total = botoes.length;
+        var atual = 0;
+
+        function atualizarProgresso(){
+          btn.innerHTML = '<span style="font-size:18px">⏳</span> Expandindo ' + atual + '/' + total + '...';
+        }
+
+        function clicarProximo(){
+          if (atual >= total){
+            // Todos expandidos - espera 2s de margem e captura
+            btn.innerHTML = '<span style="font-size:18px">⏳</span> Capturando valores...';
+            setTimeout(capturarEEnviar, 2000);
+            return;
+          }
+          atualizarProgresso();
+          // Re-coleta (pode ter mudado o DOM)
+          var atuais = coletarBotoesDetalhes();
+          var alvo = atuais[atual];
+          if (alvo){
+            try{ alvo.click(); }catch(_){}
+          }
+          atual++;
+          setTimeout(clicarProximo, 1500); // 1.5s entre cliques pra carregar
+        }
+
+        function capturarEEnviar(){
+          btn.innerHTML = '<span style="font-size:18px">📤</span> Enviando pro app...';
+          try{
+            var corpo = ((document.body && document.body.innerText) || '').trim();
+            var html = (document.body && document.body.innerHTML) || '';
+            var constam = /\bconstam\s+protestos\b/i.test(corpo);
+            var naoConstam = /\bn[aã]o\s+constam\b/i.test(corpo);
+            var temProtesto = constam && !naoConstam;
+            var docMatch = corpo.match(/Documento\s+informado:\s*([\d.\/-]+)/i);
+            var dataMatch = corpo.match(/Data\s+da\s+consulta:\s*([\d\/\s:]+)/i);
+            var totalValores = (corpo.match(/valor\s+protestado/gi) || []).length;
+
+            chrome.runtime.sendMessage({
+              tipo: 'cenprot_resultado_raw',
+              cnpj: cnpj,
+              resultado: {
+                temProtesto: temProtesto,
+                documento: docMatch ? docMatch[1].trim() : fmt(cnpj),
+                dataConsulta: dataMatch ? dataMatch[1].trim() : '',
+                totalValoresCapturados: totalValores,
+                urlResultado: location.href
+              },
+              texto: corpo.slice(0, 80000),
+              htmlBruto: html.slice(0, 40000)
+            }, function(){
+              btn.innerHTML = '<span style="font-size:18px">✅</span> Enviado! Volte pro app ('+totalValores+' valores)';
+              btn.style.background = '#166534';
+              setTimeout(function(){
+                try{ var p=document.getElementById('ma-cen-painel'); if(p) p.remove(); }catch(_){}
+              }, 3500);
+            });
+          }catch(e){
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.innerHTML = '<span style="font-size:18px">⚠️</span> Erro - tente de novo';
+            console.error('[CENPROT helper] erro ao enviar:', e);
+          }
+        }
+
+        // Comeca o processo
+        if (total === 0){
+          // Nao tem botao "Detalhes" (provavelmente nao constam protestos) - envia direto
+          capturarEEnviar();
+        } else {
+          btn.innerHTML = '<span style="font-size:18px">⏳</span> Expandindo ' + total + ' cartório(s)...';
+          clicarProximo();
         }
       });
 
