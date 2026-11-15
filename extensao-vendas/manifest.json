@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mais Acessível — Vendas e Atendimento",
-  "version": "2.5.3",
+  "version": "2.5.4",
   "description": "Assistente de vendas da Mais Acessível: Bling, WhatsApp, firewall de domínios.",
   "permissions": [
     "activeTab",
@@ -20,6 +20,8 @@
     "https://web.whatsapp.com/*",
     "https://maisacessivel-1d0ad-default-rtdb.firebaseio.com/*",
     "https://soft-limit-b3a1.rauldias.workers.dev/*",
+    "https://www.pesquisaprotesto.com.br/*",
+    "https://pesquisaprotesto.com.br/*",
     "<all_urls>"
   ],
   "background": {
@@ -50,6 +52,16 @@
       ],
       "js": [
         "app-bridge.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.pesquisaprotesto.com.br/*",
+        "https://pesquisaprotesto.com.br/*"
+      ],
+      "js": [
+        "cenprot-helper.js"
       ],
       "run_at": "document_idle"
     },
