@@ -1234,59 +1234,75 @@ chrome.runtime.onMessage.addListener(function(msg, sender, responder){
         });
       });
     }catch(_){}
-    // v2.5.9: se a aba era OCULTA, fecha ela depois de 1.5s
+    // v2.6.0: se era JANELA OCULTA, fecha ela depois de 1.5s
     try{
       var cnpjKey=msg.cnpj;
       if(cenprotAbasOcultas[cnpjKey]){
-        var tabId=cenprotAbasOcultas[cnpjKey];
+        var infoK=cenprotAbasOcultas[cnpjKey];
         delete cenprotAbasOcultas[cnpjKey];
         setTimeout(function(){
-          try{ chrome.tabs.remove(tabId); }catch(_){}
+          try{
+            if(infoK.windowId){ chrome.windows.remove(infoK.windowId); }
+            else if(infoK.tabId){ chrome.tabs.remove(infoK.tabId); }
+          }catch(_){}
         },1500);
       }
     }catch(_){}
     responder({ok:true});
     return true;
   }
-  // v2.5.9: app pede pra abrir CENPROT em background (aba invisivel)
+  // v2.6.0: app pede pra abrir CENPROT em JANELA SEPARADA MINIMIZADA (nao aparece como aba)
   if(msg && msg.tipo==='cenprot_abrir_oculto'){
     var cnpjX=(msg.cnpj||'').replace(/\D/g,'');
     if(cnpjX.length!==14){ responder({ok:false,erro:'CNPJ invalido'}); return true; }
     var urlX='https://www.pesquisaprotesto.com.br/servico/consulta-documento?ma_cnpj='+cnpjX+'&ma_oculto=1';
     try{
-      chrome.tabs.create({url:urlX,active:false},function(tab){
-        if(chrome.runtime.lastError || !tab){ responder({ok:false,erro:String(chrome.runtime.lastError && chrome.runtime.lastError.message || 'falha ao abrir aba')}); return; }
-        cenprotAbasOcultas[cnpjX]=tab.id;
-        // Timeout 90s: se nao terminar, torna aba visivel pro usuario
+      // Cria JANELA separada, minimizada e sem foco - nao aparece na barra de abas do Chrome
+      chrome.windows.create({
+        url: urlX,
+        state: 'minimized',
+        focused: false,
+        type: 'popup'
+      }, function(win){
+        if(chrome.runtime.lastError || !win){
+          // Fallback: tenta aba em background
+          try{
+            chrome.tabs.create({url:urlX,active:false},function(tab){
+              if(chrome.runtime.lastError || !tab){ responder({ok:false,erro:String(chrome.runtime.lastError && chrome.runtime.lastError.message || 'falha')}); return; }
+              cenprotAbasOcultas[cnpjX]={tabId:tab.id,windowId:null};
+              agendarTimeout(cnpjX);
+              responder({ok:true});
+            });
+          }catch(e2){ responder({ok:false,erro:String(e2)}); }
+          return;
+        }
+        var tabId = (win.tabs && win.tabs[0] && win.tabs[0].id) ? win.tabs[0].id : null;
+        cenprotAbasOcultas[cnpjX]={tabId:tabId,windowId:win.id};
+        // Re-afirma minimizada apos 200ms (algumas vezes o Chrome reseta)
         setTimeout(function(){
-          if(cenprotAbasOcultas[cnpjX]){
-            var tid=cenprotAbasOcultas[cnpjX];
-            delete cenprotAbasOcultas[cnpjX];
-            try{ chrome.tabs.update(tid,{active:true}); }catch(_){}
-            // Avisa app que precisou cair no modo visivel (timeout)
-            try{
-              chrome.tabs.query({url:'https://rauldneto.github.io/mais-acessivel-app/*'},function(abas){
-                abas.forEach(function(t){
-                  try{ chrome.tabs.sendMessage(t.id,{tipo:'cenprot_timeout_oculto',cnpj:cnpjX}); }catch(_){}
-                });
-              });
-            }catch(_){}
-          }
-        },90000);
-        responder({ok:true,tabId:tab.id});
+          try{ chrome.windows.update(win.id,{state:'minimized',focused:false}); }catch(_){}
+        },200);
+        agendarTimeout(cnpjX);
+        responder({ok:true,tabId:tabId,windowId:win.id});
       });
     }catch(e){
       responder({ok:false,erro:String(e)});
     }
     return true;
   }
-  // v2.5.9: helper avisa que precisa de login manual - torna aba visivel
+  // v2.6.0: helper avisa que precisa de login manual - torna JANELA visivel
   if(msg && msg.tipo==='cenprot_precisa_login'){
     var cnpjY=(msg.cnpj||'').replace(/\D/g,'');
     if(cenprotAbasOcultas[cnpjY]){
-      var tidY=cenprotAbasOcultas[cnpjY];
+      var info=cenprotAbasOcultas[cnpjY];
       delete cenprotAbasOcultas[cnpjY];
-      try{ chrome.tabs.update(tidY,{active:true}); }catch(_){}
+      try{
+        if(info.windowId){
+          chrome.windows.update(info.windowId,{state:'normal',focused:true,drawAttention:true});
+        } else if(info.tabId){
+          chrome.tabs.update(info.tabId,{active:true});
+        }
+      }catch(_){}
       // Avisa o app pra atualizar status
       try{
         chrome.tabs.query({url:'https://rauldneto.github.io/mais-acessivel-app/*'},function(abas){
@@ -1302,8 +1318,28 @@ chrome.runtime.onMessage.addListener(function(msg, sender, responder){
   return false;
 });
 
-// v2.5.9: Mapa cnpj -> tabId das abas ocultas CENPROT
+// v2.6.0: Mapa cnpj -> {tabId, windowId} das janelas/abas ocultas CENPROT
 var cenprotAbasOcultas={};
+
+function agendarTimeout(cnpjX){
+  setTimeout(function(){
+    if(cenprotAbasOcultas[cnpjX]){
+      var info=cenprotAbasOcultas[cnpjX];
+      delete cenprotAbasOcultas[cnpjX];
+      try{
+        if(info.windowId){ chrome.windows.update(info.windowId,{state:'normal',focused:true}); }
+        else if(info.tabId){ chrome.tabs.update(info.tabId,{active:true}); }
+      }catch(_){}
+      try{
+        chrome.tabs.query({url:'https://rauldneto.github.io/mais-acessivel-app/*'},function(abas){
+          abas.forEach(function(t){
+            try{ chrome.tabs.sendMessage(t.id,{tipo:'cenprot_timeout_oculto',cnpj:cnpjX}); }catch(_){}
+          });
+        });
+      }catch(_){}
+    }
+  },90000);
+}
 
 // Boot: registra a maquina e baixa a politica
 (async function fwBoot(){

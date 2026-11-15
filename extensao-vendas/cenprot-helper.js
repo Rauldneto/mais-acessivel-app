@@ -1,4 +1,4 @@
-// cenprot-helper.js (v2.5.9) - Modo OCULTO (background) + fallback login visivel
+// cenprot-helper.js (v2.6.0) - Janela oculta + captura HTML + iterativo p/ garantir valores
 // Mapeados em 14/11/2026 inspecionando o site ao vivo.
 //
 // TELA LOGIN (pesquisaprotesto.com.br/login):
@@ -169,51 +169,76 @@
       }, 400);
     }
 
-    // === AÇÃO NOVA: EXPANDIR TODOS OS "DETALHES" (v2.5.8) ===
-    var jaExpandiu = false;
-    var tsExpansao = 0;
-    function expandirTodosDetalhes(){
-      if (jaExpandiu) return true;
-      if (!ehTelaResultado()) return false;
+    // === v2.6.0: ESTRATEGIA ITERATIVA: clica 1 Detalhes, captura texto, proximo, etc ===
+    var botoesIterar = [];
+    var indiceIter = 0;
+    var textosAcumulados = [];
+    var htmlFinal = '';
+    var iterIniciada = false;
+    var iterFinalizada = false;
 
-      // Procura TODOS elementos clicáveis com texto "Detalhes"
+    function coletarBotoesDetalhes(){
       var tudo = document.querySelectorAll('button, a, [role="button"], .btn, span[onclick]');
-      var cliquesPendentes = [];
+      var out = [];
       for (var i=0; i<tudo.length; i++){
         var el = tudo[i];
         if (!el.offsetParent) continue;
         var txt = (el.textContent || '').trim();
-        // Match: começa com "Detalhes" (opcionalmente com ▼, seta, ícone)
-        // Não pega "Detalhes do Título" ou textos longos
         if (/^detalhes(\s|$)/i.test(txt) && txt.length < 30){
-          cliquesPendentes.push(el);
+          out.push(el);
         }
       }
+      return out;
+    }
 
-      if (cliquesPendentes.length === 0){
-        // Sem botões Detalhes (pode ser "Não constam") - segue direto
-        jaExpandiu = true;
-        tsExpansao = Date.now();
-        return true;
+    function iniciarIteracao(){
+      if (iterIniciada) return;
+      iterIniciada = true;
+      botoesIterar = coletarBotoesDetalhes();
+      console.log('[CENPROT helper] iteracao: encontrados', botoesIterar.length, 'botao(oes) Detalhes');
+      if (botoesIterar.length === 0){
+        iterFinalizada = true;
+        return;
       }
+      // Captura estado INICIAL (antes de qualquer clique)
+      try{
+        var txtIni = (document.body && document.body.innerText) || '';
+        textosAcumulados.push('=== INICIAL ===\n' + txtIni);
+      }catch(_){}
+      proximoClique();
+    }
 
-      jaExpandiu = true;
-      tsExpansao = Date.now();
-      console.log('[CENPROT helper] expandindo', cliquesPendentes.length, 'cartório(s)');
-
-      // Clica em cada um com 250ms de delay entre eles
-      cliquesPendentes.forEach(function(el, idx){
-        setTimeout(function(){
-          try {
-            el.click();
-            console.log('[CENPROT helper] clicou Detalhes', idx+1);
-          } catch(e){
-            console.warn('[CENPROT helper] erro clique', e);
-          }
-        }, idx * 250);
-      });
-
-      return false; // ainda precisa esperar carregar
+    function proximoClique(){
+      if (indiceIter >= botoesIterar.length){
+        // Terminou todos os cliques - captura HTML final tambem
+        try{ htmlFinal = (document.body && document.body.innerHTML) || ''; }catch(_){ htmlFinal=''; }
+        iterFinalizada = true;
+        console.log('[CENPROT helper] iteracao FINALIZADA:', textosAcumulados.length, 'capturas');
+        return;
+      }
+      // Re-coleta os botoes toda vez (podem ter mudado apos cada clique)
+      var atuais = coletarBotoesDetalhes();
+      var btn = atuais[indiceIter];
+      if (!btn){
+        indiceIter++;
+        setTimeout(proximoClique, 100);
+        return;
+      }
+      try {
+        btn.click();
+        console.log('[CENPROT helper] clicou Detalhes', indiceIter+1, '/', botoesIterar.length);
+      } catch(e){
+        console.warn('[CENPROT helper] erro clique', e);
+      }
+      // Espera 1.8s pros Detalhes expandirem, depois captura texto
+      setTimeout(function(){
+        try{
+          var txt = (document.body && document.body.innerText) || '';
+          textosAcumulados.push('=== APOS DETALHES #' + (indiceIter+1) + ' ===\n' + txt);
+        }catch(_){}
+        indiceIter++;
+        proximoClique();
+      }, 1800);
     }
 
     // === AÇÃO: EXTRAIR RESULTADO E ENVIAR PRO APP ===
@@ -222,7 +247,7 @@
       if (enviou) return;
       try{ if (sessionStorage.getItem(JA_ENVIOU)) { enviou = true; return; } }catch(_){}
       tent = tent || 0;
-      if (tent > 30) {
+      if (tent > 60) {
         console.warn('[CENPROT helper] timeout extração');
         return;
       }
@@ -231,46 +256,33 @@
         return;
       }
 
-      // PASSO 1: Expande todos os "Detalhes" antes de capturar
-      if (!jaExpandiu){
-        expandirTodosDetalhes();
-        // Agenda próxima tentativa após expandir
-        setTimeout(function(){ extrairEEnviar(tent+1); }, 1200);
+      // PASSO 1: Inicia iteracao (clica Detalhes 1-a-1, capturando texto entre cliques)
+      if (!iterIniciada){
+        iniciarIteracao();
+        setTimeout(function(){ extrairEEnviar(tent+1); }, 1500);
         return;
       }
 
-      // PASSO 2: Espera pelo menos 3.5s depois da expansão pros detalhes carregarem
-      var agora = Date.now();
-      var msDesdeExpansao = agora - tsExpansao;
-      if (msDesdeExpansao < 3500){
-        setTimeout(function(){ extrairEEnviar(tent+1); }, 500);
+      // PASSO 2: Espera a iteracao terminar
+      if (!iterFinalizada){
+        setTimeout(function(){ extrairEEnviar(tent+1); }, 800);
         return;
       }
 
-      // PASSO 3: Captura texto completo (já com todos detalhes expandidos)
-      var corpo = ((document.body && document.body.innerText) || '').trim();
+      // PASSO 3: Combina todos os textos capturados
+      var combinado = textosAcumulados.join('\n\n');
 
-      // Verifica se os valores apareceram (confirma expansão)
-      var temValores = /valor\s+protestado/i.test(corpo);
-      if (!temValores && tent < 15){
-        // Pode ainda estar carregando - tenta de novo
-        console.log('[CENPROT helper] aguardando valores carregarem...');
-        setTimeout(function(){ extrairEEnviar(tent+1); }, 1000);
-        return;
-      }
-
-      // Parse direto: tem ou não tem protesto?
-      var constam = /\bconstam\s+protestos\b/i.test(corpo);
-      var naoConstam = /\bn[aã]o\s+constam\b/i.test(corpo);
+      // Parse basico
+      var constam = /\bconstam\s+protestos\b/i.test(combinado);
+      var naoConstam = /\bn[aã]o\s+constam\b/i.test(combinado);
       var temProtesto = constam && !naoConstam;
 
-      // Extrai documento e data
-      var docMatch = corpo.match(/Documento\s+informado:\s*([\d.\/-]+)/i);
-      var dataMatch = corpo.match(/Data\s+da\s+consulta:\s*([\d\/\s:]+)/i);
-      var userMatch = corpo.match(/Pesquisa\s+realizada\s+pelo\s+usu[aá]rio:\s*([^,\n]+)/i);
+      var docMatch = combinado.match(/Documento\s+informado:\s*([\d.\/-]+)/i);
+      var dataMatch = combinado.match(/Data\s+da\s+consulta:\s*([\d\/\s:]+)/i);
+      var userMatch = combinado.match(/Pesquisa\s+realizada\s+pelo\s+usu[aá]rio:\s*([^,\n]+)/i);
 
       // Conta quantos valores foram capturados (feedback visual)
-      var matchValores = corpo.match(/valor\s+protestado/gi);
+      var matchValores = combinado.match(/valor\s+protestado/gi);
       var totalValores = matchValores ? matchValores.length : 0;
 
       var resultado = {
@@ -279,7 +291,6 @@
         dataConsulta: dataMatch ? dataMatch[1].trim() : '',
         usuarioPesquisa: userMatch ? userMatch[1].trim() : '',
         totalValoresCapturados: totalValores,
-        textoCompleto: corpo.slice(0, 8000),
         urlResultado: location.href
       };
 
@@ -290,10 +301,11 @@
           tipo: 'cenprot_resultado_raw',
           cnpj: cnpj,
           resultado: resultado,
-          texto: corpo.slice(0, 60000) // v2.5.8: aumenta pra caber todos valores
+          texto: combinado.slice(0, 80000), // v2.6.0: ate 80k chars de texto combinado
+          htmlBruto: (htmlFinal || '').slice(0, 40000) // v2.6.0: HTML bruto final de backup
         });
       }catch(_){}
-      console.log('[CENPROT helper] resultado enviado:', resultado.totalValoresCapturados, 'valores');
+      console.log('[CENPROT helper] resultado enviado:', totalValores, 'ocorrencias de "valor protestado"');
       // Limpa sessionStorage pra não repetir
       try{ sessionStorage.removeItem(KEY_CNPJ); }catch(_){}
     }

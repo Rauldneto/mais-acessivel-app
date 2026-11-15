@@ -22,7 +22,7 @@
   try {
     chrome.runtime.onMessage.addListener(function(msg, sender, responder) {
       if (msg && msg.tipo === 'cenprot_resultado_raw') {
-        window.postMessage({ source: 'ma-ext', type: 'cenprotResultadoRaw', cnpj: msg.cnpj, resultado: msg.resultado, texto: msg.texto }, '*');
+        window.postMessage({ source: 'ma-ext', type: 'cenprotResultadoRaw', cnpj: msg.cnpj, resultado: msg.resultado, texto: msg.texto, htmlBruto: msg.htmlBruto || '' }, '*');
         responder && responder({ ok: true });
       }
       // v2.5.9: helper avisou que precisa login (aba foi tornada visivel)
