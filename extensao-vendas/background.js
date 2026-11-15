@@ -1234,20 +1234,67 @@ chrome.runtime.onMessage.addListener(function(msg, sender, responder){
         });
       });
     }catch(_){}
-    // v2.6.0: se era JANELA OCULTA, fecha ela depois de 1.5s
+    // v2.6.3: FECHA JANELA DO CENPROT apos consulta - 3 estrategias redundantes:
+    // 1) Mapa cenprotAbasOcultas (pode estar vazio se service worker resetou)
+    // 2) sender.tab.id (SEMPRE confiavel - o content script que mandou a msg)
+    // 3) chrome.tabs.query por URL do CENPROT (caso extremo)
+    var cnpjKey=(msg.cnpj||'').replace(/\D/g,'');
+    var tabIdRemetente=(sender && sender.tab && sender.tab.id) ? sender.tab.id : null;
+    var windowIdRemetente=(sender && sender.tab && sender.tab.windowId) ? sender.tab.windowId : null;
+
+    // Limpa mapa (se existir)
     try{
-      var cnpjKey=msg.cnpj;
       if(cenprotAbasOcultas[cnpjKey]){
-        var infoK=cenprotAbasOcultas[cnpjKey];
+        if(!windowIdRemetente) windowIdRemetente=cenprotAbasOcultas[cnpjKey].windowId;
+        if(!tabIdRemetente) tabIdRemetente=cenprotAbasOcultas[cnpjKey].tabId;
         delete cenprotAbasOcultas[cnpjKey];
-        setTimeout(function(){
-          try{
-            if(infoK.windowId){ chrome.windows.remove(infoK.windowId); }
-            else if(infoK.tabId){ chrome.tabs.remove(infoK.tabId); }
-          }catch(_){}
-        },1500);
       }
     }catch(_){}
+
+    setTimeout(function(){
+      // Estrategia A: fecha a janela inteira (se for popup/janela so com essa aba)
+      if(windowIdRemetente){
+        try{
+          chrome.windows.get(windowIdRemetente,{populate:true},function(win){
+            if(chrome.runtime.lastError || !win){
+              // Fallback pra tab se janela nao existe mais
+              if(tabIdRemetente){ try{ chrome.tabs.remove(tabIdRemetente); }catch(_){} }
+              return;
+            }
+            // Se eh popup ou so tem a aba do CENPROT, fecha a janela toda
+            var soTemCenprot=!win.tabs || win.tabs.length<=1 || (win.tabs.every(function(t){ return /pesquisaprotesto\.com\.br/i.test(t.url||''); }));
+            if(win.type==='popup' || soTemCenprot){
+              try{ chrome.windows.remove(windowIdRemetente); console.log('[CENPROT] janela fechada:',windowIdRemetente); }catch(_){}
+            } else if(tabIdRemetente){
+              // Caso extremo: janela do usuario com mais abas - fecha so a aba
+              try{ chrome.tabs.remove(tabIdRemetente); }catch(_){}
+            }
+          });
+        }catch(e){
+          if(tabIdRemetente){ try{ chrome.tabs.remove(tabIdRemetente); }catch(_){} }
+        }
+      } else if(tabIdRemetente){
+        try{ chrome.tabs.remove(tabIdRemetente); }catch(_){}
+      }
+
+      // Estrategia C (sweep): procura QUALQUER aba do pesquisaprotesto.com.br e fecha
+      // (resolve caso as duas acima falharem)
+      setTimeout(function(){
+        try{
+          chrome.tabs.query({url:['https://*.pesquisaprotesto.com.br/*','https://pesquisaprotesto.com.br/*']},function(sobrou){
+            if(!sobrou || !sobrou.length) return;
+            sobrou.forEach(function(t){
+              try{
+                // So fecha se foi aberta pela extensao (URL com ma_cnpj ou ma_oculto, ou janela popup)
+                if(/[?&](ma_cnpj|ma_oculto)=/.test(t.url||'')){
+                  chrome.tabs.remove(t.id);
+                }
+              }catch(_){}
+            });
+          });
+        }catch(_){}
+      },2500);
+    },1500);
     responder({ok:true});
     return true;
   }
