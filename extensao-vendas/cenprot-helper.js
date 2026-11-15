@@ -189,9 +189,51 @@
       try{ sessionStorage.removeItem(KEY_CNPJ); }catch(_){}
     }
 
+    // === AÇÃO EXTRA: fecha modal "Login — Continuar" (aparece após clicar Entrar) ===
+    var modalContinuarClicado = false;
+    function tentarContinuarModal(){
+      if (modalContinuarClicado) return;
+      // Procura modal aberto com texto "Login" / "Certificado Digital" / "GOV.BR"
+      var modais = document.querySelectorAll('.modal, [class*="modal-dialog"]');
+      for (var i=0; i<modais.length; i++){
+        var m = modais[i];
+        if (!m.offsetParent) continue;
+        var texto = m.innerText || '';
+        if (!/certificado\s+digital|gov\.br|carta\s+de\s+anu/i.test(texto)) continue;
+        // Procura botão "Continuar" dentro do modal
+        var botoes = m.querySelectorAll('button');
+        for (var j=0; j<botoes.length; j++){
+          var t = (botoes[j].textContent || '').trim();
+          if (/^continuar$/i.test(t) && botoes[j].offsetParent){
+            botoes[j].click();
+            modalContinuarClicado = true;
+            console.log('[CENPROT helper] clicou Continuar no modal');
+            return;
+          }
+        }
+      }
+      // Fallback: procura qualquer botão verde/success com texto "Continuar"
+      var todos = document.querySelectorAll('button');
+      for (var k=0; k<todos.length; k++){
+        var t2 = (todos[k].textContent || '').trim();
+        if (/^continuar$/i.test(t2) && todos[k].offsetParent){
+          var cls = (todos[k].className || '').toLowerCase();
+          // Prioriza botão verde (success)
+          if (/success|btn-success|green/i.test(cls) || todos[k].style.backgroundColor.indexOf('rgb(40, 167, 69)') >= 0){
+            todos[k].click();
+            modalContinuarClicado = true;
+            console.log('[CENPROT helper] clicou Continuar (fallback verde)');
+            return;
+          }
+        }
+      }
+    }
+
     // === LOOP: tenta a ação apropriada ===
     function ciclo(){
       try{
+        // Modal "Continuar" pode aparecer sobre qualquer tela, sempre verifica primeiro
+        tentarContinuarModal();
         if (ehTelaLogin()) tentarLogin();
         else if (ehTelaConsulta()) tentarConsulta();
         else if (ehTelaResultado()) extrairEEnviar(0);
