@@ -1290,7 +1290,7 @@ chrome.runtime.onMessage.addListener(function(msg, sender, responder){
     }
     return true;
   }
-  // v2.6.0: helper avisa que precisa de login manual - torna JANELA visivel
+  // v2.6.1: helper avisa que precisa de login manual - traz JANELA PRA FRENTE DE TUDO
   if(msg && msg.tipo==='cenprot_precisa_login'){
     var cnpjY=(msg.cnpj||'').replace(/\D/g,'');
     if(cenprotAbasOcultas[cnpjY]){
@@ -1298,9 +1298,19 @@ chrome.runtime.onMessage.addListener(function(msg, sender, responder){
       delete cenprotAbasOcultas[cnpjY];
       try{
         if(info.windowId){
-          chrome.windows.update(info.windowId,{state:'normal',focused:true,drawAttention:true});
+          // Passo 1: restaura state=normal + focused (traz pra frente)
+          chrome.windows.update(info.windowId,{state:'normal',focused:true,drawAttention:true},function(){
+            // Passo 2: ativa a aba dentro da janela
+            if(info.tabId){
+              try{ chrome.tabs.update(info.tabId,{active:true,highlighted:true}); }catch(_){}
+            }
+            // Passo 3: re-afirma foco apos 250ms (alguns SOs ignoram o primeiro)
+            setTimeout(function(){
+              try{ chrome.windows.update(info.windowId,{focused:true,drawAttention:true}); }catch(_){}
+            },250);
+          });
         } else if(info.tabId){
-          chrome.tabs.update(info.tabId,{active:true});
+          chrome.tabs.update(info.tabId,{active:true,highlighted:true});
         }
       }catch(_){}
       // Avisa o app pra atualizar status
@@ -1327,8 +1337,12 @@ function agendarTimeout(cnpjX){
       var info=cenprotAbasOcultas[cnpjX];
       delete cenprotAbasOcultas[cnpjX];
       try{
-        if(info.windowId){ chrome.windows.update(info.windowId,{state:'normal',focused:true}); }
-        else if(info.tabId){ chrome.tabs.update(info.tabId,{active:true}); }
+        if(info.windowId){
+          chrome.windows.update(info.windowId,{state:'normal',focused:true,drawAttention:true},function(){
+            if(info.tabId){ try{ chrome.tabs.update(info.tabId,{active:true,highlighted:true}); }catch(_){} }
+            setTimeout(function(){ try{ chrome.windows.update(info.windowId,{focused:true}); }catch(_){} },250);
+          });
+        } else if(info.tabId){ chrome.tabs.update(info.tabId,{active:true,highlighted:true}); }
       }catch(_){}
       try{
         chrome.tabs.query({url:'https://rauldneto.github.io/mais-acessivel-app/*'},function(abas){
