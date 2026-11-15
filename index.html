@@ -21626,7 +21626,7 @@ function renderModeloEmTeste(){
     endTerceiro:false,
     simDoc:{1:0,2:0,3:0},simLoc:0,orcamento:0,
     mOk:false,lOk:false,
-    verifManual:{maps:null,google:null,insta:null,googleSite:'',instaPerfil:''},
+    verifManual:{maps:null,google:null,facebook:null,instagram:null,googleSite:'',facePerfil:'',instaPerfil:'',obsMaps:'',obsGoogle:'',obsFace:'',obsInsta:''},
     temProtesto:false, relatoProtesto:null, defesaCliente:null
   };
   var D={nome:'',fantasia:'',cnpj:'',socio:'',capital:'',endereco:'',cidade:'',estado:'',cep:''};
@@ -21772,7 +21772,7 @@ function renderModeloEmTeste(){
   }
 
   function limpar(){
-    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,precisaAprovDir:false,justEndTerceiro:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},docsOk:{1:false,2:false,3:false},docsNegados:{},simLoc:0,orcamento:0,mOk:false,lOk:false,verifManual:{maps:null,google:null,insta:null,googleSite:'',instaPerfil:'',obsMaps:'',obsGoogle:'',obsInsta:''},temProtesto:false,relatoProtesto:null,defesaCliente:null};
+    S={checks:[],negado:false,protestoDiretor:false,excecao1:null,excecao2:null,excecao_doc:null,justTerceiro:null,decl_divergencia:null,justWarn:null,justMaps:null,precisaAprovDir:false,justEndTerceiro:null,mE:0,mS:0,nS:1,sit:'',endTerceiro:false,simDoc:{1:0,2:0,3:0},docsOk:{1:false,2:false,3:false},docsNegados:{},simLoc:0,orcamento:0,mOk:false,lOk:false,verifManual:{maps:null,google:null,facebook:null,instagram:null,googleSite:'',facePerfil:'',instaPerfil:'',obsMaps:'',obsGoogle:'',obsFace:'',obsInsta:''},temProtesto:false,relatoProtesto:null,defesaCliente:null};
     window._mod5S=S;
     S_DOCS={contrato:null,comprovante:null,docSocio:null};
     window._mod5S_DOCS = S_DOCS;
@@ -22593,22 +22593,15 @@ function renderModeloEmTeste(){
   // ======= ETAPA 3: VERIFICACAO MANUAL (Google Maps, Google, Instagram) =======
   function buildVM(){
     // Reset dos valores ao (re)entrar
-    S.verifManual={maps:null,google:null,insta:null,googleSite:'',instaPerfil:'',obsMaps:'',obsGoogle:'',obsInsta:''};
+    S.verifManual={maps:null,google:null,facebook:null,instagram:null,googleSite:'',facePerfil:'',instaPerfil:'',obsMaps:'',obsGoogle:'',obsFace:'',obsInsta:''};
     var nomeBusca=(D.fantasia||D.nome||'').trim();
-    // Google Maps: usa o ENDERECO COMPLETO pra levar DIRETO ao local (fachada),
-    // nao a busca por nome da empresa (que mostrava rota ou lugares errados).
-    var partesEnd=[];
-    if(D.endereco) partesEnd.push(D.endereco);
-    if(D.cidade) partesEnd.push(D.cidade);
-    if(D.estado) partesEnd.push(D.estado);
-    if(D.cep) partesEnd.push('CEP '+D.cep);
-    var enderecoBusca=partesEnd.join(', ').trim();
-    var urlMaps = enderecoBusca
-      ? 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(enderecoBusca)
-      : 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent((nomeBusca+(D.cidade?' '+D.cidade:'')).trim());
-    var urlGoogle='https://www.google.com/search?q='+encodeURIComponent('"'+nomeBusca+'"');
-    var urlInsta='https://www.google.com/search?q='+encodeURIComponent('"'+nomeBusca+'" site:instagram.com');
-    var urlFace='https://www.google.com/search?q='+encodeURIComponent('"'+nomeBusca+'" site:facebook.com');
+    var cidade=(D.cidade||'').trim();
+    // v2.7.1: todas as buscas usam NOME FANTASIA + CIDADE pra achar a empresa no cadastro online
+    var buscaFantCid=(nomeBusca+(cidade?' '+cidade:'')).trim();
+    var urlMaps='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(buscaFantCid);
+    var urlGoogle='https://www.google.com/search?q='+encodeURIComponent(buscaFantCid);
+    var urlInsta='https://www.google.com/search?q='+encodeURIComponent(buscaFantCid+' instagram');
+    var urlFace='https://www.google.com/search?q='+encodeURIComponent(buscaFantCid+' facebook');
 
     // v2.7.0: vmRow com INSTRUCAO + suporte a varios links + CAMPO DE OBSERVACAO em todos
     // linksExtra: array opcional [{icon, titulo, url}] pra abrir multiplos destinos no mesmo item
@@ -22650,16 +22643,18 @@ function renderModeloEmTeste(){
       sec(3,'#0891b2','Verifica\u00e7\u00e3o Manual')
       +'<p style="font-size:12px;color:#475569;margin-bottom:12px;padding:8px 10px;background:#ecfeff;border-radius:6px;line-height:1.6">'
       +'Confira nos links abaixo e marque o resultado. Nenhum item bloqueia a an\u00e1lise \u2014 tudo entra no parecer final como observa\u00e7\u00e3o.</p>'
-      +vmRow('maps','ti-map-pin','Ver local / fachada no Google Maps'+(enderecoBusca?' <span style="font-size:11px;color:#64748b;font-weight:400">('+enderecoBusca.slice(0,60)+(enderecoBusca.length>60?'...':'')+')</span>':''),urlMaps,
-        'Veja se o endere\u00e7o realmente tem <b>fachada de empresa</b> (placa, vitrine, galp\u00e3o comercial). Avalie se parece uma empresa compat\u00edvel com o ramo \u2014 n\u00e3o uma casa residencial, terreno vazio ou endere\u00e7o inexistente. Se poss\u00edvel, use o Street View.',
+      +vmRow('maps','ti-map-pin','Buscar empresa no Google Maps',urlMaps,
+        'A busca abre com <b>nome fantasia + cidade</b>. Veja se a empresa aparece no Google Maps e se o local tem <b>fachada compat\u00edvel com o ramo</b> (placa, vitrine, galp\u00e3o comercial). N\u00e3o pode ser casa residencial, terreno vazio ou endere\u00e7o inexistente. Use o Street View se poss\u00edvel.',
         false)
-      +vmRow('google','ti-search','Empresa no Google',urlGoogle,
-        'Verifique se a empresa <b>existe e est\u00e1 cadastrada no Google</b> (perfil Google Business). Confira a <b>avalia\u00e7\u00e3o</b> (quantas estrelas, quantas reviews) e se tem site/endere\u00e7o/telefone coerentes com o que informou.',
+      +vmRow('google','ti-search','Buscar empresa no Google',urlGoogle,
+        'A busca abre com <b>nome fantasia + cidade</b>. Confirme se a empresa <b>existe e est\u00e1 cadastrada no Google</b> (perfil Google Business, site pr\u00f3prio). Confira a <b>avalia\u00e7\u00e3o</b> (quantas estrelas, quantas reviews) e se tem dados coerentes com o que o cliente informou.',
         true,'Site da empresa (opcional)','https://www.empresa.com.br')
-      +vmRow('insta','ti-brand-meta','Redes Sociais (Instagram + Facebook)',urlInsta,
-        'Veja se a empresa tem <b>redes sociais ativas</b> em pelo menos uma das plataformas: posta com frequ\u00eancia, tem seguidores, mostra produtos/servi\u00e7os, interage com clientes. Empresas que n\u00e3o aparecem em lugar nenhum online s\u00e3o um sinal de alerta.',
-        true,'Perfil(s) encontrado(s) (opcional)','@empresa   ou   instagram.com/empresa   /   facebook.com/empresa',
-        [{icon:'ti-brand-instagram',titulo:'Instagram',url:urlInsta},{icon:'ti-brand-facebook',titulo:'Facebook',url:urlFace}])
+      +vmRow('facebook','ti-brand-facebook','Facebook',urlFace,
+        'Procura <b>nome fantasia + cidade + facebook</b>. Veja se a empresa tem <b>p\u00e1gina ativa</b> no Facebook: posts recentes, seguidores reais, fotos de produtos/servi\u00e7os/equipe, intera\u00e7\u00f5es com clientes.',
+        true,'URL ou @ do Facebook (opcional)','facebook.com/empresa')
+      +vmRow('instagram','ti-brand-instagram','Instagram',urlInsta,
+        'Procura <b>nome fantasia + cidade + instagram</b>. Veja se a empresa tem <b>perfil ativo</b> no Instagram: posts recentes, stories, seguidores reais, fotos de produtos/servi\u00e7os, intera\u00e7\u00e3o com clientes.',
+        true,'@perfil do Instagram (opcional)','@empresa')
       +'<div id="m5vmOk" style="display:none;margin-top:12px"></div>'
       +'<div id="m5vmNav" style="display:none;margin-top:10px">'
       +'<button id="m5btnVM" type="button" style="background:#0891b2;color:#fff;border:none;border-radius:6px;padding:9px 16px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-arrow-right"></i> Prosseguir para documentos</button>'
@@ -22687,7 +22682,7 @@ function renderModeloEmTeste(){
     }
     function atualizarBotaoProsseguir(){
       var vm=S.verifManual;
-      var todosMarcados = vm.maps!==null && vm.google!==null && vm.insta!==null;
+      var todosMarcados = vm.maps!==null && vm.google!==null && vm.facebook!==null && vm.instagram!==null;
       if(todosMarcados){
         q('#m5vmOk').innerHTML=resBox('ok','Etapa 3 registrada','As marca\u00e7\u00f5es ser\u00e3o inclu\u00eddas no parecer final. Prossiga para os documentos.');
         q('#m5vmOk').style.display='block';
@@ -22699,21 +22694,26 @@ function renderModeloEmTeste(){
     });
     // Capturar valores dos campos opcionais ao digitar
     var inpG=q('#vm-google-in');if(inpG)inpG.addEventListener('input',function(){S.verifManual.googleSite=this.value.trim();});
-    var inpI=q('#vm-insta-in');if(inpI)inpI.addEventListener('input',function(){S.verifManual.instaPerfil=this.value.trim();});
-    // v2.7.0: capturar observacoes de cada item
+    var inpF=q('#vm-facebook-in');if(inpF)inpF.addEventListener('input',function(){S.verifManual.facePerfil=this.value.trim();});
+    var inpI=q('#vm-instagram-in');if(inpI)inpI.addEventListener('input',function(){S.verifManual.instaPerfil=this.value.trim();});
+    // v2.7.1: capturar observacoes de cada um dos 4 itens
     var obsM=q('#vm-maps-obs');if(obsM)obsM.addEventListener('input',function(){S.verifManual.obsMaps=this.value.trim();});
-    var obsG=q('#vm-google-obs');if(obsG)obsG.addEventListener('input',function(){S.verifManual.obsGoogle=this.value.trim();});
-    var obsI=q('#vm-insta-obs');if(obsI)obsI.addEventListener('input',function(){S.verifManual.obsInsta=this.value.trim();});
+    var obsGl=q('#vm-google-obs');if(obsGl)obsGl.addEventListener('input',function(){S.verifManual.obsGoogle=this.value.trim();});
+    var obsFb=q('#vm-facebook-obs');if(obsFb)obsFb.addEventListener('input',function(){S.verifManual.obsFace=this.value.trim();});
+    var obsIg=q('#vm-instagram-obs');if(obsIg)obsIg.addEventListener('input',function(){S.verifManual.obsInsta=this.value.trim();});
     // Botao prosseguir -> registra checks e vai para documentos
     q('#m5btnVM').onclick=function(){
       var vm=S.verifManual;
+      function obsSuf(o){ return o ? ' \u2014 obs: '+o : ''; }
       // Registrar cada item no checklist como observacao informativa (tipo 'ok' para nao afetar veredito)
-      if(vm.maps==='ok') addCk('ok','ti-map-pin','Endere\u00e7o confere no Google Maps');
-      if(vm.maps==='no') addCk('ok','ti-map-pin','Endere\u00e7o n\u00e3o confere no Google Maps \u2014 sem fachada ou detalhes que indiquem a empresa no local (observa\u00e7\u00e3o)');
-      if(vm.google==='ok') addCk('ok','ti-search','Empresa possui presen\u00e7a no Google'+(vm.googleSite?' \u2014 site: '+vm.googleSite:''));
-      if(vm.google==='no') addCk('ok','ti-search','Empresa n\u00e3o possui site pr\u00f3prio identificado no Google (observa\u00e7\u00e3o)');
-      if(vm.insta==='ok') addCk('ok','ti-brand-instagram','Empresa possui perfil no Instagram'+(vm.instaPerfil?' \u2014 '+vm.instaPerfil:''));
-      if(vm.insta==='no') addCk('ok','ti-brand-instagram','Empresa n\u00e3o possui perfil no Instagram (observa\u00e7\u00e3o)');
+      if(vm.maps==='ok') addCk('ok','ti-map-pin','Empresa encontrada no Google Maps (fachada confere)'+obsSuf(vm.obsMaps));
+      if(vm.maps==='no') addCk('ok','ti-map-pin','Empresa n\u00e3o encontrada no Google Maps ou fachada n\u00e3o confere (observa\u00e7\u00e3o)'+obsSuf(vm.obsMaps));
+      if(vm.google==='ok') addCk('ok','ti-search','Empresa com presen\u00e7a no Google'+(vm.googleSite?' \u2014 site: '+vm.googleSite:'')+obsSuf(vm.obsGoogle));
+      if(vm.google==='no') addCk('ok','ti-search','Empresa sem presen\u00e7a identificada no Google (observa\u00e7\u00e3o)'+obsSuf(vm.obsGoogle));
+      if(vm.facebook==='ok') addCk('ok','ti-brand-facebook','Empresa possui Facebook ativo'+(vm.facePerfil?' \u2014 '+vm.facePerfil:'')+obsSuf(vm.obsFace));
+      if(vm.facebook==='no') addCk('ok','ti-brand-facebook','Empresa n\u00e3o possui Facebook ativo (observa\u00e7\u00e3o)'+obsSuf(vm.obsFace));
+      if(vm.instagram==='ok') addCk('ok','ti-brand-instagram','Empresa possui Instagram ativo'+(vm.instaPerfil?' \u2014 '+vm.instaPerfil:'')+obsSuf(vm.obsInsta));
+      if(vm.instagram==='no') addCk('ok','ti-brand-instagram','Empresa n\u00e3o possui Instagram ativo (observa\u00e7\u00e3o)'+obsSuf(vm.obsInsta));
       buildE3();
     };
   }
@@ -22737,7 +22737,7 @@ function renderModeloEmTeste(){
       +'<p style="font-size:12px;color:#92400e;margin-bottom:12px;padding:10px 12px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:6px;line-height:1.6">'
       +'<b>\u26a0\ufe0f Cobre os documentos do cliente.</b> Se o cliente se recusar a enviar algum, clique em <b>\u201cCliente negou envio\u201d</b> e isso entra como ressalva no parecer final. Lembre-se: cliente que se recusa a enviar documentos b\u00e1sicos de identifica\u00e7\u00e3o/endere\u00e7o j\u00e1 \u00e9 um <b>sinal de alerta</b> para a diretoria.</p>'
       +dRow('m5eb1','m5ei1','ti-file-certificate','Contrato Social Alterado','IA verifica: CNPJ, s\u00f3cio e capital','1')
-      +dRow('m5eb2','m5ei2','ti-home','Comprovante de Endere\u00e7o','Conta \u00e1gua/energia/telefone/cart\u00e3o (at\u00e9 90 dias) ou contrato de loca\u00e7\u00e3o','2')
+      +dRow('m5eb2','m5ei2','ti-home','Comprovante de Endere\u00e7o / Contrato de Loca\u00e7\u00e3o','Conta \u00e1gua/energia/telefone/cart\u00e3o (at\u00e9 90 dias) OU contrato de loca\u00e7\u00e3o vigente','2')
       +dRow('m5eb3','m5ei3','ti-id-badge','Documento do S\u00f3cio (RG, CNH ou Carteira)','IA verifica se nome confere com a Receita Federal','3')
       +'<div id="m5bdoc" style="display:none;margin-top:8px">'
       +'<button id="m5btnDoc" disabled style="background:#cbd5e1;color:#64748b;border:0.5px solid #cbd5e1;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:500;cursor:not-allowed;display:inline-flex;align-items:center;gap:6px;opacity:0.7"><i class="ti ti-flag"></i> Concluir an\u00e1lise documental</button>'
@@ -22747,7 +22747,7 @@ function renderModeloEmTeste(){
     wrap.querySelectorAll('#m5s3 input[type=file]').forEach(function(inp){
       inp.addEventListener('change',function(){upDoc(parseInt(this.getAttribute('data-n')),this);});
     });
-    // v2.7.0: botoes "Cliente negou envio" (marca doc como negado pra permitir prosseguir)
+    // v2.7.1: botoes "Cliente negou envio" marcam doc como negado E abrem campo de observacao
     wrap.querySelectorAll('#m5s3 [data-neg]').forEach(function(btn){
       btn.addEventListener('click',function(){
         var n=parseInt(this.getAttribute('data-neg'));
@@ -22755,20 +22755,34 @@ function renderModeloEmTeste(){
         S.docsOk[n]='negado';
         if(!S.docsNegados) S.docsNegados={};
         S.docsNegados[n]=true;
-        // Atualiza visual do badge
         var bid='m5eb'+n;
         var b=q('#'+bid);
         if(b){
           b.innerHTML='<i class="ti ti-ban"></i> Cliente negou envio';
           b.style.cssText='display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;background:#fee2e2;color:#991b1b;border:0.5px solid #fca5a5';
         }
-        // Desabilita o Selecionar e esse proprio botao
         this.disabled=true;
         this.style.opacity='0.4';
         this.style.cursor='not-allowed';
         var operador=STATE.usuarioLogado||'desconhecido';
-        var nomes={1:'Contrato Social',2:'Comprovante de Endere\u00e7o',3:'Documento do S\u00f3cio'};
+        var nomes={1:'Contrato Social',2:'Comprovante de Endere\u00e7o / Contrato de Loca\u00e7\u00e3o',3:'Documento do S\u00f3cio'};
         addCk('warn','ti-ban',nomes[n]+': cliente negou envio (registrado por '+operador+')');
+
+        // Abre campo de observacao pra registrar o motivo/contexto
+        var ei=q('#m5ei'+n);
+        if(ei && !document.getElementById('m5obsNeg'+n)){
+          ei.style.display='block';
+          var obsBox=document.createElement('div');
+          obsBox.style.cssText='background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 12px;margin-top:4px';
+          obsBox.innerHTML='<label style="font-size:11px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:6px"><i class="ti ti-note" style="font-size:12px;vertical-align:-1px"></i> Observa\u00e7\u00e3o sobre a negativa (opcional)</label>'
+            +'<textarea id="m5obsNeg'+n+'" rows="2" placeholder="Ex: cliente alegou que nao tem contrato social em maos, vai enviar apos consultar contador. OU: cliente nao quis explicar o motivo." style="width:100%;padding:8px 10px;border:1px solid #fca5a5;border-radius:6px;font-size:12px;background:#fff;color:#1e293b;outline:none;resize:vertical;box-sizing:border-box;font-family:inherit;line-height:1.5"></textarea>';
+          ei.appendChild(obsBox);
+          // Captura obs ao digitar
+          document.getElementById('m5obsNeg'+n).addEventListener('input',function(){
+            if(!S.obsDocsNegados) S.obsDocsNegados={};
+            S.obsDocsNegados[n]=this.value.trim();
+          });
+        }
         updateBtnDocState();
       });
     });
