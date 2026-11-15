@@ -22608,30 +22608,53 @@ function renderModeloEmTeste(){
       : 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent((nomeBusca+(D.cidade?' '+D.cidade:'')).trim());
     var urlGoogle='https://www.google.com/search?q='+encodeURIComponent('"'+nomeBusca+'"');
     var urlInsta='https://www.google.com/search?q='+encodeURIComponent('"'+nomeBusca+'" site:instagram.com');
+    var urlFace='https://www.google.com/search?q='+encodeURIComponent('"'+nomeBusca+'" site:facebook.com');
 
-    function vmRow(id,icon,titulo,url,temCampo,campoLabel,campoPh){
-      return '<div style="background:#ffffff;border:0.5px solid #cffafe;border-radius:10px;padding:12px 14px;margin-bottom:8px">'
+    // v2.6.9: vmRow com INSTRUCAO do que avaliar + suporte a varios links na mesma linha
+    // linksExtra: array opcional [{icon, titulo, url}] pra abrir multiplos destinos no mesmo item
+    function vmRow(id,icon,titulo,url,instrucao,temCampo,campoLabel,campoPh,linksExtra){
+      var html='<div style="background:#ffffff;border:0.5px solid #cffafe;border-radius:10px;padding:12px 14px;margin-bottom:8px">'
         +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">'
-        +'<a href="'+url+'" target="_blank" rel="noopener" style="font-size:13px;color:#0e7490;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-weight:500">'
-        +'<i class="ti '+icon+'" style="font-size:16px"></i>'+titulo+' <i class="ti ti-external-link" style="font-size:12px;opacity:.6"></i></a>'
+        +'<div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:200px">'
+        +'<a href="'+url+'" target="_blank" rel="noopener" style="font-size:13px;color:#0e7490;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-weight:600">'
+        +'<i class="ti '+icon+'" style="font-size:16px"></i>'+titulo+' <i class="ti ti-external-link" style="font-size:12px;opacity:.6"></i></a>';
+      // Links extras (ex: Facebook/Instagram lado a lado)
+      if(linksExtra && linksExtra.length){
+        html+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:2px">';
+        linksExtra.forEach(function(lk){
+          html+='<a href="'+lk.url+'" target="_blank" rel="noopener" style="font-size:12px;color:#0e7490;text-decoration:none;display:inline-flex;align-items:center;gap:4px;font-weight:500;padding:3px 8px;background:#ecfeff;border-radius:5px;border:1px solid #a5f3fc">'
+            +'<i class="ti '+lk.icon+'" style="font-size:13px"></i>'+lk.titulo+' <i class="ti ti-external-link" style="font-size:10px;opacity:.6"></i></a>';
+        });
+        html+='</div>';
+      }
+      html+='</div>'
         +'<div style="display:flex;gap:6px">'
         +'<button type="button" id="vm-'+id+'-ok" data-vm="'+id+'" data-r="ok" style="background:#ffffff;color:#166534;border:0.5px solid #86efac;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-check" style="font-size:13px"></i> Confere</button>'
         +'<button type="button" id="vm-'+id+'-no" data-vm="'+id+'" data-r="no" style="background:#ffffff;color:#991b1b;border:0.5px solid #fca5a5;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="ti ti-x" style="font-size:13px"></i> N\u00e3o confere</button>'
         +'</div></div>'
+        +(instrucao?'<div style="margin-top:8px;padding:8px 10px;background:#f8fafc;border-left:3px solid #0891b2;border-radius:4px;font-size:11.5px;color:#334155;line-height:1.55"><b style="color:#0e7490">O que avaliar:</b> '+instrucao+'</div>':'')
         +(temCampo?'<div id="vm-'+id+'-fld" style="display:none;margin-top:10px;padding-top:10px;border-top:0.5px dashed #cffafe;align-items:center;gap:8px">'
           +'<label style="font-size:11px;color:#64748b;min-width:130px;display:inline-block">'+campoLabel+':</label>'
           +'<input type="text" id="vm-'+id+'-in" placeholder="'+campoPh+'" style="flex:1;min-width:200px;padding:6px 9px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;background:#fff;color:#1e293b;outline:none">'
           +'</div>':'')
         +'</div>';
+      return html;
     }
 
     q('#m5sVM').innerHTML=card('#0891b2',
       sec(3,'#0891b2','Verifica\u00e7\u00e3o Manual')
       +'<p style="font-size:12px;color:#475569;margin-bottom:12px;padding:8px 10px;background:#ecfeff;border-radius:6px;line-height:1.6">'
       +'Confira nos links abaixo e marque o resultado. Nenhum item bloqueia a an\u00e1lise \u2014 tudo entra no parecer final como observa\u00e7\u00e3o.</p>'
-      +vmRow('maps','ti-map-pin','Ver local / fachada no Google Maps'+(enderecoBusca?' <span style="font-size:11px;color:#64748b;font-weight:400">('+enderecoBusca.slice(0,60)+(enderecoBusca.length>60?'...':'')+')</span>':''),urlMaps,false)
-      +vmRow('google','ti-search','Empresa no Google',urlGoogle,true,'Site (opcional)','https://www.empresa.com.br')
-      +vmRow('insta','ti-brand-instagram','Empresa no Instagram',urlInsta,true,'Perfil (opcional)','@empresa   ou   instagram.com/empresa')
+      +vmRow('maps','ti-map-pin','Ver local / fachada no Google Maps'+(enderecoBusca?' <span style="font-size:11px;color:#64748b;font-weight:400">('+enderecoBusca.slice(0,60)+(enderecoBusca.length>60?'...':'')+')</span>':''),urlMaps,
+        'Veja se o endere\u00e7o realmente tem <b>fachada de empresa</b> (placa, vitrine, galp\u00e3o comercial). Avalie se parece uma empresa compat\u00edvel com o ramo \u2014 n\u00e3o uma casa residencial, terreno vazio ou endere\u00e7o inexistente. Se poss\u00edvel, use o Street View.',
+        false)
+      +vmRow('google','ti-search','Empresa no Google',urlGoogle,
+        'Verifique se a empresa <b>existe e est\u00e1 cadastrada no Google</b> (perfil Google Business). Confira a <b>avalia\u00e7\u00e3o</b> (quantas estrelas, quantas reviews) e se tem site/endere\u00e7o/telefone coerentes com o que informou.',
+        true,'Site da empresa (opcional)','https://www.empresa.com.br')
+      +vmRow('insta','ti-brand-meta','Redes Sociais (Instagram + Facebook)',urlInsta,
+        'Veja se a empresa tem <b>redes sociais ativas</b> em pelo menos uma das plataformas: posta com frequ\u00eancia, tem seguidores, mostra produtos/servi\u00e7os, interage com clientes. Empresas que n\u00e3o aparecem em lugar nenhum online s\u00e3o um sinal de alerta.',
+        true,'Perfil(s) encontrado(s) (opcional)','@empresa   ou   instagram.com/empresa   /   facebook.com/empresa',
+        [{icon:'ti-brand-instagram',titulo:'Instagram',url:urlInsta},{icon:'ti-brand-facebook',titulo:'Facebook',url:urlFace}])
       +'<div id="m5vmOk" style="display:none;margin-top:12px"></div>'
       +'<div id="m5vmNav" style="display:none;margin-top:10px">'
       +'<button id="m5btnVM" type="button" style="background:#0891b2;color:#fff;border:none;border-radius:6px;padding:9px 16px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px"><i class="ti ti-arrow-right"></i> Prosseguir para documentos</button>'
