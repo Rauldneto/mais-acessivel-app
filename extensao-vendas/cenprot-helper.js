@@ -448,7 +448,6 @@
         btn.disabled = true;
         btn.style.opacity = '0.7';
 
-        // 1) Expande TODOS os botoes "Detalhes" primeiro (pra garantir que os valores R$ apareçam)
         function coletarBotoesDetalhes(){
           var tudo = document.querySelectorAll('button, a, [role="button"], .btn, span[onclick]');
           var out = [];
@@ -460,43 +459,50 @@
           }
           return out;
         }
-        var botoes = coletarBotoesDetalhes();
-        var total = botoes.length;
+
+        // Captura inicial (sem nenhum Detalhes aberto)
+        var textosCapturados = [];
+        try{ textosCapturados.push('=== INICIAL ===\n'+(document.body.innerText||'').trim()); }catch(_){}
+
+        var total = coletarBotoesDetalhes().length;
         var atual = 0;
 
-        function atualizarProgresso(){
-          btn.innerHTML = '<span style="font-size:18px">⏳</span> Expandindo ' + atual + '/' + total + '...';
-        }
-
-        function clicarProximo(){
+        // ESTRATEGIA ITERATIVA (resolve accordion exclusivo do CENPROT):
+        // Clica em CADA Detalhes um por vez, espera 1.6s pra expandir,
+        // CAPTURA o innerText nesse momento (acumula) e vai pro proximo.
+        // Assim pega os valores de cada cartorio mesmo que o anterior tenha fechado.
+        function proximo(){
           if (atual >= total){
-            // Todos expandidos - espera 2s de margem e captura
-            btn.innerHTML = '<span style="font-size:18px">⏳</span> Capturando valores...';
-            setTimeout(capturarEEnviar, 2000);
+            btn.innerHTML = '<span style="font-size:18px">📤</span> Enviando pro app...';
+            setTimeout(enviarTudo, 300);
             return;
           }
-          atualizarProgresso();
-          // Re-coleta (pode ter mudado o DOM)
+          btn.innerHTML = '<span style="font-size:18px">⏳</span> Lendo cartório '+(atual+1)+'/'+total+'...';
           var atuais = coletarBotoesDetalhes();
           var alvo = atuais[atual];
-          if (alvo){
-            try{ alvo.click(); }catch(_){}
-          }
-          atual++;
-          setTimeout(clicarProximo, 1500); // 1.5s entre cliques pra carregar
+          if (alvo){ try{ alvo.click(); }catch(_){} }
+          // Espera DOM atualizar e captura texto COM este cartorio aberto
+          setTimeout(function(){
+            try{
+              var txt = (document.body.innerText||'').trim();
+              textosCapturados.push('=== APOS DETALHES #'+(atual+1)+' ===\n'+txt);
+            }catch(_){}
+            atual++;
+            proximo();
+          }, 1600);
         }
 
-        function capturarEEnviar(){
-          btn.innerHTML = '<span style="font-size:18px">📤</span> Enviando pro app...';
+        function enviarTudo(){
           try{
-            var corpo = ((document.body && document.body.innerText) || '').trim();
+            // Captura HTML final (com o ultimo Detalhes aberto) - backup pra IA
             var html = (document.body && document.body.innerHTML) || '';
-            var constam = /\bconstam\s+protestos\b/i.test(corpo);
-            var naoConstam = /\bn[aã]o\s+constam\b/i.test(corpo);
+            var combinado = textosCapturados.join('\n\n');
+            var constam = /\bconstam\s+protestos\b/i.test(combinado);
+            var naoConstam = /\bn[aã]o\s+constam\b/i.test(combinado);
             var temProtesto = constam && !naoConstam;
-            var docMatch = corpo.match(/Documento\s+informado:\s*([\d.\/-]+)/i);
-            var dataMatch = corpo.match(/Data\s+da\s+consulta:\s*([\d\/\s:]+)/i);
-            var totalValores = (corpo.match(/valor\s+protestado/gi) || []).length;
+            var docMatch = combinado.match(/Documento\s+informado:\s*([\d.\/-]+)/i);
+            var dataMatch = combinado.match(/Data\s+da\s+consulta:\s*([\d\/\s:]+)/i);
+            var totalValores = (combinado.match(/valor\s+protestado/gi) || []).length;
 
             chrome.runtime.sendMessage({
               tipo: 'cenprot_resultado_raw',
@@ -508,8 +514,8 @@
                 totalValoresCapturados: totalValores,
                 urlResultado: location.href
               },
-              texto: corpo.slice(0, 80000),
-              htmlBruto: html.slice(0, 40000)
+              texto: combinado.slice(0, 100000),
+              htmlBruto: html.slice(0, 30000)
             }, function(){
               btn.innerHTML = '<span style="font-size:18px">✅</span> Enviado! Volte pro app ('+totalValores+' valores)';
               btn.style.background = '#166534';
@@ -525,13 +531,10 @@
           }
         }
 
-        // Comeca o processo
-        if (total === 0){
-          // Nao tem botao "Detalhes" (provavelmente nao constam protestos) - envia direto
-          capturarEEnviar();
-        } else {
-          btn.innerHTML = '<span style="font-size:18px">⏳</span> Expandindo ' + total + ' cartório(s)...';
-          clicarProximo();
+        if (total === 0){ enviarTudo(); }
+        else {
+          btn.innerHTML = '<span style="font-size:18px">⏳</span> Lendo '+total+' cartório(s)...';
+          proximo();
         }
       });
 
