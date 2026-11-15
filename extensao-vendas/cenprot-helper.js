@@ -1,6 +1,8 @@
-// cenprot-helper.js (v2.6.4) - MODO MANUAL: so pre-preenche CNPJ, sem automacao
-// O colaborador faz login, consulta e volta no app marcar o resultado manualmente.
-// Automacao desativada a pedido do usuario (demorava demais).
+// cenprot-helper.js (v2.6.5) - MODO MANUAL com botao "Enviar pro app" na tela de resultado
+// Fluxo: colaborador abre CENPROT, loga, consulta manualmente.
+// Na tela de resultado, aparece um painel verde flutuante com botao
+// "Enviar resultado pro app" - ele clica e os dados vao pro app,
+// que processa com IA e gera tabela + mensagem pronta pro WhatsApp.
 // Mapeados em 14/11/2026 inspecionando o site ao vivo.
 //
 // TELA LOGIN (pesquisaprotesto.com.br/login):
@@ -411,27 +413,102 @@
       }
     }
 
-    // === v2.6.4: MODO MANUAL - helper SO PRE-PREENCHE O CNPJ ===
-    // Nao faz login automatico, nao clica buscar, nao expande Detalhes, nao envia resultado.
-    // O colaborador faz tudo manualmente e marca o resultado no app sozinho.
+    // === v2.6.5: MODO MANUAL com BOTAO "Enviar pro app" injetado na tela de resultado ===
+    // 1) Pre-preenche CNPJ na tela de consulta
+    // 2) Na tela de resultado, mostra painel flutuante com botao verde
+    //    "Enviar resultado pro app" - colaborador expande os Detalhes que
+    //    quiser e clica pra mandar texto+HTML pro app processar.
     var preenchido = false;
+    var painelInjetado = false;
+
+    function injetarPainelEnviar(){
+      if (painelInjetado) return;
+      if (!ehTelaResultado()) return;
+      if (document.getElementById('ma-cen-painel')) return;
+      painelInjetado = true;
+
+      var painel = document.createElement('div');
+      painel.id = 'ma-cen-painel';
+      painel.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:2147483647;background:#fff;border:3px solid #16a34a;border-radius:14px;padding:16px 20px;box-shadow:0 10px 32px rgba(0,0,0,0.3);max-width:380px;min-width:300px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:13px;color:#1e293b';
+      painel.innerHTML =
+        '<div style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800;color:#166534;margin-bottom:8px">'
+          +'<span style="font-size:22px">📊</span> Mais Acessível'
+        +'</div>'
+        +'<div style="font-size:12px;color:#334155;margin-bottom:12px;line-height:1.5">'
+          +'<b>Dica:</b> expanda os “Detalhes” dos cartórios que você quer incluir (opcional) e clique no botão abaixo para trazer tudo pro app.'
+        +'</div>'
+        +'<button id="ma-cen-enviar" style="width:100%;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:8px;padding:11px 14px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 2px 8px rgba(22,163,74,0.35)">'
+          +'<span style="font-size:18px">📤</span> Enviar resultado pro app'
+        +'</button>'
+        +'<button id="ma-cen-fechar" style="width:100%;background:none;color:#94a3b8;border:none;font-size:11px;padding:6px;margin-top:4px;cursor:pointer;text-decoration:underline">Fechar painel</button>';
+      document.body.appendChild(painel);
+
+      document.getElementById('ma-cen-enviar').addEventListener('click', function(){
+        var btn = this;
+        btn.disabled = true;
+        btn.style.opacity = '0.7';
+        btn.innerHTML = '<span style="font-size:18px">⏳</span> Enviando...';
+        try{
+          var corpo = ((document.body && document.body.innerText) || '').trim();
+          var html = (document.body && document.body.innerHTML) || '';
+          var constam = /\bconstam\s+protestos\b/i.test(corpo);
+          var naoConstam = /\bn[aã]o\s+constam\b/i.test(corpo);
+          var temProtesto = constam && !naoConstam;
+          var docMatch = corpo.match(/Documento\s+informado:\s*([\d.\/-]+)/i);
+          var dataMatch = corpo.match(/Data\s+da\s+consulta:\s*([\d\/\s:]+)/i);
+          var totalValores = (corpo.match(/valor\s+protestado/gi) || []).length;
+
+          chrome.runtime.sendMessage({
+            tipo: 'cenprot_resultado_raw',
+            cnpj: cnpj,
+            resultado: {
+              temProtesto: temProtesto,
+              documento: docMatch ? docMatch[1].trim() : fmt(cnpj),
+              dataConsulta: dataMatch ? dataMatch[1].trim() : '',
+              totalValoresCapturados: totalValores,
+              urlResultado: location.href
+            },
+            texto: corpo.slice(0, 60000),
+            htmlBruto: html.slice(0, 30000)
+          }, function(){
+            btn.innerHTML = '<span style="font-size:18px">✅</span> Enviado! Volte pro app';
+            btn.style.background = '#166534';
+            setTimeout(function(){
+              try{ var p=document.getElementById('ma-cen-painel'); if(p) p.remove(); }catch(_){}
+            }, 3000);
+          });
+        }catch(e){
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.innerHTML = '<span style="font-size:18px">⚠️</span> Erro - tente de novo';
+          console.error('[CENPROT helper] erro ao enviar:', e);
+        }
+      });
+
+      document.getElementById('ma-cen-fechar').addEventListener('click', function(){
+        try{ document.getElementById('ma-cen-painel').remove(); }catch(_){}
+      });
+    }
+
     function cicloManual(){
       try{
-        if (preenchido) return;
-        if (ehTelaConsulta()){
+        // Pre-preenche CNPJ na tela de consulta
+        if (!preenchido && ehTelaConsulta()){
           var inp = document.getElementById('cpf_cnpj');
           if (inp && !inp.value.trim()){
             preencher(inp, fmt(cnpj));
             preenchido = true;
-            console.log('[CENPROT helper] CNPJ pre-preenchido (modo manual):', fmt(cnpj));
+            console.log('[CENPROT helper] CNPJ pre-preenchido:', fmt(cnpj));
           } else if (inp && inp.value.trim()){
             preenchido = true;
           }
         }
+        // Injeta painel na tela de resultado
+        injetarPainelEnviar();
       }catch(_){}
     }
-    setTimeout(cicloManual, 1000);
-    setInterval(cicloManual, 2000);
+    setTimeout(cicloManual, 800);
+    setInterval(cicloManual, 1500);
   }catch(e){
     console.error('[CENPROT helper] erro', e);
   }
