@@ -214,6 +214,8 @@ export default {
       if (url.pathname === '/dda/diag') return resp(await ddaDiag(env));
       if (url.pathname === '/dda/pagar' && req.method === 'POST') return resp(await ddaPagar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/dda/pendente' && req.method === 'POST') return resp(await ddaPendenteResolver(env, (await req.json().catch(() => ({}))) || {}));
+      // Despesas pelo celular (sem a extensão do Chrome): as mesmas operações do Bling que a extensão faz, pela API oficial
+      if (url.pathname === '/fin/bling' && req.method === 'POST') { const b = (await req.json().catch(() => ({}))) || {}; return resp(await finBlingOp(env, b.op, b.dados || {})); }
       if (url.pathname === '/pagar/auto' && req.method === 'POST') return resp(await pagarTaxasAuto(env, { forcar: true }));
       if (url.pathname === '/pagar/auto') return resp(Object.assign({ ok: true }, (await env.BLING_KV.get('pagar:auto', 'json')) || {}));
       if (url.pathname === '/pagar/marcar' && req.method === 'POST') return resp(await pagarMarcar(env, (await req.json().catch(() => ({}))) || {}));
@@ -3147,4 +3149,130 @@ async function receberBaixar(env, b) {
   await env.BLING_KV.delete('recAbertas').catch(() => {});
   await abertosVelho(env);
   return { ok: out.every(x => x.ok), itens: out };
+}
+
+
+// ======================================================================================================
+// ---------------- Despesas pelo celular: operações do Bling sem a extensão (API oficial v3) ----------------
+// Mesmo contrato da extensão (content.js finBling): buscarContato, verificarDuplicado, criarContato, lancar, baixar, atualizar, listas.
+async function finBlingOp(env, op, d) {
+  try {
+    if (op === 'buscarContato') return await finSrvBuscarContato(env, d);
+    if (op === 'verificarDuplicado') return await finSrvDuplicado(env, d);
+    if (op === 'criarContato') return await finSrvCriarContato(env, d);
+    if (op === 'lancar') return await finSrvLancar(env, d);
+    if (op === 'baixar') return await finSrvBaixar(env, d);
+    if (op === 'atualizar') return await finSrvAtualizar(env, d);
+    if (op === 'listas') return await finSrvListas(env);
+    return { ok: false, erro: 'Operação desconhecida' };
+  } catch (e) { return { ok: false, erro: String(e.message || e) }; }
+}
+async function blingEnviar(env, metodo, caminho, corpo) {
+  const tok = await tokenValido(env);
+  const r = await fetch(API + caminho, { method: metodo, headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Accept: 'application/json' }, body: corpo ? JSON.stringify(corpo) : undefined });
+  const t = await r.text(); let j = null; try { j = t ? JSON.parse(t) : null; } catch (e) {}
+  if (!r.ok) {
+    const f = j && j.error && j.error.fields;
+    throw new Error('Bling ' + r.status + ': ' + ((f && f.length ? f.map(x => x.msg || x.message).join('; ') : (j && j.error && (j.error.description || j.error.message))) || t.slice(0, 200)));
+  }
+  return j;
+}
+async function finSrvBuscarContato(env, d) {
+  const doc = dig(d.doc), nome = String(d.nome || '').trim();
+  const mapa = j => ((j && j.data) || []).map(c => ({ id: c.id, nome: c.nome, doc: dig(c.numeroDocumento) }));
+  if (doc) {
+    let L = mapa(await bling(env, '/contatos?limite=5&numeroDocumento=' + doc).catch(() => null));
+    if (!L.length) L = mapa(await bling(env, '/contatos?limite=5&pesquisa=' + doc).catch(() => null));
+    if (L.length) return { ok: true, itens: L, porDoc: L.length === 1 };
+  }
+  if (nome) return { ok: true, itens: mapa(await bling(env, '/contatos?limite=8&pesquisa=' + encodeURIComponent(nome.slice(0, 40)))), porDoc: false };
+  return { ok: true, itens: [], porDoc: false };
+}
+async function finSrvDuplicado(env, d) {
+  const v = r2(d.valor); if (!(v > 0)) return { ok: true, itens: [] };
+  const achados = {};
+  const datas = [...new Set([d.emissao, d.vencimento].filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x || '')))];
+  for (const k of datas) for (const filtro of ['dataEmissao', 'dataVencimento']) {
+    const L = await pagarListar(env, filtro, somaDias(k, -2), somaDias(k, 2), 3).catch(() => []);
+    L.forEach(x => { const s = Number(x.situacao); if ([1, 2, 3].includes(s) && Math.abs(r2(x.valor) - v) < 0.005) achados[x.id] = { id: x.id, valor: r2(x.valor), vencimento: soData(x.vencimento), situacao: s, contatoId: x.contato && x.contato.id }; });
+  }
+  const itens = Object.values(achados).slice(0, 6);
+  const info = await contatosInfo(env, itens.map(i => String(i.contatoId || '')), 6);
+  for (const i of itens) {
+    i.contatoNome = (info.cache[String(i.contatoId)] || {}).n || '';
+    const o = ((await bling(env, '/contas/pagar/' + i.id).catch(() => null)) || {}).data;
+    if (o) { i.historico = o.historico || ''; i.numeroDocumento = o.numeroDocumento || ''; i.dataEmissao = soData(o.dataEmissao); }
+  }
+  return { ok: true, itens };
+}
+async function finSrvCriarContato(env, d) {
+  const nome = String(d.nome || '').trim().slice(0, 120); if (!nome) return { ok: false, erro: 'Fornecedor sem nome' };
+  const doc = dig(d.doc);
+  if (doc) { const ja = await contatoPorDoc(env, doc); if (ja) return { ok: true, id: ja, jaExistia: true }; }
+  const base = { nome, tipo: doc.length === 11 ? 'F' : 'J', situacao: 'A' };
+  if (doc.length === 14 || doc.length === 11) base.numeroDocumento = doc;
+  const completo = Object.assign({}, base);
+  if (d.fantasia) completo.fantasia = String(d.fantasia).slice(0, 60);
+  if (d.email) completo.email = String(d.email).slice(0, 120);
+  if (d.fone) completo.telefone = dig(d.fone).slice(0, 15);
+  if (d.cep || d.cidade || d.endereco) completo.endereco = { geral: { endereco: d.endereco || '', numero: d.numero || '', complemento: d.complemento || '', bairro: d.bairro || '', cep: dig(d.cep), municipio: d.cidade || '', uf: String(d.uf || '').toUpperCase().slice(0, 2) } };
+  let j;
+  try { j = await blingEnviar(env, 'POST', '/contatos', completo); }
+  catch (e) { if (!/ 400:/.test(e.message)) throw e; try { j = await blingEnviar(env, 'POST', '/contatos', base); } catch (e2) { delete base.numeroDocumento; j = await blingEnviar(env, 'POST', '/contatos', base); } }
+  const id = (j && j.data && j.data.id) || 0;
+  if (!id) return { ok: false, erro: 'O Bling não devolveu o id do fornecedor.' };
+  if (doc) await env.BLING_KV.put('cache:contatodoc:' + doc, String(id), { expirationTtl: 90 * 86400 });
+  await logAcao(env, { origem: 'despesa', acao: 'fornecedor_criado', contato: id, doc, nome });
+  return { ok: true, id };
+}
+function finSrvCorpo(d) {
+  const parc = parseInt(d.parcelas, 10) || 1;
+  const c = { vencimento: soData(d.vencimento), valor: r2(d.valor), contato: { id: Number(d.idContato) }, dataEmissao: soData(d.emissao) || soData(d.vencimento),
+    competencia: soData(d.competencia) || soData(d.emissao) || soData(d.vencimento), numeroDocumento: String(d.numeroDocumento || '').slice(0, 50), historico: String(d.historico || '').slice(0, 2000) };
+  if (d.categoria) c.categoria = { id: Number(d.categoria) };
+  if (d.portador) c.portador = { id: Number(d.portador) };
+  if (d.forma) c.formaPagamento = { id: Number(d.forma) };
+  c.ocorrencia = parc > 1 ? { tipo: '2', diaVencimento: Number(String(c.vencimento).slice(8, 10)), numeroParcelas: parc, considerarDiasUteis: false } : { tipo: '1' };
+  return c;
+}
+async function finSrvLancar(env, d) {
+  if (!d.idContato || !(Number(d.valor) > 0) || !d.vencimento) return { ok: false, erro: 'Faltam fornecedor, valor ou vencimento' };
+  const j = await blingEnviar(env, 'POST', '/contas/pagar', finSrvCorpo(d));
+  const id = (j && j.data && (j.data.id || (Array.isArray(j.data) && j.data[0] && j.data[0].id))) || 0;
+  if (!id) return { ok: false, erro: 'O Bling não confirmou o lançamento. Confira no Contas a Pagar antes de tentar de novo.' };
+  await logAcao(env, { origem: 'despesa', acao: 'lancar_celular', contaId: id, valor: d.valor });
+  return { ok: true, id };
+}
+async function finSrvBaixar(env, d) {
+  const id = dig(d.id); if (!id) return { ok: false, erro: 'Conta sem ID do Bling' };
+  const c = ((await bling(env, '/contas/pagar/' + id).catch(() => null)) || {}).data;
+  if (!c) return { ok: false, erro: 'Não achei a conta ' + id + ' no Bling.' };
+  if (Number(c.situacao) === 2) return { ok: true, jaPaga: true };
+  const portador = Number(d.portador || (c.portador && c.portador.id) || 0);
+  if (!portador) return { ok: false, erro: 'Informe a conta financeira para dar baixa.' };
+  const corpo = { data: soData(d.data) || soData(c.vencimento), usarDataVencimento: false, portador: { id: portador }, historico: String(d.historico || c.historico || '').slice(0, 200),
+    taxa: 0, juro: 0, desconto: 0, acrescimo: 0, valorPago: r2(Number(d.valor || c.saldo || c.valor || 0)) };
+  const cat = Number(d.categoria || (c.categoria && c.categoria.id) || 0); if (cat) corpo.categoria = { id: cat };
+  await blingEnviar(env, 'POST', '/contas/pagar/' + id + '/baixar', corpo);
+  const dep = ((await bling(env, '/contas/pagar/' + id).catch(() => null)) || {}).data;
+  const s = dep && Number(dep.situacao);
+  if (s === 2 || (d.parcial && s === 3)) return { ok: true };
+  return { ok: false, erro: 'O Bling aceitou o pedido mas a conta não ficou paga (situação ' + s + '). Confira no Contas a Pagar.' };
+}
+async function finSrvAtualizar(env, d) {
+  const id = dig(d.blingId); if (!id) return { ok: false, erro: 'Lançamento sem ID do Bling' };
+  const c = ((await bling(env, '/contas/pagar/' + id)) || {}).data;
+  if (!c) return { ok: false, erro: 'Não achei a conta ' + id + ' no Bling.' };
+  const aberto = [1, 3].includes(Number(c.situacao));
+  const corpo = finSrvCorpo({ vencimento: aberto && d.vencimento ? d.vencimento : c.vencimento, valor: aberto && d.valor > 0 ? d.valor : c.valor, idContato: d.idContato || (c.contato && c.contato.id),
+    emissao: d.emissao || c.dataEmissao, competencia: d.competencia || c.competencia, numeroDocumento: d.numeroDocumento || c.numeroDocumento, historico: d.historico != null && d.historico !== '' ? d.historico : c.historico,
+    categoria: d.categoria || (c.categoria && c.categoria.id), portador: d.portador || (c.portador && c.portador.id), forma: d.forma || (c.formaPagamento && c.formaPagamento.id), parcelas: 1 });
+  delete corpo.ocorrencia;
+  await blingEnviar(env, 'PUT', '/contas/pagar/' + id, corpo);
+  return { ok: true, id };
+}
+async function finSrvListas(env) {
+  const fp = await paginas(env, '/formas-pagamentos', 3);
+  const cc = await paginas(env, '/contas-contabeis', 3).catch(() => []);
+  return { ok: true, formas: fp.map(f => ({ id: String(f.id), nome: f.descricao, ativa: Number(f.situacao) === 1, pagar: [1, 3].includes(Number(f.finalidade)) })), contas: cc.map(x => ({ id: String(x.id), nome: x.descricao })) };
 }
