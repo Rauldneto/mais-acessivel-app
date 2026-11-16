@@ -23218,11 +23218,32 @@ function upDoc(n,inp){
       }
     }
 
-    // Verificar se todos os docs foram enviados
+    // v2.7.3: Verificar se todos os docs foram tratados (enviados OU negados COM observacao)
+    // Docs negados pelo cliente COM observacao registrada contam como "resolvidos" -
+    // a ressalva vai pro parecer final sem bloquear o fluxo.
     var docsEnviados=Object.values(S.simDoc).filter(function(v){return v>0;}).length;
-    if(docsEnviados<3){
-      divCruz.push({t:'warn',tx:'Aten\u00e7\u00e3o: apenas '+docsEnviados+'/3 documentos foram enviados. Recomendamos enviar todos para an\u00e1lise completa.'});
+    var docsNegadosComObs=0;
+    var docsNegadosSemObs=0;
+    if(S.docsNegados){
+      Object.keys(S.docsNegados).forEach(function(k){
+        if(!S.docsNegados[k]) return;
+        if(S.obsDocsNegados && S.obsDocsNegados[k] && S.obsDocsNegados[k].length>0){
+          docsNegadosComObs++;
+        } else {
+          docsNegadosSemObs++;
+        }
+      });
+    }
+    var docsTratados=docsEnviados+docsNegadosComObs+docsNegadosSemObs;
+    if(docsTratados<3){
+      // Ha docs ainda sem tratamento algum (nem enviado, nem negado)
+      var falt=3-docsTratados;
+      divCruz.push({t:'warn',tx:'Aten\u00e7\u00e3o: '+falt+' documento(s) ainda sem tratamento (nem enviado nem marcado como negado). Trate antes de prosseguir.'});
       warnCruz=true;
+    } else if(docsNegadosComObs>0 || docsNegadosSemObs>0){
+      // Docs negados pelo cliente - vira INFORMATIVO no parecer, nao bloqueia fluxo
+      divCruz.push({t:'warn',tx:docsEnviados+' documento(s) enviado(s) e '+(docsNegadosComObs+docsNegadosSemObs)+' negado(s) pelo cliente'+(docsNegadosComObs?' (com observa\u00e7\u00e3o registrada)':'')+'. Entra como ressalva no parecer final.'});
+      // Nao seta warnCruz - apenas informa, nao exige justificativa adicional
     }
 
     // Montar o HTML da varredura cruzada
