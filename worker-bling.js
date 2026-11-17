@@ -2977,7 +2977,7 @@ async function ddaPendenteResolver(env, b) {
 // O que entrou no Sicoob e não tem baixa no Bling: procura a conta em aberto e sugere a baixa (o Raul confirma).
 // O que foi baixado no Bling (conta Sicoob) e não aparece no extrato: aparece para corrigir.
 const CONTA_SICOOB_BLING = 14890739452;
-const RECDIA_VER = 5;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
+const RECDIA_VER = 6;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
 function tipoCredito(desc, doc) {
   const d = semAcento(desc);
   if (doc && doc === ECONF_CNPJ) return 'transf';
@@ -3175,6 +3175,25 @@ async function receberDia(env, dia, forcar) {
         motivo: (m.exato ? 'mesmo valor' : 'valor + juros/multa') + (m.ap ? ' e pagador já ligado a este cliente' : m.doc ? ' e mesmo CPF/CNPJ' : m.nomes >= 2 ? ' e nome do pagador parecido com o do cliente' : m.nomes ? ' (nome do pagador parecido)' : ' (única conta em aberto com esse valor)') };
     }
   }
+  // ficou sem conta: pode ser um pedido de venda ainda sem contas lançadas (mesmo valor) — lança as contas do pedido e baixa
+  const semConta = sobraS.filter(x => !x.baixar && !x.outraData && x.tipo !== 'cartao' && x.tipo !== 'boleto');
+  if (semConta.length) {
+    let ab = ABERTOS_MEM; if (!ab) ab = await env.BLING_KV.get('cache:abertos', 'json');
+    const peds = ((ab && ab.itens) || []).filter(p => p.tipo === 'pedido' && !(p.contas || []).length && Number(p.aReceber || p.total) > 0);
+    const usadosP = new Set();
+    for (const x of semConta) {
+      const cs = peds.filter(p => !usadosP.has(p.id) && Math.abs(Number(p.aReceber || p.total) - x.valor) <= 0.01).map(p => ({ p, doc: mesmoDoc(x.doc, dig(p.doc)), nomes: nomesComuns(x.nome, p.cliente) }))
+        .sort((a, b) => (b.doc - a.doc) || (b.nomes - a.nomes));
+      if (!cs.length) continue;
+      const m = cs[0], unico = cs.length === 1 || (m.doc && !cs[1].doc) || (m.nomes > cs[1].nomes);
+      if (!m.doc && !m.nomes && !unico) continue;
+      usadosP.add(m.p.id);
+      const venc = (m.p.parcelas && m.p.parcelas[0] && m.p.parcelas[0].venc) || m.p.venc || dia;
+      x.baixar = { pedidoId: m.p.id, contaId: 'p' + m.p.id, valor: x.valor, juros: 0, desconto: 0, data: dia, venc, atraso: diasAtraso(dia, venc), cliente: m.p.cliente, docCliente: dig(m.p.doc), numero: m.p.numero, origemTipo: 'venda',
+        forte: (m.doc || m.nomes >= 1) && unico,
+        motivo: 'pedido de venda ' + m.p.numero + ' (sem conta lançada) com o mesmo valor' + (m.doc ? ' e mesmo CPF/CNPJ' : m.nomes ? ' e nome parecido' : ' (único com esse valor)') + ' — o app lança as contas do pedido e dá baixa' };
+    }
+  }
   // ficou sem conta: opções entre as contas em atraso (até 5 anos) — você escolhe de qual cliente é
   const semOp = sobraS.filter(x => !x.baixar && !x.outraData && !(x.sugestoes || []).length && x.tipo !== 'cartao' && x.tipo !== 'boleto');
   if (semOp.length) {
@@ -3347,6 +3366,16 @@ async function receberBaixar(env, b) {
     if (it.pagador && it.docCliente && !it.auto) { const k = chaveNome(it.pagador); if (k && apelidos[k] !== it.docCliente) { apelidos[k] = it.docCliente; novosAp++; } }
     if (!it.contaId || !data) { out.push({ contaId: it.contaId, ok: false, erro: 'Dados incompletos.' }); continue; }
     if (Array.isArray(it.partes) && it.partes.length && it.chave) { out.push(await baixarAcordo(env, it, data, b)); continue; }
+    if (it.pedidoId && data) {
+      const hist = 'Recebido no Sicoob em ' + brData(data) + (it.desc ? ' (' + String(it.desc).slice(0, 60) + ')' : '') + ' - contas do pedido lançadas e baixadas pelo cruzamento Sicoob × Bling (app Mais Acessível' + (b.usuario ? ', ' + String(b.usuario).slice(0, 40) : '') + ')';
+      try {
+        const r = await executarContasPedido(env, { id: Number(it.pedidoId), historico: hist }, r2(it.valor), data);
+        await logAcao(env, { modo: 'real', origem: it.auto ? 'cruzamento-auto' : 'cruzamento', acao: 'contas_pedido', cliente: it.cliente || '', numero: it.numero || '', contaId: 0, valorBaixa: r2(it.valor), valor: r2(it.valor), data, resultado: r, por: b.usuario || '',
+          detalhe: 'Pedido ' + (it.numero || it.pedidoId) + ' sem conta: contas lançadas e baixadas, R$ ' + r2(it.valor).toFixed(2) + ', data ' + brData(data) });
+        out.push({ contaId: it.contaId, ok: /^ok/.test(r), resultado: r });
+      } catch (e) { out.push({ contaId: it.contaId, ok: false, erro: String(e.message || e).slice(0, 200) }); }
+      continue;
+    }
     const atraso = Number(it.atraso || 0);
     const historico = 'Recebido no Sicoob em ' + brData(data) + (it.desc ? ' (' + String(it.desc).slice(0, 60) + ')' : '') + (atraso > 0 ? ' com ' + atraso + (atraso === 1 ? ' dia' : ' dias') + ' de atraso (venc. ' + brData(it.venc) + ')' : atraso < 0 ? ' adiantado' : '') +
       (Number(it.juros) ? ' - juros/multa R$ ' + Number(it.juros).toFixed(2).replace('.', ',') : '') + ' - baixa pelo cruzamento Sicoob × Bling (app Mais Acessível' + (b.usuario ? ', ' + String(b.usuario).slice(0, 40) : '') + ')';
@@ -3527,7 +3556,7 @@ async function receberAuto(env) {
   let feitas = 0;
   if (fortes.length) {
     const res = await receberBaixar(env, { dia, usuario: 'automático', itens: fortes.map(x => ({ contaId: x.baixar.contaId, valor: x.baixar.valor, juros: x.baixar.juros, desconto: x.baixar.desconto || 0, data: x.data,
-      atraso: x.baixar.atraso, venc: x.baixar.venc, desc: (x.tipo === 'pix' ? 'PIX' : x.tipo === 'boleto' ? 'Boleto Sicoob' : 'Crédito') + (x.nome ? ' de ' + x.nome : ''), auto: true, cliente: x.baixar.cliente, numero: x.baixar.numero, partes: x.baixar.partes, chave: x.chave, contatoId: x.baixar.contatoId })) });
+      atraso: x.baixar.atraso, venc: x.baixar.venc, desc: (x.tipo === 'pix' ? 'PIX' : x.tipo === 'boleto' ? 'Boleto Sicoob' : 'Crédito') + (x.nome ? ' de ' + x.nome : ''), auto: true, cliente: x.baixar.cliente, numero: x.baixar.numero, partes: x.baixar.partes, chave: x.chave, contatoId: x.baixar.contatoId, pedidoId: x.baixar.pedidoId })) });
     feitas = (res.itens || []).filter(i => i.ok).length;
   }
   await env.BLING_KV.put('recauto', JSON.stringify({ ultimo: dia, ts: Date.now(), feitas, fortes: fortes.length }));
