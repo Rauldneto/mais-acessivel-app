@@ -56,6 +56,10 @@ export default {
       const st = (await env.BLING_KV.get('pagar:auto', 'json')) || {};
       if (!(st.slot === hojeLocal() + '-' + horaAgora && st.fim)) { ctx.waitUntil(pagarTaxasAuto(env).catch(e => registrarErro(env, 'Tarifas automáticas: ' + String(e.message || e)))); return; }
     }
+    const minAgora = new Date().getUTCMinutes();
+    if (env.SICOOB_CLIENT_ID_CCO && ((minAgora >= 10 && minAgora < 15) || (minAgora >= 40 && minAgora < 45))) {
+      ctx.waitUntil(receberAuto(env).catch(e => registrarErro(env, 'Cruzamento automático: ' + String(e.message || e)))); return;
+    }
     ctx.waitUntil(verificarPagamentos(env).then(() => registrarErro(env, null)).catch(e => registrarErro(env, String(e.message || e)))
       .then(() => verificarBoletos(env)).catch(e => registrarErro(env, 'Boletos: ' + String(e.message || e))));
   },
@@ -2999,6 +3003,11 @@ async function receberBlingDia(env, dia) {
     formaId: (c.formaPagamento && c.formaPagamento.id) || 0, forma: Number(c.formaPagamento && c.formaPagamento.codigoFiscal) || 0,
     portador: (c.contaContabil && c.contaContabil.id) || 0, portadorNome: (c.contaContabil && c.contaContabil.descricao) || '' }));
 }
+const NOME_COMUM = new Set(['LTDA', 'EIRELI', 'EPP', 'ME', 'MEI', 'SA', 'S/A', 'DE', 'DA', 'DO', 'DOS', 'DAS', 'E', 'EM', 'ENGENHARIA', 'CONSTRUTORA', 'CONSTRUCOES', 'CONSTRUCAO', 'SERVICOS', 'COMERCIO', 'EMPRESARIAL',
+  'INCORPORACOES', 'INCORPORADORA', 'INSTALACOES', 'CONSULTORIA', 'EMPREENDIMENTOS', 'PARTICIPACOES', 'INDUSTRIA', 'ARQUITETURA', 'TECNICA', 'SOLUCOES', 'GRUPO', 'CIA', 'UNIPESSOAL', 'NEGOCIOS', 'MATERIAIS']);
+function tokensNome(n) { return [...new Set(semAcento(n).replace(/[^A-Z ]/g, ' ').split(/\s+/).filter(t => t.length >= 3 && !NOME_COMUM.has(t)))]; }
+function nomesComuns(a, b) { const tb = new Set(tokensNome(b)); return tokensNome(a).filter(t => tb.has(t)).length; }
+function chaveNome(n) { return tokensNome(n).join(' ').slice(0, 80); }
 const mesmoDoc = (a, b) => !!(a && b && (a === b || (a.length === 14 && b.length === 14 && a.slice(0, 8) === b.slice(0, 8))));
 
 async function receberDia(env, dia, forcar) {
@@ -3075,21 +3084,25 @@ async function receberDia(env, dia, forcar) {
     reservadas.add(String(c.id));
     const venc = l.venc || c.venc, atraso = venc && l.liq > venc ? Math.round((Date.parse(l.liq) - Date.parse(venc)) / 864e5) : 0;
     x.baixar = { contaId: c.id, valor: Math.min(c.valor, r2(l.pago - l.juros - l.multa + l.desconto)), juros: r2(l.juros + l.multa), desconto: r2(l.desconto), data: dia, venc, atraso, cliente: c.cliente, numero: c.numero, origemTipo: c.origemTipo,
-      motivo: 'boleto Sicoob nº ' + l.nn + ' da NF ' + c.numero + ' (arquivo do Sicoob)' + (l.juros + l.multa ? ' · juros R$ ' + l.juros.toFixed(2).replace('.', ',') + ' + multa R$ ' + l.multa.toFixed(2).replace('.', ',') : '') };
+      forte: true, motivo: 'boleto Sicoob nº ' + l.nn + ' da NF ' + c.numero + ' (arquivo do Sicoob)' + (l.juros + l.multa ? ' · juros R$ ' + l.juros.toFixed(2).replace('.', ',') + ' + multa R$ ' + l.multa.toFixed(2).replace('.', ',') : '') };
   }
+  const apelidos = sobraS.length ? ((await env.BLING_KV.get('recapelidos', 'json')) || {}) : {};
   for (const x of sobraS.filter(x => !x.baixar)) {
+    const ap = x.nome ? apelidos[chaveNome(x.nome)] : null;   // quem pagou já foi ligado a este cliente antes (confirmado por você)
     const cand = abertas.filter(c => !reservadas.has(String(c.id))).map(c => {
-      const exato = Math.abs(c.valor - x.valor) <= 0.01, doc = mesmoDoc(x.doc, c.doc), juros = x.valor > c.valor && x.valor - c.valor <= c.valor * 0.15;
-      if (!exato && !(juros && doc)) return null;
+      const exato = Math.abs(c.valor - x.valor) <= 0.01, doc = mesmoDoc(x.doc, c.doc) || !!(ap && mesmoDoc(ap, c.doc)), nomes = nomesComuns(x.nome, c.cliente);
+      const juros = x.valor > c.valor && x.valor - c.valor <= c.valor * 0.15;
+      if (!exato && !(juros && (doc || nomes >= 2))) return null;
       const dias = c.venc ? Math.round((Date.parse(x.data) - Date.parse(c.venc)) / 864e5) : 0;
-      return { c, p: (exato ? 50 : 20) + (doc ? 40 : 0) - Math.min(30, Math.abs(dias)), doc, exato, dias };
+      return { c, p: (exato ? 50 : 20) + (doc ? 40 : nomes >= 2 ? 35 : nomes ? 10 : 0) - Math.min(30, Math.abs(dias)), doc, nomes, exato, dias, ap: !!(ap && mesmoDoc(ap, c.doc)) };
     }).filter(Boolean).sort((a, b) => b.p - a.p);
-    x.sugestoes = cand.slice(0, 5).map(o => ({ contaId: o.c.id, valor: o.c.valor, venc: o.c.venc, cliente: o.c.cliente, numero: o.c.numero, origemTipo: o.c.origemTipo, doc: o.doc, dias: o.dias }));
+    x.sugestoes = cand.slice(0, 5).map(o => ({ docCliente: o.c.doc, nomes: o.nomes, contaId: o.c.id, valor: o.c.valor, venc: o.c.venc, cliente: o.c.cliente, numero: o.c.numero, origemTipo: o.c.origemTipo, doc: o.doc, dias: o.dias }));
     const m = cand[0];
     if (m && (m.doc || cand.length === 1) && (cand.length === 1 || m.p - cand[1].p >= 15)) {
       reservadas.add(String(m.c.id));
-      x.baixar = { contaId: m.c.id, valor: m.c.valor, juros: r2(Math.max(0, x.valor - m.c.valor)), data: dia, venc: m.c.venc, atraso: Math.max(0, m.dias), cliente: m.c.cliente, numero: m.c.numero, origemTipo: m.c.origemTipo,
-        motivo: (m.exato ? 'mesmo valor' : 'valor + juros/multa') + (m.doc ? ' e mesmo CPF/CNPJ' : ' (única conta em aberto com esse valor)') };
+      const forte = (m.doc || m.nomes >= 2) && (cand.length === 1 || m.p - cand[1].p >= 25) && m.dias >= -60 && m.dias <= 120;
+      x.baixar = { docCliente: m.c.doc, contaId: m.c.id, valor: m.c.valor, juros: r2(Math.max(0, x.valor - m.c.valor)), data: dia, venc: m.c.venc, atraso: Math.max(0, m.dias), cliente: m.c.cliente, numero: m.c.numero, origemTipo: m.c.origemTipo, forte,
+        motivo: (m.exato ? 'mesmo valor' : 'valor + juros/multa') + (m.ap ? ' e pagador já ligado a este cliente' : m.doc ? ' e mesmo CPF/CNPJ' : m.nomes >= 2 ? ' e nome do pagador parecido com o do cliente' : m.nomes ? ' (nome do pagador parecido)' : ' (única conta em aberto com esse valor)') };
     }
   }
   const sobraB = livresB();
@@ -3116,7 +3129,9 @@ async function contasAbertasJanela(env) {
   const c = await env.BLING_KV.get('recAbertas', 'json');
   if (c && Date.now() - c.ts < 15 * 60e3) return c.l;
   const hoje = hojeLocal();
-  const lista = await paginas(env, '/contas/receber?situacoes[]=1&situacoes[]=3&tipoFiltroData=V&dataInicial=' + somaDias(hoje, -365) + '&dataFinal=' + somaDias(hoje, 180), 20);
+  // o Bling aceita no máximo 1 ano por consulta: duas buscas (passado e futuro)
+  const lista = (await paginas(env, '/contas/receber?situacoes[]=1&situacoes[]=3&tipoFiltroData=V&dataInicial=' + somaDias(hoje, -360) + '&dataFinal=' + hoje, 12))
+    .concat(await paginas(env, '/contas/receber?situacoes[]=1&situacoes[]=3&tipoFiltroData=V&dataInicial=' + somaDias(hoje, 1) + '&dataFinal=' + somaDias(hoje, 180), 8));
   const l = lista.map(x => ({ id: x.id, valor: r2(x.valor), venc: soData(x.vencimento), situacao: Number(x.situacao), cliente: (x.contato && x.contato.nome) || '', doc: dig(x.contato && x.contato.numeroDocumento),
     origemTipo: (x.origem && x.origem.tipoOrigem) || '', numero: String((x.origem && x.origem.numero) || ''), forma: Number(x.formaPagamento && x.formaPagamento.codigoFiscal) || 0,
     formaId: (x.formaPagamento && x.formaPagamento.id) || 0, portador: (x.contaContabil && x.contaContabil.id) || 0 }));
@@ -3132,19 +3147,23 @@ async function receberBaixar(env, b) {
   const itens = Array.isArray(b.itens) ? b.itens.slice(0, 12) : [];
   if (!itens.length) return { ok: false, erro: 'Nada para baixar.' };
   const out = [];
+  const apelidos = (await env.BLING_KV.get('recapelidos', 'json')) || {};
+  let novosAp = 0;
   for (const it of itens) {
     const data = soData(it.data);
+    if (it.pagador && it.docCliente && !it.auto) { const k = chaveNome(it.pagador); if (k && apelidos[k] !== it.docCliente) { apelidos[k] = it.docCliente; novosAp++; } }
     if (!it.contaId || !data) { out.push({ contaId: it.contaId, ok: false, erro: 'Dados incompletos.' }); continue; }
     const atraso = Number(it.atraso || 0);
     const historico = 'Recebido no Sicoob em ' + brData(data) + (it.desc ? ' (' + String(it.desc).slice(0, 60) + ')' : '') + (atraso > 0 ? ' com ' + atraso + (atraso === 1 ? ' dia' : ' dias') + ' de atraso (venc. ' + brData(it.venc) + ')' : atraso < 0 ? ' adiantado' : '') +
       (Number(it.juros) ? ' - juros/multa R$ ' + Number(it.juros).toFixed(2).replace('.', ',') : '') + ' - baixa pelo cruzamento Sicoob × Bling (app Mais Acessível' + (b.usuario ? ', ' + String(b.usuario).slice(0, 40) : '') + ')';
     try {
       const r = await executarBaixa(env, it.contaId, r2(it.valor), data, { historico, historicoConta: true, conferir: true, juros: r2(it.juros || 0), desconto: r2(it.desconto || 0) });
-      await logAcao(env, { modo: 'real', origem: 'cruzamento', acao: 'baixa', contaId: it.contaId, valorBaixa: r2(it.valor), valor: r2(Number(it.valor) + Number(it.juros || 0)), data, resultado: r, por: b.usuario || '',
+      await logAcao(env, { modo: 'real', origem: it.auto ? 'cruzamento-auto' : 'cruzamento', acao: 'baixa', cliente: it.cliente || '', numero: it.numero || '', contaId: it.contaId, valorBaixa: r2(it.valor), valor: r2(Number(it.valor) + Number(it.juros || 0)), data, resultado: r, por: b.usuario || '',
         detalhe: 'Baixa pelo cruzamento Sicoob × Bling: R$ ' + r2(it.valor).toFixed(2) + (Number(it.juros) ? ' + juros/multa R$ ' + Number(it.juros).toFixed(2) : '') + ', data ' + brData(data) + ' (conta ' + it.contaId + ')' });
       out.push({ contaId: it.contaId, ok: /^ok/.test(r), resultado: r });
     } catch (e) { out.push({ contaId: it.contaId, ok: false, erro: String(e.message || e).slice(0, 200) }); }
   }
+  if (novosAp) await env.BLING_KV.put('recapelidos', JSON.stringify(apelidos));
   if (b.dia) await env.BLING_KV.delete('recdia:' + soData(b.dia)).catch(() => {});
   await env.BLING_KV.delete('recAbertas').catch(() => {});
   await abertosVelho(env);
@@ -3275,4 +3294,26 @@ async function finSrvListas(env) {
   const fp = await paginas(env, '/formas-pagamentos', 3);
   const cc = await paginas(env, '/contas-contabeis', 3).catch(() => []);
   return { ok: true, formas: fp.map(f => ({ id: String(f.id), nome: f.descricao, ativa: Number(f.situacao) === 1, pagar: [1, 3].includes(Number(f.finalidade)) })), contas: cc.map(x => ({ id: String(x.id), nome: x.descricao })) };
+}
+
+// ---- Baixa automática pelo cruzamento (cron, 2x por hora, um dia por vez: hoje e o dia útil anterior) ----
+// Só baixa sozinho o que é FORTE: mesmo valor e (mesmo CPF/CNPJ, ou pagador já ligado antes ao cliente, ou nome do pagador
+// parecido com o do cliente — 2 nomes iguais), uma única conta possível; boleto Sicoob pela NF/parcela do arquivo do Sicoob.
+// O resto fica na tela Sicoob × Bling para confirmar.
+async function receberAuto(env) {
+  const st = (await env.BLING_KV.get('recauto', 'json')) || {};
+  const hoje = hojeLocal();
+  let ontem = somaDias(hoje, -1); while (fimDeSemana(ontem)) ontem = somaDias(ontem, -1);
+  const dia = st.ultimo === hoje ? ontem : hoje;
+  if (fimDeSemana(dia)) { await env.BLING_KV.put('recauto', JSON.stringify(Object.assign({}, st, { ultimo: dia, ts: Date.now() }))); return { pulou: 'fim de semana' }; }
+  const r = await receberDia(env, dia, true);
+  const fortes = (r.sicoob || []).filter(x => !x.par && x.baixar && x.baixar.forte && x.tipo !== 'cartao').slice(0, 3);
+  let feitas = 0;
+  if (fortes.length) {
+    const res = await receberBaixar(env, { dia, usuario: 'automático', itens: fortes.map(x => ({ contaId: x.baixar.contaId, valor: x.baixar.valor, juros: x.baixar.juros, desconto: x.baixar.desconto || 0, data: x.data,
+      atraso: x.baixar.atraso, venc: x.baixar.venc, desc: (x.tipo === 'pix' ? 'PIX' : x.tipo === 'boleto' ? 'Boleto Sicoob' : 'Crédito') + (x.nome ? ' de ' + x.nome : ''), auto: true, cliente: x.baixar.cliente, numero: x.baixar.numero })) });
+    feitas = (res.itens || []).filter(i => i.ok).length;
+  }
+  await env.BLING_KV.put('recauto', JSON.stringify({ ultimo: dia, ts: Date.now(), feitas, fortes: fortes.length }));
+  return { dia, feitas };
 }
