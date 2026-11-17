@@ -2988,7 +2988,7 @@ async function ddaPendenteResolver(env, b) {
 // O que entrou no Sicoob e não tem baixa no Bling: procura a conta em aberto e sugere a baixa (o Raul confirma).
 // O que foi baixado no Bling (conta Sicoob) e não aparece no extrato: aparece para corrigir.
 const CONTA_SICOOB_BLING = 14890739452;
-const RECDIA_VER = 9;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
+const RECDIA_VER = 10;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
 function tipoCredito(desc, doc) {
   const d = semAcento(desc);
   if (doc && doc === ECONF_CNPJ) return 'transf';
@@ -3268,7 +3268,7 @@ async function contasAbertasJanela(env) {
 // ---- clientes que pagam aos poucos (acordo de dívida antiga) ----
 function crzRefSrv(p) { return (p.origemTipo === 'notafiscal' ? 'NF ' : p.origemTipo === 'venda' ? 'Pedido ' : 'Conta ') + (p.numero || p.contaId || ''); }
 // pago a menos com desconto "redondo" (ex.: 5% de 675,00 = 641,25): % inteiro ou meio por cento, até 10%
-function descontoRedondo(pago, conta) { if (!(pago < conta) || conta - pago > conta * 0.10 + 0.005) return 0; const pct = (conta - pago) / conta * 100, r = Math.round(pct * 2) / 2; return r > 0 && Math.abs(r2(conta * (1 - r / 100)) - pago) <= 0.011 ? r : 0; }
+function descontoRedondo(pago, conta) { return 0; /* desligado: o app compara só valor de parcela (ou total) + cliente */ if (!(pago < conta) || conta - pago > conta * 0.10 + 0.005) return 0; const pct = (conta - pago) / conta * 100, r = Math.round(pct * 2) / 2; return r > 0 && Math.abs(r2(conta * (1 - r / 100)) - pago) <= 0.011 ? r : 0; }
 function acordoDe(acordos, x) { return (x.doc && acordos['d:' + dig(x.doc)]) || (x.nome && acordos['n:' + chaveNome(x.nome)]) || null; }
 // contas em aberto do cliente (todas as datas, mais antiga primeiro), com o saldo que falta receber
 async function contasDoCliente(env, contatoId) {
