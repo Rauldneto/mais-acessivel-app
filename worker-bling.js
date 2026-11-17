@@ -3393,18 +3393,21 @@ async function conferirBoletosAbertos(env, forcar) {
       if (await env.BLING_KV.get('bolpago:' + nn)) continue;
       const j = await sicoobCob(env, 'GET', '/boletos?numeroCliente=' + SICOOB_NUM_CLIENTE + '&codigoModalidade=1&nossoNumero=' + encodeURIComponent(nn));
       const bo = (j && j.resultado) || j || {};
-      const sit = semAcento(String(campoMov(bo, ['situacaoBoleto', 'situacao', 'descricaoSituacao'], /situa/i) || ''));
-      if (!/LIQUID|PAGO|BAIXAD.*PAG/.test(sit)) continue;
-      const x = normalizarLiquidacao(Object.assign({ nossoNumero: nn }, bo));
-      x.nossoNumero = nn;
-      if (!x.dataLiquidacao) {   // sem a data do pagamento: fica para o arquivo do dia
-        st.aguardando.push({ nn, contaId: c.id, cliente: c.cliente, valor: c.valor, motivo: 'Sicoob diz pago, sem a data do pagamento' }); continue;
-      }
-      const temPago = !!campoMov(bo, ['valorPago', 'valorLiquidado', 'valorRecebido', 'valorLiquidacao']);
-      if (!temPago && x.dataLiquidacao > x.dataVencimento) {   // atrasado sem o valor pago: juros/multa vêm no arquivo
-        st.aguardando.push({ nn, contaId: c.id, cliente: c.cliente, valor: c.valor, motivo: 'pago com atraso — juros e multa chegam no arquivo do Sicoob' }); continue;
-      }
-      if (!x.dataCredito) x.dataCredito = proxDiaUtil(x.dataLiquidacao);   // o Sicoob credita no dia útil seguinte ao pagamento
+      // a consulta do boleto traz o histórico: "LIQUIDAÇÃO - ... - R$1.898,57" (data e valor pago) e "TARIFA ... - R$ 1,60".
+      // valorMulta/valorJurosMora do boleto são as REGRAS (%), não o que foi pago — não usar.
+      const hist = Array.isArray(bo.listaHistorico) ? bo.listaHistorico : [];
+      const liq = hist.find(h => /LIQUIDA/i.test(semAcento(h.descricaoHistorico || '')) && !/BAIXA|ESTORNO|CANCEL/i.test(semAcento(h.descricaoHistorico || '')));
+      if (!liq && !/LIQUID/.test(semAcento(String(bo.situacaoBoleto || '')))) continue;
+      const valorDe = h => { const m = String((h && h.descricaoHistorico) || '').match(/R\$\s*([\d.]+,\d{2})/); return m ? r2(numBR(m[1])) : 0; };
+      const dataLiq = soData(liq && liq.dataHistorico);
+      if (!dataLiq) { st.aguardando.push({ nn, contaId: c.id, cliente: c.cliente, valor: c.valor, motivo: 'Sicoob diz pago, sem a data do pagamento' }); continue; }
+      const titulo = r2(bo.valor || c.valor), pago = valorDe(liq) || titulo;
+      const tarH = hist.find(h => /TARIFA/i.test(semAcento(h.descricaoHistorico || '')) && soData(h.dataHistorico) === dataLiq);
+      const extra = r2(pago - titulo);
+      if (extra > 0.009) { st.aguardando.push({ nn, contaId: c.id, cliente: c.cliente, valor: pago, motivo: 'pago com juros/multa (R$ ' + extra.toFixed(2).replace('.', ',') + ') — baixa sai pelo arquivo do Sicoob, que separa juros e multa' }); continue; }
+      const x = { nossoNumero: nn, seuNumero: String(bo.seuNumero || '').trim(), dataLiquidacao: dataLiq, dataCredito: proxDiaUtil(dataLiq),   // o Sicoob credita no dia útil seguinte
+        dataVencimento: soData(bo.dataVencimento) || c.venc, valorTitulo: titulo, juros: extra > 0 ? extra : 0, multa: 0, mora: extra > 0 ? extra : 0, desconto: extra < 0 ? -extra : 0,
+        tarifa: valorDe(tarH), pago, valorLiquido: pago, pagadorDoc: dig(bo.pagador && bo.pagador.numeroCpfCnpj), pagadorNome: String((bo.pagador && bo.pagador.nome) || '').trim() };
       const contaObj = { id: c.id, valor: c.valor, numero: c.numero, origemTipo: c.origemTipo, origemId, cliente: c.cliente, situacao: 1 };
       await guardarLiq(env, x, contaObj).catch(() => {});
       await executarPlanoBoleto(env, x, { conta: contaObj, motivo: 'consulta do boleto no Sicoob (09h)' }, 'Sicoob: boleto nº ' + nn + ' pago (consulta das 09h)');
