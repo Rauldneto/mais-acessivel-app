@@ -3022,9 +3022,11 @@ async function receberDia(env, dia, forcar) {
   if (!forcar) { const c = await env.BLING_KV.get(ck, 'json'); if (c && (dia < somaDias(hojeLocal(), -2) || Date.now() - c.ts < 10 * 60e3)) return Object.assign({ ok: true, cache: true }, c); }
   const [creditos, blingTodos] = await Promise.all([lerCreditos(env, dia, dia), receberBlingDia(env, dia)]);
   // Bling Conta tem baixa própria: fica fora do cruzamento (só aparece no resumo)
-  const blingConta = blingTodos.filter(ehBlingConta);
-  const bling = blingTodos.filter(c => !ehBlingConta(c) && (!c.portador || Number(c.portador) === CONTA_SICOOB_BLING));
-  const outrasContas = blingTodos.filter(c => !ehBlingConta(c) && c.portador && Number(c.portador) !== CONTA_SICOOB_BLING);
+  // cartão (crédito/débito) fica à parte até a regra do cartão; Bling Conta entra no cruzamento (pode ter sido paga por PIX no Sicoob) e, se não casar, vai para a lista dela
+  const ehCartao = c => c.forma === 3 || c.forma === 4;
+  let blingConta = [];
+  const bling = blingTodos.filter(c => !ehCartao(c) && (ehBlingConta(c) || !c.portador || Number(c.portador) === CONTA_SICOOB_BLING));
+  const outrasContas = blingTodos.filter(c => !ehBlingConta(c) && (ehCartao(c) || (c.portador && Number(c.portador) !== CONTA_SICOOB_BLING)));
   // baixas automáticas feitas pelo app neste dia (data da baixa = dia)
   const log = (await env.BLING_KV.get('acoes', 'json')) || [];
   const autos = log.filter(a => a.modo === 'real' && ['baixa', 'contas_pedido'].includes(a.acao) && a.data === dia && /^ok/.test(String(a.resultado || '')));
@@ -3121,16 +3123,29 @@ async function receberDia(env, dia, forcar) {
         motivo: (m.exato ? 'mesmo valor' : 'valor + juros/multa') + (m.ap ? ' e pagador já ligado a este cliente' : m.doc ? ' e mesmo CPF/CNPJ' : m.nomes >= 2 ? ' e nome do pagador parecido com o do cliente' : m.nomes ? ' (nome do pagador parecido)' : ' (única conta em aberto com esse valor)') };
     }
   }
+  // boletos Bling Conta que não casaram com entrada do Sicoob: a Bling baixou sozinha (fica na lista dela)
+  blingConta = livresB().filter(ehBlingConta);
+  blingConta.forEach(c => usadosB.add(String(c.id)));
+  // recebido no Bling sem entrada neste dia: procura o boleto Sicoob pago em outro dia (arquivo de cobrança, 25 dias para trás e 5 à frente)
+  const semDia = livresB();
+  if (semDia.length) {
+    const liqs = [];
+    for (let i = -25; i <= 5; i++) { const d = somaDias(dia, i); if (d === dia || fimDeSemana(d)) continue; const l = await env.BLING_KV.get('bolliq:' + d, 'json'); if (l) l.forEach(x => liqs.push(x)); }
+    for (const c of semDia) {
+      const l = liqs.find(x => String(x.contaId) === String(c.id)) || liqs.find(x => nfDe(x.seu) && nfDe(x.seu) === String(Number(c.numero)) && Math.abs(x.titulo - c.valor) <= 0.01);
+      if (l) { usadosB.add(String(c.id)); c.outroDia = l.credito; c.nota = 'boleto Sicoob nº ' + l.nn + ' pago em ' + brData(l.liq) + ' (entrada no banco em ' + brData(l.credito) + ')'; }
+    }
+  }
   const sobraB = livresB();
   const resumo = {
     entradas: S.length, valorEntradas: r2(S.reduce((t, x) => t + x.valor, 0)),
-    recebidosBling: bling.length, valorBling: r2(bling.reduce((t, c) => t + c.valor, 0)),
+    recebidosBling: bling.length - blingConta.length, valorBling: r2(bling.filter(c => !blingConta.includes(c)).reduce((t, c) => t + c.valor, 0)),
     cruzados: pares.length + sobraS.filter(x => x.outraData).length, autos: autos.length, aBaixar: sobraS.filter(x => !x.outraData && x.baixar).length, semConta: sobraS.filter(x => !x.outraData && !x.baixar).length,
     blingSemBanco: sobraB.length, blingConta: blingConta.length, valorBlingConta: r2(blingConta.reduce((t, c) => t + c.valor, 0)), transferencias: transf.length,
   };
   const limpa = x => ({ outraData: x.outraData, blingInfo: x.blingInfo, chave: x.chave, data: x.data, valor: x.valor, desc: x.desc, compl: x.compl, doc: x.doc, nome: x.nome, tipo: x.tipo, bol: x.bol, liqAviso: x.liqAviso,
     par: x.par, como: x.como, juros: x.juros, desconto: x.desconto, auto: x.auto, baixar: x.baixar, sugestoes: x.sugestoes });
-  const out = { ts: Date.now(), dia, resumo, sicoob: S.map(limpa), bling: bling.map(c => Object.assign({}, c, { auto: autoContas.has(String(c.id)), ligado: usadosB.has(String(c.id)) })),
+  const out = { ts: Date.now(), dia, resumo, sicoob: S.map(limpa), bling: bling.filter(c => !ehBlingConta(c) || !blingConta.includes(c)).map(c => Object.assign({}, c, { auto: autoContas.has(String(c.id)), ligado: usadosB.has(String(c.id)) })),
     blingConta: blingConta.map(c => ({ id: c.id, valor: c.valor, cliente: c.cliente, numero: c.numero })), outrasContas: outrasContas.map(c => ({ id: c.id, valor: c.valor, cliente: c.cliente, numero: c.numero, portadorNome: c.portadorNome })),
     transferencias: transf.map(limpa) };
   await env.BLING_KV.put(ck, JSON.stringify(out), { expirationTtl: 120 * 86400 });
