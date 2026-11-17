@@ -145,6 +145,10 @@ export default {
       }
       if (url.pathname === '/boletos/abertos' && req.method === 'POST') return resp(Object.assign({ ok: true }, await conferirBoletosAbertos(env, true)));
       if (url.pathname === '/boletos/abertos') return resp(Object.assign({ ok: true }, (await env.BLING_KV.get('bolabertos', 'json')) || {}));
+      if (url.pathname === '/receber/acordos') return resp({ ok: true, acordos: (await env.BLING_KV.get('recacordos', 'json')) || {} });
+      if (url.pathname === '/receber/acordo' && req.method === 'POST') return resp(await receberAcordo(env, (await req.json().catch(() => ({}))) || {}));
+      if (url.pathname === '/receber/clientes') return resp(await finSrvBuscarContato(env, { nome: url.searchParams.get('q') || '', doc: url.searchParams.get('doc') || '' }));
+      if (url.pathname === '/receber/conta') { const d = ((await bling(env, '/contas/receber/' + Number(url.searchParams.get('id'))).catch(e => ({ erro: String(e) }))) || {}); return resp({ ok: true, d: d.data || d }); }
       if (url.pathname === '/receber/mes') return resp(await receberMes(env, url.searchParams.get('mes')));
       if (url.pathname === '/receber/baixar' && req.method === 'POST') return resp(await receberBaixar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/cobranca/extra' && req.method === 'POST') return resp(await cobrancaExtra(env, (await req.json().catch(() => ({}))) || {}));
@@ -588,7 +592,9 @@ async function listarAbertos(env) {
     const ck = 'ped:' + p.id;
     const c = cachePed[ip];
     // guardado há menos de 20 min, ou há menos de 2 h com o mesmo total → não precisa buscar de novo no Bling
-    if (c && (Date.now() - c.ts < 20 * 60e3 || (Date.now() - c.ts < 2 * 3600e3 && Math.abs(Number(c.d && c.d.total) - Number(p.total)) < 0.01))) d = c.d;
+    // se o pedido foi editado no Bling (total ou datas mudaram), busca de novo na hora
+    const mudou = c && c.d && (Math.abs(Number(c.d.total) - Number(p.total)) >= 0.01 || (p.data && c.d.data !== p.data) || (p.dataPrevista && c.d.dataPrevista !== p.dataPrevista) || (p.dataSaida && c.d.dataSaida !== p.dataSaida));
+    if (c && !mudou && Date.now() - c.ts < (Date.now() - c.ts < 20 * 60e3 ? 20 * 60e3 : 45 * 60e3)) d = c.d;
     else if (novasBuscas < 30) {
       novasBuscas++;
       try { d = (await bling(env, '/pedidos/vendas/' + p.id)).data; } catch (e) { d = null; }
@@ -2969,7 +2975,7 @@ async function ddaPendenteResolver(env, b) {
 // O que entrou no Sicoob e não tem baixa no Bling: procura a conta em aberto e sugere a baixa (o Raul confirma).
 // O que foi baixado no Bling (conta Sicoob) e não aparece no extrato: aparece para corrigir.
 const CONTA_SICOOB_BLING = 14890739452;
-const RECDIA_VER = 3;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
+const RECDIA_VER = 4;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
 function tipoCredito(desc, doc) {
   const d = semAcento(desc);
   if (doc && doc === ECONF_CNPJ) return 'transf';
@@ -3068,15 +3074,25 @@ async function receberDia(env, dia, forcar) {
     const soma = r2(cs.reduce((t, c) => t + c.valor, 0)); x.juros = r2(Math.max(0, x.valor - soma)); x.desconto = r2(Math.max(0, soma - x.valor));
     x.auto = cs.some(c => autoContas.has(String(c.id))); pares.push(x); };
   const livresB = () => bling.filter(c => !usadosB.has(String(c.id)));
+  // pagamento parcial de cliente com acordo, já abatido pelo app: fica cruzado (não baixa de novo)
+  const acFeitos = (await env.BLING_KV.get('recacfeitos', 'json')) || {};
+  for (const x of S) {
+    const f = acFeitos[x.chave]; if (!f || !Array.isArray(f.partes) || !f.partes.length) continue;
+    f.partes.forEach(p => usadosB.add(String(p.contaId)));
+    x.par = f.partes.map(p => p.contaId); x.auto = !!f.auto; x.juros = 0; x.desconto = 0; x.acordo = true;
+    x.como = 'pagamento parcial (cliente que paga aos poucos) — abatido em ' + f.partes.map(p => crzRefSrv(p) + ' R$ ' + p.valor.toFixed(2).replace('.', ',')).join(' + ');
+    x.blingInfo = { id: f.partes[0].contaId, cliente: f.cliente || '', numero: f.partes[0].numero || '', origemTipo: f.partes[0].origemTipo || '', valor: x.valor, venc: f.partes[0].venc };
+    pares.push(x);
+  }
   // 0) boleto Sicoob: mesma conta (lida no arquivo) ou mesma NF/parcela + valor do título
   const nfDe = seu => { const m = String(seu || '').match(/^\s*0*(\d{1,9})\s*(?:[\/-]\s*0*(\d{1,3}))?/); return m ? String(Number(m[1])) : ''; };
-  for (const x of S.filter(x => x.bol)) {
+  for (const x of S.filter(x => x.bol && !x.par)) {
     const l = x.bol;
     const c = livresB().find(c => String(c.id) === String(l.contaId)) || livresB().find(c => nfDe(l.seu) && String(Number(c.numero)) === nfDe(l.seu) && Math.abs(c.valor - l.titulo) <= 0.01);
     if (c) { ligar(x, [c], 'boleto Sicoob da NF ' + (c.numero || nfDe(l.seu)) + ' (arquivo do Sicoob)'); x.juros = r2(l.juros + l.multa); x.desconto = r2(l.desconto); }
   }
   // 1) mesmo valor + mesmo CPF/CNPJ  2) valor + juros (até 15%) com mesmo CPF/CNPJ  3) mesmo valor, único no dia
-  for (const x of S) { const c = livresB().find(c => Math.abs(c.valor - x.valor) <= 0.01 && mesmoDoc(x.doc, c.doc)); if (c) ligar(x, [c], 'mesmo valor e CPF/CNPJ'); }
+  for (const x of S.filter(x => !x.par)) { const c = livresB().find(c => Math.abs(c.valor - x.valor) <= 0.01 && mesmoDoc(x.doc, c.doc)); if (c) ligar(x, [c], 'mesmo valor e CPF/CNPJ'); }
   for (const x of S.filter(x => !x.par)) { const c = livresB().find(c => mesmoDoc(x.doc, c.doc) && x.valor > c.valor && x.valor - c.valor <= c.valor * 0.15); if (c) ligar(x, [c], 'valor + juros/multa, mesmo CPF/CNPJ'); }
   for (const x of S.filter(x => !x.par)) {
     const cs = livresB().filter(c => Math.abs(c.valor - x.valor) <= 0.01);
@@ -3118,6 +3134,26 @@ async function receberDia(env, dia, forcar) {
     x.baixar = { contaId: c.id, valor: Math.min(c.valor, r2(l.pago - l.juros - l.multa + l.desconto)), juros: r2(l.juros + l.multa), desconto: r2(l.desconto), data: dia, venc, atraso, cliente: c.cliente, numero: c.numero, origemTipo: c.origemTipo,
       forte: true, motivo: 'boleto Sicoob nº ' + l.nn + ' da NF ' + c.numero + ' (arquivo do Sicoob)' + (l.juros + l.multa ? ' · juros R$ ' + l.juros.toFixed(2).replace('.', ',') + ' + multa R$ ' + l.multa.toFixed(2).replace('.', ',') : '') };
   }
+  // cliente que paga aos poucos (acordo): quem pagou foi ligado por você a um cliente — abate na conta mais antiga em aberto dele
+  const acordos = sobraS.some(x => !x.baixar) ? ((await env.BLING_KV.get('recacordos', 'json')) || {}) : {};
+  for (const x of sobraS.filter(x => !x.baixar && !x.outraData && x.tipo !== 'boleto' && x.tipo !== 'cartao')) {
+    const a = acordoDe(acordos, x); if (!a) continue;
+    const contas = await contasDoCliente(env, a.contatoId).catch(() => []);
+    let resto = x.valor; const partes = [];
+    for (const c of contas) {
+      if (resto <= 0.009 || partes.length >= 6) break;
+      if (reservadas.has(String(c.id))) continue;
+      const v = r2(Math.min(resto, c.saldo)); if (v <= 0) continue;
+      partes.push({ contaId: c.id, valor: v, saldo: c.saldo, venc: c.venc, numero: c.numero, origemTipo: c.origemTipo, quita: Math.abs(v - c.saldo) <= 0.009 });
+      reservadas.add(String(c.id)); resto = r2(resto - v);
+    }
+    if (!partes.length) { x.acordoAviso = 'Cliente com acordo (' + a.cliente + '), mas não achei conta em aberto dele no Bling.'; continue; }
+    const p0 = partes[0];
+    x.baixar = { acordo: true, partes, contatoId: a.contatoId, docCliente: a.doc || '', contaId: p0.contaId, valor: p0.valor, juros: 0, desconto: 0, data: dia, venc: p0.venc, atraso: diasAtraso(dia, p0.venc), cliente: a.cliente, numero: p0.numero, origemTipo: p0.origemTipo,
+      forte: resto <= 0.009,
+      motivo: 'cliente que paga aos poucos: abate na conta mais antiga em aberto (' + partes.map(p => crzRefSrv(p) + ' venc. ' + brData(p.venc) + ': R$ ' + p.valor.toFixed(2).replace('.', ',') + (p.quita ? ' quita' : ' de saldo R$ ' + p.saldo.toFixed(2).replace('.', ','))).join('; ') + ')' +
+        (resto > 0.009 ? ' · sobram R$ ' + resto.toFixed(2).replace('.', ',') + ' sem conta' : '') };
+  }
   const apelidos = sobraS.length ? ((await env.BLING_KV.get('recapelidos', 'json')) || {}) : {};
   for (const x of sobraS.filter(x => !x.baixar)) {
     const ap = x.nome ? apelidos[chaveNome(x.nome)] : null;   // quem pagou já foi ligado a este cliente antes (confirmado por você)
@@ -3158,7 +3194,7 @@ async function receberDia(env, dia, forcar) {
     blingSemBanco: sobraB.length, blingConta: blingConta.length, valorBlingConta: r2(blingConta.reduce((t, c) => t + c.valor, 0)), transferencias: transf.length,
   };
   const limpa = x => ({ outraData: x.outraData, blingInfo: x.blingInfo, chave: x.chave, data: x.data, valor: x.valor, desc: x.desc, compl: x.compl, doc: x.doc, nome: x.nome, tipo: x.tipo, bol: x.bol, liqAviso: x.liqAviso,
-    par: x.par, como: x.como, juros: x.juros, desconto: x.desconto, auto: x.auto, baixar: x.baixar, sugestoes: x.sugestoes });
+    par: x.par, como: x.como, juros: x.juros, desconto: x.desconto, auto: x.auto, baixar: x.baixar, sugestoes: x.sugestoes, acordo: x.acordo, acordoAviso: x.acordoAviso });
   const out = { ver: RECDIA_VER, ts: Date.now(), dia, resumo, sicoob: S.map(limpa), bling: bling.filter(c => !ehBlingConta(c) || !blingConta.includes(c)).map(c => Object.assign({}, c, { auto: autoContas.has(String(c.id)), ligado: usadosB.has(String(c.id)) })),
     blingConta: blingConta.map(c => ({ id: c.id, valor: c.valor, cliente: c.cliente, numero: c.numero })), outrasContas: outrasContas.map(c => ({ id: c.id, valor: c.valor, cliente: c.cliente, numero: c.numero, portadorNome: c.portadorNome })),
     transferencias: transf.map(limpa) };
@@ -3183,6 +3219,45 @@ async function contasAbertasJanela(env) {
   await env.BLING_KV.put('recAbertas', JSON.stringify({ ts: Date.now(), l }), { expirationTtl: 3600 });
   return l;
 }
+// ---- clientes que pagam aos poucos (acordo de dívida antiga) ----
+function crzRefSrv(p) { return (p.origemTipo === 'notafiscal' ? 'NF ' : p.origemTipo === 'venda' ? 'Pedido ' : 'Conta ') + (p.numero || p.contaId || ''); }
+function acordoDe(acordos, x) { return (x.doc && acordos['d:' + dig(x.doc)]) || (x.nome && acordos['n:' + chaveNome(x.nome)]) || null; }
+// contas em aberto do cliente (todas as datas, mais antiga primeiro), com o saldo que falta receber
+async function contasDoCliente(env, contatoId) {
+  const ck = 'recacli:' + contatoId, c = await env.BLING_KV.get(ck, 'json');
+  if (c && Date.now() - c.ts < 10 * 60e3) return c.l;
+  const hoje = hojeLocal(), lista = [];
+  for (let fim = somaDias(hoje, 180), i = 0; i < 9 && fim >= '2019-01-01'; i++) {
+    const ini = somaDias(fim, -364);
+    lista.push(...await paginas(env, '/contas/receber?situacoes[]=1&situacoes[]=3&tipoFiltroData=V&idContato=' + Number(contatoId) + '&dataInicial=' + ini + '&dataFinal=' + fim, 3));
+    fim = somaDias(ini, -1);
+  }
+  const l = [];
+  for (const x of lista.sort((a, b) => String(a.vencimento).localeCompare(String(b.vencimento)) || a.id - b.id)) {
+    let saldo = r2(x.valor);
+    if (Number(x.situacao) === 3 && l.length < 8) { const d = ((await bling(env, '/contas/receber/' + x.id).catch(() => null)) || {}).data || {}; if (Number(d.saldo) > 0) saldo = r2(d.saldo); }
+    l.push({ id: x.id, valor: r2(x.valor), saldo, venc: soData(x.vencimento), situacao: Number(x.situacao), numero: String((x.origem && x.origem.numero) || ''), origemTipo: (x.origem && x.origem.tipoOrigem) || '' });
+  }
+  await env.BLING_KV.put(ck, JSON.stringify({ ts: Date.now(), l }), { expirationTtl: 3600 });
+  return l;
+}
+// POST /receber/acordo {pagadorNome, pagadorDoc, contatoId, cliente, doc, dia, usuario} — ou {chave, remover:true}
+async function receberAcordo(env, b) {
+  const ac = (await env.BLING_KV.get('recacordos', 'json')) || {};
+  if (b.remover) { delete ac[String(b.chave || '')]; await env.BLING_KV.put('recacordos', JSON.stringify(ac)); return { ok: true, acordos: ac }; }
+  if (!Number(b.contatoId)) return { ok: false, erro: 'Escolha o cliente.' };
+  const chaves = [];
+  if (dig(b.pagadorDoc).length >= 11) chaves.push('d:' + dig(b.pagadorDoc));
+  if (chaveNome(b.pagadorNome)) chaves.push('n:' + chaveNome(b.pagadorNome));
+  if (!chaves.length) return { ok: false, erro: 'Sem nome ou CPF/CNPJ de quem pagou.' };
+  const reg = { contatoId: Number(b.contatoId), cliente: String(b.cliente || '').slice(0, 120), doc: dig(b.doc), pagador: String(b.pagadorNome || '').slice(0, 80), criado: Date.now(), por: String(b.usuario || '').slice(0, 40) };
+  chaves.forEach(k => { ac[k] = reg; });
+  await env.BLING_KV.put('recacordos', JSON.stringify(ac));
+  await env.BLING_KV.delete('recacli:' + reg.contatoId).catch(() => {});
+  if (b.dia) await env.BLING_KV.delete('recdia:' + soData(b.dia)).catch(() => {});
+  const contas = await contasDoCliente(env, reg.contatoId).catch(() => []);
+  return { ok: true, contas: contas.length, devido: r2(contas.reduce((t, c) => t + c.saldo, 0)) };
+}
 async function receberMes(env, mes) {
   if (!/^\d{4}-\d{2}$/.test(String(mes || ''))) mes = hojeLocal().slice(0, 7);
   return { ok: true, mes, dias: (await env.BLING_KV.get('recmes:' + mes, 'json')) || {} };
@@ -3198,6 +3273,7 @@ async function receberBaixar(env, b) {
     const data = soData(it.data);
     if (it.pagador && it.docCliente && !it.auto) { const k = chaveNome(it.pagador); if (k && apelidos[k] !== it.docCliente) { apelidos[k] = it.docCliente; novosAp++; } }
     if (!it.contaId || !data) { out.push({ contaId: it.contaId, ok: false, erro: 'Dados incompletos.' }); continue; }
+    if (Array.isArray(it.partes) && it.partes.length && it.chave) { out.push(await baixarAcordo(env, it, data, b)); continue; }
     const atraso = Number(it.atraso || 0);
     const historico = 'Recebido no Sicoob em ' + brData(data) + (it.desc ? ' (' + String(it.desc).slice(0, 60) + ')' : '') + (atraso > 0 ? ' com ' + atraso + (atraso === 1 ? ' dia' : ' dias') + ' de atraso (venc. ' + brData(it.venc) + ')' : atraso < 0 ? ' adiantado' : '') +
       (Number(it.juros) ? ' - juros/multa R$ ' + Number(it.juros).toFixed(2).replace('.', ',') : '') + ' - baixa pelo cruzamento Sicoob × Bling (app Mais Acessível' + (b.usuario ? ', ' + String(b.usuario).slice(0, 40) : '') + ')';
@@ -3215,6 +3291,28 @@ async function receberBaixar(env, b) {
   return { ok: out.every(x => x.ok), itens: out };
 }
 
+// pagamento parcial de cliente com acordo: uma baixa parcial (ou total) em cada conta, da mais antiga para a mais nova
+async function baixarAcordo(env, it, data, b) {
+  const feitos = (await env.BLING_KV.get('recacfeitos', 'json')) || {};
+  if (feitos[it.chave]) return { contaId: it.contaId, ok: true, resultado: 'já abatido antes (nada feito)' };
+  const partes = it.partes.slice(0, 6), ok = [], res = [];
+  for (const p of partes) {
+    const historico = 'Pagamento parcial recebido no Sicoob em ' + brData(data) + (it.desc ? ' (' + String(it.desc).slice(0, 60) + ')' : '') + ': R$ ' + r2(p.valor).toFixed(2).replace('.', ',') +
+      (p.quita ? ' quita esta parcela' : ' abatido (saldo antes R$ ' + r2(p.saldo).toFixed(2).replace('.', ',') + ')') + ' - cliente que paga aos poucos - app Mais Acessível' + (b.usuario ? ', ' + String(b.usuario).slice(0, 40) : '');
+    try {
+      const r = await executarBaixa(env, p.contaId, r2(p.valor), data, { historico, historicoConta: true, conferir: true, juros: 0, desconto: 0 });
+      res.push(r); if (/^ok/.test(r)) ok.push(p);
+      await logAcao(env, { modo: 'real', origem: it.auto ? 'cruzamento-auto' : 'cruzamento', acao: 'baixa', cliente: it.cliente || '', numero: p.numero || '', contaId: p.contaId, valorBaixa: r2(p.valor), valor: r2(p.valor), data, resultado: r, por: b.usuario || '',
+        detalhe: 'Pagamento parcial (cliente que paga aos poucos): R$ ' + r2(p.valor).toFixed(2) + ' abatido na conta ' + p.contaId + ', data ' + brData(data) });
+    } catch (e) { res.push('erro: ' + String(e.message || e).slice(0, 160)); }
+  }
+  if (ok.length) {
+    feitos[it.chave] = { partes: ok, cliente: it.cliente || '', auto: !!it.auto, quando: Date.now() };
+    await env.BLING_KV.put('recacfeitos', JSON.stringify(feitos));
+    if (it.contatoId) await env.BLING_KV.delete('recacli:' + it.contatoId).catch(() => {});
+  }
+  return { contaId: it.contaId, ok: ok.length === partes.length, resultado: res.join(' | ') };
+}
 
 // ======================================================================================================
 // ---------------- Despesas pelo celular: operações do Bling sem a extensão (API oficial v3) ----------------
@@ -3356,7 +3454,7 @@ async function receberAuto(env) {
   let feitas = 0;
   if (fortes.length) {
     const res = await receberBaixar(env, { dia, usuario: 'automático', itens: fortes.map(x => ({ contaId: x.baixar.contaId, valor: x.baixar.valor, juros: x.baixar.juros, desconto: x.baixar.desconto || 0, data: x.data,
-      atraso: x.baixar.atraso, venc: x.baixar.venc, desc: (x.tipo === 'pix' ? 'PIX' : x.tipo === 'boleto' ? 'Boleto Sicoob' : 'Crédito') + (x.nome ? ' de ' + x.nome : ''), auto: true, cliente: x.baixar.cliente, numero: x.baixar.numero })) });
+      atraso: x.baixar.atraso, venc: x.baixar.venc, desc: (x.tipo === 'pix' ? 'PIX' : x.tipo === 'boleto' ? 'Boleto Sicoob' : 'Crédito') + (x.nome ? ' de ' + x.nome : ''), auto: true, cliente: x.baixar.cliente, numero: x.baixar.numero, partes: x.baixar.partes, chave: x.chave, contatoId: x.baixar.contatoId })) });
     feitas = (res.itens || []).filter(i => i.ok).length;
   }
   await env.BLING_KV.put('recauto', JSON.stringify({ ultimo: dia, ts: Date.now(), feitas, fortes: fortes.length }));
