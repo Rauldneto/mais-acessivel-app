@@ -386,6 +386,15 @@ export default {
         const b = await req.json();
         return resp(await econfRegistrar(env, b || {}));
       }
+      if (url.pathname === '/cartao/importar' && req.method === 'POST') return resp(await cartaoImportar(env, (await req.json().catch(() => null)) || {}));
+      if (url.pathname === '/cartao/pendentes') return resp(await cartaoPendentes(env));
+      if (url.pathname === '/cartao/tef' && req.method === 'POST') {
+        const b = (await req.json().catch(() => ({}))) || {};
+        await env.BLING_KV.put('econf:cartao', b.ligado ? 'ligado' : 'desligado');
+        await logAcao(env, { acao: 'econf', modo: 'real', detalhe: 'TEF de cartão ' + (b.ligado ? 'LIGADO' : 'DESLIGADO') + (b.usuario ? ' — ' + String(b.usuario).slice(0, 60) : '') });
+        return resp({ ok: true, ligado: !!b.ligado });
+      }
+      if (url.pathname === '/cartao/vincular' && req.method === 'POST') return resp(await cartaoVincular(env, (await req.json().catch(() => null)) || {}));
       if (url.pathname === '/docs/ocultar' && req.method === 'POST') {
         // tira um pedido/nota da lista (ex.: teste). Não apaga nada no Bling; dá para desfazer com {desfazer:true}
         const b = (await req.json().catch(() => ({}))) || {};
@@ -677,7 +686,7 @@ async function listarAbertos(env) {
       const ultimo = pg.map(x => diaLocal(x.horario)).sort().pop() || '';
       if (ultimo && ultimo < diasAtras(DIAS_CONTAS)) continue;
       itens.push({ tipo, id: Number(id), numero: String(m.numero || id), data: m.data || ultimo, prevista: '', cliente: m.cliente || (pg[0] && pg[0].pagador) || '', doc: m.doc || '',
-        total: Number(m.total || pago), aReceber: Math.max(Number(m.aReceber || 0), pago), formas: [...new Set(pg.map(x => x.boleto ? 'boleto' : 'pix'))], formaNome: pg.some(x => x.boleto) ? 'Boleto' : 'PIX', vendedor: '', situacao: 'Pago', fora: true });
+        total: Number(m.total || pago), aReceber: Math.max(Number(m.aReceber || 0), pago), formas: [...new Set(pg.map(x => x.boleto ? 'boleto' : x.cartao ? 'credito' : 'pix'))], formaNome: pg.some(x => x.boleto) ? 'Boleto' : pg.some(x => x.cartao) ? 'Cartão' : 'PIX', vendedor: '', situacao: 'Pago', fora: true });
     }
     cur = l.list_complete ? null : l.cursor;
   } while (cur);
@@ -1530,6 +1539,7 @@ async function nfDoPedido(env, pedId) {
 }
 
 async function econfPendentes(env, maxChamadas) {
+  const ctxCartao = {};
   const LIM = maxChamadas || 35;
   const out = [];
   let cursor, chamadas = 0, faltaram = 0;
@@ -1544,8 +1554,11 @@ async function econfPendentes(env, maxChamadas) {
         if (reg && reg.ok) continue;
         const dia = diaLocal(p.horario);
         if (dia < ECONF_DESDE) continue;   // TEF/ECONF só para pagamentos a partir do início da obrigação
-        const item = { e2e: p.e2e, valor: Number(p.valor || 0), dia, horario: p.horario, pagador: p.pagador || '', tipo, docId: id, tPag: p.txid ? '17' : '20',
+        const item = { e2e: p.e2e, valor: Number(p.valor || 0), dia, horario: p.horario, pagador: p.pagador || '', tipo, docId: id, tPag: p.cartao ? (p.credDeb === 'D' ? '04' : '03') : (p.txid ? '17' : '20'),
           ultimaTentativa: reg };
+        if (p.cartao) Object.assign(item, { cartao: true, cAut: p.cAut, tBand: p.tBand || '99', indPag: Number(p.parcelas || 1) > 1 ? '1' : '0', pagador: p.pagador || ('Cartão ' + (p.bandeira || '')) });
+        if (p.cartao && ctxCartao.ligado === undefined) ctxCartao.ligado = (await env.BLING_KV.get('econf:cartao')) === 'ligado';
+        if (p.cartao && !ctxCartao.ligado) { item.status = 'aguardando_config'; item.erro = 'TEF de cartão ainda desligado (falta confirmar o CNPJ da credenciadora Sipag)'; out.push(item); continue; }
         try {
           let nfId = tipo === 'nota' ? id : null;
           if (tipo === 'pedido') { if (chamadas >= LIM) { faltaram++; continue; } chamadas++; nfId = await nfDoPedido(env, id); }
@@ -2239,8 +2252,8 @@ async function econfMontarAssinado(a1, o) {
   const corpo = '<cOrgao>92</cOrgao><tpAmb>' + o.tpAmb + '</tpAmb><CNPJ>' + ECONF_CNPJ + '</CNPJ><chNFe>' + o.chave + '</chNFe>' +
     '<dhEvento>' + o.dhEvento + '</dhEvento><tpEvento>110750</tpEvento><nSeqEvento>' + o.nSeq + '</nSeqEvento><verEvento>1.00</verEvento>' +
     '<detEvento versao="1.00"><descEvento>ECONF</descEvento><verAplic>MaisAcessivel-1.0</verAplic>' +
-    '<detPag><indPag>0</indPag><tPag>' + o.tPag + '</tPag><vPag>' + o.vPag + '</vPag><dPag>' + o.dPag + '</dPag>' +
-    '<CNPJPag>' + ECONF_CNPJ + '</CNPJPag><UFPag>' + ECONF_UF + '</UFPag><CNPJIF>' + o.cnpjIF + '</CNPJIF><cAut>' + o.cAut + '</cAut>' +
+    '<detPag><indPag>' + (o.indPag || '0') + '</indPag><tPag>' + o.tPag + '</tPag><vPag>' + o.vPag + '</vPag><dPag>' + o.dPag + '</dPag>' +
+    '<CNPJPag>' + ECONF_CNPJ + '</CNPJPag><UFPag>' + ECONF_UF + '</UFPag><CNPJIF>' + o.cnpjIF + '</CNPJIF>' + (o.tBand ? '<tBand>' + o.tBand + '</tBand>' : '') + '<cAut>' + o.cAut + '</cAut>' +
     '<CNPJReceb>' + ECONF_CNPJ + '</CNPJReceb><UFReceb>' + ECONF_UF + '</UFReceb></detPag></detEvento>';
   const enc = new TextEncoder();
   const digest = b64em(await crypto.subtle.digest('SHA-1', enc.encode('<infEvento xmlns="' + ECONF_NS + '" Id="' + id + '">' + corpo + '</infEvento>')));
@@ -2281,7 +2294,8 @@ async function econfEnviar(env, opt) {
       const item = { e2e: p.e2e, nf: p.nf.numero, chave: p.nf.chave, valor: p.valor, dia: p.dia, pagador: p.pagador, momento: p.momento, nSeq: p.nSeq || 1 };
       try {
         const evento = await econfMontarAssinado(a1, { chave: p.nf.chave, nSeq: item.nSeq, tpAmb: ambiente === 'producao' ? '1' : '2', dhEvento: horaBrasilia(Date.now() - 30000),
-          tPag: p.tPag, vPag: Number(p.valor).toFixed(2), dPag: p.dia, cnpjIF: CNPJ_SICOOB_IF, cAut: p.e2e });
+          tPag: p.tPag, vPag: Number(p.valor).toFixed(2), dPag: p.dia, cnpjIF: p.cartao ? CNPJ_CREDENCIADORA_SIPAG : CNPJ_SICOOB_IF, cAut: p.cartao ? p.cAut : p.e2e,
+          tBand: p.cartao ? p.tBand : '', indPag: p.indPag || '0' });
         const idLote = (horaBrasilia().slice(0, 19).replace(/\D/g, '') + String(Math.floor(Math.random() * 10))).slice(0, 15);
         const envio = '<envEvento xmlns="' + ECONF_NS + '" versao="1.00"><idLote>' + idLote + '</idLote>' + evento + '</envEvento>';
         const r = await econfSoap(env, ambiente, envio);
@@ -2360,7 +2374,7 @@ async function tefAlerta(env, a) {
 async function econfPainel(env) {
   const a1 = await env.BLING_KV.get('econf:a1', 'json');
   const hist = (await env.BLING_KV.get('econf:execucoes', 'json')) || [];
-  return { configurado: !!a1, validade: a1 ? a1.validade : null, auto: (await env.BLING_KV.get('econf:auto')) !== 'desligado', horas: ECONF_HORAS, execucoes: hist.slice(0, 40) };
+  return { cartao: (await env.BLING_KV.get('econf:cartao')) === 'ligado', configurado: !!a1, validade: a1 ? a1.validade : null, auto: (await env.BLING_KV.get('econf:auto')) !== 'desligado', horas: ECONF_HORAS, execucoes: hist.slice(0, 40) };
 }
 
 // ======================================================================================================
@@ -3653,4 +3667,121 @@ async function conferirBoletosAbertos(env, forcar) {
   st.erros = st.erros.slice(-20);
   await env.BLING_KV.put('bolabertos', JSON.stringify(st), { expirationTtl: 7 * 86400 });
   return { dia: st.dia, conferidos: st.conferidos, total: st.total, fim: st.fim, pagos: st.pagos, aguardando: st.aguardando, erros: st.erros };
+}
+
+
+// ======================================================================================================
+// ---------------- Vendas no cartão (maquininha / link Sipag) → vínculo com a NF e TEF (ECONF) ----------------
+// O app lê o CSV exportado no Portal do Lojista (Minhas Vendas › Realizadas › Exportar) e manda as vendas para cá.
+// Cada venda (nº da transação) vira um pagamento do pedido/nota — igual a um PIX — e entra na fila do TEF com
+// tPag 03 (crédito) / 04 (débito), bandeira e código de autorização. Não dá baixa no Bling (o cartão liquida depois).
+const CNPJ_CREDENCIADORA_SIPAG = '02038232000164';   // Sipag = adquirência do Sicoob (Banco Cooperativo Sicoob S.A.) — confirmar com o Sicoob
+const BANDEIRA_TBAND = { visa: '01', mastercard: '02', master: '02', 'american express': '03', amex: '03', sorocred: '04', diners: '05', elo: '06', hipercard: '07', hiper: '07', aura: '08', cabal: '09' };
+function tBandDe(nome) { const n = String(nome || '').toLowerCase().trim(); for (const k of Object.keys(BANDEIRA_TBAND)) if (n.indexOf(k) === 0) return BANDEIRA_TBAND[k]; return '99'; }
+
+// contas a receber (qualquer situação) pagas no cartão, agrupadas por pedido/nota, num período
+async function cartaoCandidatos(env, ctx, de, ate) {
+  const ck = de + ':' + ate;
+  if (ctx[ck]) return ctx[ck];
+  const fp = ctx.fp || (ctx.fp = await formas(env));
+  const contas = await paginas(env, '/contas/receber?tipoFiltroData=E&dataInicial=' + de + '&dataFinal=' + ate, 6);
+  const por = {};
+  for (const c of contas) {
+    const o = c.origem || {};
+    if (o.tipoOrigem !== 'notafiscal' && o.tipoOrigem !== 'venda') continue;
+    const cod = Number(c.formaPagamento && c.formaPagamento.codigoFiscal);
+    const f = fp[c.formaPagamento && c.formaPagamento.id] || {};
+    if (!(cod === 3 || cod === 4 || /cart|cr[eé]dito|d[eé]bito/i.test(f.nome || ''))) continue;
+    const k = (o.tipoOrigem === 'venda' ? 'pedido' : 'nota') + ':' + o.id;
+    const x = por[k] || (por[k] = { tipo: o.tipoOrigem === 'venda' ? 'pedido' : 'nota', id: o.id, numero: String(o.numero || ''), data: o.dataEmissao || c.dataEmissao || '',
+      cliente: (c.contato && c.contato.nome) || '', valorCartao: 0, totalDoc: Number(o.valor || 0) });
+    x.valorCartao = Math.round((x.valorCartao + Number(c.valor || 0)) * 100) / 100;
+  }
+  return (ctx[ck] = Object.values(por));
+}
+
+async function cartaoRegistrar(env, v, doc, como) {
+  const key = 'CARD-' + v.nsu;
+  const kd = 'pagosdoc:' + doc.tipo + ':' + doc.id;
+  const pd = (await env.BLING_KV.get(kd, 'json')) || [];
+  if (!pd.some(x => x.e2e === key)) {
+    pd.push({ e2e: key, cartao: true, valor: v.total, horario: v.iso, pagador: 'Cartão ' + v.bandeira + (v.parcelas > 1 ? ' ' + v.parcelas + 'x' : ''), origem: 'cartao',
+      cAut: v.aut, tBand: tBandDe(v.bandeira), bandeira: v.bandeira, credDeb: v.credDeb, parcelas: v.parcelas, ec: v.ec });
+    await env.BLING_KV.put(kd, JSON.stringify(pd), { expirationTtl: 400 * 86400 });
+  }
+  await env.BLING_KV.put('docmeta:' + doc.tipo + ':' + doc.id, JSON.stringify({ numero: doc.numero || '', cliente: doc.cliente || '', doc: '', total: Number(doc.totalDoc || v.total), aReceber: Number(doc.totalDoc || v.total), data: doc.data || '' }), { expirationTtl: 400 * 86400 });
+  v.vinculo = { tipo: doc.tipo, id: doc.id, numero: doc.numero, cliente: doc.cliente, como };
+  await env.BLING_KV.put('cartao:' + v.nsu, JSON.stringify(v), { expirationTtl: 400 * 86400 });
+  await logAcao(env, { acao: 'cartao', modo: 'real', tipo: doc.tipo, id: doc.id, numero: doc.numero, cliente: doc.cliente, valor: v.total,
+    detalhe: 'Venda no cartão ' + v.bandeira + ' (' + (v.credDeb === 'D' ? 'débito' : 'crédito') + (v.parcelas > 1 ? ' ' + v.parcelas + 'x' : '') + ', aut. ' + v.aut + ') de R$ ' + v.total.toFixed(2) + ' em ' + v.dataBr + ' vinculada (' + como + ')' });
+  await env.BLING_KV.delete('cache:abertos');
+}
+
+function soDia(iso) { return String(iso || '').slice(0, 10); }
+async function cartaoTentarCasar(env, v, ctx) {
+  const de = somaDias(v.dia, -10), ate = [somaDias(v.dia, 20), hojeLocal()].sort()[0];
+  const cands = (await cartaoCandidatos(env, ctx, de, ate)).filter(c => Math.abs(c.valorCartao - v.total) <= 0.10);
+  // não usa um pedido/nota que já tem outra venda de cartão com o mesmo valor
+  const livres = [];
+  for (const c of cands) {
+    const pd = (await env.BLING_KV.get('pagosdoc:' + c.tipo + ':' + c.id, 'json')) || [];
+    if (!pd.some(x => x.cartao && x.e2e !== 'CARD-' + v.nsu)) livres.push(c);
+  }
+  // prefere a nota (a venda pode ter conta no pedido e na nota)
+  const notas = livres.filter(c => c.tipo === 'nota');
+  const unico = notas.length === 1 ? notas[0] : (!notas.length && livres.length === 1 ? livres[0] : null);
+  v.sugestoes = livres.slice(0, 6).map(c => ({ tipo: c.tipo, id: c.id, numero: c.numero, cliente: c.cliente, data: soDia(c.data), valor: c.valorCartao }));
+  if (unico) { await cartaoRegistrar(env, v, unico, 'automático: mesmo valor no cartão'); return true; }
+  return false;
+}
+
+async function cartaoImportar(env, b) {
+  const lista = Array.isArray(b.vendas) ? b.vendas.slice(0, 400) : [];
+  const ctx = {}; const out = { ok: true, recebidas: lista.length, novas: 0, jaImportadas: 0, vinculadas: 0, pendentes: 0, ignoradas: 0, canceladas: 0 };
+  for (const x of lista) {
+    const nsu = String(x.nsu || '').replace(/[^\w-]/g, '').slice(0, 40);
+    if (!nsu) continue;
+    if (/cancel|negad|desfeit/i.test(String(x.status || '')) || (x.cancel && x.cancel !== '000' && x.cancel !== '-')) { out.canceladas++; continue; }
+    const ant = await env.BLING_KV.get('cartao:' + nsu, 'json');
+    if (ant && (ant.vinculo || ant.ignorado)) { out.jaImportadas++; continue; }
+    const m = String(x.dataHora || '').match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (!m) continue;
+    const v = { nsu, ec: String(x.ec || ''), dia: m[3] + '-' + m[2] + '-' + m[1], dataBr: m[1] + '/' + m[2] + '/' + m[3] + ' ' + m[4] + ':' + m[5],
+      iso: new Date(Date.parse(m[3] + '-' + m[2] + '-' + m[1] + 'T' + m[4] + ':' + m[5] + ':' + (m[6] || '00') + '-03:00')).toISOString(),
+      bandeira: String(x.bandeira || '').trim(), credDeb: String(x.credDeb || 'C').trim().toUpperCase().slice(0, 1) === 'D' ? 'D' : 'C',
+      parcelas: Math.max(1, Number(x.parcelas || 1)), aut: String(x.aut || '').trim().slice(0, 20), total: Math.round(Number(x.total || 0) * 100) / 100,
+      captura: String(x.captura || ''), importadoEm: Date.now(), por: String(b.usuario || '').slice(0, 60) };
+    if (!v.total || !v.aut) continue;
+    if (!ant) out.novas++;
+    try {
+      if (await cartaoTentarCasar(env, v, ctx)) out.vinculadas++;
+      else { await env.BLING_KV.put('cartao:' + nsu, JSON.stringify(v), { expirationTtl: 400 * 86400 }); out.pendentes++; }
+    } catch (e) { v.erro = String(e.message || e).slice(0, 200); await env.BLING_KV.put('cartao:' + nsu, JSON.stringify(v), { expirationTtl: 400 * 86400 }); out.pendentes++; }
+  }
+  await env.BLING_KV.put('cartao:ultimaImportacao', JSON.stringify({ quando: Date.now(), por: String(b.usuario || '').slice(0, 60), resumo: out }));
+  return out;
+}
+
+async function cartaoPendentes(env) {
+  const out = []; let cur;
+  do {
+    const l = await env.BLING_KV.list({ prefix: 'cartao:', cursor: cur });
+    for (const k of l.keys) {
+      if (k.name === 'cartao:ultimaImportacao') continue;
+      const v = await env.BLING_KV.get(k.name, 'json');
+      if (v && !v.vinculo && !v.ignorado) out.push(v);
+    }
+    cur = l.list_complete ? null : l.cursor;
+  } while (cur);
+  out.sort((a, b) => String(b.iso).localeCompare(String(a.iso)));
+  return { ok: true, pendentes: out, ultima: await env.BLING_KV.get('cartao:ultimaImportacao', 'json') };
+}
+
+async function cartaoVincular(env, b) {
+  const v = await env.BLING_KV.get('cartao:' + String(b.nsu || ''), 'json');
+  if (!v) return { ok: false, erro: 'Venda não encontrada.' };
+  if (b.ignorar) { v.ignorado = { por: String(b.usuario || '').slice(0, 60), quando: Date.now() }; await env.BLING_KV.put('cartao:' + v.nsu, JSON.stringify(v), { expirationTtl: 400 * 86400 }); return { ok: true }; }
+  if (!b.tipo || !b.id) return { ok: false, erro: 'Escolha o pedido/nota.' };
+  await cartaoRegistrar(env, v, { tipo: b.tipo, id: b.id, numero: String(b.numero || ''), cliente: String(b.cliente || ''), totalDoc: Number(b.total || 0), data: String(b.data || '') }, 'manual' + (b.usuario ? ' — ' + String(b.usuario).slice(0, 60) : ''));
+  return { ok: true };
 }

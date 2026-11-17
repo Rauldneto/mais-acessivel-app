@@ -17131,6 +17131,7 @@ function blgChave(x){return x.tipo+':'+x.id;}
 function blgCarregarPend(){
   if(BLG.demo||!blgUrl())return;
   blgApi('/pendentes').then(function(r){if(r&&r.ok){BLG.pend=r.pendentes||[];blgDraw();}}).catch(function(){});
+  if(blgAdmin())blgApi('/cartao/pendentes').then(function(r){if(r&&r.ok){BLG.cartPend=r.pendentes||[];BLG.cartUlt=r.ultima||null;blgDraw();}}).catch(function(){});
 }
 function blgTelaConc(){
   var L=BLG.pend||[],st=BLG.stage||{},nMarc=Object.keys(st).filter(function(k){return st[k];}).length;
@@ -17164,7 +17165,7 @@ function blgTelaEconf(){
   h+=(e.configurado?'✅ Envio automático configurado (certificado válido até '+new Date(e.validade).toLocaleDateString('pt-BR')+'). ':'⚠️ <b>Falta configurar o certificado</b> (rodar CONFIGURAR-ECONF-AUTOMATICO no PC). ')+
      'Automático às <b>'+(e.horas||[13,18]).join('h e ')+'h</b>: '+(e.auto?'<b style="color:#15803d">LIGADO</b>':'<b style="color:#b91c1c">DESLIGADO</b>')+
      ' <button class="blg-btn" style="height:26px;margin-left:6px" data-a="econfAuto" data-k="'+(e.auto?'0':'1')+'">'+(e.auto?'Desligar':'Ligar')+'</button></div>';
-  var it=pd.itens||[],pr=it.filter(function(x){return x.status==='pronto';}),ag=it.filter(function(x){return x.status==='aguardando_nf'||x.status==='aguardando_sefaz';}),pb=it.filter(function(x){return x.status!=='pronto'&&x.status!=='aguardando_nf'&&x.status!=='aguardando_sefaz';});
+  var it=pd.itens||[],pr=it.filter(function(x){return x.status==='pronto';}),ag=it.filter(function(x){return x.status==='aguardando_nf'||x.status==='aguardando_sefaz'||x.status==='aguardando_config';}),pb=it.filter(function(x){return x.status!=='pronto'&&x.status!=='aguardando_nf'&&x.status!=='aguardando_sefaz'&&x.status!=='aguardando_config';});
   h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 10px"><button class="blg-btn" data-a="econfEnviar" data-k="producao"'+(pr.length&&e.configurado&&!BLG.ecEnv?'':' disabled')+'>'+(BLG.ecEnv?'<span class="blg-spin"></span> Enviando…':'📨 Enviar ECONF agora ('+pr.length+')')+'</button>'+
      '<button class="blg-btn" style="background:#fff;color:#2b2b2b;border:1px solid #d6d6d6" data-a="econfEnviar" data-k="teste"'+(pr.length&&e.configurado&&!BLG.ecEnv?'':' disabled')+' title="Manda para o ambiente de testes da Sefaz (não vale fiscalmente)">🧪 Testar (homologação)</button>'+
      '<button class="blg-ib" data-a="econfRecarregar" title="Atualizar">'+BLG_IC.rec+'</button>'+(BLG.ecMsg?'<span style="font-size:13px">'+BLG.ecMsg+'</span>':'')+'</div>';
@@ -17220,7 +17221,9 @@ function blgAdminStatus(){
   return '<div class="sub">Baixa automática no Bling</div><span class="lk">'+(m==='real'?'<b style="color:#15803d">LIGADA</b> — dá baixa e lança as contas sozinha':m?'<b style="color:#b45309">SIMULAÇÃO</b> — só anota o que faria':'…')+
     (m?' · <a style="cursor:pointer;color:#15803d;font-weight:700" data-a="modoBaixa" data-k="'+(m==='real'?'simulacao':'real')+'">'+(m==='real'?'voltar p/ simulação':'ligar')+'</a>':'')+'</span>'+
     '<div class="sub">TEF automático (13h e 18h)</div><span class="lk">'+(!BLG.ec?'…':!e.configurado?'⚠️ falta configurar o certificado':e.auto?'<b style="color:#15803d">LIGADO</b>':'<b style="color:#b91c1c">DESLIGADO</b>')+
-    ' · <a style="cursor:pointer;color:#15803d;font-weight:700" data-a="aba" data-k="econf">ver envios</a></span>';
+    ' · <a style="cursor:pointer;color:#15803d;font-weight:700" data-a="aba" data-k="econf">ver envios</a></span>'+
+    '<div class="sub">TEF de cartão (Sipag)</div><span class="lk">'+(!BLG.ec?'…':e.cartao?'<b style="color:#15803d">LIGADO</b>':'<b style="color:#b45309">DESLIGADO</b>')+
+    (BLG.ec?' · <a style="cursor:pointer;color:#15803d;font-weight:700" data-a="cartTef" data-k="'+(e.cartao?'0':'1')+'">'+(e.cartao?'desligar':'ligar')+'</a>':'')+'</span>';
 }
 function blgPainelTefHist(x){
   var h='',t=x.tef;
@@ -17246,6 +17249,64 @@ function blgPainelTefHist(x){
     h+='</div>';
   }
   return h;
+}
+// ---------- Vendas no cartão (Sipag): importar o CSV do Portal do Lojista e vincular à nota/pedido para o TEF ----------
+function blgCsvSipag(txt){
+  var L=String(txt||'').replace(/^﻿/,'').split(/\r?\n/),hi=-1;
+  for(var i=0;i<Math.min(L.length,15);i++){if(/Data da transa/i.test(L[i])&&/autoriza/i.test(L[i])){hi=i;break;}}
+  if(hi<0)return null;
+  var H=L[hi].split(';').map(function(x){return x.trim();}),col=function(re){for(var j=0;j<H.length;j++)if(re.test(H[j]))return j;return -1;};
+  var c={ec:col(/estabelecimento/i),dt:col(/^Data da transa/i),nsu:col(/^N\S{0,3}\s*da transa/i),id:col(/^ID Venda/i),band:col(/^Bandeira/i),cd:col(/Cr.dito\/D.bito/i),parc:col(/^Total de parcela/i),aut:col(/autoriza/i),
+    cap:col(/^Tipo captura/i),canc:col(/cancelamento/i),st:col(/^Status/i),tot:col(/^Total plano/i),vb:col(/^Valor parcela bruto/i)};
+  var num=function(s){return Number(String(s||'').replace(/R\$|\s/g,'').replace(/\./g,'').replace(',','.'))||0;},por={};
+  for(var k=hi+1;k<L.length;k++){var r=L[k].split(';');if(r.length<6||!r[c.dt])continue;
+    var nsu=(r[c.nsu]||r[c.id]||'').trim();if(!nsu)continue;
+    var v=por[nsu]||(por[nsu]={nsu:nsu,ec:r[c.ec],dataHora:r[c.dt],bandeira:r[c.band],credDeb:r[c.cd],parcelas:Number(r[c.parc]||1),aut:(r[c.aut]||'').trim(),captura:r[c.cap],cancel:(r[c.canc]||'').trim(),status:r[c.st],total:c.tot>=0?num(r[c.tot]):0,soma:0});
+    v.soma+=c.vb>=0?num(r[c.vb]):0;}
+  return Object.keys(por).map(function(k){var v=por[k];if(!v.total)v.total=Math.round(v.soma*100)/100;delete v.soma;return v;});
+}
+function blgCartImportar(){
+  var inp=document.createElement('input');inp.type='file';inp.accept='.csv,text/csv';
+  inp.onchange=function(){var f=inp.files&&inp.files[0];if(!f)return;var rd=new FileReader();
+    rd.onload=function(){var vendas=blgCsvSipag(rd.result);
+      if(!vendas){alert('Este arquivo não parece o CSV de vendas da Sipag.\n\nNo Portal do Lojista: Minhas Vendas › Realizadas › EXPORTAR › formato CSV (marque os dois estabelecimentos).');return;}
+      if(!vendas.length){alert('Nenhuma venda no arquivo.');return;}
+      BLG.cartImp=true;blgDraw();
+      blgApi('/cartao/importar',{method:'POST',body:{vendas:vendas,usuario:STATE.usuarioLogado||''}}).then(function(r){BLG.cartImp=false;
+        if(!r||!r.ok){alert('Não importou: '+((r&&r.erro)||'falhou'));blgDraw();return;}
+        alert('Vendas Sipag importadas: '+r.recebidas+'\n\n✅ Vinculadas sozinhas: '+r.vinculadas+'\n🔎 Para você vincular: '+r.pendentes+'\n↩️ Já importadas antes: '+r.jaImportadas+(r.canceladas?'\n🚫 Canceladas (ignoradas): '+r.canceladas:'')+'\n\nAs vinculadas entram no TEF nos envios das 13h e 18h.');
+        blgCarregarPend();blgCarregarTefInfo(true);blgCarregar(true);if(r.pendentes){BLG.view='cart';}blgDraw();
+      }).catch(function(e){BLG.cartImp=false;alert(String(e));blgDraw();});};
+    rd.readAsText(f,'utf-8');};
+  inp.click();
+}
+function blgTelaCart(){
+  var L=BLG.cartPend||[],u=BLG.cartUlt;
+  var h='<div class="blg-msg"><b>💳 Vendas no cartão sem vínculo</b> — vieram do arquivo da Sipag e não acharam sozinhas a nota/pedido (nenhum ou mais de um com o mesmo valor no cartão). Escolha a nota/pedido de cada uma; ela entra no TEF nos envios das 13h/18h.'+
+    (u?'<br><span style="font-size:12px;color:#6f6f6f">Última importação: '+new Date(u.quando).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+(u.por?' por '+blgEsc(u.por):'')+'</span>':'')+'</div>';
+  if(!L.length)return h+'<div class="blg-vazio">Nenhuma venda no cartão esperando vínculo. 🎉</div>';
+  var falta=function(x){return Number(x.aReceber||0)-Number(x.pago||0);};
+  var docs=(BLG.dados||[]).filter(function(x){return falta(x)>0.009;}).sort(function(a,b){return falta(b)-falta(a);});
+  h+='<table class="blg-tb"><thead><tr><th>Venda</th><th>Cartão</th><th>Autorização</th><th class="r">Valor (R$)</th><th>Sugestão</th><th>Vincular a</th><th></th></tr></thead><tbody>';
+  L.forEach(function(v,i){
+    var sug=(v.sugestoes||[]).map(function(s2){return '<button class="blg-btn sec" style="height:24px;font-size:11px;margin:2px 4px 2px 0" data-a="cartVinc" data-i="'+i+'" data-k="'+blgEsc(s2.tipo+':'+s2.id+':'+s2.numero)+'">'+(s2.tipo==='nota'?'NF ':'Pedido ')+blgEsc(s2.numero)+' · '+blgEsc((s2.cliente||'').slice(0,22))+'</button>';}).join('');
+    var opts='<option value="">Escolher…</option>'+docs.map(function(x){return '<option value="'+blgEsc(x.tipo+':'+x.id+':'+x.numero)+'">R$ '+blgMoeda(falta(x))+' — '+(x.tipo==='nota'?'NF ':'Pedido ')+blgEsc(x.numero)+' — '+blgEsc((x.cliente||'').slice(0,34))+'</option>';}).join('');
+    h+='<tr style="cursor:default"><td>'+blgEsc(v.dataBr||'')+'<div style="font-size:10.5px;color:#777">'+blgEsc(/980001$/.test(v.ec||'')?'link de pagamento':'maquininha')+'</div></td><td>'+blgEsc(v.bandeira)+' '+(v.credDeb==='D'?'débito':'crédito')+(v.parcelas>1?' '+v.parcelas+'x':'')+'</td><td>'+blgEsc(v.aut)+'</td>'+
+       '<td class="r">'+blgMoeda(v.total)+'</td><td style="white-space:normal;max-width:280px">'+(sug||'<span style="color:#999">—</span>')+'</td>'+
+       '<td><select data-cartsel="'+i+'" style="height:28px;border-radius:8px;border:1px solid var(--bd);max-width:300px;font-size:11.5px;background:#fff">'+opts+'</select></td>'+
+       '<td><button class="blg-btn sec" style="height:28px" data-a="cartIgnorar" data-i="'+i+'" title="Não é venda com nota (ex.: teste)">Ignorar</button></td></tr>';
+  });
+  return h+'</tbody></table>';
+}
+function blgCartAcao(a,i,k){
+  var v=(BLG.cartPend||[])[i];if(!v)return;
+  var fim=function(r){if(!r||!r.ok)alert((r&&r.erro)||'Falhou');blgCarregarPend();blgCarregarTefInfo(true);blgCarregar(true);};
+  if(a==='cartIgnorar'){if(!confirm('Ignorar esta venda no cartão (R$ '+blgMoeda(v.total)+')? Ela não vai para o TEF.'))return;
+    blgApi('/cartao/vincular',{method:'POST',body:{nsu:v.nsu,ignorar:true,usuario:STATE.usuarioLogado||''}}).then(fim);return;}
+  var p=String(k||'').split(':');if(p.length<3)return;
+  var doc=(BLG.dados||[]).filter(function(x){return x.tipo===p[0]&&String(x.id)===p[1];})[0]||{};
+  if(!confirm('Vincular a venda de R$ '+blgMoeda(v.total)+' ('+v.bandeira+', aut. '+v.aut+') a'+(p[0]==='nota'?' NF ':'o pedido ')+p[2]+'?'))return;
+  blgApi('/cartao/vincular',{method:'POST',body:{nsu:v.nsu,tipo:p[0],id:p[1],numero:p[2],cliente:doc.cliente||'',total:doc.total||0,data:doc.data||'',usuario:STATE.usuarioLogado||''}}).then(fim);
 }
 function blgCarregarPag(){BLG.pagCarr=true;blgApi('/pagamentos').then(function(r){BLG.pagCarr=false;BLG.pag=r&&r.ok?r:{erro:(r&&r.erro)||'Falhou'};blgDraw();}).catch(function(e){BLG.pagCarr=false;BLG.pag={erro:String(e)};blgDraw();});}
 
@@ -17746,7 +17807,7 @@ function blgDraw(){
   if(blgPag())h+='<div class="blg-top"><div class="blg-bc">Pagamentos</div><div class="blg-sep"></div><div class="blg-loja">Gerar PIX e link de crédito</div><div class="blg-sp"></div>'+
      '<button class="blg-btn" data-a="pixSel"'+(sel&&!selPago&&blgTemPix(sel)?'':' disabled')+'>'+BLG_IC.pix+' Gerar PIX</button></div>';
   else h+='<div class="blg-top"><div class="blg-bc">Baixa Contas a Receber</div><div class="blg-sep"></div><div class="blg-loja">PIX e boletos Sicoob</div><div class="blg-sp"></div>'+
-     (blgAdmin()&&!BLG.demo?blgBotaoTef():'')+'</div>';
+     (blgAdmin()&&!BLG.demo?'<button class="blg-btn sec" style="margin-right:8px" data-a="cartImportar" title="Importar o CSV exportado no Portal do Lojista Sipag (Minhas Vendas › Realizadas › Exportar)">'+(BLG.cartImp?'<span class="blg-spin"></span> Importando…':'💳 Importar vendas Sipag')+'</button>'+blgBotaoTef():'')+'</div>';
   var aba=function(v,t){return '<button class="blg-aba'+((BLG.view||'')===v?' on':'')+'" data-a="aba" data-k="'+v+'">'+t+'</button>';};
   if(!BLG.demo&&!blgPag())h+='<div class="blg-abas">'+aba('sit','📊 Situação dos pagamentos')+aba('','📋 Vendas a receber')+aba('cruz','🔀 Sicoob × Bling (dia a dia)')+(blgAdmin()?aba('bol','📄 Boletos sem vínculo'+(nBol?' <i>'+nBol+'</i>':''))+aba('sim','🧪 Simulação boletos'):'')+'</div>';
   h+='<div class="blg-body">';
@@ -17772,6 +17833,7 @@ function blgDraw(){
   if(!BLG.view)h+='<div class="blg-fsit">Situação: '+nomeSit+(BLG.f.baixa==='auto'?' · com baixa automática':'')+(BLG.per&&(BLG.per.de||BLG.per.ate)?' · '+blgPerTexto(BLG.per):'')+(BLG.f.sit!=='todos'||BLG.f.tipo!=='todos'||BLG.f.forma!=='todos'||BLG.f.vendedor||BLG.f.busca||(BLG.f.tef&&BLG.f.tef!=='todos')||(BLG.f.baixa&&BLG.f.baixa!=='todos')||(BLG.per&&(BLG.per.de||BLG.per.ate))?'<a data-a="limpar">Limpar</a>':'')+'</div>';
   h+=blgAvisos();
   if(BLG.view==='conc'){h+=blgTelaConc()+'</section><aside class="blg-act">'+blgAcoes()+'</aside></div>';w.innerHTML=h;blgLigar(w);return;}
+  if(BLG.view==='cart'){h+=blgTelaCart()+'</section><aside class="blg-act">'+blgAcoes()+'</aside></div>';w.innerHTML=h;blgLigar(w);return;}
   if(BLG.view==='econf'){h+=blgTelaEconf()+'</section><aside class="blg-act">'+blgAcoes()+'</aside></div>';w.innerHTML=h;blgLigar(w);return;}
   w.classList.toggle('blg-cruz',BLG.view==='cruz');
   w.classList.toggle('blg-sit',BLG.view==='sit');
@@ -18021,6 +18083,7 @@ function blgAvisos(){
   var h='',adm=blgAdmin();
   if(BLG.avisoPag)h+='<div class="blg-msg ok">'+blgEsc(BLG.avisoPag)+'</div>';
   if(adm&&!BLG.demo&&!blgPag()){var nT=TEF.alertas.filter(function(a){return !a.visto;}).length;if(nT&&BLG.view!=='econf')h+='<div class="blg-msg err">⚠️ <b>'+nT+' aviso(s) de TEF</b> não enviado ou recusado pela Sefaz. <a data-a="aba" data-k="econf" style="color:#b91c1c;cursor:pointer;font-weight:700;text-decoration:underline">Ver no ECONF Sefaz</a></div>';}
+  if(!BLG.demo&&!blgPag()&&BLG.view!=='cart'&&BLG.cartPend&&BLG.cartPend.length)h+='<div class="blg-msg demo">💳 <b>'+BLG.cartPend.length+' venda(s) no cartão sem vínculo</b> — não acharam sozinhas a nota/pedido. <a data-a="aba" data-k="cart" style="color:#15803d;cursor:pointer;font-weight:700">Ver e vincular</a></div>';
   if(!BLG.demo&&!blgPag()&&BLG.view!=='conc'&&BLG.pend&&BLG.pend.length)h+='<div class="blg-msg demo">💰 <b>'+BLG.pend.length+' PIX recebido(s) sem vínculo</b> — caíram direto na chave e não bateram sozinhos. <a data-a="aba" data-k="conc" style="color:#15803d;cursor:pointer;font-weight:700">Ver e vincular</a></div>';
   if(BLG.demo)h+='<div class="blg-msg demo">👀 <b>Prévia com dados de exemplo</b> (nomes fictícios). Nada aqui é real e nenhum PIX é cobrado. '+(blgUrl()?'<a data-a="sairDemo" style="color:#34ad61;cursor:pointer;font-weight:700">Voltar para os dados do Bling</a>':'')+'</div>';
   if(BLG.status&&BLG.status.conectando)h+='<div class="blg-msg"><span class="blg-spin"></span>&nbsp; Conectando ao Bling…</div>';
@@ -18329,6 +18392,7 @@ function blgLigar(w){
   // filtros da lateral: só valem quando clica em "Filtrar"
   var marcar=function(){var bt=w.querySelector('[data-a="aplicarFiltro"]');if(bt){bt.style.boxShadow='0 0 0 3px #bbf7d0';bt.textContent='🔎 Filtrar (alterações não aplicadas)';}};
   w.querySelectorAll('select[data-f]').forEach(function(s){s.onchange=function(){BLG.fd=BLG.fd||Object.assign({},BLG.f);BLG.fd[s.getAttribute('data-f')]=s.value;marcar();};});
+  w.querySelectorAll('select[data-cartsel]').forEach(function(s){s.onchange=function(){if(s.value)blgCartAcao('cartVinc',Number(s.getAttribute('data-cartsel')),s.value);};});
   w.querySelectorAll('input[data-pd]').forEach(function(s){s.onchange=function(){BLG.perD=BLG.perD||Object.assign({},BLG.per);BLG.perD[s.getAttribute('data-pd')]=s.value;};});
   w.querySelectorAll('input[data-pc]').forEach(function(s){s.onchange=function(){BLG.perD=BLG.perD||Object.assign({},BLG.per);BLG.perD.campo=s.getAttribute('data-pc');};});
   w.querySelectorAll('input[data-fd]').forEach(function(s){s.onchange=function(){BLG.fd=BLG.fd||Object.assign({},BLG.f);BLG.fd[s.getAttribute('data-fd')]=s.value;marcar();};});
@@ -18370,6 +18434,10 @@ function blgAcao(a){
     var eo=(xo.pagos||[]).map(function(p){return p.e2e;}).filter(Boolean);
     Promise.all([blgApi('/docs/ocultar',{method:'POST',body:{tipo:xo.tipo,id:xo.id,numero:xo.numero,usuario:STATE.usuarioLogado||''}})].concat(eo.length?[blgApi('/econf/ignorar',{method:'POST',body:{e2e:eo,motivo:'teste',usuario:STATE.usuarioLogado||'',tipo:xo.tipo,id:xo.id,numero:xo.numero}})]:[]))
       .then(function(){BLG.sel=null;blgCarregar(true);});return;}
+  if(a==='cartImportar'){blgCartImportar();return;}
+  if(a==='cartTef'){var lg=BLG._k==='1';if(!confirm(lg?'Ligar o TEF das vendas no cartão?\n\nAs vendas vinculadas vão para a Sefaz nos envios das 13h e 18h.':'Desligar o TEF das vendas no cartão?'))return;
+    blgApi('/cartao/tef',{method:'POST',body:{ligado:lg,usuario:STATE.usuarioLogado||''}}).then(function(){blgCarregarTefInfo(true);});return;}
+  if(a==='cartVinc'||a==='cartIgnorar'){blgCartAcao(a,Number(BLG._i),BLG._k);return;}
   if(a==='tefIgnorar'){var lst=String(BLG._k||'').split(',').filter(Boolean);if(!lst.length)return;
     var xs2=blgSelecionado();
     if(!confirm('Marcar '+(lst.length>1?'estes '+lst.length+' pagamentos':'este pagamento')+' como TESTE?\n\nEle nunca será informado à Sefaz (ECONF) e sai da fila do TEF.'))return;
