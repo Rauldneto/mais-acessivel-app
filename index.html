@@ -17268,7 +17268,7 @@ function crzConferirMes(){
 }
 function crzPend(r){return r?(r.aBaixar||0)+(r.semConta||0)+(r.blingSemBanco||0):0;}
 function crzTipoTxt(t){return {pix:'PIX',boleto:'Boleto Sicoob',cartao:'Cartão',ted:'TED/DOC',outro:'Outro crédito',transf:'Transferência'}[t]||t;}
-function crzDiasTxt(dia,venc){if(!venc)return '';var d=Math.round((Date.parse(dia)-Date.parse(venc))/864e5);return d>0?'<span class="crz-at">'+d+' dia'+(d>1?'s':'')+' de atraso</span>':d<0?'<span class="crz-ad">'+(-d)+' dia'+(d<-1?'s':'')+' adiantado</span>':'<span class="crz-ok">no vencimento</span>';}
+function crzDiasTxt(dia,venc){return sitAtraso(dia,venc);}
 function crzDoc(d){d=String(d||'');return d.length===14?d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5'):d.length===11?d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'):d;}
 function crzRef(c){return c.numero?(c.origemTipo==='venda'?'Pedido ':'NF ')+c.numero:'Conta '+c.id;}
 function crzTela(){
@@ -17455,7 +17455,13 @@ function sitTela(){
   h+='<div class="sit-leg"><span><b style="color:#15803d">Baixado automático</b> = o app achou a conta pelo CPF/CNPJ, pelo nome de quem pagou ou pela NF do boleto e deu baixa sozinho.</span><span><b style="color:#B45309">Pago — falta baixar</b> = entrou no banco e o app achou a conta provável; confirme.</span><span><b style="color:#B91C1C">Pago — sem conta</b> = entrou no banco e não há conta no Bling com esse valor.</span></div>';
   return h+'</div>';
 }
-function sitAtraso(pago,venc){if(!venc||!pago)return '';var d=Math.round((Date.parse(pago)-Date.parse(venc))/864e5);return d>0?'<span class="crz-at">'+d+' dia(s) de atraso</span>':d<0?'<span class="crz-ad">'+(-d)+' dia(s) adiantado</span>':'<span class="crz-ok">no dia</span>';}
+// vencimento em fim de semana ou feriado nacional vale até o próximo dia útil
+function blgPascoa(a){var A=a%19,b=Math.floor(a/100),c=a%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*A+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((A+11*h+22*l)/451),mes=Math.floor((h+l-7*m+114)/31),dia=((h+l-7*m+114)%31)+1;return Date.UTC(a,mes-1,dia,12);}
+function blgFeriado(iso){if(['01-01','04-21','05-01','09-07','10-12','11-02','11-15','11-20','12-25'].indexOf(iso.slice(5))>=0)return true;var p=blgPascoa(+iso.slice(0,4)),r=function(n){return new Date(p+n*864e5).toISOString().slice(0,10);};return [r(-48),r(-47),r(-2),r(60)].indexOf(iso)>=0;}
+function blgDiaUtil(iso){var w=new Date(iso+'T12:00:00Z').getUTCDay();return w!==0&&w!==6&&!blgFeriado(iso);}
+function blgVencUtil(iso){if(!iso)return iso;var d=iso;while(!blgDiaUtil(d))d=new Date(Date.parse(d+'T12:00:00Z')+864e5).toISOString().slice(0,10);return d;}
+function blgAtraso(pago,venc){if(!pago||!venc)return null;var v=blgVencUtil(venc),d=Math.round((Date.parse(pago)-Date.parse(v))/864e5);if(d<=0&&pago>=venc)return 0;return d>0?d:Math.round((Date.parse(pago)-Date.parse(venc))/864e5);}
+function sitAtraso(pago,venc){var d=blgAtraso(pago,venc);if(d==null)return '';var fs=venc&&blgVencUtil(venc)!==venc?' (venceu em fim de semana/feriado: vale até '+blgData(blgVencUtil(venc)).slice(0,5)+')':'';return d>0?'<span class="crz-at">'+d+' dia(s) de atraso</span>':d<0?'<span class="crz-ad">'+(-d)+' dia(s) adiantado</span>':'<span class="crz-ok">no prazo'+fs+'</span>';}
 function sitLigar(w){var i=w.querySelector('#sitBusca');if(i){i.oninput=function(){SIT.busca=i.value;clearTimeout(SIT.tb);SIT.tb=setTimeout(function(){var pos=i.selectionStart;blgDraw();var n=BLG.root.querySelector('#sitBusca');if(n){n.focus();try{n.setSelectionRange(pos,pos);}catch(e){}}},300);};}}
 function blgTelaPag(){
   var p=BLG.pag||{},h='<div class="blg-msg"><b>Pagamentos recebidos e ações no Bling</b> · modo: '+(p.modo==='real'?'<b style="color:#15803d">REAL</b> (executa no Bling)':'<b style="color:#b45309">SIMULAÇÃO</b> (só anota o que faria; nada é alterado no Bling)')+

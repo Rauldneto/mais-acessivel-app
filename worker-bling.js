@@ -789,6 +789,9 @@ function feriado(iso) {
   return [rel(-48), rel(-47), rel(-2), rel(60)].includes(iso);   // Carnaval (seg e ter), Sexta-feira Santa, Corpus Christi
 }
 function diaUtil(iso) { const w = new Date(iso + 'T12:00:00Z').getUTCDay(); return w !== 0 && w !== 6 && !feriado(iso); }
+// vencimento em sábado, domingo ou feriado vale até o próximo dia útil (pagar nesse dia não é atraso)
+function vencUtil(iso) { return iso && !diaUtil(iso) ? proxDiaUtil(iso) : iso; }
+function diasAtraso(pago, venc) { if (!pago || !venc) return 0; const v = vencUtil(venc); return pago > v ? Math.round((Date.parse(pago) - Date.parse(v)) / 864e5) : 0; }
 function proxDiaUtil(iso) { let d = iso; do { d = new Date(new Date(d + 'T12:00:00Z').getTime() + 864e5).toISOString().slice(0, 10); } while (!diaUtil(d)); return d; }
 // validade do PIX: vencimento do pedido/NF + 1 dia útil, até 23:59 (Brasília). Vencido ou sem vencimento: hoje + 1 dia útil.
 function validadePix(venc) {
@@ -1838,7 +1841,7 @@ function planoBoleto(b, conta) {
   // multa separada quando o Sicoob informa; senão tudo vai como juros
   const multa = r2(b.multa || 0), juros = r2(b.mora - multa);
   const venc = b.dataVencimento || conta.venc || '';
-  const atraso = venc && b.dataLiquidacao > venc ? Math.round((Date.parse(b.dataLiquidacao) - Date.parse(venc)) / 864e5) : 0;
+  const atraso = diasAtraso(b.dataLiquidacao, venc);
   const historico = 'Boleto Sicoob nº ' + b.nossoNumero + ' pago em ' + brData(b.dataLiquidacao) + (atraso ? ' com ' + atraso + (atraso === 1 ? ' dia' : ' dias') + ' de atraso (venc. ' + brData(venc) + ')' : '') +
     (b.mora ? ' - juros/multa R$ ' + b.mora.toFixed(2).replace('.', ',') : '') + (b.desconto ? ' - desconto R$ ' + b.desconto.toFixed(2).replace('.', ',') : '') + ' - total pago R$ ' + b.pago.toFixed(2).replace('.', ',') +
     (b.tarifa ? ' (tarifa R$ ' + b.tarifa.toFixed(2).replace('.', ',') + ' lançada à parte)' : '') + ' - baixa automática app Mais Acessível';
@@ -2966,6 +2969,7 @@ async function ddaPendenteResolver(env, b) {
 // O que entrou no Sicoob e não tem baixa no Bling: procura a conta em aberto e sugere a baixa (o Raul confirma).
 // O que foi baixado no Bling (conta Sicoob) e não aparece no extrato: aparece para corrigir.
 const CONTA_SICOOB_BLING = 14890739452;
+const RECDIA_VER = 3;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
 function tipoCredito(desc, doc) {
   const d = semAcento(desc);
   if (doc && doc === ECONF_CNPJ) return 'transf';
@@ -3029,7 +3033,7 @@ async function receberDia(env, dia, forcar) {
   dia = soData(dia) || hojeLocal();
   if (dia > hojeLocal()) return { ok: false, erro: 'Dia no futuro.' };
   const ck = 'recdia:' + dia;
-  if (!forcar) { const c = await env.BLING_KV.get(ck, 'json'); if (c && (dia < somaDias(hojeLocal(), -2) || Date.now() - c.ts < 10 * 60e3)) return Object.assign({ ok: true, cache: true }, c); }
+  if (!forcar) { const c = await env.BLING_KV.get(ck, 'json'); if (c && c.ver === RECDIA_VER && (dia < somaDias(hojeLocal(), -2) || Date.now() - c.ts < 10 * 60e3)) return Object.assign({ ok: true, cache: true }, c); }
   const [creditos, blingTodos] = await Promise.all([lerCreditos(env, dia, dia), receberBlingDia(env, dia)]);
   // Bling Conta tem baixa própria: fica fora do cruzamento (só aparece no resumo)
   // cartão (crédito/débito) fica à parte até a regra do cartão; Bling Conta entra no cruzamento (pode ter sido paga por PIX no Sicoob) e, se não casar, vai para a lista dela
@@ -3110,7 +3114,7 @@ async function receberDia(env, dia, forcar) {
     const c = abertasSicoob.find(c => String(c.id) === String(l.contaId)) || abertasSicoob.find(c => nf && String(Number(c.numero)) === nf && Math.abs(c.valor - l.titulo) <= 0.01);
     if (!c) continue;
     reservadas.add(String(c.id));
-    const venc = l.venc || c.venc, atraso = venc && l.liq > venc ? Math.round((Date.parse(l.liq) - Date.parse(venc)) / 864e5) : 0;
+    const venc = l.venc || c.venc, atraso = diasAtraso(l.liq, venc);
     x.baixar = { contaId: c.id, valor: Math.min(c.valor, r2(l.pago - l.juros - l.multa + l.desconto)), juros: r2(l.juros + l.multa), desconto: r2(l.desconto), data: dia, venc, atraso, cliente: c.cliente, numero: c.numero, origemTipo: c.origemTipo,
       forte: true, motivo: 'boleto Sicoob nº ' + l.nn + ' da NF ' + c.numero + ' (arquivo do Sicoob)' + (l.juros + l.multa ? ' · juros R$ ' + l.juros.toFixed(2).replace('.', ',') + ' + multa R$ ' + l.multa.toFixed(2).replace('.', ',') : '') };
   }
@@ -3129,7 +3133,7 @@ async function receberDia(env, dia, forcar) {
     if (m && (m.doc || cand.length === 1) && (cand.length === 1 || m.p - cand[1].p >= 15)) {
       reservadas.add(String(m.c.id));
       const forte = (m.doc || m.nomes >= 2) && (cand.length === 1 || m.p - cand[1].p >= 25) && m.dias >= -60 && m.dias <= 120;
-      x.baixar = { docCliente: m.c.doc, contaId: m.c.id, valor: m.c.valor, juros: r2(Math.max(0, x.valor - m.c.valor)), data: dia, venc: m.c.venc, atraso: Math.max(0, m.dias), cliente: m.c.cliente, numero: m.c.numero, origemTipo: m.c.origemTipo, forte,
+      x.baixar = { docCliente: m.c.doc, contaId: m.c.id, valor: m.c.valor, juros: r2(Math.max(0, x.valor - m.c.valor)), data: dia, venc: m.c.venc, atraso: diasAtraso(dia, m.c.venc), cliente: m.c.cliente, numero: m.c.numero, origemTipo: m.c.origemTipo, forte,
         motivo: (m.exato ? 'mesmo valor' : 'valor + juros/multa') + (m.ap ? ' e pagador já ligado a este cliente' : m.doc ? ' e mesmo CPF/CNPJ' : m.nomes >= 2 ? ' e nome do pagador parecido com o do cliente' : m.nomes ? ' (nome do pagador parecido)' : ' (única conta em aberto com esse valor)') };
     }
   }
@@ -3155,7 +3159,7 @@ async function receberDia(env, dia, forcar) {
   };
   const limpa = x => ({ outraData: x.outraData, blingInfo: x.blingInfo, chave: x.chave, data: x.data, valor: x.valor, desc: x.desc, compl: x.compl, doc: x.doc, nome: x.nome, tipo: x.tipo, bol: x.bol, liqAviso: x.liqAviso,
     par: x.par, como: x.como, juros: x.juros, desconto: x.desconto, auto: x.auto, baixar: x.baixar, sugestoes: x.sugestoes });
-  const out = { ts: Date.now(), dia, resumo, sicoob: S.map(limpa), bling: bling.filter(c => !ehBlingConta(c) || !blingConta.includes(c)).map(c => Object.assign({}, c, { auto: autoContas.has(String(c.id)), ligado: usadosB.has(String(c.id)) })),
+  const out = { ver: RECDIA_VER, ts: Date.now(), dia, resumo, sicoob: S.map(limpa), bling: bling.filter(c => !ehBlingConta(c) || !blingConta.includes(c)).map(c => Object.assign({}, c, { auto: autoContas.has(String(c.id)), ligado: usadosB.has(String(c.id)) })),
     blingConta: blingConta.map(c => ({ id: c.id, valor: c.valor, cliente: c.cliente, numero: c.numero })), outrasContas: outrasContas.map(c => ({ id: c.id, valor: c.valor, cliente: c.cliente, numero: c.numero, portadorNome: c.portadorNome })),
     transferencias: transf.map(limpa) };
   await env.BLING_KV.put(ck, JSON.stringify(out), { expirationTtl: 120 * 86400 });
