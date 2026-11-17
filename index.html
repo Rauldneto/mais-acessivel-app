@@ -6884,7 +6884,7 @@ function dspDrawMob(){
     if(ok){DSP.msg='Salvo. O lançamento no Bling é feito na Conferência do computador.';DSP.msgTipo='ok';DSP.mtela='pend';DSP.sel=null;DSP.form=null;}dspDraw();window.scrollTo(0,0);};}
 }
 // NF-e 55 lida no celular: dá para mandar direto ao Contas a Pagar do Bling (sem a conferência no computador)
-function dspMobPodeDireto(d){return !!(d&&d.status!=='lancado'&&d.status!=='lendo'&&!DSP.lendo[d.id]&&d.tipoDoc==='nfe');}
+function dspMobPodeDireto(d){return !!(d&&d.status==='pendente'&&!DSP.lendo[d.id]);} // qualquer despesa já lida: você escolhe mandar direto ou deixar pendente para o PC
 async function dspMobDireto(b){
   var id=DSP.sel,f=dspLerCampos();
   var falta=dspFaltas(f);if(falta.length){DSP.msg='Falta preencher: '+falta.join(', ')+'.';DSP.msgTipo='warn';dspDraw();window.scrollTo(0,0);return;}
@@ -6926,7 +6926,7 @@ function dspMobEnviar(){
       (lendo?'<span class="fin-mu">Pode guardar o celular. Fica pendente para conferir.</span>':
        '<span style="font-size:14px">'+dspEsc((u.fornecedor&&u.fornecedor.nome)||'Fornecedor não identificado')+(u.valor>0?' · <b style="color:inherit">R$ '+dspMoney(u.valor)+'</b>':'')+(u.formaId?' · '+dspEsc(dspFormaNome(u.formaId)):'')+'</span>'+
        (dspDuplicados(DSP.ultimoEnvio).length?'<span class="fin-chip err" style="justify-self:start">⚠️ Parece duplicado de outra despesa</span>':'')+
-       '<button type="button" class="dm-btn" id="dmVerUlt" style="min-height:44px;font-size:15px">'+(dspMobPodeDireto(u)?'📤 Conferir e enviar ao Contas a Pagar':'Conferir agora')+'</button>')+'</div>';}
+       '<button type="button" class="dm-btn" id="dmVerUlt" style="min-height:44px;font-size:15px">'+(dspMobPodeDireto(u)?'📤 Conferir e enviar direto ao Contas a Pagar':'Conferir agora')+'</button>'+(dspMobPodeDireto(u)?'<span class="fin-mu" style="text-align:center">ou deixe como está: fica pendente para aprovar no computador</span>':''))+'</div>';}
   return h;
 }
 function dspMobLista(L,vazioT,vazioD,lanc){
