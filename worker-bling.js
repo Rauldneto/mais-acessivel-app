@@ -2977,7 +2977,7 @@ async function ddaPendenteResolver(env, b) {
 // O que entrou no Sicoob e não tem baixa no Bling: procura a conta em aberto e sugere a baixa (o Raul confirma).
 // O que foi baixado no Bling (conta Sicoob) e não aparece no extrato: aparece para corrigir.
 const CONTA_SICOOB_BLING = 14890739452;
-const RECDIA_VER = 6;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
+const RECDIA_VER = 7;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
 function tipoCredito(desc, doc) {
   const d = semAcento(desc);
   if (doc && doc === ECONF_CNPJ) return 'transf';
@@ -3162,17 +3162,18 @@ async function receberDia(env, dia, forcar) {
     const cand = abertas.filter(c => !reservadas.has(String(c.id)) && (!ehBlingConta(c) || (x.tipo !== 'boleto' && mesmoDoc(x.doc, c.doc)))).map(c => {
       const exato = Math.abs(c.valor - x.valor) <= 0.01, doc = mesmoDoc(x.doc, c.doc) || !!(ap && mesmoDoc(ap, c.doc)), nomes = nomesComuns(x.nome, c.cliente);
       const juros = x.valor > c.valor && x.valor - c.valor <= c.valor * 0.15;
-      if (!exato && !(juros && (doc || nomes >= 2))) return null;
+      const descP = !exato && !juros && (doc || nomes >= 2) ? descontoRedondo(x.valor, c.valor) : 0;
+      if (!exato && !(juros && (doc || nomes >= 2)) && !descP) return null;
       const dias = c.venc ? Math.round((Date.parse(x.data) - Date.parse(c.venc)) / 864e5) : 0;
-      return { c, p: (exato ? 50 : 20) + (doc ? 40 : nomes >= 2 ? 35 : nomes ? 10 : 0) - Math.min(30, Math.abs(dias)), doc, nomes, exato, dias, ap: !!(ap && mesmoDoc(ap, c.doc)) };
+      return { c, p: (exato ? 50 : descP ? 25 : 20) + (doc ? 40 : nomes >= 2 ? 35 : nomes ? 10 : 0) - Math.min(30, Math.abs(dias)), doc, nomes, exato, dias, descP, ap: !!(ap && mesmoDoc(ap, c.doc)) };
     }).filter(Boolean).sort((a, b) => b.p - a.p);
     x.sugestoes = cand.slice(0, 5).map(o => ({ docCliente: o.c.doc, nomes: o.nomes, contaId: o.c.id, valor: o.c.valor, venc: o.c.venc, cliente: o.c.cliente, numero: o.c.numero, origemTipo: o.c.origemTipo, doc: o.doc, dias: o.dias }));
     const m = cand[0];
     if (m && (m.doc || cand.length === 1) && (cand.length === 1 || m.p - cand[1].p >= 15)) {
       reservadas.add(String(m.c.id));
       const forte = (m.doc || m.nomes >= 2) && (cand.length === 1 || m.p - cand[1].p >= 25) && m.dias >= -60 && m.dias <= 120;
-      x.baixar = { docCliente: m.c.doc, contaId: m.c.id, valor: m.c.valor, juros: r2(Math.max(0, x.valor - m.c.valor)), data: dia, venc: m.c.venc, atraso: diasAtraso(dia, m.c.venc), cliente: m.c.cliente, numero: m.c.numero, origemTipo: m.c.origemTipo, forte,
-        motivo: (m.exato ? 'mesmo valor' : 'valor + juros/multa') + (m.ap ? ' e pagador já ligado a este cliente' : m.doc ? ' e mesmo CPF/CNPJ' : m.nomes >= 2 ? ' e nome do pagador parecido com o do cliente' : m.nomes ? ' (nome do pagador parecido)' : ' (única conta em aberto com esse valor)') };
+      x.baixar = { docCliente: m.c.doc, contaId: m.c.id, valor: m.c.valor, juros: r2(Math.max(0, x.valor - m.c.valor)), desconto: m.descP ? r2(m.c.valor - x.valor) : 0, data: dia, venc: m.c.venc, atraso: diasAtraso(dia, m.c.venc), cliente: m.c.cliente, numero: m.c.numero, origemTipo: m.c.origemTipo, forte,
+        motivo: (m.exato ? 'mesmo valor' : m.descP ? 'pago com ' + String(m.descP).replace('.', ',') + '% de desconto (R$ ' + r2(m.c.valor - x.valor).toFixed(2).replace('.', ',') + ')' : 'valor + juros/multa') + (m.ap ? ' e pagador já ligado a este cliente' : m.doc ? ' e mesmo CPF/CNPJ' : m.nomes >= 2 ? ' e nome do pagador parecido com o do cliente' : m.nomes ? ' (nome do pagador parecido)' : ' (única conta em aberto com esse valor)') };
     }
   }
   // ficou sem conta: pode ser um pedido de venda ainda sem contas lançadas (mesmo valor) — lança as contas do pedido e baixa
@@ -3182,16 +3183,18 @@ async function receberDia(env, dia, forcar) {
     const peds = ((ab && ab.itens) || []).filter(p => p.tipo === 'pedido' && !(p.contas || []).length && Number(p.aReceber || p.total) > 0);
     const usadosP = new Set();
     for (const x of semConta) {
-      const cs = peds.filter(p => !usadosP.has(p.id) && Math.abs(Number(p.aReceber || p.total) - x.valor) <= 0.01).map(p => ({ p, doc: mesmoDoc(x.doc, dig(p.doc)), nomes: nomesComuns(x.nome, p.cliente) }))
-        .sort((a, b) => (b.doc - a.doc) || (b.nomes - a.nomes));
+      const cs = peds.filter(p => !usadosP.has(p.id)).map(p => { const v = Number(p.aReceber || p.total), doc = mesmoDoc(x.doc, dig(p.doc)), nomes = nomesComuns(x.nome, p.cliente);
+          const exato = Math.abs(v - x.valor) <= 0.01, descP = !exato && (doc || nomes >= 2) && (p.parcelas || []).length <= 1 ? descontoRedondo(x.valor, v) : 0;
+          return exato || descP ? { p, doc, nomes, descP, v } : null; }).filter(Boolean)
+        .sort((a, b) => (b.doc - a.doc) || (b.nomes - a.nomes) || (a.descP - b.descP));
       if (!cs.length) continue;
       const m = cs[0], unico = cs.length === 1 || (m.doc && !cs[1].doc) || (m.nomes > cs[1].nomes);
       if (!m.doc && !m.nomes && !unico) continue;
       usadosP.add(m.p.id);
       const venc = (m.p.parcelas && m.p.parcelas[0] && m.p.parcelas[0].venc) || m.p.venc || dia;
-      x.baixar = { pedidoId: m.p.id, contaId: 'p' + m.p.id, valor: x.valor, juros: 0, desconto: 0, data: dia, venc, atraso: diasAtraso(dia, venc), cliente: m.p.cliente, docCliente: dig(m.p.doc), numero: m.p.numero, origemTipo: 'venda',
+      x.baixar = { pedidoId: m.p.id, contaId: 'p' + m.p.id, valor: m.descP ? r2(m.v) : x.valor, juros: 0, desconto: m.descP ? r2(m.v - x.valor) : 0, data: dia, venc, atraso: diasAtraso(dia, venc), cliente: m.p.cliente, docCliente: dig(m.p.doc), numero: m.p.numero, origemTipo: 'venda',
         forte: (m.doc || m.nomes >= 1) && unico,
-        motivo: 'pedido de venda ' + m.p.numero + ' (sem conta lançada) com o mesmo valor' + (m.doc ? ' e mesmo CPF/CNPJ' : m.nomes ? ' e nome parecido' : ' (único com esse valor)') + ' — o app lança as contas do pedido e dá baixa' };
+        motivo: 'pedido de venda ' + m.p.numero + ' (sem conta lançada) ' + (m.descP ? 'pago com ' + String(m.descP).replace('.', ',') + '% de desconto (R$ ' + r2(m.v - x.valor).toFixed(2).replace('.', ',') + ')' : 'com o mesmo valor') + (m.doc ? ' e mesmo CPF/CNPJ' : m.nomes ? ' e nome parecido' : ' (único com esse valor)') + ' — o app lança as contas do pedido e dá baixa' };
     }
   }
   // ficou sem conta: opções entre as contas em atraso (até 5 anos) — você escolhe de qual cliente é
@@ -3248,6 +3251,8 @@ async function contasAbertasJanela(env) {
 }
 // ---- clientes que pagam aos poucos (acordo de dívida antiga) ----
 function crzRefSrv(p) { return (p.origemTipo === 'notafiscal' ? 'NF ' : p.origemTipo === 'venda' ? 'Pedido ' : 'Conta ') + (p.numero || p.contaId || ''); }
+// pago a menos com desconto "redondo" (ex.: 5% de 675,00 = 641,25): % inteiro ou meio por cento, até 10%
+function descontoRedondo(pago, conta) { if (!(pago < conta) || conta - pago > conta * 0.10 + 0.005) return 0; const pct = (conta - pago) / conta * 100, r = Math.round(pct * 2) / 2; return r > 0 && Math.abs(r2(conta * (1 - r / 100)) - pago) <= 0.011 ? r : 0; }
 function acordoDe(acordos, x) { return (x.doc && acordos['d:' + dig(x.doc)]) || (x.nome && acordos['n:' + chaveNome(x.nome)]) || null; }
 // contas em aberto do cliente (todas as datas, mais antiga primeiro), com o saldo que falta receber
 async function contasDoCliente(env, contatoId) {
@@ -3369,7 +3374,7 @@ async function receberBaixar(env, b) {
     if (it.pedidoId && data) {
       const hist = 'Recebido no Sicoob em ' + brData(data) + (it.desc ? ' (' + String(it.desc).slice(0, 60) + ')' : '') + ' - contas do pedido lançadas e baixadas pelo cruzamento Sicoob × Bling (app Mais Acessível' + (b.usuario ? ', ' + String(b.usuario).slice(0, 40) : '') + ')';
       try {
-        const r = await executarContasPedido(env, { id: Number(it.pedidoId), historico: hist }, r2(it.valor), data);
+        const r = await executarContasPedido(env, { id: Number(it.pedidoId), historico: hist + (Number(it.desconto) ? ' - desconto R$ ' + Number(it.desconto).toFixed(2).replace('.', ',') : ''), desconto: r2(it.desconto || 0) }, r2(it.valor), data);
         await logAcao(env, { modo: 'real', origem: it.auto ? 'cruzamento-auto' : 'cruzamento', acao: 'contas_pedido', cliente: it.cliente || '', numero: it.numero || '', contaId: 0, valorBaixa: r2(it.valor), valor: r2(it.valor), data, resultado: r, por: b.usuario || '',
           detalhe: 'Pedido ' + (it.numero || it.pedidoId) + ' sem conta: contas lançadas e baixadas, R$ ' + r2(it.valor).toFixed(2) + ', data ' + brData(data) });
         out.push({ contaId: it.contaId, ok: /^ok/.test(r), resultado: r });
@@ -3378,7 +3383,7 @@ async function receberBaixar(env, b) {
     }
     const atraso = Number(it.atraso || 0);
     const historico = 'Recebido no Sicoob em ' + brData(data) + (it.desc ? ' (' + String(it.desc).slice(0, 60) + ')' : '') + (atraso > 0 ? ' com ' + atraso + (atraso === 1 ? ' dia' : ' dias') + ' de atraso (venc. ' + brData(it.venc) + ')' : atraso < 0 ? ' adiantado' : '') +
-      (Number(it.juros) ? ' - juros/multa R$ ' + Number(it.juros).toFixed(2).replace('.', ',') : '') + ' - baixa pelo cruzamento Sicoob × Bling (app Mais Acessível' + (b.usuario ? ', ' + String(b.usuario).slice(0, 40) : '') + ')';
+      (Number(it.juros) ? ' - juros/multa R$ ' + Number(it.juros).toFixed(2).replace('.', ',') : '') + (Number(it.desconto) ? ' - desconto R$ ' + Number(it.desconto).toFixed(2).replace('.', ',') : '') + ' - baixa pelo cruzamento Sicoob × Bling (app Mais Acessível' + (b.usuario ? ', ' + String(b.usuario).slice(0, 40) : '') + ')';
     try {
       const r = await executarBaixa(env, it.contaId, r2(it.valor), data, { historico, historicoConta: true, conferir: true, juros: r2(it.juros || 0), desconto: r2(it.desconto || 0) });
       await logAcao(env, { modo: 'real', origem: it.auto ? 'cruzamento-auto' : 'cruzamento', acao: 'baixa', cliente: it.cliente || '', numero: it.numero || '', contaId: it.contaId, valorBaixa: r2(it.valor), valor: r2(Number(it.valor) + Number(it.juros || 0)), data, resultado: r, por: b.usuario || '',
