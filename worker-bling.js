@@ -3084,6 +3084,15 @@ async function receberDia(env, dia, forcar) {
   if (sobraS.length) abertas = await contasAbertasJanela(env).catch(() => []);
   const reservadas = new Set();
   const abertasSicoob = abertas.filter(c => !ehBlingConta(c));
+  // boleto do arquivo cuja conta já não está em aberto: foi baixado no Bling em outra data (à mão) — conta como cruzado
+  if (sobraS.some(x => x.bol && x.bol.contaId) && abertas.length) {
+    const abertasIds = new Set(abertas.map(c => String(c.id)));
+    for (const x of sobraS.filter(x => x.bol && x.bol.contaId && !abertasIds.has(String(x.bol.contaId)))) {
+      x.par = [x.bol.contaId]; x.como = 'boleto Sicoob da NF ' + (x.bol.numero || nfDe(x.bol.seu)) + ' — baixado no Bling em outra data';
+      x.outraData = true; x.blingInfo = { id: x.bol.contaId, cliente: x.bol.nome || x.nome || '', numero: x.bol.numero || nfDe(x.bol.seu), origemTipo: 'notafiscal', valor: x.bol.titulo, venc: x.bol.venc };
+      x.juros = r2((x.bol.juros || 0) + (x.bol.multa || 0));
+    }
+  }
   for (const x of sobraS.filter(x => x.bol)) {
     const l = x.bol, nf = nfDe(l.seu);
     const c = abertasSicoob.find(c => String(c.id) === String(l.contaId)) || abertasSicoob.find(c => nf && String(Number(c.numero)) === nf && Math.abs(c.valor - l.titulo) <= 0.01);
@@ -3116,10 +3125,10 @@ async function receberDia(env, dia, forcar) {
   const resumo = {
     entradas: S.length, valorEntradas: r2(S.reduce((t, x) => t + x.valor, 0)),
     recebidosBling: bling.length, valorBling: r2(bling.reduce((t, c) => t + c.valor, 0)),
-    cruzados: pares.length, autos: autos.length, aBaixar: sobraS.filter(x => x.baixar).length, semConta: sobraS.filter(x => !x.baixar).length,
+    cruzados: pares.length + sobraS.filter(x => x.outraData).length, autos: autos.length, aBaixar: sobraS.filter(x => !x.outraData && x.baixar).length, semConta: sobraS.filter(x => !x.outraData && !x.baixar).length,
     blingSemBanco: sobraB.length, blingConta: blingConta.length, valorBlingConta: r2(blingConta.reduce((t, c) => t + c.valor, 0)), transferencias: transf.length,
   };
-  const limpa = x => ({ chave: x.chave, data: x.data, valor: x.valor, desc: x.desc, compl: x.compl, doc: x.doc, nome: x.nome, tipo: x.tipo, bol: x.bol, liqAviso: x.liqAviso,
+  const limpa = x => ({ outraData: x.outraData, blingInfo: x.blingInfo, chave: x.chave, data: x.data, valor: x.valor, desc: x.desc, compl: x.compl, doc: x.doc, nome: x.nome, tipo: x.tipo, bol: x.bol, liqAviso: x.liqAviso,
     par: x.par, como: x.como, juros: x.juros, desconto: x.desconto, auto: x.auto, baixar: x.baixar, sugestoes: x.sugestoes });
   const out = { ts: Date.now(), dia, resumo, sicoob: S.map(limpa), bling: bling.map(c => Object.assign({}, c, { auto: autoContas.has(String(c.id)), ligado: usadosB.has(String(c.id)) })),
     blingConta: blingConta.map(c => ({ id: c.id, valor: c.valor, cliente: c.cliente, numero: c.numero })), outrasContas: outrasContas.map(c => ({ id: c.id, valor: c.valor, cliente: c.cliente, numero: c.numero, portadorNome: c.portadorNome })),

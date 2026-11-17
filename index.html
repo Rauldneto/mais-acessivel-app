@@ -17363,12 +17363,21 @@ function sitLinhas(){
   var dias=sitDiasPer(),L=[],faltam=0;
   dias.forEach(function(d){var D=CRZ.det[d];if(!D||!D.resumo){faltam++;return;}var B={};(D.bling||[]).forEach(function(c){B[c.id]=c;});
     (D.sicoob||[]).forEach(function(x){
-      var cs=(x.par||[]).map(function(id){return B[id];}).filter(Boolean),c=cs[0];
-      var k=x.par?(x.auto?'auto':'manual'):x.tipo==='cartao'?'cartao':x.baixar?'falta':'semconta';
+      var cs=(x.par||[]).map(function(id){return B[id];}).filter(Boolean);if(!cs.length&&x.blingInfo)cs=[x.blingInfo];
+      var k=x.par?(x.auto?'auto':'manual'):x.tipo==='cartao'?'cartao':x.baixar?'falta':'semconta';if(x.par&&x.outraData)k='manual';
       L.push({k:k,dia:d,x:x,cs:cs,v:x.valor});
     });
     (D.bling||[]).filter(function(c){return !c.ligado;}).forEach(function(c){L.push({k:'semBanco',dia:d,c:c,v:c.valor});});
   });
+  // o que o Bling baixou num dia e o banco mostra em outro: junta os dois (data da baixa diferente da do extrato)
+  var usados={};L.forEach(function(l){if(l.x&&l.x.par)l.x.par.forEach(function(id){usados[id]=l;});});
+  L.filter(function(l){return l.k==='semBanco';}).forEach(function(l){
+    var p=usados[l.c.id];
+    if(!p){p=L.filter(function(o){return o.k==='semconta'&&!o.junto&&Math.abs(o.v-l.c.valor)<0.01&&o.x&&((o.x.doc&&l.c.doc&&o.x.doc.slice(0,8)===l.c.doc.slice(0,8))||(o.x.bol&&String(Number(String(o.x.bol.seu||'').split('/')[0]))===String(Number(l.c.numero))));})[0];
+      if(p){p.k='manual';p.junto=true;p.cs=[l.c];p.x=Object.assign({},p.x,{como:'baixado no Bling em '+blgData(l.dia)+' (data diferente do banco)'});}}
+    if(p)l.k='fora';
+  });
+  L=L.filter(function(l){return l.k!=='fora';});
   (SIT.venc||[]).forEach(function(c){L.push({k:'vencido',c:c,v:c.valor});});
   return {L:L,faltam:faltam,dias:dias.length};
 }
