@@ -177,59 +177,59 @@ function mostrarCheck(res,tabId,dados,continuar){
   if(cadItem)cadBind(cadItem.cad,tabId,dados,continuar,res);
 }
 
-// ====================== CAMPANHA: CONFIRMAR TELEFONE E E-MAIL ======================
+// ====================== CAMPANHA: CADASTRO ATUALIZADO? (pergunta 1x por cliente) ======================
 function cadDigP(s){var d=String(s||'').replace(/\D/g,'');if(d.length===13&&d.indexOf('55')===0)d=d.slice(2);if(d.length===12&&d.charAt(0)==='0')d=d.slice(1);return d;}
 function cadFmtP(s){var d=cadDigP(s);if(d.length===11)return '('+d.slice(0,2)+') '+d.slice(2,7)+'-'+d.slice(7);if(d.length===10)return '('+d.slice(0,2)+') '+d.slice(2,6)+'-'+d.slice(6);return String(s||'');}
 function cadHtml(c){
-  function lin(ic,rot,v){return '<div style="display:flex;gap:6px;padding:2px 0"><span style="width:16px">'+ic+'</span><span style="color:#64748b;width:58px">'+rot+'</span><b style="color:'+(v?'#0f172a':'#dc2626')+'">'+(v?esc(v):'(vazio)')+'</b></div>';}
-  var inp='width:100%;padding:6px 7px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;margin-top:2px';
+  var ems=String(c.email||'').split(/[;,\s]+/).filter(Boolean);
+  function lin(ic,rot,v){return '<div style="display:flex;gap:6px;padding:2px 0"><span style="width:16px">'+ic+'</span><span style="color:#64748b;width:52px;flex-shrink:0">'+rot+'</span><b style="color:'+(v?'#0f172a':'#dc2626')+';word-break:break-all">'+(v||'(vazio)')+'</b></div>';}
+  var inp='width:100%;padding:6px 7px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;margin-top:2px;font-family:inherit';
+  var btn='flex:1;padding:8px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;';
+  var resp='<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:6px;padding:6px 8px;color:#9a3412;font-size:11.5px;margin:6px 0">⚠️ <b><span class="cadNome">Você</span></b>, ao confirmar você fica registrado como <b>responsável</b> por estes dados do cliente.</div>';
   return '<div id="cadBox" style="margin-top:7px;background:#fff;border:1px solid #fecaca;border-radius:8px;padding:8px;font-size:11.5px">'+
     '<div style="font-size:10.5px;color:#64748b;margin-bottom:3px">Hoje no Bling:</div>'+
-    lin('📱','Celular',c.celular)+lin('☎️','Telefone',c.fone)+lin('✉️','E-mail',c.email)+
-    '<div id="cadVer" style="display:flex;gap:6px;margin-top:7px">'+
-      '<button id="cadOk" style="flex:1;padding:8px;border:none;border-radius:6px;background:#16a34a;color:#fff;font-weight:700;font-size:12px;cursor:pointer">✔ Está tudo certo</button>'+
-      '<button id="cadEdit" style="flex:1;padding:8px;border:1px solid #cbd5e1;border-radius:6px;background:#f8fafc;color:#0f172a;font-weight:700;font-size:12px;cursor:pointer">✏️ Corrigir</button>'+
-    '</div>'+
+    lin('📱','Celular',esc(c.celular))+lin('☎️','Telefone',esc(c.fone))+lin('✉️','E-mail',ems.map(esc).join('<br>'))+
+    '<div id="cadP1" style="margin-top:7px"><div style="font-weight:800;color:#0f172a;margin-bottom:5px">O cliente confirmou que está atualizado?</div><div style="display:flex;gap:6px">'+
+      '<button id="cadSim" style="'+btn+'border:none;background:#16a34a;color:#fff">✔ Sim, está atualizado</button>'+
+      '<button id="cadEdit" style="'+btn+'border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a">✏️ Não, corrigir</button></div></div>'+
+    '<div id="cadP2" style="display:none">'+resp+'<div style="display:flex;gap:6px">'+
+      '<button id="cadOk" style="'+btn+'border:none;background:#16a34a;color:#fff">✔ Confirmo, sou o responsável</button>'+
+      '<button class="cadVolta" style="'+btn+'flex:0 0 70px;border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a">Voltar</button></div></div>'+
     '<div id="cadForm" style="display:none;margin-top:7px">'+
       '<label style="display:block;margin-bottom:5px">📱 Celular / WhatsApp<input id="cadCel" style="'+inp+'" placeholder="(62) 99999-9999" value="'+esc(c.celular)+'"></label>'+
-      '<label style="display:block;margin-bottom:5px">☎️ Telefone fixo <span style="color:#94a3b8">(se tiver)</span><input id="cadFone" style="'+inp+'" placeholder="(62) 3333-4444" value="'+esc(c.fone)+'"></label>'+
-      '<label style="display:block;margin-bottom:6px">✉️ E-mail<input id="cadEmail" style="'+inp+'" placeholder="compras@empresa.com.br" value="'+esc(c.email)+'"></label>'+
-      '<button id="cadSalvar" style="width:100%;padding:8px;border:none;border-radius:6px;background:#2563eb;color:#fff;font-weight:700;font-size:12px;cursor:pointer">💾 Salvar no Bling e confirmar</button>'+
+      '<label style="display:block;margin-bottom:5px">☎️ Telefone fixo<input id="cadFone" style="'+inp+'" placeholder="(62) 3333-4444" value="'+esc(c.fone)+'"></label>'+
+      '<label style="display:block;margin-bottom:4px">✉️ E-mail <span style="color:#94a3b8">(mais de um: separe com ;)</span><textarea id="cadEmail" rows="2" style="'+inp+';resize:vertical">'+esc(ems.join('; '))+'</textarea></label>'+
+      resp+'<div style="display:flex;gap:6px">'+
+      '<button id="cadSalvar" style="'+btn+'border:none;background:#2563eb;color:#fff">💾 Salvar no Bling e confirmar</button>'+
+      '<button class="cadVolta" style="'+btn+'flex:0 0 70px;border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a">Voltar</button></div>'+
     '</div>'+
     '<div id="cadMsg" style="margin-top:6px;font-size:11.5px"></div>'+
-    '<div style="font-size:10px;color:#94a3b8;margin-top:4px">Confirme com o cliente antes. Depois de confirmado, este cliente não pede mais.</div>'+
   '</div>';
 }
-function cadValidarP(cel,fone,email){
-  var p=[],c=cadDigP(cel),f=cadDigP(fone),e=String(email||'').trim().toLowerCase();
-  if(!c&&!f)p.push('Informe ao menos um telefone');
-  if(c&&!(c.length===11&&c.charAt(2)==='9'))p.push('Celular: DDD + 9 dígitos');
-  if(f&&!(f.length===10||f.length===11))p.push('Telefone: DDD + número');
-  if(!e)p.push('Informe o e-mail');
-  else if(!/^[^\s@,;]+@[^\s@,;]+\.[a-z]{2,}$/.test(e))p.push('E-mail inválido (só um, sem espaço)');
-  return p;
-}
 function cadBind(c,tabId,dados,continuar,res){
-  var msg=document.getElementById('cadMsg');
+  var g=function(id){return document.getElementById(id);};
+  var msg=g('cadMsg');
+  chrome.storage.local.get(['appUsuario'],function(o){var n=(o&&o.appUsuario)||'';if(n)document.querySelectorAll('.cadNome').forEach(function(s){s.textContent=n;});});
+  function tela(qual){g('cadP1').style.display=qual===1?'block':'none';g('cadP2').style.display=qual===2?'block':'none';g('cadForm').style.display=qual===3?'block':'none';msg.innerHTML='';}
   function aviso(t,cor){msg.innerHTML='<div style="color:'+(cor||'#b91c1c')+'">'+t+'</div>';}
-  function enviar(cel,fone,email,btn){
-    var p=cadValidarP(cel,fone,email);
-    if(p.length){aviso('⚠️ '+esc(p.join(' • '))+(btn.id==='cadOk'?'<br>Use <b>✏️ Corrigir</b>.':''));return;}
+  function enviar(corrigir,btn){
+    var m={action:'cadastroConfirmar',id:c.id,nome:c.nome,numero:res.numeroProposta,corrigir:corrigir};
+    if(corrigir){m.celular=g('cadCel').value;m.fone=g('cadFone').value;m.email=g('cadEmail').value;}
     var txt=btn.textContent;btn.disabled=true;btn.textContent='⏳ Gravando...';
-    chrome.tabs.sendMessage(tabId,{action:'cadastroConfirmar',id:c.id,nome:c.nome,celular:cel,fone:fone,email:email,numero:res.numeroProposta},function(r){
+    chrome.tabs.sendMessage(tabId,m,function(r){
       btn.disabled=false;btn.textContent=txt;
       if(chrome.runtime.lastError||!r){aviso('⚠️ Não consegui falar com a página do Bling. Recarregue (F5) e tente de novo.');return;}
       if(!r.ok){aviso('⚠️ '+esc(r.erro||'Falhou'));return;}
-      aviso(r.alterou?'✅ Cadastro atualizado no Bling e confirmado!':'✅ Cadastro confirmado!','#15803d');
-      setTimeout(function(){pedirCheck(tabId,function(r2){mostrarCheck(r2,tabId,dados,continuar);});},900);
+      aviso((r.alterou?'✅ Cadastro atualizado no Bling.':'✅ Cadastro confirmado.')+' Responsável: <b>'+esc(r.responsavel||'você')+'</b>','#15803d');
+      setTimeout(function(){pedirCheck(tabId,function(r2){mostrarCheck(r2,tabId,dados,continuar);});},1200);
     });
   }
-  document.getElementById('cadOk').onclick=function(){enviar(c.celular,c.fone,c.email,this);};
-  document.getElementById('cadEdit').onclick=function(){document.getElementById('cadForm').style.display='block';document.getElementById('cadVer').style.display='none';msg.innerHTML='';document.getElementById('cadCel').focus();};
-  ['cadCel','cadFone'].forEach(function(id){var e=document.getElementById(id);e.onblur=function(){if(cadDigP(e.value).length>=10)e.value=cadFmtP(e.value);};});
-  document.getElementById('cadSalvar').onclick=function(){
-    enviar(document.getElementById('cadCel').value,document.getElementById('cadFone').value,document.getElementById('cadEmail').value.trim(),this);
-  };
+  g('cadSim').onclick=function(){tela(2);};
+  g('cadEdit').onclick=function(){tela(3);g('cadCel').focus();};
+  document.querySelectorAll('.cadVolta').forEach(function(b){b.onclick=function(){tela(1);};});
+  g('cadOk').onclick=function(){enviar(false,this);};
+  ['cadCel','cadFone'].forEach(function(id){var e=g(id);e.onblur=function(){if(cadDigP(e.value).length>=10)e.value=cadFmtP(e.value);};});
+  g('cadSalvar').onclick=function(){enviar(true,this);};
 }
 
 // ====================== 💡 PRODUTOS QUE COSTUMAM IR JUNTO ======================

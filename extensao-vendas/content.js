@@ -156,92 +156,109 @@ async function aguardarFormulario() {
   return false;
 }
 
-// ====================== CAMPANHA: CADASTRO CONFIRMADO (v2.6.8) ======================
-// Cada cliente precisa ter telefone/e-mail CONFIRMADOS com ele uma vez (selo em cadastroConfirmado/{idContato}).
-// Sem selo = erro no Check (proposta não fica COMPLETA). Confirmou uma vez, não pede mais.
-var CAD_NO = 'cadastroConfirmado';
+// ====================== CAMPANHA: CADASTRO CONFIRMADO (v2.6.9) ======================
+// Cada cliente é perguntado UMA vez: "o cadastro (telefone/e-mail) está atualizado?".
+// Quem responde fica registrado como RESPONSÁVEL pelos dados (selo em cadastroConfirmado/{idContato}).
+// O mesmo cliente não é cobrado 2x: vale o ID do contato e também o CPF/CNPJ (cadastroConfirmadoDoc/{doc} -> idContato),
+// assim um cadastro duplicado da mesma empresa não pergunta de novo.
+var CAD_NO = 'cadastroConfirmado', CAD_DOC = 'cadastroConfirmadoDoc';
 function cadDig(s) { var d = String(s || '').replace(/\D/g, ''); if (d.length === 13 && d.indexOf('55') === 0) d = d.slice(2); if (d.length === 12 && d.indexOf('0') === 0) d = d.slice(1); return d; }
 function cadFmt(s) { var d = cadDig(s); if (d.length === 11) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7); if (d.length === 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6); return String(s || '').trim(); }
-// Regras dos dados confirmados. Devolve lista de problemas (vazia = ok).
+function cadDoc(s) { var d = String(s || '').replace(/\D/g, ''); return (d.length === 11 || d.length === 14) ? d : ''; }
+function cadEmails(s) { return String(s || '').split(/[;,\s]+/).map(function(x) { return x.trim(); }).filter(Boolean); }
+// Só para a CORREÇÃO (dados novos digitados). Confirmar "está atualizado" não tem validação.
 function cadValidar(cel, fone, email) {
-  var p = [], c = cadDig(cel), f = cadDig(fone), e = String(email || '').trim().toLowerCase();
-  if (!c && !f) p.push('Informe ao menos um telefone (de preferência o celular/WhatsApp)');
-  if (c && !(c.length === 11 && c.charAt(2) === '9' && parseInt(c.slice(0, 2), 10) >= 11)) p.push('Celular inválido: use DDD + 9 dígitos, ex.: (62) 99999-9999');
-  if (f && !((f.length === 10 || f.length === 11) && parseInt(f.slice(0, 2), 10) >= 11)) p.push('Telefone fixo inválido: use DDD + número, ex.: (62) 3333-4444');
-  if (c && /^(\d)\1+$/.test(c.slice(2))) p.push('Celular parece falso (números repetidos)');
-  if (!e) p.push('Informe o e-mail');
-  else if (e.indexOf(',') > -1 || e.indexOf(';') > -1 || /\s/.test(e)) p.push('Coloque só UM e-mail (sem vírgula ou espaço)');
-  else if (!/^[a-z0-9._%+\-]+@[a-z0-9\-]+(\.[a-z0-9\-]+)*\.[a-z]{2,}$/.test(e)) p.push('E-mail inválido');
-  else if (/^(nao|n|sem|semmail|sememail|naotem|naopossui|teste|test|xxx+|aaa+|email|nenhum)[@.]|@(teste|test|email|naotem)\./.test(e.normalize('NFD').replace(/[̀-ͯ]/g, ''))) p.push('E-mail parece falso — peça o e-mail verdadeiro ao cliente');
+  var p = [], c = cadDig(cel), f = cadDig(fone), ems = cadEmails(email);
+  if (!c && !f && !ems.length) p.push('Preencha pelo menos um telefone ou e-mail');
+  if (c && c.length < 10) p.push('Celular incompleto (falta o DDD?)');
+  if (f && f.length < 10) p.push('Telefone incompleto (falta o DDD?)');
+  ems.forEach(function(e) { if (!/^[^@]+@[^@]+\.[a-z]{2,}$/i.test(e)) p.push('E-mail "' + e + '" incompleto'); });
   return p;
 }
-async function cadSelo(idContato) {
-  try {
-    var x = await fetch(FB_DB + '/' + CAD_NO + '/' + encodeURIComponent(idContato) + '.json');
-    if (!x.ok) return { falha: 'HTTP ' + x.status };
-    return { selo: await x.json() };
-  } catch (e) { return { falha: 'sem conexão' }; }
+async function cadGet(path) {
+  try { var x = await fetch(FB_DB + '/' + path + '.json'); if (!x.ok) return { falha: 'HTTP ' + x.status }; return { v: await x.json() }; }
+  catch (e) { return { falha: 'sem conexão' }; }
 }
-var _cadMapa = null, _cadMapaTs = 0;
-async function cadMapa() { // só as chaves (quem já confirmou), para a conferência em lote do app
+async function cadSelo(idContato, doc) {
+  var r = await cadGet(CAD_NO + '/' + encodeURIComponent(idContato));
+  if (r.falha) return { falha: r.falha };
+  if (r.v && r.v.ts) return { selo: r.v };
+  doc = cadDoc(doc);
+  if (doc) { // outro cadastro com o mesmo CPF/CNPJ já foi confirmado?
+    var d = await cadGet(CAD_DOC + '/' + doc);
+    if (d.v) { var s = await cadGet(CAD_NO + '/' + encodeURIComponent(d.v)); if (s.v && s.v.ts) return { selo: s.v, porDoc: true }; }
+  }
+  return { selo: null };
+}
+var _cadMapa = null, _cadDocs = null, _cadMapaTs = 0;
+async function cadMapa() { // quem já confirmou (IDs e CPF/CNPJ), para a conferência em lote do app
   if (_cadMapa && Date.now() - _cadMapaTs < 120000) return _cadMapa;
-  try { var x = await fetch(FB_DB + '/' + CAD_NO + '.json?shallow=true'); if (x.ok) { _cadMapa = (await x.json()) || {}; _cadMapaTs = Date.now(); } } catch (e) {}
+  try {
+    var x = await fetch(FB_DB + '/' + CAD_NO + '.json?shallow=true'), y = await fetch(FB_DB + '/' + CAD_DOC + '.json?shallow=true');
+    if (x.ok) { _cadMapa = (await x.json()) || {}; _cadDocs = y.ok ? ((await y.json()) || {}) : {}; _cadMapaTs = Date.now(); }
+  } catch (e) {}
   return _cadMapa;
 }
-// Confirma (e, se mudou, grava no Bling) o cadastro do cliente e marca o selo.
+function cadOkLote(c) {
+  if (!_cadMapa || !c) return true; // sem dados: não acusa
+  if (_cadMapa[String(c.id)]) return true;
+  var doc = cadDoc(c.cnpj || c.cpf_cnpj || c.numeroDocumento);
+  return !!(doc && _cadDocs && _cadDocs[doc]);
+}
+// req.corrigir = false: só registra "está atualizado" (responsável = quem confirmou).
+// req.corrigir = true : grava os dados novos no Bling e registra.
 async function cadConfirmar(req) {
   var id = String(req.id || '').replace(/\D/g, '');
   if (!id) return { ok: false, erro: 'Cliente sem ID' };
-  var cel = cadDig(req.celular), fone = cadDig(req.fone), email = String(req.email || '').trim().toLowerCase();
-  var prob = cadValidar(cel, fone, email);
-  if (prob.length) return { ok: false, erro: prob.join(' • ') };
   var H = { Accept: 'application/json', 'Content-Type': 'application/json' };
   var g = await fetch('/Api/v3/contatos/listagem/' + id, { credentials: 'include', headers: H });
   if (g.status === 401 || g.status === 403) return { ok: false, erro: 'Sessão do Bling expirada. Entre de novo no Bling.' };
   var a = g.ok ? ((await g.json()) || {}).data : null;
   if (!a || !(a.id || a.nome)) return { ok: false, erro: 'Não consegui abrir o cadastro no Bling (' + g.status + ')' };
-  var antes = { celular: cadDig(a.celular), fone: cadDig(a.fone), email: String(a.email || '').trim().toLowerCase() };
-  var mudou = antes.celular !== cel || antes.fone !== fone || antes.email !== email;
+  var antes = { celular: String(a.celular || '').trim(), fone: String(a.fone || '').trim(), email: String(a.email || '').trim() };
+  var novo = antes, mudou = false;
+  if (req.corrigir) {
+    var prob = cadValidar(req.celular, req.fone, req.email);
+    if (prob.length) return { ok: false, erro: prob.join(' • ') };
+    novo = { celular: cadDig(req.celular) ? cadFmt(req.celular) : '', fone: cadDig(req.fone) ? cadFmt(req.fone) : '', email: cadEmails(req.email).join('; ') };
+    mudou = cadDig(novo.celular) !== cadDig(antes.celular) || cadDig(novo.fone) !== cadDig(antes.fone) || novo.email.toLowerCase() !== cadEmails(antes.email).join('; ').toLowerCase();
+  }
   if (mudou) {
     var b = JSON.parse(JSON.stringify(a));
-    b.celular = cel ? cadFmt(cel) : ''; b.fone = fone ? cadFmt(fone) : ''; b.email = email;
-    if (!String(a.email_nfe || '').trim() || String(a.email_nfe).trim().toLowerCase() === antes.email) b.email_nfe = email; // e-mail da NF acompanha, se estava vazio ou igual
+    b.celular = novo.celular; b.fone = novo.fone; b.email = novo.email;
+    if (!String(a.email_nfe || '').trim() || String(a.email_nfe).trim().toLowerCase() === antes.email.toLowerCase()) b.email_nfe = novo.email;
     var lim = numBR(a.limiteCredito);
-    var tentativas = lim > 0 ? [a.limiteCredito, lim] : [null]; // o Bling recusa "0,00"; vazio mantém sem limite
+    var tentativas = lim > 0 ? [a.limiteCredito, lim] : [null]; // o Bling recusa "0,00"; vazio = sem limite
     var r = null, j = null;
     for (var i = 0; i < tentativas.length; i++) {
       b.limiteCredito = tentativas[i];
       r = await fetch('/Api/v3/contatos/' + id, { method: 'PUT', credentials: 'include', headers: H, body: JSON.stringify(b) });
       if (r.ok) break;
       j = await r.json().catch(function() { return null; });
-      var campos = (j && j.error && j.error.fields) || [];
-      if (!campos.some(function(f) { return f.element === 'limiteCredito'; })) break;
+      if (!(((j && j.error && j.error.fields) || []).some(function(f) { return f.element === 'limiteCredito'; }))) break;
     }
     if (!r.ok) {
       var f = j && j.error && j.error.fields;
       return { ok: false, erro: 'O Bling não aceitou a alteração: ' + (f && f.length ? f.map(function(x) { return x.msg; }).join('; ') : ((j && j.error && (j.error.description || j.error.message)) || ('HTTP ' + r.status))) + '. Corrija direto no cadastro do Bling.' };
     }
-    // confere se gravou e se nada mais mudou
     var d = ((await (await fetch('/Api/v3/contatos/listagem/' + id, { credentials: 'include', headers: H })).json()) || {}).data || {};
-    if (cadDig(d.celular) !== cel || cadDig(d.fone) !== fone || String(d.email || '').trim().toLowerCase() !== email)
-      return { ok: false, erro: 'O Bling não gravou os novos dados. Corrija direto no cadastro do Bling.' };
-    if (numBR(d.limiteCredito) !== lim) { // segurança: devolve o limite de crédito se o Bling mexeu
-      var b2 = JSON.parse(JSON.stringify(d)); b2.limiteCredito = lim > 0 ? a.limiteCredito : null;
-      await fetch('/Api/v3/contatos/' + id, { method: 'PUT', credentials: 'include', headers: H, body: JSON.stringify(b2) }).catch(function() {});
-    }
+    if (cadDig(d.celular) !== cadDig(novo.celular) || cadDig(d.fone) !== cadDig(novo.fone)) return { ok: false, erro: 'O Bling não gravou os novos dados. Corrija direto no cadastro do Bling.' };
+    if (numBR(d.limiteCredito) !== lim) { var b2 = JSON.parse(JSON.stringify(d)); b2.limiteCredito = lim > 0 ? a.limiteCredito : null; await fetch('/Api/v3/contatos/' + id, { method: 'PUT', credentials: 'include', headers: H, body: JSON.stringify(b2) }).catch(function() {}); }
   }
   var u = await usuarioBling();
   var st = await new Promise(function(ok) { try { chrome.storage.local.get(['appUsuario'], function(o) { void chrome.runtime.lastError; ok(o || {}); }); } catch (e) { ok({}); } });
+  var doc = cadDoc(a.cnpj || a.cpf_cnpj);
   var selo = {
     ts: Date.now(), u: st.appUsuario || (u.nome || u.login || '').trim(), ub: (u.nome || u.login || '').trim(),
-    cli: a.nome || req.nome || '', celular: cel, fone: fone, email: email, alterou: mudou,
+    cli: a.nome || req.nome || '', doc: doc, celular: novo.celular, fone: novo.fone, email: novo.email, alterou: mudou,
     prop: String(req.numero || fld('numeroProposta') || '')
   };
   if (mudou) selo.antes = antes;
   var w = await fetch(FB_DB + '/' + CAD_NO + '/' + id + '.json', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(selo) }).catch(function() { return null; });
-  if (!w || !w.ok) return { ok: false, gravouBling: mudou, erro: (mudou ? 'Dados gravados no Bling, mas ' : '') + 'não consegui registrar a confirmação (abra o app neste computador e entre com seu login, depois tente de novo)' };
-  if (_cadMapa) _cadMapa[id] = true;
-  return { ok: true, alterou: mudou };
+  if (!w || !w.ok) return { ok: false, erro: (mudou ? 'Dados gravados no Bling, mas ' : '') + 'não consegui registrar a confirmação (abra o app neste computador e entre com seu login, depois tente de novo)' };
+  if (doc) await fetch(FB_DB + '/' + CAD_DOC + '/' + doc + '.json', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(id) }).catch(function() {});
+  if (_cadMapa) _cadMapa[id] = true; if (_cadDocs && doc) _cadDocs[doc] = id;
+  return { ok: true, alterou: mudou, responsavel: selo.u };
 }
 
 async function checarProposta() {
@@ -276,16 +293,13 @@ async function checarProposta() {
         ? item('Cliente', 'Cadastro do cliente', 'erro', 'Falta no cadastro: ' + faltas.join(', '))
         : item('Cliente', 'Cadastro do cliente', 'ok', nomeContato));
       // Campanha: telefone/e-mail confirmados com o cliente (uma vez por cliente)
-      var sl = await cadSelo(c.id || idContato);
-      var dadosCad = { id: String(c.id || idContato), nome: c.nome || nomeContato, celular: cadFmt(c.celular), fone: cadFmt(c.fone), email: String(c.email || '').trim() };
-      if (sl.falha) {
-        var itF = item('Cliente', 'Atualizar cadastro (telefone e e-mail)', 'erro', 'Não consegui conferir se o cadastro já foi confirmado (' + sl.falha + '). Abra o app neste computador e entre com seu login, ou confirme abaixo.');
-        itF.cad = dadosCad; r.push(itF);
-      } else if (sl.selo && sl.selo.ts) {
+      var sl = await cadSelo(c.id || idContato, c.cpf_cnpj);
+      var dadosCad = { id: String(c.id || idContato), nome: c.nome || nomeContato, celular: String(c.celular || '').trim(), fone: String(c.fone || '').trim(), email: String(c.email || '').trim() };
+      if (sl.selo && sl.selo.ts) {
         var dt = new Date(sl.selo.ts);
-        r.push(item('Cliente', 'Cadastro confirmado', 'ok', 'Telefone e e-mail confirmados' + (sl.selo.u ? ' por ' + sl.selo.u : '') + ' em ' + String(dt.getDate()).padStart(2, '0') + '/' + String(dt.getMonth() + 1).padStart(2, '0') + '/' + dt.getFullYear()));
+        r.push(item('Cliente', 'Cadastro confirmado', 'ok', 'Responsável: ' + (sl.selo.u || '?') + ' em ' + String(dt.getDate()).padStart(2, '0') + '/' + String(dt.getMonth() + 1).padStart(2, '0') + '/' + dt.getFullYear() + (sl.porDoc ? ' (mesmo CNPJ, outro cadastro)' : '')));
       } else {
-        var it = item('Cliente', 'Atualizar cadastro (telefone e e-mail)', 'erro', 'Confirme com o cliente o celular/WhatsApp, o telefone e o e-mail. Se algo mudou, corrija aqui mesmo.');
+        var it = item('Cliente', 'O cadastro do cliente está atualizado?', 'erro', sl.falha ? 'Não consegui ver se já foi confirmado (' + sl.falha + '). Responda abaixo.' : 'Pergunte ao cliente e responda abaixo (uma vez por cliente).');
         it.cad = dadosCad; r.push(it);
       }
     }
@@ -494,7 +508,7 @@ function regrasApi(d) {
     if (vazio(c.fone) && vazio(c.celular)) f.push('telefone');
     if (vazio(c.email) && vazio(c.email_nfe)) f.push('e-mail');
     if (f.length) erro('Cadastro do cliente', 'Falta no cadastro: ' + f.join(', '));
-    if (_cadMapa && !_cadMapa[String(c.id)]) erro('Cadastro não confirmado', 'Confirme telefone e e-mail com o cliente (botão ✅ Check Proposta da extensão)');
+    if (!cadOkLote(c)) erro('Cadastro não confirmado', 'Pergunte ao cliente se o telefone e o e-mail estão atualizados (✅ Check Proposta da extensão)');
   }
   if (vazio(d.contatoAc)) erro('Aos cuidados de', 'Informe o nome do comprador');
   if (!d.loja || String(d.loja.id) !== String(LOTE.lojaId)) erro('Loja', 'Selecione a loja Mais Acessível');
@@ -555,7 +569,7 @@ async function auditarProposta(id) {
   return {
     id: id, numero: d.numero, data: d.data, situacao: d.situacao, total: d.total,
     cliente: (d.contato && d.contato.nome) || '', vendedor: d.nomeVendedor || '', ac: d.contatoAc || '',
-    cid: (d.contato && d.contato.id) || '', cadOk: !!(d.contato && _cadMapa && _cadMapa[String(d.contato.id)]),
+    cid: (d.contato && d.contato.id) || '', cadOk: !!(d.contato && _cadMapa && cadOkLote(d.contato)),
     cidade: (d.contato && d.contato.cidade) || '', uf: (d.contato && d.contato.uf) || '',
     fone: d.contato ? [d.contato.celular, d.contato.fone].filter(function(x) { return x && String(x).replace(/\D/g, '').length >= 8; }).join(' / ') : '',
     itens: (d.itens || []).map(function(it) { return { codigo: it.codigo || '', descricao: it.descricao || (it.produto && it.produto.descricao) || '', qtd: it.quantidade, v: numX(it.valor) }; }),
