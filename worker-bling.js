@@ -2977,7 +2977,7 @@ async function ddaPendenteResolver(env, b) {
 // O que entrou no Sicoob e não tem baixa no Bling: procura a conta em aberto e sugere a baixa (o Raul confirma).
 // O que foi baixado no Bling (conta Sicoob) e não aparece no extrato: aparece para corrigir.
 const CONTA_SICOOB_BLING = 14890739452;
-const RECDIA_VER = 7;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
+const RECDIA_VER = 8;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
 function tipoCredito(desc, doc) {
   const d = semAcento(desc);
   if (doc && doc === ECONF_CNPJ) return 'transf';
@@ -3184,17 +3184,22 @@ async function receberDia(env, dia, forcar) {
     const usadosP = new Set();
     for (const x of semConta) {
       const cs = peds.filter(p => !usadosP.has(p.id)).map(p => { const v = Number(p.aReceber || p.total), doc = mesmoDoc(x.doc, dig(p.doc)), nomes = nomesComuns(x.nome, p.cliente);
-          const exato = Math.abs(v - x.valor) <= 0.01, descP = !exato && (doc || nomes >= 2) && (p.parcelas || []).length <= 1 ? descontoRedondo(x.valor, v) : 0;
-          return exato || descP ? { p, doc, nomes, descP, v } : null; }).filter(Boolean)
+          const parcs = p.parcelas || [];
+          // o cliente pode pagar uma das parcelas do pedido: compara com cada parcela (e com o total)
+          const parc = parcs.length > 1 ? parcs.find(q => Math.abs(Number(q.valor) - x.valor) <= 0.01) : null;
+          const exato = Math.abs(v - x.valor) <= 0.01 || !!parc, descP = !exato && (doc || nomes >= 2) && parcs.length <= 1 ? descontoRedondo(x.valor, v) : 0;
+          return exato || descP ? { p, doc, nomes, descP, v, parc: Math.abs(v - x.valor) > 0.01 && parc ? parc : null } : null; }).filter(Boolean)
         .sort((a, b) => (b.doc - a.doc) || (b.nomes - a.nomes) || (a.descP - b.descP));
       if (!cs.length) continue;
       const m = cs[0], unico = cs.length === 1 || (m.doc && !cs[1].doc) || (m.nomes > cs[1].nomes);
       if (!m.doc && !m.nomes && !unico) continue;
       usadosP.add(m.p.id);
-      const venc = (m.p.parcelas && m.p.parcelas[0] && m.p.parcelas[0].venc) || m.p.venc || dia;
-      x.baixar = { pedidoId: m.p.id, contaId: 'p' + m.p.id, valor: m.descP ? r2(m.v) : x.valor, juros: 0, desconto: m.descP ? r2(m.v - x.valor) : 0, data: dia, venc, atraso: diasAtraso(dia, venc), cliente: m.p.cliente, docCliente: dig(m.p.doc), numero: m.p.numero, origemTipo: 'venda',
+      const venc = (m.parc && m.parc.venc) || (m.p.parcelas && m.p.parcelas[0] && m.p.parcelas[0].venc) || m.p.venc || dia;
+      const nP = (m.p.parcelas || []).length, iP = m.parc ? m.p.parcelas.indexOf(m.parc) + 1 : 0;
+      x.baixar = { pedidoId: m.p.id, parcela: m.parc ? { venc: m.parc.venc, valor: r2(m.parc.valor) } : null, contaId: 'p' + m.p.id, valor: m.descP ? r2(m.v) : x.valor, juros: 0, desconto: m.descP ? r2(m.v - x.valor) : 0, data: dia, venc, atraso: diasAtraso(dia, venc), cliente: m.p.cliente, docCliente: dig(m.p.doc), numero: m.p.numero, origemTipo: 'venda',
         forte: (m.doc || m.nomes >= 1) && unico,
-        motivo: 'pedido de venda ' + m.p.numero + ' (sem conta lançada) ' + (m.descP ? 'pago com ' + String(m.descP).replace('.', ',') + '% de desconto (R$ ' + r2(m.v - x.valor).toFixed(2).replace('.', ',') + ')' : 'com o mesmo valor') + (m.doc ? ' e mesmo CPF/CNPJ' : m.nomes ? ' e nome parecido' : ' (único com esse valor)') + ' — o app lança as contas do pedido e dá baixa' };
+        motivo: 'pedido de venda ' + m.p.numero + ' (sem conta lançada) ' + (m.parc ? 'parcela ' + iP + ' de ' + nP + ' (R$ ' + r2(m.parc.valor).toFixed(2).replace('.', ',') + ', venc. ' + brData(m.parc.venc) + ')' : m.descP ? 'pago com ' + String(m.descP).replace('.', ',') + '% de desconto (R$ ' + r2(m.v - x.valor).toFixed(2).replace('.', ',') + ')' : 'com o mesmo valor') +
+          (m.doc ? ' e mesmo CPF/CNPJ' : m.nomes ? ' e nome parecido' : ' (único com esse valor)') + (m.parc ? ' — o app lança as contas do pedido e baixa só esta parcela; as outras ficam em aberto' : ' — o app lança as contas do pedido e dá baixa') };
     }
   }
   // ficou sem conta: opções entre as contas em atraso (até 5 anos) — você escolhe de qual cliente é
@@ -3378,7 +3383,7 @@ async function receberBaixar(env, b) {
         const pago = r2(Number(it.valor) - Number(it.desconto || 0) + Number(it.juros || 0));
         const pedAt = ((await bling(env, '/pedidos/vendas/' + Number(it.pedidoId)).catch(() => null)) || {}).data || {};
         const parcs = pedAt.parcelas || [], igual = parcs.find(q => Math.abs(Number(q.valor) - pago) <= 0.01);
-        let valorB = r2(it.valor), desc = r2(it.desconto || 0), parcela = null;
+        let valorB = r2(it.valor), desc = r2(it.desconto || 0), parcela = it.parcela && it.parcela.valor ? { venc: soData(it.parcela.venc), valor: r2(it.parcela.valor) } : null;
         if (parcs.length > 1 && igual) { valorB = pago; desc = 0; parcela = { venc: soData(igual.dataVencimento), valor: r2(igual.valor) }; }
         else if (parcs.length > 1 && desc) { out.push({ contaId: it.contaId, ok: false, erro: 'O pedido agora tem ' + parcs.length + ' parcelas e nenhuma é de R$ ' + pago.toFixed(2) + ': confira e baixe à mão.' }); continue; }
         const r = await executarContasPedido(env, { id: Number(it.pedidoId), parcela, historico: hist + (desc ? ' - desconto R$ ' + desc.toFixed(2).replace('.', ',') : ''), desconto: desc }, valorB, data);
@@ -3568,7 +3573,7 @@ async function receberAuto(env) {
   let feitas = 0;
   if (fortes.length) {
     const res = await receberBaixar(env, { dia, usuario: 'automático', itens: fortes.map(x => ({ contaId: x.baixar.contaId, valor: x.baixar.valor, juros: x.baixar.juros, desconto: x.baixar.desconto || 0, data: x.data,
-      atraso: x.baixar.atraso, venc: x.baixar.venc, desc: (x.tipo === 'pix' ? 'PIX' : x.tipo === 'boleto' ? 'Boleto Sicoob' : 'Crédito') + (x.nome ? ' de ' + x.nome : ''), auto: true, cliente: x.baixar.cliente, numero: x.baixar.numero, partes: x.baixar.partes, chave: x.chave, contatoId: x.baixar.contatoId, pedidoId: x.baixar.pedidoId })) });
+      atraso: x.baixar.atraso, venc: x.baixar.venc, desc: (x.tipo === 'pix' ? 'PIX' : x.tipo === 'boleto' ? 'Boleto Sicoob' : 'Crédito') + (x.nome ? ' de ' + x.nome : ''), auto: true, cliente: x.baixar.cliente, numero: x.baixar.numero, partes: x.baixar.partes, chave: x.chave, contatoId: x.baixar.contatoId, pedidoId: x.baixar.pedidoId, parcela: x.baixar.parcela })) });
     feitas = (res.itens || []).filter(i => i.ok).length;
   }
   await env.BLING_KV.put('recauto', JSON.stringify({ ultimo: dia, ts: Date.now(), feitas, fortes: fortes.length }));
