@@ -57,6 +57,10 @@ export default {
       if (!(st.slot === hojeLocal() + '-' + horaAgora && st.fim)) { ctx.waitUntil(pagarTaxasAuto(env).catch(e => registrarErro(env, 'Tarifas automáticas: ' + String(e.message || e)))); return; }
     }
     const minAgora = new Date().getUTCMinutes();
+    if (horaAgora === 9 && !((minAgora >= 10 && minAgora < 15) || (minAgora >= 40 && minAgora < 45))) {
+      const st = (await env.BLING_KV.get('bolabertos', 'json')) || {};
+      if (!(st.dia === hojeLocal() && st.fim)) { ctx.waitUntil(conferirBoletosAbertos(env).catch(e => registrarErro(env, 'Boletos em aberto (09h): ' + String(e.message || e)))); return; }
+    }
     if (env.SICOOB_CLIENT_ID_CCO && ((minAgora >= 10 && minAgora < 15) || (minAgora >= 40 && minAgora < 45))) {
       ctx.waitUntil(receberAuto(env).catch(e => registrarErro(env, 'Cruzamento automático: ' + String(e.message || e)))); return;
     }
@@ -135,6 +139,12 @@ export default {
         const l = (await contasAbertasJanela(env)).filter(c => c.venc && c.venc < hoje && !ehBlingConta(c) && c.forma !== 3 && c.forma !== 4);
         return resp({ ok: true, itens: l.sort((a, b) => String(b.venc).localeCompare(String(a.venc))) });
       }
+      if (url.pathname === '/boletos/consulta') {   // diagnóstico: o que o Sicoob devolve para um boleto
+        const j = await sicoobCob(env, 'GET', '/boletos?numeroCliente=' + SICOOB_NUM_CLIENTE + '&codigoModalidade=1&nossoNumero=' + encodeURIComponent(url.searchParams.get('nn') || '')).catch(e => ({ erro: String(e.message || e) }));
+        return resp({ ok: true, j });
+      }
+      if (url.pathname === '/boletos/abertos' && req.method === 'POST') return resp(Object.assign({ ok: true }, await conferirBoletosAbertos(env, true)));
+      if (url.pathname === '/boletos/abertos') return resp(Object.assign({ ok: true }, (await env.BLING_KV.get('bolabertos', 'json')) || {}));
       if (url.pathname === '/receber/mes') return resp(await receberMes(env, url.searchParams.get('mes')));
       if (url.pathname === '/receber/baixar' && req.method === 'POST') return resp(await receberBaixar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/cobranca/extra' && req.method === 'POST') return resp(await cobrancaExtra(env, (await req.json().catch(() => ({}))) || {}));
@@ -3347,4 +3357,65 @@ async function receberAuto(env) {
   }
   await env.BLING_KV.put('recauto', JSON.stringify({ ultimo: dia, ts: Date.now(), feitas, fortes: fortes.length }));
   return { dia, feitas };
+}
+
+
+// ---- Todo dia às 09h: confere no Sicoob, um por um, os boletos Sicoob em aberto no Bling ----
+// O nosso número vem do Bling (/contas/receber/boletos → numeroExterno). Se o Sicoob disser que foi pago,
+// o app dá a baixa na hora (sem esperar o arquivo de movimentação do dia). Pagamento com atraso sem o valor pago
+// informado pelo Sicoob fica para o arquivo do dia (que traz juros e multa certinhos).
+const BOLAB_POR_RODADA = 12;
+async function conferirBoletosAbertos(env, forcar) {
+  const hoje = hojeLocal();
+  let st = (await env.BLING_KV.get('bolabertos', 'json')) || {};
+  if (st.dia !== hoje || (forcar && st.fim)) st = { dia: hoje, idx: 0, fim: false, pagos: [], aguardando: [], erros: [], conferidos: 0, inicio: Date.now() };
+  if (st.fim && !forcar) return st;
+  if (!st.lista) {
+    const ab = await contasAbertasJanela(env);
+    st.lista = ab.filter(c => c.forma === 15 && !ehBlingConta(c) && c.venc && c.venc <= somaDias(hoje, 7) && c.venc >= somaDias(hoje, -120))
+      .map(c => ({ id: c.id, valor: c.valor, venc: c.venc, numero: c.numero, origemTipo: c.origemTipo, cliente: c.cliente, doc: c.doc }));
+    st.total = st.lista.length;
+    if (!forcar) { await env.BLING_KV.put('bolabertos', JSON.stringify(st), { expirationTtl: 7 * 86400 }); return { dia: st.dia, total: st.total, fim: false }; }   // rodada seguinte já consulta
+  }
+  const fatia = st.lista.slice(st.idx, st.idx + BOLAB_POR_RODADA);
+  const nnCache = {};
+  for (const c of fatia) {
+    st.conferidos++;
+    try {
+      // nosso número do boleto desta conta (o Bling guarda como numeroExterno)
+      const conta = ((await bling(env, '/contas/receber/' + c.id).catch(() => null)) || {}).data || {};
+      const origemId = conta.origem && conta.origem.id;
+      if (!origemId) continue;
+      if (!nnCache[origemId]) nnCache[origemId] = ((await bling(env, '/contas/receber/boletos?idOrigem=' + origemId).catch(() => null)) || {}).data || {};
+      const bc = (nnCache[origemId].contas || []).find(x => String(x.id) === String(c.id));
+      const nn = bc && String(Number(bc.numeroExterno || 0) || '');
+      if (!nn) continue;
+      if (await env.BLING_KV.get('bolpago:' + nn)) continue;
+      const j = await sicoobCob(env, 'GET', '/boletos?numeroCliente=' + SICOOB_NUM_CLIENTE + '&codigoModalidade=1&nossoNumero=' + encodeURIComponent(nn));
+      const bo = (j && j.resultado) || j || {};
+      const sit = semAcento(String(campoMov(bo, ['situacaoBoleto', 'situacao', 'descricaoSituacao'], /situa/i) || ''));
+      if (!/LIQUID|PAGO|BAIXAD.*PAG/.test(sit)) continue;
+      const x = normalizarLiquidacao(Object.assign({ nossoNumero: nn }, bo));
+      x.nossoNumero = nn;
+      if (!x.dataLiquidacao) {   // sem a data do pagamento: fica para o arquivo do dia
+        st.aguardando.push({ nn, contaId: c.id, cliente: c.cliente, valor: c.valor, motivo: 'Sicoob diz pago, sem a data do pagamento' }); continue;
+      }
+      const temPago = !!campoMov(bo, ['valorPago', 'valorLiquidado', 'valorRecebido', 'valorLiquidacao']);
+      if (!temPago && x.dataLiquidacao > x.dataVencimento) {   // atrasado sem o valor pago: juros/multa vêm no arquivo
+        st.aguardando.push({ nn, contaId: c.id, cliente: c.cliente, valor: c.valor, motivo: 'pago com atraso — juros e multa chegam no arquivo do Sicoob' }); continue;
+      }
+      if (!x.dataCredito) x.dataCredito = proxDiaUtil(x.dataLiquidacao);   // o Sicoob credita no dia útil seguinte ao pagamento
+      const contaObj = { id: c.id, valor: c.valor, numero: c.numero, origemTipo: c.origemTipo, origemId, cliente: c.cliente, situacao: 1 };
+      await guardarLiq(env, x, contaObj).catch(() => {});
+      await executarPlanoBoleto(env, x, { conta: contaObj, motivo: 'consulta do boleto no Sicoob (09h)' }, 'Sicoob: boleto nº ' + nn + ' pago (consulta das 09h)');
+      st.pagos.push({ nn, contaId: c.id, cliente: c.cliente, numero: c.numero, valor: x.pago, liq: x.dataLiquidacao });
+    } catch (e) { st.erros.push({ contaId: c.id, erro: String(e.message || e).slice(0, 160) }); }
+  }
+  st.idx += fatia.length;
+  st.fim = st.idx >= st.lista.length;
+  st.ultimo = Date.now();
+  if (st.fim) { delete st.lista; if (st.pagos.length) { await abertosVelho(env); await env.BLING_KV.delete('recAbertas').catch(() => {}); } }
+  st.erros = st.erros.slice(-20);
+  await env.BLING_KV.put('bolabertos', JSON.stringify(st), { expirationTtl: 7 * 86400 });
+  return { dia: st.dia, conferidos: st.conferidos, total: st.total, fim: st.fim, pagos: st.pagos, aguardando: st.aguardando, erros: st.erros };
 }
