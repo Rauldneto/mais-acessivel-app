@@ -7090,9 +7090,10 @@ function frtExtBaixaOk(){return frtExtNum()>=2001002;}
 function frtBaixaPadrao(f){var m=(frtCfg().baixaPorForma)||{};if(f.formaId&&m[f.formaId]!==undefined)return !!m[f.formaId];return !frtEhCredito(f.formaId)&&!(f.parcelas>1);}
 function frtExtDupOk(){return frtExtNum()>=2000005;}
 function frtExtOk(){var v=frtExtVer();return !!v&&v.split('.').map(Number).reduce(function(a,n,i){return a+n*Math.pow(1000,2-i);},0)>=2000004;}
+function frtViaServidor(){return !frtExtOk();}
 function frtBling(op,dados){
+  if(frtViaServidor())return dspBlingServidor(op,dados); // celular: API oficial do Bling pelo servidor
   return new Promise(function(res,rej){
-    if(!frtExtOk()){rej(new Error('Para falar com o Bling, instale a extensão Mais Acessível — Vendas e Atendimento (botão 🧩 Extensão no topo) e abra o app neste computador.'));return;}
     var id='fin'+Date.now()+Math.random().toString(36).slice(2,7);
     FRT_PEND[id]={res:function(m){if(m.ok)res(m);else rej(new Error(m.erro==='SESSAO'?'Você não está logado no Bling neste computador. Abra o Bling, faça login e tente de novo.':(m.erro||'O Bling recusou a operação')));},
       tm:setTimeout(function(){if(FRT_PEND[id]){delete FRT_PEND[id];rej(new Error('A extensão não respondeu. Recarregue o app e tente de novo.'));}},60000)};
@@ -7795,9 +7796,9 @@ async function frtLancarCore(id,f,passo){
 async function frtLancarCore2(id,f,passo){
   passo=passo||function(){};
   // nunca lançar a mesma despesa duas vezes: confere no Firebase se já tem ID do Bling
-  try{var atual=await frtFb('fretes/'+id);if(atual&&(atual.blingId||atual.status==='lancado')){if(FRT.desp[id])Object.assign(FRT.desp[id],atual);throw new Error('Este frete já foi lançado no Bling (ID '+(atual.blingId||'?')+').');}}catch(e){if(/já foi lançada/.test(e.message))throw e;}
+  try{var atual=await frtFb('fretes/'+id);if(atual&&(atual.blingId||atual.status==='lancado')){if(FRT.desp[id])Object.assign(FRT.desp[id],atual);throw new Error('Este frete já foi lançado no Bling (ID '+(atual.blingId||'?')+').');}}catch(e){if(/já foi lançad/.test(e.message))throw e;}
   // duplicidade: confere no Bling na hora (mesmo valor e mesma data, em aberto)
-  if(!frtExtDupOk())throw new Error('Atualize a extensão Mais Acessível — Vendas e Atendimento para a versão 2.0.5 (botão 🧩 Extensão). A versão instalada ('+(frtExtVer()||'?')+') não enxerga contas já pagas e pode deixar passar duplicidade.');
+  if(!frtViaServidor()&&!frtExtDupOk())throw new Error('Atualize a extensão Mais Acessível — Vendas e Atendimento para a versão 2.0.5 (botão 🧩 Extensão). A versão instalada ('+(frtExtVer()||'?')+') não enxerga contas já pagas e pode deixar passar duplicidade.');
   passo('Conferindo duplicidade no Bling…');
   var dups=await frtChecarDupBling(id,Object.assign({},f,{vencimento:f.vencimento||f.emissao}));
   var lib=(FRT.desp[id]&&FRT.desp[id].naoDup)||[];
@@ -8368,11 +8369,12 @@ function frtDrawMob(){
   h+='<div class="dm-body">'+frtMsgHtml();
   if(!FRT.carregado)h+='<div class="fin-card fin-mu">Carregando…</div>';
   else if(t==='enviar')h+=frtMobEnviar();
-  else if(t==='pend')h+=frtMobLista(frtLista('pend'),'Nenhuma pendência','Tudo o que você enviar fica aqui até ser lançado no computador.');
+  else if(t==='pend')h+=frtMobLista(frtLista('pend'),'Nenhuma pendência','Tudo o que você enviar fica aqui até ser lançado (pelo 📤 no celular ou no computador).');
   else if(t==='lanc')h+=frtMobLista(frtLista('lancado').slice(0,40),'Nada lançado ainda','Os fretes lançados no Bling aparecem aqui.',true);
   else h+=frtMobItem();
   h+='</div>';
   if(t==='enviar'&&FRT.fotosNovas.length)h+='<div class="dm-cta"><button type="button" id="frtEnviar"'+(FRT.enviando?' disabled':'')+'>'+(FRT.enviando?'Enviando…':'Enviar '+(FRT.fotosNovas.length>1?FRT.fotosNovas.length+' imagens':'para conferência'))+'</button></div>';
+  if(t==='item'&&FRT.form&&frtMobPodeDireto(FRT.desp[FRT.sel]))h+='<div class="dm-cta" style="bottom:calc(64px + env(safe-area-inset-bottom))"><button type="button" id="dmDireto" style="background:linear-gradient(135deg,#16a34a,#0d9488)">📤 Enviar direto ao Contas a Pagar</button></div>';
   if(t==='item'&&FRT.form)h+=(FRT.desp[FRT.sel]&&FRT.desp[FRT.sel].status==='lancado')?'<div class="dm-cta dupla"><button type="button" class="sec" id="fResolvido" style="color:#166534;border-color:#bbf7d0">Já resolvi</button><button type="button" id="dmSalvar">Salvar</button></div>':'<div class="dm-cta dupla"><button type="button" class="sec" id="fExcluir">Excluir</button><button type="button" id="dmSalvar">Salvar</button></div>';
   if(t!=='item')h+='<div class="dm-tab" role="tablist" aria-label="Telas de fretes">'+[['enviar','📷','Enviar'],['pend','🧾','Pendentes'],['lanc','✅','Lançados']].map(function(x){return '<button type="button" data-m="'+x[0]+'" class="'+(t===x[0]?'on':'')+'"><span>'+x[1]+'</span>'+x[2]+(x[0]==='pend'&&n?'<i>'+n+'</i>':'')+'</button>';}).join('')+'</div>';
   h+='<div id="frtZoom" hidden></div>';
@@ -8390,9 +8392,10 @@ function frtDrawMob(){
     var vu=frtEl('dmVerUlt');if(vu)vu.onclick=function(){frtMobAbrir(FRT.ultimoEnvio);};
   }
   FRT.root.querySelectorAll('.dm-card[data-id]').forEach(function(b){b.onclick=function(){frtMobAbrir(b.dataset.id);};});
+  if(t==='item'&&FRT.form){var dd=frtEl('dmDireto');if(dd)dd.onclick=function(){frtMobDireto(dd);};}
   if(t==='item'&&FRT.form){frtBindConferencia();var sv=frtEl('dmSalvar');if(sv)sv.onclick=async function(){sv.disabled=true;sv.textContent='Salvando…';var ok=await frtSalvarForm(true);
     if(ok&&FRT.desp[FRT.sel]&&FRT.desp[FRT.sel].status==='lancado'){var pnd=frtPendencias(FRT.form);try{await frtFb('fretes/'+FRT.sel,{method:'PATCH',body:{precisaAtualizar:true,pendencias:pnd.length?pnd:['Atualizar no Bling']}});}catch(e){}FRT.desp[FRT.sel].precisaAtualizar=true;FRT.desp[FRT.sel].pendencias=pnd.length?pnd:['Atualizar no Bling'];}
-    if(ok){FRT.msg='Salvo. O lançamento no Bling é feito na Conferência do computador.';FRT.msgTipo='ok';FRT.mtela='pend';FRT.sel=null;FRT.form=null;}frtDraw();window.scrollTo(0,0);};}
+    if(ok){FRT.msg='Salvo. Fica pendente: lance pelo botão 📤 aqui no celular ou na Conferência do computador.';FRT.msgTipo='ok';FRT.mtela='pend';FRT.sel=null;FRT.form=null;}frtDraw();window.scrollTo(0,0);};}
 }
 function frtMobAbrir(id){if(!id||!FRT.desp[id])return;FRT.sel=id;FRT.form=null;FRT.msg='';FRT.mtela='item';frtDraw();window.scrollTo(0,0);}
 function frtMobEnviar(){
@@ -8400,7 +8403,7 @@ function frtMobEnviar(){
   if(!FRT.fotosNovas.length){
     h+='<div class="dm-cam"><label class="big" for="frtCam"><span>📷</span>Tirar foto</label><input id="frtCam" type="file" accept="image/*" capture="environment" hidden>'+
       '<label class="sec" for="frtArq">🖼️ Galeria ou PDF</label><input id="frtArq" type="file" accept="image/*,application/pdf" multiple hidden>'+
-      '<p>CT-e (DACTE) ou fatura/boleto da transportadora. Foto ou PDF. O app lê tudo do CT-e e deixa pendente para você conferir.</p></div>';
+      '<p>CT-e (DACTE) ou fatura/boleto da transportadora. Foto ou PDF. O app lê tudo; depois você manda direto ao Contas a Pagar ou deixa pendente para o computador.</p></div>';
   } else {
     h+='<div class="dm-lbl">'+FRT.fotosNovas.length+' imagem(ns) deste frete</div><div class="dm-thumbs">'+FRT.fotosNovas.map(function(b,i){return '<div><img src="data:image/jpeg;base64,'+b+'" alt=""><button type="button" data-rm="'+i+'" aria-label="Remover">×</button><button type="button" data-gira="'+i+'" aria-label="Girar" style="top:auto;bottom:4px;right:auto;left:4px">↻</button></div>';}).join('')+
       (FRT.fotosNovas.length<4?'<label for="dmMais"><span>＋</span>Mais uma</label><input id="dmMais" type="file" accept="image/*" capture="environment" hidden>':'')+'</div>'+
@@ -8414,7 +8417,7 @@ function frtMobEnviar(){
       (lendo?'<span class="fin-mu">Pode guardar o celular. Fica pendente para conferir.</span>':
        '<span style="font-size:14px">'+frtEsc((u.fornecedor&&u.fornecedor.nome)||'Transportadora não identificada')+(u.valor>0?' · <b style="color:inherit">R$ '+frtMoney(u.valor)+'</b>':'')+(u.formaId?' · '+frtEsc(frtFormaNome(u.formaId)):'')+'</span>'+
        (frtDuplicados(FRT.ultimoEnvio).length?'<span class="fin-chip err" style="justify-self:start">⚠️ Parece duplicado de outra despesa</span>':'')+
-       '<button type="button" class="dm-btn" id="dmVerUlt" style="min-height:44px;font-size:15px">Conferir agora</button>')+'</div>';}
+       '<button type="button" class="dm-btn" id="dmVerUlt" style="min-height:44px;font-size:15px">'+(frtMobPodeDireto(u)?'📤 Conferir e enviar direto ao Contas a Pagar':'Conferir agora')+'</button>'+(frtMobPodeDireto(u)?'<span class="fin-mu" style="text-align:center">ou deixe como está: fica pendente para aprovar no computador</span>':''))+'</div>';}
   return h;
 }
 function frtMobLista(L,vazioT,vazioD,lanc){
@@ -8430,7 +8433,26 @@ function frtMobLista(L,vazioT,vazioD,lanc){
 function frtMobItem(){
   var f=FRT.sel&&FRT.desp[FRT.sel]?frtFormAtual():null;
   if(!f)return '<div class="fin-empty"><b>Frete não encontrado</b>Volte para a lista de pendentes.</div>';
-  return '<div id="frtForm">'+frtHtmlFormCard(f,true,false)+'</div>';
+  return '<div id="frtForm">'+frtHtmlFormCard(f,true,false)+'</div>'+(frtMobPodeDireto(FRT.desp[FRT.sel])?'<div style="height:86px"></div>':'');
+}
+// Celular: você escolhe — manda direto ao Contas a Pagar do Bling ou deixa pendente para aprovar no computador
+function frtMobPodeDireto(d){return !!(d&&d.status==='pendente'&&!FRT.lendo[d.id]);}
+async function frtMobDireto(b){
+  var id=FRT.sel,f=frtLerCampos();
+  var falta=frtFaltas(f);if(falta.length){FRT.msg='Para enviar direto falta: '+falta.join(', ')+(falta.indexOf('Vencimento')>=0?' (o CT-e não traz o vencimento: digite o do boleto)':'')+'.';FRT.msgTipo='warn';frtDraw();window.scrollTo(0,0);return;}
+  if(frtDuplicados(id).length||frtCruzados(id).length){FRT.msg='Este frete parece duplicado ou cobre CT-e de outro lançamento. Confira o aviso abaixo antes de lançar.';FRT.msgTipo='err';frtDraw();window.scrollTo(0,0);return;}
+  var forn=(f.contato&&f.contato.nome)||(f.fornecedor&&f.fornecedor.nome)||'(sem transportadora)';
+  var resumo=forn+'\nR$ '+frtMoney(f.valor)+' · venc. '+frtBr(f.vencimento)+(f.numeroDocumento?'\n'+f.numeroDocumento:'')+(f.formaId?'\n'+frtFormaNome(f.formaId):'\n⚠️ Sem forma de pagamento')+(f.categoria?'\nCategoria: '+frtCatNome(f.categoria):'\n⚠️ Sem categoria')+(frtEmailAuto()?'\n📧 Vai também por e-mail à contabilidade':'');
+  if(!confirm('Enviar direto ao Contas a Pagar do Bling?\n\n'+resumo))return;
+  b.disabled=true;b.textContent='Enviando ao Bling…';
+  try{await frtSalvarForm(true);}catch(e){}
+  try{
+    var r=await frtLancarCore(id,f,function(t){b.textContent=t;});
+    FRT.msg='✅ Lançado no Contas a Pagar do Bling (ID '+(r.blingId||'?')+').'+(r.pend.length?' Pendente: '+r.pend.join(', ')+'.':'')+
+      (r.email===true?' 📧 Enviado à contabilidade.':r.email===false?' ⚠️ E-mail à contabilidade não saiu: '+r.emailErro+' Reenvie pela aba Lançados no computador.':' O e-mail à contabilidade sai pelo computador (aba Lançados).');
+    FRT.msgTipo=(r.pend.length||r.email===false)?'warn':'ok';FRT.mtela='lanc';FRT.sel=null;FRT.form=null;
+  }catch(e){FRT.msg='Não lancei: '+e.message+' O frete continua em Pendentes.';FRT.msgTipo='err';}
+  frtDraw();window.scrollTo(0,0);
 }
 
 // ===================== MÓDULO FORMAÇÃO DE PREÇO (mod13) =====================
