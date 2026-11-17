@@ -147,6 +147,17 @@ export default {
       if (url.pathname === '/boletos/abertos') return resp(Object.assign({ ok: true }, (await env.BLING_KV.get('bolabertos', 'json')) || {}));
       if (url.pathname === '/receber/atrasados') return resp(await buscarAtrasados(env, url.searchParams.get('q') || '', Number(url.searchParams.get('valor') || 0)));
       if (url.pathname === '/receber/abater' && req.method === 'POST') return resp(await receberAbater(env, (await req.json().catch(() => ({}))) || {}));
+      if (url.pathname === '/receber/estornar' && req.method === 'POST') {
+        const b = (await req.json().catch(() => ({}))) || {}, cid = Number(b.contaId), bid = Number(b.borderoId);
+        const c = ((await bling(env, '/contas/receber/' + cid).catch(() => null)) || {}).data || {};
+        if (!(c.borderos || []).map(Number).includes(bid)) return resp({ ok: false, erro: 'Esse recebimento não é desta conta.' });
+        const tok = await tokenValido(env);
+        const r = await fetch(API + '/borderos/' + bid, { method: 'DELETE', headers: { Authorization: 'Bearer ' + tok, Accept: 'application/json' } });
+        const t = await r.text();
+        await logAcao(env, { modo: 'real', origem: 'cruzamento', acao: 'estorno', contaId: cid, data: hojeLocal(), resultado: r.ok ? 'ok — recebimento ' + bid + ' excluído' : 'erro ' + r.status, por: String(b.usuario || ''), detalhe: 'Estorno de baixa feita errado: recebimento ' + bid + ' da conta ' + cid });
+        await env.BLING_KV.delete('recAbertas').catch(() => {}); if (b.dia) await env.BLING_KV.delete('recdia:' + soData(b.dia)).catch(() => {});
+        return resp({ ok: r.ok, status: r.status, corpo: t.slice(0, 200) });
+      }
       if (url.pathname === '/receber/acordos') return resp({ ok: true, acordos: (await env.BLING_KV.get('recacordos', 'json')) || {} });
       if (url.pathname === '/receber/acordo' && req.method === 'POST') return resp(await receberAcordo(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/receber/clientes') return resp(await finSrvBuscarContato(env, { nome: url.searchParams.get('q') || '', doc: url.searchParams.get('doc') || '' }));
@@ -2977,7 +2988,7 @@ async function ddaPendenteResolver(env, b) {
 // O que entrou no Sicoob e não tem baixa no Bling: procura a conta em aberto e sugere a baixa (o Raul confirma).
 // O que foi baixado no Bling (conta Sicoob) e não aparece no extrato: aparece para corrigir.
 const CONTA_SICOOB_BLING = 14890739452;
-const RECDIA_VER = 8;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
+const RECDIA_VER = 9;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
 function tipoCredito(desc, doc) {
   const d = semAcento(desc);
   if (doc && doc === ECONF_CNPJ) return 'transf';
@@ -3172,8 +3183,8 @@ async function receberDia(env, dia, forcar) {
     if (m && (m.doc || cand.length === 1) && (cand.length === 1 || m.p - cand[1].p >= 15)) {
       reservadas.add(String(m.c.id));
       const forte = (m.doc || m.nomes >= 2) && (cand.length === 1 || m.p - cand[1].p >= 25) && m.dias >= -60 && m.dias <= 120;
-      x.baixar = { docCliente: m.c.doc, contaId: m.c.id, valor: m.c.valor, juros: r2(Math.max(0, x.valor - m.c.valor)), desconto: m.descP ? r2(m.c.valor - x.valor) : 0, data: dia, venc: m.c.venc, atraso: diasAtraso(dia, m.c.venc), cliente: m.c.cliente, numero: m.c.numero, origemTipo: m.c.origemTipo, forte,
-        motivo: (m.exato ? 'mesmo valor' : m.descP ? 'pago com ' + String(m.descP).replace('.', ',') + '% de desconto (R$ ' + r2(m.c.valor - x.valor).toFixed(2).replace('.', ',') + ')' : 'valor + juros/multa') + (m.ap ? ' e pagador já ligado a este cliente' : m.doc ? ' e mesmo CPF/CNPJ' : m.nomes >= 2 ? ' e nome do pagador parecido com o do cliente' : m.nomes ? ' (nome do pagador parecido)' : ' (única conta em aberto com esse valor)') };
+      x.baixar = { docCliente: m.c.doc, contaId: m.c.id, valor: m.descP ? x.valor : m.c.valor, juros: m.descP ? 0 : r2(Math.max(0, x.valor - m.c.valor)), desconto: 0, data: dia, venc: m.c.venc, atraso: diasAtraso(dia, m.c.venc), cliente: m.c.cliente, numero: m.c.numero, origemTipo: m.c.origemTipo, forte,
+        motivo: (m.exato ? 'mesmo valor' : m.descP ? 'pago ' + String(100 - m.descP).replace('.', ',') + '% da conta (retenção de ' + String(m.descP).replace('.', ',') + '%: baixa parcial, R$ ' + r2(m.c.valor - x.valor).toFixed(2).replace('.', ',') + ' fica em aberto)' : 'valor + juros/multa') + (m.ap ? ' e pagador já ligado a este cliente' : m.doc ? ' e mesmo CPF/CNPJ' : m.nomes >= 2 ? ' e nome do pagador parecido com o do cliente' : m.nomes ? ' (nome do pagador parecido)' : ' (única conta em aberto com esse valor)') };
     }
   }
   // ficou sem conta: pode ser um pedido de venda ainda sem contas lançadas (mesmo valor) — lança as contas do pedido e baixa
@@ -3196,9 +3207,9 @@ async function receberDia(env, dia, forcar) {
       usadosP.add(m.p.id);
       const venc = (m.parc && m.parc.venc) || (m.p.parcelas && m.p.parcelas[0] && m.p.parcelas[0].venc) || m.p.venc || dia;
       const nP = (m.p.parcelas || []).length, iP = m.parc ? m.p.parcelas.indexOf(m.parc) + 1 : 0;
-      x.baixar = { pedidoId: m.p.id, parcela: m.parc ? { venc: m.parc.venc, valor: r2(m.parc.valor) } : null, contaId: 'p' + m.p.id, valor: m.descP ? r2(m.v) : x.valor, juros: 0, desconto: m.descP ? r2(m.v - x.valor) : 0, data: dia, venc, atraso: diasAtraso(dia, venc), cliente: m.p.cliente, docCliente: dig(m.p.doc), numero: m.p.numero, origemTipo: 'venda',
+      x.baixar = { pedidoId: m.p.id, parcela: m.parc ? { venc: m.parc.venc, valor: r2(m.parc.valor) } : null, contaId: 'p' + m.p.id, valor: x.valor, juros: 0, desconto: 0, data: dia, venc, atraso: diasAtraso(dia, venc), cliente: m.p.cliente, docCliente: dig(m.p.doc), numero: m.p.numero, origemTipo: 'venda',
         forte: (m.doc || m.nomes >= 1) && unico,
-        motivo: 'pedido de venda ' + m.p.numero + ' (sem conta lançada) ' + (m.parc ? 'parcela ' + iP + ' de ' + nP + ' (R$ ' + r2(m.parc.valor).toFixed(2).replace('.', ',') + ', venc. ' + brData(m.parc.venc) + ')' : m.descP ? 'pago com ' + String(m.descP).replace('.', ',') + '% de desconto (R$ ' + r2(m.v - x.valor).toFixed(2).replace('.', ',') + ')' : 'com o mesmo valor') +
+        motivo: 'pedido de venda ' + m.p.numero + ' (sem conta lançada) ' + (m.parc ? 'parcela ' + iP + ' de ' + nP + ' (R$ ' + r2(m.parc.valor).toFixed(2).replace('.', ',') + ', venc. ' + brData(m.parc.venc) + ')' : m.descP ? 'pago ' + String(100 - m.descP).replace('.', ',') + '% (retenção de ' + String(m.descP).replace('.', ',') + '%: R$ ' + r2(m.v - x.valor).toFixed(2).replace('.', ',') + ' fica em aberto)' : 'com o mesmo valor') +
           (m.doc ? ' e mesmo CPF/CNPJ' : m.nomes ? ' e nome parecido' : ' (único com esse valor)') + (m.parc ? ' — o app lança as contas do pedido e baixa só esta parcela; as outras ficam em aberto' : ' — o app lança as contas do pedido e dá baixa') };
     }
   }
