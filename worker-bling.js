@@ -130,6 +130,11 @@ export default {
       }
       if (url.pathname === '/receber/dia') return resp(await receberDia(env, url.searchParams.get('dia'), url.searchParams.get('forcar') === '1'));
       if (url.pathname === '/receber/liq') return resp({ ok: true, l: (await env.BLING_KV.get('bolliq:' + soData(url.searchParams.get('dia')), 'json')) || [] });
+      if (url.pathname === '/receber/vencidas') {
+        const hoje = hojeLocal();
+        const l = (await contasAbertasJanela(env)).filter(c => c.venc && c.venc < hoje && !ehBlingConta(c) && c.forma !== 3 && c.forma !== 4);
+        return resp({ ok: true, itens: l.sort((a, b) => String(b.venc).localeCompare(String(a.venc))) });
+      }
       if (url.pathname === '/receber/mes') return resp(await receberMes(env, url.searchParams.get('mes')));
       if (url.pathname === '/receber/baixar' && req.method === 'POST') return resp(await receberBaixar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/cobranca/extra' && req.method === 'POST') return resp(await cobrancaExtra(env, (await req.json().catch(() => ({}))) || {}));

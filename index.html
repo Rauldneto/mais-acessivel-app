@@ -17335,6 +17335,97 @@ function crzBaixar(itens){
     CRZ.msg=(ok?'✅ '+ok+' baixa(s) feita(s) no Bling. ':'')+L.filter(function(i){return !i.ok;}).map(function(i){return '❌ conta '+i.contaId+': '+blgEsc(i.erro||i.resultado||'erro');}).join(' ');
     crzCarregarDia(CRZ.dia,true);}).catch(function(e){CRZ.baixando=false;CRZ.msg='❌ Sem conexão: '+blgEsc(e&&e.message||e);blgDraw();});
 }
+
+// ===================== Situação dos pagamentos (visão principal da Baixa Contas a Receber) =====================
+// Banco (extrato Sicoob) de um lado, Bling do outro: o que precisa de ação, o que já está baixado, o que ninguém pagou.
+var SIT={per:'7 dias',aba:'atencao',venc:null,vencCarr:false,busca:'',msg:''};
+function sitDiasPer(){
+  var hoje=crzHoje(),out=[],ini,fim=hoje;
+  var util=function(d){var w=new Date(d+'T12:00:00').getDay();return w!==0&&w!==6;};
+  var menos=function(d,n){return new Date(Date.parse(d+'T12:00:00')-n*864e5).toISOString().slice(0,10);};
+  if(SIT.per==='Hoje')ini=hoje;
+  else if(SIT.per==='Ontem'){var o=menos(hoje,1);while(!util(o))o=menos(o,1);ini=fim=o;}
+  else if(SIT.per==='7 dias')ini=menos(hoje,7);
+  else if(SIT.per==='Este mês')ini=hoje.slice(0,8)+'01';
+  else{var m=new Date(Date.parse(hoje.slice(0,8)+'01T12:00:00')-2*864e5).toISOString().slice(0,7);ini=m+'-01';fim=crzDiasUteis(m).slice(-1)[0]||m+'-28';var u=new Date(Date.UTC(+m.slice(0,4),+m.slice(5,7),0)).toISOString().slice(0,10);fim=u;}
+  for(var d=ini;d<=fim;d=new Date(Date.parse(d+'T12:00:00')+864e5).toISOString().slice(0,10))if(util(d)&&d<=hoje)out.push(d);
+  return out;
+}
+function sitMesPassadoNome(){var h=crzHoje();var m=new Date(Date.parse(h.slice(0,8)+'01T12:00:00')-2*864e5);return ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][m.getMonth()];}
+function sitIniciar(){
+  if(BLG.view!=='sit')return;
+  if(!blgUrl()){setTimeout(sitIniciar,800);return;}
+  var dias=sitDiasPer(),i=0;
+  var prox=function(){if(i>=dias.length){blgDraw();return;}var d=dias[i++];if(CRZ.det[d]&&!CRZ.det[d].erro){prox();return;}crzCarregarDia(d,false,function(){setTimeout(prox,250);});};prox();
+  if(!SIT.venc&&!SIT.vencCarr){SIT.vencCarr=true;blgApi('/receber/vencidas').then(function(r){SIT.vencCarr=false;SIT.venc=r&&r.ok?r.itens:[];blgDraw();}).catch(function(){SIT.vencCarr=false;SIT.venc=[];blgDraw();});}
+}
+function sitLinhas(){
+  var dias=sitDiasPer(),L=[],faltam=0;
+  dias.forEach(function(d){var D=CRZ.det[d];if(!D||!D.resumo){faltam++;return;}var B={};(D.bling||[]).forEach(function(c){B[c.id]=c;});
+    (D.sicoob||[]).forEach(function(x){
+      var cs=(x.par||[]).map(function(id){return B[id];}).filter(Boolean),c=cs[0];
+      var k=x.par?(x.auto?'auto':'manual'):x.tipo==='cartao'?'cartao':x.baixar?'falta':'semconta';
+      L.push({k:k,dia:d,x:x,cs:cs,v:x.valor});
+    });
+    (D.bling||[]).filter(function(c){return !c.ligado;}).forEach(function(c){L.push({k:'semBanco',dia:d,c:c,v:c.valor});});
+  });
+  (SIT.venc||[]).forEach(function(c){L.push({k:'vencido',c:c,v:c.valor});});
+  return {L:L,faltam:faltam,dias:dias.length};
+}
+var SIT_ST={auto:['Baixado automático','#15803d','#E8F6EC'],manual:['Baixado (Bling)','#166534','#F1F5F2'],falta:['Pago — falta baixar','#B45309','#FFF4E0'],semconta:['Pago — sem conta','#B91C1C','#FDECEC'],
+  vencido:['Vencido, não pago','#4B5563','#EEF0F3'],semBanco:['Baixado sem entrada no banco','#6D28D9','#F1EAFE'],cartao:['Cartão — regra em breve','#4B5563','#EEF0F3']};
+var SIT_GR={atencao:['falta','semconta','semBanco','cartao'],baixados:['auto','manual'],vencidos:['vencido'],todos:['auto','manual','falta','semconta','semBanco','cartao']};
+function sitTela(){
+  var R=sitLinhas(),L=R.L,brl=function(n){return 'R$ '+blgMoeda(n);};
+  var gr=function(g){return L.filter(function(l){return SIT_GR[g].indexOf(l.k)>=0;});},soma=function(a){return a.reduce(function(t,l){return t+(l.v||0);},0);};
+  var h='<div class="sit">';
+  var per=['Hoje','Ontem','7 dias','Este mês',sitMesPassadoNome()];
+  h+='<div class="sit-top"><div><h2>Situação dos pagamentos</h2><p>O que entrou no Sicoob × o que está baixado no Bling — PIX e boletos Sicoob (boletos da Bling Conta a Bling baixa sozinha)</p></div>'+
+     '<div class="sit-per">'+per.map(function(p){return '<button class="'+(SIT.per===p?'on':'')+'" data-a="sitPer" data-k="'+p+'">'+p+'</button>';}).join('')+
+     '<button class="sit-rec" data-a="sitRec" title="Conferir de novo agora">'+BLG_IC.rec+'</button></div></div>';
+  if(R.faltam)h+='<div class="sit-carr"><span class="blg-spin"></span> Lendo o extrato do Sicoob e o Bling… faltam '+R.faltam+' de '+R.dias+' dia(s)</div>';
+  var ent=gr('todos'),pend=L.filter(function(l){return l.k==='falta'||l.k==='semconta';}),bx=gr('baixados');
+  var card=function(id,t,cor,arr,sub){return '<button class="sit-card'+(SIT.aba===id?' on':'')+'" style="--c:'+cor+'" data-a="sitAba" data-k="'+id+'"><span class="t"><i></i>'+t+'</span><span class="n">'+arr.length+'<small>'+brl(soma(arr))+'</small></span><span class="s">'+sub+'</span></button>';};
+  h+='<div class="sit-cards">'+card('atencao','Precisa da sua ação','#B45309',gr('atencao'),'Pago e não baixado, ou baixado sem entrada no banco')+
+     card('baixados','Baixados no Bling','#15803d',bx,bx.filter(function(l){return l.k==='auto';}).length+' automáticos pelo app · '+bx.filter(function(l){return l.k==='manual';}).length+' por você ou na conferência')+
+     card('vencidos','Vencidos sem pagamento','#4B5563',gr('vencidos'),SIT.venc?'Contas vencidas (PIX e boleto Sicoob) sem nada no banco':'carregando…')+
+     card('todos','Entraram no Sicoob','#1d4ed8',ent,'PIX, boletos Sicoob e cartão no período')+'</div>';
+  if(pend.length)h+='<div class="sit-alerta"><b>'+SIT.per+': '+pend.length+' pagamento(s) entraram no Sicoob e ainda não estão baixados no Bling ('+brl(soma(pend))+').</b> Cada linha abaixo diz o motivo e o que fazer.</div>';
+  else if(!R.faltam&&ent.length)h+='<div class="sit-ok">✅ '+SIT.per+': tudo que entrou no Sicoob está baixado no Bling.</div>';
+  if(SIT.msg)h+='<div class="blg-msg">'+SIT.msg+'</div>';
+  var abas=[['atencao','Precisa da sua ação'],['baixados','Baixados'],['vencidos','Vencidos sem pagamento'],['todos','Todos']];
+  h+='<div class="sit-box"><div class="sit-bar"><div class="sit-abas">'+abas.map(function(a){return '<button class="'+(SIT.aba===a[0]?'on':'')+'" data-a="sitAba" data-k="'+a[0]+'">'+a[1]+' <i>'+gr(a[0]).length+'</i></button>';}).join('')+'</div>'+
+     '<label>Buscar <input id="sitBusca" value="'+blgEsc(SIT.busca)+'" placeholder="Cliente, CPF/CNPJ, NF ou valor"></label></div>';
+  var b=SIT.busca.trim().toLowerCase(),lista=gr(SIT.aba).filter(function(l){if(!b)return true;var t=[l.x&&l.x.nome,l.x&&l.x.doc,l.c&&l.c.cliente,l.c&&l.c.numero,(l.cs||[]).map(function(c){return c.cliente+' '+c.numero;}).join(' '),blgMoeda(l.v)].join(' ').toLowerCase();return t.indexOf(b)>=0;});
+  var ordem={falta:0,semconta:1,semBanco:2,cartao:3,auto:4,manual:5,vencido:6};
+  lista.sort(function(a,c){return (ordem[a.k]-ordem[c.k])||String(c.dia||'').localeCompare(String(a.dia||''));});
+  h+='<div class="sit-scroll"><div class="sit-tb"><div class="sit-hd"><div>Situação</div><div>Pago em</div><div>No banco (Sicoob)</div><div></div><div>No Bling (conta a receber)</div><div>Detalhe</div><div style="text-align:right">Ação</div></div>';
+  if(!lista.length)h+='<div class="sit-vazio">'+(R.faltam?'Carregando…':'Nada nesta situação no período.')+'</div>';
+  lista.slice(0,300).forEach(function(l,i){
+    var st=SIT_ST[l.k],x=l.x,c=l.c,cs=l.cs||[],ok=l.k==='auto'||l.k==='manual';
+    var banco,bling,det='',acao='';
+    if(x){banco='<div><b>R$ '+blgMoeda(x.valor)+'</b> <span class="sit-fp">'+crzTipoTxt(x.tipo)+'</span></div><div class="el">'+blgEsc(x.nome||x.desc)+'</div><small>'+blgEsc(x.bol?x.desc:(x.doc?crzDoc(x.doc):x.desc))+'</small>';}
+    else banco='<span class="mut">'+(l.k==='vencido'?'Nada entrou no Sicoob':'Nenhuma entrada no extrato do dia')+'</span>';
+    var dt=x?blgData(x.data).slice(0,5):l.k==='semBanco'?blgData(l.dia).slice(0,5):'—';
+    if(ok){bling=cs.map(function(c){return '<b class="el">'+blgEsc(c.cliente)+'</b><div>'+blgEsc(crzRef(c))+' · R$ '+blgMoeda(c.valor)+'</div><small>venc. '+blgData(c.venc)+' · '+sitAtraso(x.data,c.venc)+'</small>';}).join('');
+      det=blgEsc(x.como||'')+(x.juros?' · <b>juros/multa R$ '+blgMoeda(x.juros)+'</b>':'');acao=cs[0]?'<a class="sit-btn" href="https://www.bling.com.br/contas.receber.php#edit/'+cs[0].id+'" target="_blank">Ver no Bling</a>':'';}
+    else if(l.k==='falta'){var bb=x.baixar;bling='<b class="el">'+blgEsc(bb.cliente)+'</b><div>'+blgEsc(crzRef(bb))+' · R$ '+blgMoeda(bb.valor)+'</div><small>venc. '+blgData(bb.venc)+' · '+sitAtraso(x.data,bb.venc)+'</small>';
+      det=(bb.forte?'Ligação segura ('+blgEsc(bb.motivo)+'): o app baixa sozinho na próxima rodada.':'Confira: '+blgEsc(bb.motivo)+'. Depois de confirmar uma vez, os próximos pagamentos de '+blgEsc(x.nome||'quem pagou')+' para este cliente saem automáticos.')+(bb.juros?' Juros/multa R$ '+blgMoeda(bb.juros)+'.':'');
+      acao='<button class="sit-btn p" data-a="sitBaixar" data-k="'+l.dia+'|'+x.chave+'">Confirmar e baixar</button>';}
+    else if(l.k==='semconta'){var sg=x.sugestoes||[];bling=sg.length?'<b>'+sg.length+' conta(s) possível(is)</b><div>'+sg.slice(0,2).map(function(s){return blgEsc(s.cliente)+' · R$ '+blgMoeda(s.valor);}).join('<br>')+'</div>':'<b class="red">Nenhuma conta encontrada</b><div>Sem conta em aberto com R$ '+blgMoeda(x.valor)+'</div>';
+      det=sg.length?'Mais de uma conta pode ser esta: escolha a certa.':'Falta lançar a conta a receber no Bling, ou diga de qual cliente é.';acao='<button class="sit-btn s" data-a="sitAbrirDia" data-k="'+l.dia+'">'+(sg.length?'Escolher conta':'Vincular / lançar')+'</button>';}
+    else if(l.k==='cartao'){bling='<span class="mut">Várias vendas no cartão</span>';det='Repasse da maquininha (já sem a taxa). A baixa do cartão ainda não está ligada.';}
+    else if(l.k==='semBanco'){bling='<b class="el">'+blgEsc(c.cliente)+'</b><div>'+blgEsc(crzRef(c))+' · R$ '+blgMoeda(c.valor)+'</div><small>baixada no Bling em '+blgData(l.dia)+', conta Sicoob</small>';det='Confira no Bling a data da baixa e a conta financeira (pode ter sido baixada no dia errado ou em outra conta).';acao='<a class="sit-btn s" href="https://www.bling.com.br/contas.receber.php#edit/'+c.id+'" target="_blank">Abrir no Bling</a>';}
+    else if(l.k==='vencido'){var dd=Math.round((Date.parse(crzHoje())-Date.parse(c.venc))/864e5);bling='<b class="el">'+blgEsc(c.cliente)+'</b><div>'+blgEsc(crzRef(c))+' · R$ '+blgMoeda(c.valor)+'</div><small>venceu '+blgData(c.venc)+' · '+dd+' dia(s)</small>';
+      det=(c.forma===15?'Boleto Sicoob':'PIX')+' sem pagamento no Sicoob. '+(dd>60?'Muito antigo: conferir se foi pago por fora.':'Cobrar o cliente.');acao='<a class="sit-btn s" href="https://www.bling.com.br/contas.receber.php#edit/'+c.id+'" target="_blank">Abrir no Bling</a>';}
+    h+='<div class="sit-ln k-'+l.k+'"><div><span class="sit-st" style="color:'+st[1]+';background:'+st[2]+'">'+st[0]+'</span></div><div class="num">'+dt+'</div><div class="col">'+banco+'</div><div class="seta" style="color:'+(ok?'#15803d':'#9AA3AD')+'">'+(ok?'⇄':l.k==='vencido'?'…':'✕')+'</div><div class="col">'+bling+'</div><div class="det">'+det+'</div><div style="text-align:right">'+acao+'</div></div>';
+  });
+  h+='</div></div></div>';
+  h+='<div class="sit-leg"><span><b style="color:#15803d">Baixado automático</b> = o app achou a conta pelo CPF/CNPJ, pelo nome de quem pagou ou pela NF do boleto e deu baixa sozinho.</span><span><b style="color:#B45309">Pago — falta baixar</b> = entrou no banco e o app achou a conta provável; confirme.</span><span><b style="color:#B91C1C">Pago — sem conta</b> = entrou no banco e não há conta no Bling com esse valor.</span></div>';
+  return h+'</div>';
+}
+function sitAtraso(pago,venc){if(!venc||!pago)return '';var d=Math.round((Date.parse(pago)-Date.parse(venc))/864e5);return d>0?'<span class="crz-at">'+d+' dia(s) de atraso</span>':d<0?'<span class="crz-ad">'+(-d)+' dia(s) adiantado</span>':'<span class="crz-ok">no dia</span>';}
+function sitLigar(w){var i=w.querySelector('#sitBusca');if(i){i.oninput=function(){SIT.busca=i.value;clearTimeout(SIT.tb);SIT.tb=setTimeout(function(){var pos=i.selectionStart;blgDraw();var n=BLG.root.querySelector('#sitBusca');if(n){n.focus();try{n.setSelectionRange(pos,pos);}catch(e){}}},300);};}}
 function blgTelaPag(){
   var p=BLG.pag||{},h='<div class="blg-msg"><b>Pagamentos recebidos e ações no Bling</b> · modo: '+(p.modo==='real'?'<b style="color:#15803d">REAL</b> (executa no Bling)':'<b style="color:#b45309">SIMULAÇÃO</b> (só anota o que faria; nada é alterado no Bling)')+
     '<br>O servidor confere o Sicoob a cada 5 minutos. Última conferência: '+(p.ultimaVerificacao?new Date(p.ultimaVerificacao).toLocaleString('pt-BR'):'—')+
@@ -17520,6 +17611,22 @@ function blgCss(){
   '.blg-pix .ln{border-bottom-color:#ececec}.blg-pix .ln b{color:#111}.blg-pix textarea{color:#333}.blg-pix .qr{border:1px solid #e5e5e5}'+
   '.blg-kb{color:#666}.blg-act .it:hover{color:#222}.blg-act .grp:before{color:#fff}.blg-spin{border-color:#ddd;border-top-color:var(--vd)}.blg-sep{background:#cfcfcf}'+
   '.blg-tb td.ok{color:#15803d}.blg-tb .blg-tb-sub{color:#777}'+
+  '.blg-sit .blg-fil,.blg-sit .blg-bar,.blg-sit .blg-fsit{display:none}.blg-sit .blg-mid{max-width:none}'+
+  '.sit{font-size:13px;color:#1B1F24;display:flex;flex-direction:column;gap:14px}.sit-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:10px}.sit-top h2{margin:0;font-size:20px}.sit-top p{margin:3px 0 0;color:#4A535E;font-size:12.5px}'+
+  '.sit-per{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.sit-per button{height:32px;padding:0 12px;border-radius:999px;border:1px solid #CBD2D9;background:#fff;color:#2F3640;font:500 12.5px Inter,arial,sans-serif;cursor:pointer}.sit-per button.on{background:#1B1F24;color:#fff;border-color:#1B1F24}.sit-per .sit-rec{padding:0 8px;display:flex;align-items:center}'+
+  '.sit-carr{font-size:12px;color:#4A535E;display:flex;align-items:center;gap:6px}'+
+  '.sit-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.sit-card{text-align:left;display:flex;flex-direction:column;gap:5px;padding:12px 14px;border-radius:12px;background:#fff;border:1px solid #E2E6EA;cursor:pointer;font:inherit;color:inherit}.sit-card.on{border:2px solid var(--c)}'+
+  '.sit-card .t{font-size:12.5px;font-weight:600;color:var(--c);display:flex;gap:7px;align-items:center}.sit-card .t i{width:9px;height:9px;border-radius:50%;background:var(--c)}.sit-card .n{font-size:28px;font-weight:700;display:flex;gap:8px;align-items:baseline}.sit-card .n small{font-size:13px;font-weight:500;color:#4A535E}.sit-card .s{font-size:11.5px;color:#5B6470}'+
+  '.sit-alerta{background:#FFF7E6;border:1px solid #F3C77A;border-radius:10px;padding:10px 14px;color:#92400E}.sit-ok{background:#ECFDF3;border:1px solid #A7E3BE;border-radius:10px;padding:10px 14px;color:#166534;font-weight:600}'+
+  '.sit-box{background:#fff;border:1px solid #E2E6EA;border-radius:12px;overflow:hidden}.sit-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #E2E6EA}'+
+  '.sit-abas{display:flex;flex-wrap:wrap;gap:4px}.sit-abas button{height:34px;padding:0 12px;border-radius:8px;border:0;background:transparent;color:#4A535E;font:600 13px Inter,arial,sans-serif;cursor:pointer}.sit-abas button.on{background:#1B1F24;color:#fff}.sit-abas i{font-style:normal;font-size:11px;border-radius:999px;padding:1px 7px;margin-left:3px;background:#E9ECEF;color:#2F3640}.sit-abas button.on i{background:#fff;color:#1B1F24}'+
+  '.sit-bar label{display:flex;gap:6px;align-items:center;font-size:12.5px;color:#4A535E}.sit-bar input{height:32px;width:240px;max-width:60vw;border:1px solid #CBD2D9;border-radius:8px;padding:0 10px;font:inherit}'+
+  '.sit-scroll{overflow-x:auto}.sit-tb{min-width:1020px}.sit-hd,.sit-ln{display:grid;grid-template-columns:160px 60px minmax(0,1.1fr) 22px minmax(0,1.2fr) minmax(0,1fr) 140px;gap:10px;padding:10px 12px;align-items:center}'+
+  '.sit-hd{background:#F7F9FA;border-bottom:1px solid #E2E6EA;font-size:11px;font-weight:600;color:#4A535E;text-transform:uppercase;letter-spacing:.04em}.sit-ln{border-bottom:1px solid #EEF1F3}.sit-ln.k-falta{background:#FFFCF5}.sit-ln.k-semconta{background:#FFFAFA}'+
+  '.sit-ln .col{min-width:0;display:flex;flex-direction:column;gap:1px}.sit-ln .el{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}.sit-ln small{font-size:11px;color:#5B6470}.sit-ln .mut{color:#7A838E}.sit-ln .red{color:#B91C1C}.sit-ln .num{font-variant-numeric:tabular-nums;color:#2F3640}.sit-ln .seta{text-align:center;font-size:15px}.sit-ln .det{font-size:12px;line-height:1.4;color:#4A535E}'+
+  '.sit-st{display:inline-block;font-size:11.5px;font-weight:600;border-radius:999px;padding:4px 9px;line-height:1.25}.sit-fp{font-size:10.5px;font-weight:600;color:#3730A3;background:#EEF0FF;border-radius:6px;padding:1px 6px;margin-left:4px}'+
+  '.sit-btn{display:inline-flex;align-items:center;height:32px;padding:0 11px;border-radius:8px;border:1px solid #CBD2D9;background:#fff;color:#2F3640;font:500 12px Inter,arial,sans-serif;cursor:pointer;white-space:nowrap;text-decoration:none}.sit-btn.p{background:#B45309;border-color:#B45309;color:#fff;font-weight:600}.sit-btn.s{border-color:#B45309;color:#92400E;font-weight:600}'+
+  '.sit-vazio{padding:26px;text-align:center;color:#5B6470}.sit-leg{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:12px;color:#4A535E}'+
   '.blg-cruz .blg-fil,.blg-cruz .blg-bar{display:none}.crz{font-size:12.5px}.crz-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}.crz-top input{height:30px;border:1px solid #d6d6d6;border-radius:6px;padding:0 8px;font:inherit}.crz-top .blg-btn{width:auto;padding:0 14px;margin:0;height:32px}'+
   '.crz-leg{font-size:11px;color:#777;display:flex;gap:10px;align-items:center}.crz-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:3px}.crz-leg i.g{background:#dcfce7;border:1px solid #86efac}.crz-leg i.a{background:#fef3c7;border:1px solid #fcd34d}.crz-leg i.c{background:#f4f4f5;border:1px solid #ddd}'+
   '.crz-cal{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;margin-bottom:10px}.crz-d{border:1px solid #ddd;border-radius:8px;background:#f8f8f8;padding:5px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;font:inherit;min-height:66px}'+
@@ -17562,7 +17669,8 @@ var BLG_IC={
 // e 'pag' = Pagamentos (mod22, só gera PIX / link de crédito).
 function blgPag(){return BLG.modo==='pag';}
 function renderBling(modo){
-  var novo=(modo||'conc');if(BLG.modo!==novo){BLG.sel=null;BLG.view='';}BLG.modo=novo;
+  var novo=(modo||'conc');if(BLG.modo!==novo){BLG.sel=null;BLG.view=novo==='conc'?'sit':'';}BLG.modo=novo;
+  if(novo==='conc'&&BLG.view==='sit')setTimeout(sitIniciar,0);
   blgCss();
   var w=document.createElement('div');w.className='blg';w.id='blgRoot';BLG.root=w;
   blgRetornoOAuth();
@@ -17586,7 +17694,7 @@ function blgDraw(){
   else h+='<div class="blg-top"><div class="blg-bc">Baixa Contas a Receber</div><div class="blg-sep"></div><div class="blg-loja">PIX e boletos Sicoob</div><div class="blg-sp"></div>'+
      (blgAdmin()&&!BLG.demo?blgBotaoTef():'')+'</div>';
   var aba=function(v,t){return '<button class="blg-aba'+((BLG.view||'')===v?' on':'')+'" data-a="aba" data-k="'+v+'">'+t+'</button>';};
-  if(!BLG.demo&&!blgPag())h+='<div class="blg-abas">'+aba('','📋 Vendas a receber')+aba('cruz','🔀 Sicoob × Bling (dia a dia)')+(blgAdmin()?aba('bol','📄 Boletos sem vínculo'+(nBol?' <i>'+nBol+'</i>':''))+aba('sim','🧪 Simulação boletos'):'')+'</div>';
+  if(!BLG.demo&&!blgPag())h+='<div class="blg-abas">'+aba('sit','📊 Situação dos pagamentos')+aba('','📋 Vendas a receber')+aba('cruz','🔀 Sicoob × Bling (dia a dia)')+(blgAdmin()?aba('bol','📄 Boletos sem vínculo'+(nBol?' <i>'+nBol+'</i>':''))+aba('sim','🧪 Simulação boletos'):'')+'</div>';
   h+='<div class="blg-body">';
   // filtros (coluna esquerda)
   var FD=BLG.fd||BLG.f;
@@ -17612,6 +17720,8 @@ function blgDraw(){
   if(BLG.view==='conc'){h+=blgTelaConc()+'</section><aside class="blg-act">'+blgAcoes()+'</aside></div>';w.innerHTML=h;blgLigar(w);return;}
   if(BLG.view==='econf'){h+=blgTelaEconf()+'</section><aside class="blg-act">'+blgAcoes()+'</aside></div>';w.innerHTML=h;blgLigar(w);return;}
   w.classList.toggle('blg-cruz',BLG.view==='cruz');
+  w.classList.toggle('blg-sit',BLG.view==='sit');
+  if(BLG.view==='sit'){h+=sitTela()+'</section></div>';w.innerHTML=h;blgLigar(w);sitLigar(w);return;}
   if(BLG.view==='cruz'){h+=crzTela()+'</section><aside class="blg-act">'+crzLateral()+'</aside></div>';w.innerHTML=h;blgLigar(w);crzLigar(w);return;}
   if(BLG.view==='pag'){h+=blgTelaPag()+'</section><aside class="blg-act">'+blgAcoes()+'</aside></div>';w.innerHTML=h;blgLigar(w);return;}
   if(BLG.view==='bol'||BLG.view==='sim'){
@@ -18219,7 +18329,7 @@ function blgAcao(a){
   if(a==='modoBaixa'){var real=BLG._k==='real';
     if(!confirm(real?'Ligar a baixa automática no Bling?\n\nA partir de agora, quando um PIX for identificado, o sistema lança as contas e dá baixa no Bling sozinho.':'Voltar a baixa para SIMULAÇÃO (só anota, não mexe no Bling)?'))return;
     blgApi('/modo',{method:'POST',body:{modo:real?'real':'simulacao',usuario:STATE.usuarioLogado||''}}).then(function(){blgCarregarTefInfo(true);});return;}
-  if(a==='aba'){BLG.view=BLG._k||'';BLG.sel=null;if(BLG.view==='conc')blgCarregarPend();if(BLG.view==='pag')blgCarregarPag();if(BLG.view==='econf')blgCarregarEconf();if(BLG.view==='bol')ccrCarregarPain();if(BLG.view==='cruz')crzIniciar();blgDraw();return;}
+  if(a==='aba'){BLG.view=BLG._k||'';BLG.sel=null;if(BLG.view==='conc')blgCarregarPend();if(BLG.view==='pag')blgCarregarPag();if(BLG.view==='econf')blgCarregarEconf();if(BLG.view==='bol')ccrCarregarPain();if(BLG.view==='cruz')crzIniciar();if(BLG.view==='sit')sitIniciar();blgDraw();return;}
   if(a==='retroativo'){BLG.retroCarr=true;blgDraw();blgApi('/pagamentos/retroativo',{method:'POST',body:{dias:10}}).then(function(r){BLG.retroCarr=false;BLG.retroMsg=r&&r.ok?('Últimos '+r.dias+' dias: '+r.novos+' pagamento(s) vinculado(s) sozinho(s), '+r.pendentes+' para você vincular.'):('Erro: '+((r&&r.erro)||'?'));blgCarregar(true);}).catch(function(e){BLG.retroCarr=false;BLG.retroMsg='Erro: '+e;blgDraw();});return;}
   if(a==='marcar'){var pp=(BLG.pend||[])[BLG._i];if(!pp)return;if(BLG.stage[pp.e2e]===BLG._k)delete BLG.stage[pp.e2e];else BLG.stage[pp.e2e]=BLG._k;blgDraw();return;}
   if(a==='limparMarc'){BLG.stage={};blgDraw();return;}
@@ -18297,6 +18407,16 @@ function blgAcao(a){
   if(a==='copiarImg'&&x){var pi=BLG.pix[BLG.sel];if(!pi)return;blgCopiarImagem(x,pi);return;}
   if(a==='copiar'){var t=BLG.root.querySelector('#blgCopia');if(t){t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand('copy');}var bt=BLG.root.querySelector('[data-a="copiar"]');if(bt){bt.innerHTML='✓ Código copiado';setTimeout(function(){if(bt)bt.innerHTML=BLG_IC.copiar+' Copiar só o código';},1800);}}return;}
   if(a==='wpp'&&x){var p=BLG.pix[BLG.sel];if(!p)return;blgWhatsPix(x,p);return;}
+  if(a==='sitPer'){SIT.per=BLG._k;SIT.msg='';sitIniciar();blgDraw();return;}
+  if(a==='sitAba'){SIT.aba=BLG._k;blgDraw();return;}
+  if(a==='sitRec'){sitDiasPer().forEach(function(d){delete CRZ.det[d];});SIT.venc=null;SIT.msg='';sitIniciar();blgDraw();return;}
+  if(a==='sitAbrirDia'){CRZ.dia=BLG._k;CRZ.mes=CRZ.dia.slice(0,7);BLG.view='cruz';crzCarregarMes();blgDraw();return;}
+  if(a==='sitBaixar'){var pz=String(BLG._k).split('|'),Dz=CRZ.det[pz[0]];if(!Dz)return;var qz=(Dz.sicoob||[]).filter(function(q){return q.chave===pz[1];})[0];if(!qz||!qz.baixar)return;var bz=qz.baixar;
+    if(!confirm('Dar baixa no Bling: '+crzRef(bz)+' · '+bz.cliente+'\nR$ '+blgMoeda(bz.valor)+(bz.juros?' + juros/multa R$ '+blgMoeda(bz.juros):'')+', data '+blgData(qz.data)+' (conta Sicoob)?'))return;
+    SIT.msg='<span class="blg-spin"></span> Baixando…';blgDraw();
+    blgApi('/receber/baixar',{method:'POST',body:{dia:pz[0],usuario:STATE.usuarioLogado||'',itens:[{pagador:qz.nome||'',docCliente:bz.docCliente||'',cliente:bz.cliente||'',numero:bz.numero||'',contaId:bz.contaId,valor:bz.valor,juros:bz.juros||0,desconto:bz.desconto||0,data:qz.data,atraso:bz.atraso,venc:bz.venc,desc:crzTipoTxt(qz.tipo)+(qz.nome?' de '+qz.nome:'')}]}}).then(function(r){
+      var it=(r&&r.itens||[])[0]||{};SIT.msg=it.ok?'✅ Baixado no Bling: '+blgEsc(crzRef(bz))+' · '+blgEsc(bz.cliente)+'.':'❌ '+blgEsc(it.erro||it.resultado||(r&&r.erro)||'Não baixou.');
+      delete CRZ.det[pz[0]];SIT.venc=null;sitIniciar();blgDraw();}).catch(function(e){SIT.msg='❌ Sem conexão: '+blgEsc(e&&e.message||e);blgDraw();});return;}
   if(a==='crzMesConf'){crzConferirMes();return;}
   if(a==='crzDia'){CRZ.dia=BLG._k;CRZ.msg='';if(!CRZ.det[CRZ.dia])crzCarregarDia(CRZ.dia,false);blgDraw();return;}
   if(a==='crzRecarregar'){CRZ.msg='';crzCarregarDia(CRZ.dia,true);return;}
