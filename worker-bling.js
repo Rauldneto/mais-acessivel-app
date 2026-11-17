@@ -145,6 +145,8 @@ export default {
       }
       if (url.pathname === '/boletos/abertos' && req.method === 'POST') return resp(Object.assign({ ok: true }, await conferirBoletosAbertos(env, true)));
       if (url.pathname === '/boletos/abertos') return resp(Object.assign({ ok: true }, (await env.BLING_KV.get('bolabertos', 'json')) || {}));
+      if (url.pathname === '/receber/atrasados') return resp(await buscarAtrasados(env, url.searchParams.get('q') || '', Number(url.searchParams.get('valor') || 0)));
+      if (url.pathname === '/receber/abater' && req.method === 'POST') return resp(await receberAbater(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/receber/acordos') return resp({ ok: true, acordos: (await env.BLING_KV.get('recacordos', 'json')) || {} });
       if (url.pathname === '/receber/acordo' && req.method === 'POST') return resp(await receberAcordo(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/receber/clientes') return resp(await finSrvBuscarContato(env, { nome: url.searchParams.get('q') || '', doc: url.searchParams.get('doc') || '' }));
@@ -2975,7 +2977,7 @@ async function ddaPendenteResolver(env, b) {
 // O que entrou no Sicoob e não tem baixa no Bling: procura a conta em aberto e sugere a baixa (o Raul confirma).
 // O que foi baixado no Bling (conta Sicoob) e não aparece no extrato: aparece para corrigir.
 const CONTA_SICOOB_BLING = 14890739452;
-const RECDIA_VER = 4;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
+const RECDIA_VER = 5;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
 function tipoCredito(desc, doc) {
   const d = semAcento(desc);
   if (doc && doc === ECONF_CNPJ) return 'transf';
@@ -3173,6 +3175,12 @@ async function receberDia(env, dia, forcar) {
         motivo: (m.exato ? 'mesmo valor' : 'valor + juros/multa') + (m.ap ? ' e pagador já ligado a este cliente' : m.doc ? ' e mesmo CPF/CNPJ' : m.nomes >= 2 ? ' e nome do pagador parecido com o do cliente' : m.nomes ? ' (nome do pagador parecido)' : ' (única conta em aberto com esse valor)') };
     }
   }
+  // ficou sem conta: opções entre as contas em atraso (até 5 anos) — você escolhe de qual cliente é
+  const semOp = sobraS.filter(x => !x.baixar && !x.outraData && !(x.sugestoes || []).length && x.tipo !== 'cartao' && x.tipo !== 'boleto');
+  if (semOp.length) {
+    const grupos = await gruposAtrasados(env).catch(() => []);
+    for (const x of semOp) x.atrasos = opcoesAtraso(grupos, x, apelidos).slice(0, 6);
+  }
   // boletos Bling Conta que não casaram com entrada do Sicoob: a Bling baixou sozinha (fica na lista dela)
   blingConta = livresB().filter(ehBlingConta);
   blingConta.forEach(c => usadosB.add(String(c.id)));
@@ -3194,7 +3202,7 @@ async function receberDia(env, dia, forcar) {
     blingSemBanco: sobraB.length, blingConta: blingConta.length, valorBlingConta: r2(blingConta.reduce((t, c) => t + c.valor, 0)), transferencias: transf.length,
   };
   const limpa = x => ({ outraData: x.outraData, blingInfo: x.blingInfo, chave: x.chave, data: x.data, valor: x.valor, desc: x.desc, compl: x.compl, doc: x.doc, nome: x.nome, tipo: x.tipo, bol: x.bol, liqAviso: x.liqAviso,
-    par: x.par, como: x.como, juros: x.juros, desconto: x.desconto, auto: x.auto, baixar: x.baixar, sugestoes: x.sugestoes, acordo: x.acordo, acordoAviso: x.acordoAviso });
+    par: x.par, como: x.como, juros: x.juros, desconto: x.desconto, auto: x.auto, baixar: x.baixar, sugestoes: x.sugestoes, acordo: x.acordo, acordoAviso: x.acordoAviso, atrasos: x.atrasos });
   const out = { ver: RECDIA_VER, ts: Date.now(), dia, resumo, sicoob: S.map(limpa), bling: bling.filter(c => !ehBlingConta(c) || !blingConta.includes(c)).map(c => Object.assign({}, c, { auto: autoContas.has(String(c.id)), ligado: usadosB.has(String(c.id)) })),
     blingConta: blingConta.map(c => ({ id: c.id, valor: c.valor, cliente: c.cliente, numero: c.numero })), outrasContas: outrasContas.map(c => ({ id: c.id, valor: c.valor, cliente: c.cliente, numero: c.numero, portadorNome: c.portadorNome })),
     transferencias: transf.map(limpa) };
@@ -3257,6 +3265,71 @@ async function receberAcordo(env, b) {
   if (b.dia) await env.BLING_KV.delete('recdia:' + soData(b.dia)).catch(() => {});
   const contas = await contasDoCliente(env, reg.contatoId).catch(() => []);
   return { ok: true, contas: contas.length, devido: r2(contas.reduce((t, c) => t + c.saldo, 0)) };
+}
+// ---- contas em atraso de até 5 anos, agrupadas por cliente (guardado 60 min) ----
+async function gruposAtrasados(env) {
+  const c = await env.BLING_KV.get('recAtraso5', 'json');
+  if (c && Date.now() - c.ts < 60 * 60e3) return c.g;
+  const hoje = hojeLocal(), lista = [];
+  for (let fim = somaDias(hoje, -1), i = 0; i < 5; i++) {
+    const ini = somaDias(fim, -364);
+    lista.push(...await paginas(env, '/contas/receber?situacoes[]=1&situacoes[]=3&tipoFiltroData=V&dataInicial=' + ini + '&dataFinal=' + fim, 6));
+    fim = somaDias(ini, -1);
+  }
+  const G = {};
+  for (const x of lista) {
+    const ct = x.contato || {}, k = String(ct.id || dig(ct.numeroDocumento) || ct.nome || '');
+    if (!k) continue;
+    const g = G[k] || (G[k] = { contatoId: ct.id || 0, cliente: ct.nome || '', doc: dig(ct.numeroDocumento), n: 0, total: 0, parcial: 0, maisAntiga: null, valores: [] });
+    const venc = soData(x.vencimento);
+    g.n++; g.total = r2(g.total + Number(x.valor || 0)); if (Number(x.situacao) === 3) g.parcial++;
+    if (g.valores.length < 40) g.valores.push(r2(x.valor));
+    if (!g.maisAntiga || venc < g.maisAntiga.venc) g.maisAntiga = { id: x.id, venc, numero: String((x.origem && x.origem.numero) || ''), origemTipo: (x.origem && x.origem.tipoOrigem) || '', valor: r2(x.valor) };
+  }
+  const g = Object.values(G).filter(g => g.contatoId);
+  await env.BLING_KV.put('recAtraso5', JSON.stringify({ ts: Date.now(), g }), { expirationTtl: 3 * 3600 });
+  return g;
+}
+// clientes em atraso que podem ser donos deste pagamento (nome/CPF parecido, valor de alguma parcela, já pagou aos poucos)
+function opcoesAtraso(grupos, x, apelidos) {
+  const ap = x.nome ? (apelidos || {})[chaveNome(x.nome)] : null;
+  return grupos.map(g => {
+    const doc = mesmoDoc(x.doc, g.doc) || !!(ap && mesmoDoc(ap, g.doc)), nomes = nomesComuns(x.nome, g.cliente), exato = g.valores.some(v => Math.abs(v - x.valor) <= 0.01);
+    const p = (doc ? 60 : 0) + (nomes >= 2 ? 40 : nomes ? 15 : 0) + (exato ? 25 : 0) + (g.parcial ? 15 : 0) + (g.total >= x.valor ? 3 : -10);
+    const por = [doc ? 'mesmo CPF/CNPJ' : '', nomes ? 'nome parecido' : '', exato ? 'tem parcela de mesmo valor' : '', g.parcial ? 'já pagou parte antes' : ''].filter(Boolean).join(' · ');
+    return { p, contatoId: g.contatoId, cliente: g.cliente, doc: g.doc, n: g.n, total: g.total, maisAntiga: g.maisAntiga, por };
+  }).filter(o => o.p > 3).sort((a, b) => b.p - a.p || String(a.maisAntiga.venc).localeCompare(String(b.maisAntiga.venc)));
+}
+async function buscarAtrasados(env, q, valor) {
+  const grupos = await gruposAtrasados(env).catch(() => []);
+  const so = dig(q), tk = tokensNome(q);
+  const l = grupos.filter(g => (so.length >= 5 && g.doc.includes(so)) || (tk.length && tk.every(t => tokensNome(g.cliente).some(u => u.startsWith(t)))))
+    .sort((a, b) => b.total - a.total).slice(0, 15).map(g => ({ contatoId: g.contatoId, cliente: g.cliente, doc: g.doc, n: g.n, total: g.total, maisAntiga: g.maisAntiga, por: g.parcial ? 'já pagou parte antes' : '' }));
+  return { ok: true, itens: l };
+}
+// POST /receber/abater {dia, chave, contatoId, cliente, doc, usuario} — abate o pagamento nas contas mais antigas do cliente escolhido
+async function receberAbater(env, b) {
+  const dia = soData(b.dia);
+  if (!dia || !b.chave || !Number(b.contatoId)) return { ok: false, erro: 'Dados incompletos.' };
+  const d = await receberDia(env, dia, true);
+  const x = (d.sicoob || []).find(q => q.chave === b.chave);
+  if (!x) return { ok: false, erro: 'Pagamento não encontrado neste dia.' };
+  if (x.par) return { ok: true, resultado: 'já estava baixado' };
+  // liga quem pagou a este cliente (próximos pagamentos dele saem automáticos)
+  await receberAcordo(env, { pagadorNome: x.nome, pagadorDoc: x.doc, contatoId: b.contatoId, cliente: b.cliente, doc: b.doc, usuario: b.usuario });
+  const contas = await contasDoCliente(env, b.contatoId);
+  let resto = x.valor; const partes = [];
+  for (const c of contas) {
+    if (resto <= 0.009 || partes.length >= 6) break;
+    const v = r2(Math.min(resto, c.saldo)); if (v <= 0) continue;
+    partes.push({ contaId: c.id, valor: v, saldo: c.saldo, venc: c.venc, numero: c.numero, origemTipo: c.origemTipo, quita: Math.abs(v - c.saldo) <= 0.009 }); resto = r2(resto - v);
+  }
+  if (!partes.length) return { ok: false, erro: 'Esse cliente não tem conta em aberto no Bling.' };
+  const r = await baixarAcordo(env, { partes, chave: x.chave, contatoId: b.contatoId, cliente: b.cliente, contaId: partes[0].contaId, desc: (x.tipo === 'pix' ? 'PIX' : 'Crédito') + (x.nome ? ' de ' + x.nome : '') }, x.data, b);
+  await env.BLING_KV.delete('recdia:' + dia).catch(() => {});
+  await env.BLING_KV.delete('recAtraso5').catch(() => {});
+  await env.BLING_KV.delete('recAbertas').catch(() => {});
+  return { ok: r.ok, resultado: r.resultado, partes, sobra: resto };
 }
 async function receberMes(env, mes) {
   if (!/^\d{4}-\d{2}$/.test(String(mes || ''))) mes = hojeLocal().slice(0, 7);

@@ -17316,7 +17316,7 @@ function crzTela(){
            '<div>Conta de R$ '+blgMoeda(b.valor)+(b.juros?' + <b>juros/multa R$ '+blgMoeda(b.juros)+'</b>':'')+' · venc. '+blgData(b.venc)+' '+crzDiasTxt(x.data,b.venc)+'</div><small>'+blgEsc(b.motivo)+' · baixa com data '+blgData(x.data)+', conta Sicoob</small>'+(b.forte?'<small style="color:#047857">🤖 Ligação segura: o app baixa sozinho na próxima rodada (até 30 min), ou baixe agora.</small>':'<small style="color:#92400e">Confira e baixe: depois que você confirmar, quem pagou fica ligado a este cliente e das próximas vezes a baixa é automática.</small>');}
       else if((x.sugestoes||[]).length){h+='<div style="color:#92400e"><b>Mais de uma conta possível</b> — escolha:</div>'+(x.sugestoes||[]).map(function(s){
           return '<div class="crz-sug"><span>'+blgEsc(crzRef(s))+' · '+blgEsc(s.cliente)+' · R$ '+blgMoeda(s.valor)+' · venc. '+blgData(s.venc)+(s.doc?' · <b>mesmo CPF/CNPJ</b>':'')+'</span><button class="blg-btn sec" data-a="crzBaixarSug" data-k="'+k+'|'+s.contaId+'">Baixar nesta</button></div>';}).join('');}
-      else h+='<div style="color:#b91c1c"><b>Nenhuma conta em aberto no Bling com esse valor.</b></div><small>'+(x.acordoAviso?blgEsc(x.acordoAviso):'Falta lançar a conta a receber no Bling (ou é outro tipo de entrada). Depois de lançar, clique em ⟳ para conferir de novo.')+'</small>'+(x.tipo!=='boleto'?'<div><button class="blg-btn sec" style="width:auto;padding:0 10px;margin-top:4px" data-a="sitAcAbrir" data-k="'+CRZ.dia+'|'+k+'">🤝 É de um cliente que paga aos poucos</button></div>':'');
+      else h+='<div style="color:#b91c1c"><b>Nenhuma conta em aberto no Bling com esse valor.</b></div><small>'+(x.acordoAviso?blgEsc(x.acordoAviso):'Falta lançar a conta a receber no Bling, ou é pagamento de conta em atraso.')+'</small>'+(x.tipo!=='boleto'&&x.tipo!=='cartao'?((x.atrasos||[]).length?'<div style="margin-top:4px;font-size:12px"><b>Contas em atraso que podem ser deste pagamento:</b></div>'+(x.atrasos||[]).slice(0,3).map(function(o,i){return sitAtrOp(o,CRZ.dia,k,i);}).join(''):'')+'<div><button class="blg-btn sec" style="width:auto;padding:0 10px;margin-top:4px" data-a="sitAcAbrir" data-k="'+CRZ.dia+'|'+k+'">📂 Ver contas em atraso (até 5 anos)</button></div>':'');
       h+='</div></div>';
     });
     if(nSel)h+='<button class="blg-btn" style="width:auto;padding:0 18px;margin:8px 0 4px" data-a="crzBaixarSel"'+(CRZ.baixando?' disabled':'')+'>'+(CRZ.baixando?'<span class="blg-spin"></span> Baixando…':'✅ Baixar no Bling os '+nSel+' marcados')+'</button><div class="nota" style="font-size:11px;color:#666">A baixa usa a data em que o dinheiro entrou no Sicoob, com juros/multa quando o valor pago foi maior, e o histórico informa o atraso.</div>';
@@ -17374,18 +17374,21 @@ function sitDiasPer(){
   return out;
 }
 function sitMesPassadoNome(){var h=crzHoje();var m=new Date(Date.parse(h.slice(0,8)+'01T12:00:00')-2*864e5);return ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][m.getMonth()];}
-// cliente que paga aos poucos: liga quem pagou (nome/CPF) a um cliente; o app abate cada pagamento na conta mais antiga dele
+// pagamento sem conta: opções entre as contas em atraso (até 5 anos); escolher abate nas parcelas mais antigas do cliente
+function sitAtrOp(o,dia,chave,i){var m=o.maisAntiga||{};return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #fde4c8"><span><b>'+blgEsc(o.cliente)+'</b> · '+o.n+' conta(s) em atraso, R$ '+blgMoeda(o.total)+
+  '<br><small>mais antiga: '+blgEsc(crzRef(m))+' venc. '+blgData(m.venc)+' · R$ '+blgMoeda(m.valor)+(o.por?' · <b>'+blgEsc(o.por)+'</b>':'')+'</small></span><button class="sit-btn p" data-a="sitAtrAbater" data-k="'+dia+'|'+chave+'|'+i+'">Abater aqui</button></div>';}
 function sitAcPainel(){var A=SIT.ac;if(!A)return '';
-  var h='<div class="blg-msg" style="background:#FFF7ED;border:1px solid #FDBA74;color:#7c2d12"><b>🤝 Cliente que paga aos poucos</b><br>Pagamento de <b>R$ '+blgMoeda(A.valor)+'</b> feito por <b>'+blgEsc(A.nome||'?')+'</b>'+(A.doc?' ('+crzDoc(A.doc)+')':'')+'. De qual cliente é essa dívida?'+
-    '<div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap"><input id="sitAcQ" value="'+blgEsc(A.q||'')+'" placeholder="Nome ou CNPJ do cliente (ex.: PREDIAL)" style="flex:1;min-width:200px;padding:6px 8px;border:1px solid #ccc;border-radius:6px">'+
-    '<button class="sit-btn p" data-a="sitAcBuscar">Buscar</button><button class="sit-btn s" data-a="sitAcFechar">Cancelar</button></div>';
+  var h='<div class="blg-msg" style="background:#FFF7ED;border:1px solid #FDBA74;color:#7c2d12"><b>📂 Contas em atraso (até 5 anos)</b> — de quem é o pagamento de <b>R$ '+blgMoeda(A.valor)+'</b> feito por <b>'+blgEsc(A.nome||'?')+'</b>'+(A.doc?' ('+crzDoc(A.doc)+')':'')+' em '+blgData(A.data)+'?'+
+    '<div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap"><input id="sitAcQ" value="'+blgEsc(A.q||'')+'" placeholder="Buscar outro cliente em atraso (nome ou CNPJ)" style="flex:1;min-width:200px;padding:6px 8px;border:1px solid #ccc;border-radius:6px">'+
+    '<button class="sit-btn p" data-a="sitAcBuscar">Buscar</button><button class="sit-btn s" data-a="sitAcFechar">Fechar</button></div>';
   if(A.carr)h+='<div><span class="blg-spin"></span> '+blgEsc(A.carr)+'</div>';
   if(A.erro)h+='<div style="color:#b91c1c">'+blgEsc(A.erro)+'</div>';
-  (A.res||[]).forEach(function(c,i){h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-top:1px solid #fde4c8"><span><b>'+blgEsc(c.nome)+'</b> · '+crzDoc(c.doc||'')+'</span><button class="sit-btn p" data-a="sitAcLigar" data-k="'+i+'">É deste cliente</button></div>';});
-  if(A.res&&!A.res.length)h+='<div>Nenhum cliente encontrado.</div>';
-  return h+'<small>Depois de ligar, todo pagamento de '+blgEsc(A.nome||'quem pagou')+' é abatido sozinho na conta mais antiga em aberto do cliente (baixa parcial no Bling, com a data do extrato).</small></div>';}
+  var L=A.res||A.ops||[];if(!A.res&&L.length)h+='<div style="font-size:12px;margin-top:4px">Mais prováveis:</div>';
+  L.forEach(function(o,i){h+=sitAtrOp(o,A.dia,A.chave,i);});
+  if(!L.length&&!A.carr)h+='<div>'+(A.res?'Nenhum cliente em atraso com esse nome.':'Nenhuma sugestão automática — busque o cliente acima.')+'</div>';
+  return h+'<small>"Abater aqui" dá baixa parcial no Bling na conta mais antiga do cliente (data do extrato) e liga '+blgEsc(A.nome||'quem pagou')+' a ele: os próximos pagamentos saem automáticos.</small></div>';}
 function sitAcAbrir(dia,chave){var D=CRZ.det[dia];if(!D)return;var x=(D.sicoob||[]).filter(function(q){return q.chave===chave;})[0];if(!x)return;
-  SIT.ac={dia:dia,chave:chave,nome:x.nome||'',doc:x.doc||'',valor:x.valor,q:''};blgDraw();var i=BLG.root.querySelector('#sitAcQ');if(i)i.focus();}
+  SIT.ac={dia:dia,chave:chave,nome:x.nome||'',doc:x.doc||'',valor:x.valor,data:x.data,ops:x.atrasos||[],q:''};blgDraw();try{window.scrollTo(0,0);}catch(e){}}
 function sitIniciar(){
   if(BLG.view!=='sit')return;
   if(!blgUrl()){setTimeout(sitIniciar,800);return;}
@@ -17456,7 +17459,8 @@ function sitTela(){
       det=bb.acordo?'🤝 '+blgEsc(bb.motivo)+(bb.forte?'. O app baixa sozinho na próxima rodada.':''):(bb.forte?'Ligação segura ('+blgEsc(bb.motivo)+'): o app baixa sozinho na próxima rodada.':'Confira: '+blgEsc(bb.motivo)+'. Depois de confirmar uma vez, os próximos pagamentos de '+blgEsc(x.nome||'quem pagou')+' para este cliente saem automáticos.')+(bb.juros?' Juros/multa R$ '+blgMoeda(bb.juros)+'.':'');
       acao='<button class="sit-btn p" data-a="sitBaixar" data-k="'+l.dia+'|'+x.chave+'">Confirmar e baixar</button>';}
     else if(l.k==='semconta'){var sg=x.sugestoes||[];bling=sg.length?'<b>'+sg.length+' conta(s) possível(is)</b><div>'+sg.slice(0,2).map(function(s){return blgEsc(s.cliente)+' · R$ '+blgMoeda(s.valor);}).join('<br>')+'</div>':'<b class="red">Nenhuma conta encontrada</b><div>Sem conta em aberto com R$ '+blgMoeda(x.valor)+'</div>';
-      det=sg.length?'Mais de uma conta pode ser esta: escolha a certa.':'Falta lançar a conta a receber no Bling, ou diga de qual cliente é.';acao='<button class="sit-btn s" data-a="sitAbrirDia" data-k="'+l.dia+'">'+(sg.length?'Escolher conta':'Vincular / lançar')+'</button>'+(x.tipo!=='boleto'?'<button class="sit-btn s" style="margin-top:4px" data-a="sitAcAbrir" data-k="'+l.dia+'|'+x.chave+'" title="Pagamento por conta de dívida antiga, pago aos poucos">🤝 Paga aos poucos</button>':'');
+      det=sg.length?'Mais de uma conta pode ser esta: escolha a certa.':'Falta lançar a conta a receber no Bling, ou diga de qual cliente é.';acao='<button class="sit-btn s" data-a="sitAbrirDia" data-k="'+l.dia+'">'+(sg.length?'Escolher conta':'Vincular / lançar')+'</button>'+(x.tipo!=='boleto'&&x.tipo!=='cartao'?'<button class="sit-btn s" style="margin-top:4px" data-a="sitAcAbrir" data-k="'+l.dia+'|'+x.chave+'">📂 Contas em atraso'+((x.atrasos||[]).length?' ('+x.atrasos.length+')':'')+'</button>':'');
+      if(!sg.length&&(x.atrasos||[]).length){var o0=x.atrasos[0];bling='<b class="el">Pode ser conta em atraso</b><div>'+blgEsc(o0.cliente)+'</div><small>'+(x.atrasos.length>1?'e mais '+(x.atrasos.length-1)+' opção(ões)':'')+(o0.por?(x.atrasos.length>1?' · ':'')+blgEsc(o0.por):'')+'</small>';det='Não há conta com esse valor. Veja as contas em atraso (até 5 anos) e escolha onde abater.';}
       if(x.acordoAviso)det=blgEsc(x.acordoAviso);}
     else if(l.k==='cartao'){bling='<span class="mut">Várias vendas no cartão</span>';det='Repasse da maquininha (já sem a taxa). A baixa do cartão ainda não está ligada.';}
     else if(l.k==='semBanco'){bling='<b class="el">'+blgEsc(c.cliente)+'</b><div>'+blgEsc(crzRef(c))+' · R$ '+blgMoeda(c.valor)+'</div><small>baixada no Bling em '+blgData(l.dia)+', conta Sicoob</small>';det='Confira no Bling a data da baixa e a conta financeira (pode ter sido baixada no dia errado ou em outra conta).';acao='<a class="sit-btn s" href="https://www.bling.com.br/contas.receber.php#edit/'+c.id+'" target="_blank">Abrir no Bling</a>';}
@@ -18459,17 +18463,17 @@ function blgAcao(a){
   if(a==='wpp'&&x){var p=BLG.pix[BLG.sel];if(!p)return;blgWhatsPix(x,p);return;}
   if(a==='sitAcAbrir'){var pa=String(BLG._k).split('|');sitAcAbrir(pa[0],pa[1]);return;}
   if(a==='sitAcFechar'){SIT.ac=null;blgDraw();return;}
-  if(a==='sitAcBuscar'){var A=SIT.ac;if(!A)return;var qi=BLG.root.querySelector('#sitAcQ');A.q=qi?qi.value.trim():'';if(A.q.length<3){A.erro='Digite pelo menos 3 letras.';blgDraw();return;}
-    var so=A.q.replace(/\D/g,'');A.erro='';A.res=null;A.carr='Buscando no Bling…';blgDraw();
-    blgApi('/receber/clientes?'+(so.length>=11?'doc='+so:'q='+encodeURIComponent(A.q))).then(function(r){A.carr='';A.res=(r&&r.itens)||[];if(!(r&&r.ok))A.erro=(r&&r.erro)||'Falhou.';blgDraw();}).catch(function(e){A.carr='';A.erro=String(e);blgDraw();});return;}
-  if(a==='sitAcLigar'){var A2=SIT.ac,cl=A2&&(A2.res||[])[Number(BLG._k)];if(!cl)return;
-    if(!confirm('Ligar '+(A2.nome||'quem pagou')+' ao cliente '+cl.nome+'?\nDaqui em diante os pagamentos dele são abatidos na conta mais antiga em aberto deste cliente.'))return;
-    A2.carr='Ligando e lendo as contas em aberto do cliente…';blgDraw();
-    blgApi('/receber/acordo',{method:'POST',body:{pagadorNome:A2.nome,pagadorDoc:A2.doc,contatoId:cl.id,cliente:cl.nome,doc:cl.doc,dia:A2.dia,usuario:STATE.usuarioLogado||''}}).then(function(r){
-      if(!(r&&r.ok)){A2.carr='';A2.erro=(r&&r.erro)||'Falhou.';blgDraw();return;}
-      var m='🤝 '+blgEsc(A2.nome)+' ligado a <b>'+blgEsc(cl.nome)+'</b> ('+r.contas+' conta(s) em aberto, R$ '+blgMoeda(r.devido)+'). O app abate este pagamento sozinho em até 30 min (ou clique em Confirmar e baixar).';
-      SIT.ac=null;SIT.msg=m;CRZ.msg=m;delete CRZ.det[A2.dia];
-      if(BLG.view==='cruz')crzCarregarDia(A2.dia,true);else{SIT.venc=null;sitIniciar();}blgDraw();}).catch(function(e){A2.carr='';A2.erro=String(e);blgDraw();});return;}
+  if(a==='sitAcBuscar'){var A=SIT.ac;if(!A)return;var qi=BLG.root.querySelector('#sitAcQ');A.q=qi?qi.value.trim():'';if(!A.q){A.res=null;blgDraw();return;}if(A.q.length<3){A.erro='Digite pelo menos 3 letras.';blgDraw();return;}
+    A.erro='';A.res=null;A.carr='Buscando nas contas em atraso…';blgDraw();
+    blgApi('/receber/atrasados?q='+encodeURIComponent(A.q)).then(function(r){A.carr='';A.res=(r&&r.itens)||[];if(!(r&&r.ok))A.erro=(r&&r.erro)||'Falhou.';blgDraw();}).catch(function(e){A.carr='';A.erro=String(e);blgDraw();});return;}
+  if(a==='sitAtrAbater'){var pk=String(BLG._k).split('|'),Dk=CRZ.det[pk[0]],xk=Dk&&(Dk.sicoob||[]).filter(function(q){return q.chave===pk[1];})[0];if(!xk)return;
+    var A3=SIT.ac&&SIT.ac.chave===pk[1]?SIT.ac:null,ok3=(A3?(A3.res||A3.ops):xk.atrasos)||[],o=ok3[Number(pk[2])];if(!o)return;
+    if(!confirm('Abater R$ '+blgMoeda(xk.valor)+' ('+(xk.nome||'pagamento')+', '+blgData(xk.data)+') nas contas em atraso de '+o.cliente+'?\nComeça pela mais antiga: '+crzRef(o.maisAntiga||{})+' venc. '+blgData((o.maisAntiga||{}).venc)+'.'))return;
+    var fim=function(m){SIT.ac=null;SIT.msg=m;CRZ.msg=m;delete CRZ.det[pk[0]];if(BLG.view==='cruz')crzCarregarDia(pk[0],true);else{SIT.venc=null;sitIniciar();}blgDraw();};
+    SIT.msg=CRZ.msg='<span class="blg-spin"></span> Abatendo no Bling…';if(SIT.ac)SIT.ac.carr='Abatendo no Bling…';blgDraw();
+    blgApi('/receber/abater',{method:'POST',body:{dia:pk[0],chave:pk[1],contatoId:o.contatoId,cliente:o.cliente,doc:o.doc,usuario:STATE.usuarioLogado||''}}).then(function(r){
+      if(!(r&&r.ok)){fim('❌ '+blgEsc((r&&(r.erro||r.resultado))||'Não abateu.'));return;}
+      fim('✅ R$ '+blgMoeda(xk.valor)+' abatido em '+blgEsc(o.cliente)+': '+(r.partes||[]).map(function(p){return blgEsc(crzRef(p))+' venc. '+blgData(p.venc)+' R$ '+blgMoeda(p.valor)+(p.quita?' (quitou)':' (falta R$ '+blgMoeda(Math.round((p.saldo-p.valor)*100)/100)+')');}).join('; ')+'.');}).catch(function(e){fim('❌ Sem conexão: '+blgEsc(e&&e.message||e));});return;}
   if(a==='sitPer'){SIT.per=BLG._k;SIT.msg='';sitIniciar();blgDraw();return;}
   if(a==='sitAba'){SIT.aba=BLG._k;blgDraw();return;}
   if(a==='sitRec'){sitDiasPer().forEach(function(d){delete CRZ.det[d];});SIT.venc=null;SIT.msg='';sitIniciar();blgDraw();return;}
