@@ -1392,7 +1392,7 @@ async function executarContasPedido(env, reg, valor, data) {
   for (const c of abertas) {
     if (resto <= 0.009) break;
     const v = Math.min(resto, Number(c.valor || 0));
-    await executarBaixa(env, c.id, v, data, reg);
+    await executarBaixa(env, c.id, v, data, feitas ? Object.assign({}, reg, { desconto: 0, juros: 0, acrescimo: 0 }) : reg);   // desconto/juros só na primeira parcela
     resto = Math.round((resto - v) * 100) / 100; feitas++;
   }
   return 'ok (' + (lancou ? 'contas lançadas no pedido; ' : nfId ? 'na nota do pedido; ' : '') + feitas + ' parcela(s) baixada(s))';
@@ -3374,7 +3374,14 @@ async function receberBaixar(env, b) {
     if (it.pedidoId && data) {
       const hist = 'Recebido no Sicoob em ' + brData(data) + (it.desc ? ' (' + String(it.desc).slice(0, 60) + ')' : '') + ' - contas do pedido lançadas e baixadas pelo cruzamento Sicoob × Bling (app Mais Acessível' + (b.usuario ? ', ' + String(b.usuario).slice(0, 40) : '') + ')';
       try {
-        const r = await executarContasPedido(env, { id: Number(it.pedidoId), historico: hist + (Number(it.desconto) ? ' - desconto R$ ' + Number(it.desconto).toFixed(2).replace('.', ',') : ''), desconto: r2(it.desconto || 0) }, r2(it.valor), data);
+        // confere o pedido como está agora: se alguém dividiu as parcelas e uma delas é o valor pago, baixa só ela (sem desconto)
+        const pago = r2(Number(it.valor) - Number(it.desconto || 0) + Number(it.juros || 0));
+        const pedAt = ((await bling(env, '/pedidos/vendas/' + Number(it.pedidoId)).catch(() => null)) || {}).data || {};
+        const parcs = pedAt.parcelas || [], igual = parcs.find(q => Math.abs(Number(q.valor) - pago) <= 0.01);
+        let valorB = r2(it.valor), desc = r2(it.desconto || 0), parcela = null;
+        if (parcs.length > 1 && igual) { valorB = pago; desc = 0; parcela = { venc: soData(igual.dataVencimento), valor: r2(igual.valor) }; }
+        else if (parcs.length > 1 && desc) { out.push({ contaId: it.contaId, ok: false, erro: 'O pedido agora tem ' + parcs.length + ' parcelas e nenhuma é de R$ ' + pago.toFixed(2) + ': confira e baixe à mão.' }); continue; }
+        const r = await executarContasPedido(env, { id: Number(it.pedidoId), parcela, historico: hist + (desc ? ' - desconto R$ ' + desc.toFixed(2).replace('.', ',') : ''), desconto: desc }, valorB, data);
         await logAcao(env, { modo: 'real', origem: it.auto ? 'cruzamento-auto' : 'cruzamento', acao: 'contas_pedido', cliente: it.cliente || '', numero: it.numero || '', contaId: 0, valorBaixa: r2(it.valor), valor: r2(it.valor), data, resultado: r, por: b.usuario || '',
           detalhe: 'Pedido ' + (it.numero || it.pedidoId) + ' sem conta: contas lançadas e baixadas, R$ ' + r2(it.valor).toFixed(2) + ', data ' + brData(data) });
         out.push({ contaId: it.contaId, ok: /^ok/.test(r), resultado: r });
