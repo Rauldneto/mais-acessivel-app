@@ -3075,11 +3075,13 @@ async function receberDia(env, dia, forcar) {
   // o que sobrou do Sicoob: procura a conta em aberto no Bling (pode ter sido paga adiantada ou atrasada)
   const sobraS = S.filter(x => !x.par);
   let abertas = [];
-  if (sobraS.length) abertas = (await contasAbertasJanela(env).catch(() => [])).filter(c => !ehBlingConta(c));
+  // conta de boleto Bling Conta só fica de fora para crédito de boleto; se o cliente pagou por PIX no Sicoob, ela entra (mesmo CNPJ e valor)
+  if (sobraS.length) abertas = await contasAbertasJanela(env).catch(() => []);
   const reservadas = new Set();
+  const abertasSicoob = abertas.filter(c => !ehBlingConta(c));
   for (const x of sobraS.filter(x => x.bol)) {
     const l = x.bol, nf = nfDe(l.seu);
-    const c = abertas.find(c => String(c.id) === String(l.contaId)) || abertas.find(c => nf && String(Number(c.numero)) === nf && Math.abs(c.valor - l.titulo) <= 0.01);
+    const c = abertasSicoob.find(c => String(c.id) === String(l.contaId)) || abertasSicoob.find(c => nf && String(Number(c.numero)) === nf && Math.abs(c.valor - l.titulo) <= 0.01);
     if (!c) continue;
     reservadas.add(String(c.id));
     const venc = l.venc || c.venc, atraso = venc && l.liq > venc ? Math.round((Date.parse(l.liq) - Date.parse(venc)) / 864e5) : 0;
@@ -3089,7 +3091,7 @@ async function receberDia(env, dia, forcar) {
   const apelidos = sobraS.length ? ((await env.BLING_KV.get('recapelidos', 'json')) || {}) : {};
   for (const x of sobraS.filter(x => !x.baixar)) {
     const ap = x.nome ? apelidos[chaveNome(x.nome)] : null;   // quem pagou já foi ligado a este cliente antes (confirmado por você)
-    const cand = abertas.filter(c => !reservadas.has(String(c.id))).map(c => {
+    const cand = abertas.filter(c => !reservadas.has(String(c.id)) && (!ehBlingConta(c) || (x.tipo !== 'boleto' && mesmoDoc(x.doc, c.doc)))).map(c => {
       const exato = Math.abs(c.valor - x.valor) <= 0.01, doc = mesmoDoc(x.doc, c.doc) || !!(ap && mesmoDoc(ap, c.doc)), nomes = nomesComuns(x.nome, c.cliente);
       const juros = x.valor > c.valor && x.valor - c.valor <= c.valor * 0.15;
       if (!exato && !(juros && (doc || nomes >= 2))) return null;
