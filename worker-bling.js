@@ -3008,7 +3008,7 @@ async function ddaPendenteResolver(env, b) {
 // O que entrou no Sicoob e não tem baixa no Bling: procura a conta em aberto e sugere a baixa (o Raul confirma).
 // O que foi baixado no Bling (conta Sicoob) e não aparece no extrato: aparece para corrigir.
 const CONTA_SICOOB_BLING = 14890739452;
-const RECDIA_VER = 10;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
+const RECDIA_VER = 11;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
 function tipoCredito(desc, doc) {
   const d = semAcento(desc);
   if (doc && doc === ECONF_CNPJ) return 'transf';
@@ -3140,7 +3140,15 @@ async function receberDia(env, dia, forcar) {
   // 5) crédito de cobrança agrupado (vários boletos numa linha): soma dos recebimentos de boleto do dia
   for (const x of S.filter(x => !x.par && x.tipo === 'boleto')) {
     const cs = livresB().filter(c => c.forma === 15);
-    if (cs.length > 1 && Math.abs(r2(cs.reduce((t, c) => t + c.valor, 0)) - x.valor) <= 0.01) ligar(x, cs, 'crédito de cobrança agrupado = soma de ' + cs.length + ' boletos');
+    if (cs.length > 1 && Math.abs(r2(cs.reduce((t, c) => t + c.valor, 0)) - x.valor) <= 0.01) { ligar(x, cs, 'crédito de cobrança agrupado = soma de ' + cs.length + ' boletos'); continue; }
+    // nem todos os boletos baixados no dia estão nesse crédito: procura o grupo de boletos cuja soma bate exatamente
+    const sub = somaExata(cs, x.valor);
+    if (sub && sub.length > 1) ligar(x, sub, 'crédito de cobrança agrupado = soma de ' + sub.length + ' boletos Sicoob baixados no Bling neste dia');
+  }
+  // 6) diferença de centavos (até R$ 1,00) com o mesmo cliente no mesmo dia: é o mesmo pagamento
+  for (const x of S.filter(x => !x.par && x.tipo !== 'boleto')) {
+    const c = livresB().find(c => Math.abs(c.valor - x.valor) <= 1.0 && (mesmoDoc(x.doc, c.doc) || nomesComuns(x.nome, c.cliente) >= 1));
+    if (c) ligar(x, [c], 'mesmo cliente, diferença de R$ ' + Math.abs(r2(c.valor - x.valor)).toFixed(2).replace('.', ',') + ' (centavos)');
   }
   // o que sobrou do Sicoob: procura a conta em aberto no Bling (pode ter sido paga adiantada ou atrasada)
   const sobraS = S.filter(x => !x.par);
@@ -3288,6 +3296,15 @@ async function contasAbertasJanela(env) {
 // ---- clientes que pagam aos poucos (acordo de dívida antiga) ----
 function crzRefSrv(p) { return (p.origemTipo === 'notafiscal' ? 'NF ' : p.origemTipo === 'venda' ? 'Pedido ' : 'Conta ') + (p.numero || p.contaId || ''); }
 // pago a menos com desconto "redondo" (ex.: 5% de 675,00 = 641,25): % inteiro ou meio por cento, até 10%
+// subconjunto de contas cuja soma é exatamente o valor (até 24 contas; soma em centavos)
+function somaExata(cs, alvo) {
+  const L = cs.slice(0, 24), A = Math.round(alvo * 100), mapa = new Map([[0, []]]);
+  for (let i = 0; i < L.length; i++) {
+    const v = Math.round(L[i].valor * 100);
+    for (const [soma, idx] of [...mapa]) { const n = soma + v; if (n > A || mapa.has(n)) continue; mapa.set(n, idx.concat(i)); if (n === A) return mapa.get(n).map(j => L[j]); if (mapa.size > 200000) return null; }
+  }
+  return null;
+}
 function descontoRedondo(pago, conta) { return 0; /* desligado: o app compara só valor de parcela (ou total) + cliente */ if (!(pago < conta) || conta - pago > conta * 0.10 + 0.005) return 0; const pct = (conta - pago) / conta * 100, r = Math.round(pct * 2) / 2; return r > 0 && Math.abs(r2(conta * (1 - r / 100)) - pago) <= 0.011 ? r : 0; }
 function acordoDe(acordos, x) { return (x.doc && acordos['d:' + dig(x.doc)]) || (x.nome && acordos['n:' + chaveNome(x.nome)]) || null; }
 // contas em aberto do cliente (todas as datas, mais antiga primeiro), com o saldo que falta receber
