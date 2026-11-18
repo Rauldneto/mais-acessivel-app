@@ -15732,6 +15732,9 @@ function ddaCss(){
   '.dda-modal select{font-size:15px;letter-spacing:0;text-align:left;padding:0 12px}'+
   '.dda-modal .row{display:flex;gap:8px}'+
   '@media(max-width:420px){.dda-lado{padding:10px 10px}.dda-lado.b{padding-left:18px}.dda-lado .nm{font-size:13px}.dda-lado .vl{font-size:16.5px}.dda-hero h2{font-size:19px}}';
+  st.textContent+='.dda-print{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#F5F3FF,#EEF2FF);border:1px solid #DDD6FE;border-radius:16px;padding:12px 14px;margin:10px 0;box-shadow:0 2px 10px rgba(124,58,237,.08)}.dda-print .tx{flex:1;min-width:220px;font-size:13px;line-height:1.45;color:#3b0764}'+
+  '.dda-lidos{background:#fff;border:1px solid #E2E8F0;border-radius:16px;padding:6px 12px 12px;margin:0 0 12px;box-shadow:0 2px 10px rgba(15,23,42,.06)}.dda-lidos .hd{font-weight:800;padding:8px 0}.dda-lidos .ln{display:grid;grid-template-columns:22px 1fr auto auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #F1F5F9;font-size:13px;cursor:pointer}.dda-lidos .ln small{color:#64748b}.dda-lidos .row{display:flex;gap:8px;justify-content:flex-end;padding-top:10px}'+
+  '@media (max-width:560px){.dda-lidos .ln{grid-template-columns:22px 1fr auto}.dda-lidos .ln span:nth-child(3){grid-column:2}}';
   document.head.appendChild(st);
 }
 
@@ -15758,6 +15761,7 @@ function ddaDraw(){
     '<button class="dda-dia" id="ddaAtual">'+(DDA.carregando?'⏳':'🔄')+'</button></div></div>';
   if(DDA.msg)h+='<div class="dda-msg '+(DDA.msgTipo||'ok')+'">'+DDA.msg+'</div>';
   if(DDA.erro)h+='<div class="dda-msg bad">'+ddaEsc(DDA.erro)+'</div>';
+  h+=ddaPrintHtml(DDA.dados);
   if(!blgUrl()){w.innerHTML=h+'<div class="dda-vazio">Servidor (Worker) não configurado.</div>';ddaLigar();return;}
   if(!d){w.innerHTML=h+'<div class="dda-vazio">'+(DDA.carregando?'Lendo o DDA do Sicoob e o Contas a Pagar do Bling…':(DDA.erro?'':'Toque em 🔄 para carregar.'))+'</div>';ddaLigar();return;}
   var L=d.linhas||[],cont={},tot={};
@@ -15765,7 +15769,7 @@ function ddaDraw(){
   var ks=[['todos','Tudo','#0f172a'],['ok','✅ Batem','#16a34a'],['divergente','⚠️ Valor diferente','#ea580c'],['sem_bling','❌ Sem Bling','#dc2626'],['sem_dda','📋 Sem DDA','#64748b'],['pago','💙 Pagos','#2563eb']];
   h+='<div class="dda-res">'+ks.map(function(k){var n=k[0]==='todos'?L.length:(cont[k[0]]||0),v=k[0]==='todos'?L.reduce(function(s,x){return s+((x.dda||x.conta||{}).valor||0);},0):(tot[k[0]]||0);
     return '<div class="dda-k'+(DDA.filtro===k[0]?' on':'')+'" data-f="'+k[0]+'" style="--c:'+k[2]+'"><div class="t">'+k[1]+'</div><div class="v">'+n+'</div><div class="n">'+ddaR(v)+'</div></div>';}).join('')+'</div>';
-  if(!d.pagarLigado)h+='<div class="dda-msg warn">🔒 O pagamento pelo app ainda está desligado. Por enquanto você pode <b>dar baixa no Bling</b> do que já pagou no banco. Para ligar: Cloudflare → variável <b>DDA_PAGAR = sim</b> e segredo <b>DDA_PIN</b>.</div>';
+  if(!d.pagarLigado&&d.fonte!=='print')h+='<div class="dda-msg warn">🔒 O pagamento pelo app ainda está desligado. Por enquanto você pode <b>dar baixa no Bling</b> do que já pagou no banco. Para ligar: Cloudflare → variável <b>DDA_PAGAR = sim</b> e segredo <b>DDA_PIN</b>.</div>';
   else h+='<div class="dda-msg ok" style="font-weight:500">🔐 Pagamentos pelo app hoje: <b>'+ddaR(d.pagoHoje)+'</b> de '+ddaR(d.limiteDia)+' (limite diário).</div>';
   var F=L.filter(function(x){return DDA.filtro==='todos'||ddaGrupo(x.st)===DDA.filtro;});
   if(!F.length)h+='<div class="dda-vazio">Nada aqui para '+(DDA.ate?'o período até '+ddaD(DDA.ate):DDA.dia===ddaHoje(0)?'hoje':ddaD(DDA.dia))+'. ✓</div>';
@@ -15789,11 +15793,13 @@ function ddaCard(x,i){
   h+='<div class="dda-lado b"><div class="lb">Bling</div>'+(c?'<div class="nm">'+ddaEsc(c.fornecedor)+'</div><div class="vl">'+ddaR(c.valor)+'</div><div class="mt">venc. '+ddaD(c.venc)+' · '+ddaEsc(c.forma||'')+'</div><div class="mt">'+ddaDoc(c.doc)+'</div>':'<div class="vazio">— não lançado —</div>')+'</div>';
   h+='</div><div class="dda-acts">';
   if(x.st==='ok'||x.st==='provavel'||x.st==='divergente'){
-    if(d.pagarLigado)h+='<button class="dda-b pagar" data-a="pagar" data-i="'+i+'">💸 Pagar e baixar</button>';
-    h+='<button class="dda-b '+(d.pagarLigado?'sec':'pagar')+'" data-a="baixar" data-i="'+i+'">'+(d.pagarLigado?'Já paguei · só baixar':'✅ Já paguei · baixar no Bling')+'</button>';
+    var pl=d.pagarLigado&&!(b&&b.manual);
+    if(pl)h+='<button class="dda-b pagar" data-a="pagar" data-i="'+i+'">💸 Pagar e baixar</button>';
+    h+='<button class="dda-b '+(pl?'sec':'pagar')+'" data-a="baixar" data-i="'+i+'">'+(pl?'Já paguei · só baixar':'✅ Já paguei · baixar no Bling')+'</button>';
   }else if(x.st==='sem_bling'){
-    if(d.pagarLigado)h+='<button class="dda-b avulso" data-a="avulso" data-i="'+i+'">💳 Pagar avulso</button>';
+    if(d.pagarLigado&&!(b&&b.manual))h+='<button class="dda-b avulso" data-a="avulso" data-i="'+i+'">💳 Pagar avulso</button>';
     h+='<button class="dda-b avisa" data-a="avisar" data-i="'+i+'">📣 Avisar financeiro</button>';
+    if(b&&b.manual)h+='<button class="dda-b sec" data-a="printPago" data-i="'+i+'">✔️ Paguei no app Sicoob</button>';
   }else if(x.st==='sem_dda'){
     h+='<button class="dda-b sec" data-a="baixar" data-i="'+i+'">Paguei por outro meio · baixar</button>';
   }else if(x.st==='pago'&&x.pago&&c){
@@ -15801,7 +15807,44 @@ function ddaCard(x,i){
   }else if(x.st==='pago'&&x.pago&&!c){
     h+='<button class="dda-b avisa" data-a="avisar" data-i="'+i+'">📣 Avisar financeiro</button>';
   }
+  if(b&&b.manual&&x.st!=='pago')h+='<button class="dda-b sec" data-a="printTirar" data-i="'+i+'" title="Leitura errada ou boleto que não é para pagar">🗑️ Tirar da lista</button>';
   return h+'</div></div>';
+}
+// ---------- DDA lido dos prints do app Sicoob (enquanto a API do DDA está bloqueada pelo Sicoob) ----------
+function ddaPrintPrompt(){var a=new Date().getFullYear();
+  return 'As imagens são prints da tela de DDA (boletos a pagar / boletos registrados contra a empresa) do app ou internet banking do Sicoob.\n'+
+  'Extraia CADA boleto que aparecer. Responda SOMENTE com JSON: {"boletos":[{"nome":"nome do beneficiário/cedente","doc":"CNPJ/CPF do beneficiário só dígitos ou vazio","valor":123.45,"venc":"AAAA-MM-DD","linha":"linha digitável ou código de barras só dígitos ou vazio"}]}\n'+
+  'Regras: valor é o valor do boleto (número com ponto decimal). Datas no formato brasileiro dd/mm/aaaa → AAAA-MM-DD; se o ano não aparecer, use '+a+'. Ignore totais, saldos, cabeçalhos e itens sem valor. Não invente: se um campo não estiver legível, deixe vazio. Se o mesmo boleto aparecer em dois prints, liste uma vez só.';}
+async function ddaLerPrints(files){
+  DDA.lendo=true;DDA.lidos=DDA.lidos||[];ddaDraw();
+  try{
+    var imgs=[];for(var i=0;i<files.length;i++){var f=files[i];if(f.type==='application/pdf'||/\.pdf$/i.test(f.name))(await dspPdf(f)).forEach(function(b){imgs.push(b);});else imgs.push(await dspJpeg(f,1800));}
+    for(var k=0;k<imgs.length;k+=3){
+      var content=[{type:'text',text:ddaPrintPrompt()}];imgs.slice(k,k+3).forEach(function(b){content.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:b}});});
+      var r=await fetch(DSP_IA_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,messages:[{role:'user',content:content}]})});
+      if(!r.ok)throw new Error('IA respondeu '+r.status);
+      var j=await r.json();if(j&&j.error)throw new Error('IA: '+(j.error.message||j.error.type));
+      var t=(j.content||[]).filter(function(c){return c.type==='text';}).map(function(c){return c.text;}).join('').replace(/```json|```/g,'');
+      var a=t.indexOf('{'),z=t.lastIndexOf('}');if(a<0)continue;
+      ((JSON.parse(t.slice(a,z+1)).boletos)||[]).forEach(function(o){var v=Number(String(o.valor).replace(/[^\d.,-]/g,'').replace(/\.(?=\d{3}(\D|$))/g,'').replace(',','.'));
+        if(!v||!/^\d{4}-\d{2}-\d{2}$/.test(o.venc||''))return;
+        if(DDA.lidos.some(function(q){return q.valor===v&&q.venc===o.venc&&ddaEsc(q.nome).toLowerCase()===ddaEsc(o.nome).toLowerCase();}))return;
+        DDA.lidos.push({nome:String(o.nome||'').trim(),doc:String(o.doc||'').replace(/\D/g,''),valor:Math.round(v*100)/100,venc:o.venc,linha:String(o.linha||'').replace(/\D/g,''),ok:true});});
+    }
+    DDA.msg=DDA.lidos.length?'📷 Li '+DDA.lidos.length+' boleto(s). Confira abaixo e toque em Salvar.':'Não achei boletos nos prints. Tente um print mais nítido da lista do DDA.';DDA.msgTipo=DDA.lidos.length?'ok':'warn';
+  }catch(e){DDA.msg='❌ Não consegui ler os prints: '+ddaEsc(e.message);DDA.msgTipo='bad';}
+  DDA.lendo=false;ddaDraw();
+}
+function ddaPrintHtml(d){
+  var fp=d&&d.fonte==='print';
+  var h='<div class="dda-print"><div class="tx">'+(fp?'📷 <b>DDA pelos prints do app Sicoob.</b> A consulta do DDA pela API está bloqueada pelo Sicoob (erro 10039) — então você manda os prints da tela DDA do app do Sicoob, o app lê e cruza com o Bling. Você paga no app do Sicoob e dá a baixa aqui.':
+    '📷 Também dá para mandar prints do DDA do app Sicoob.')+'</div>'+
+    '<label class="dda-b pagar" style="cursor:pointer;display:inline-flex;align-items:center;justify-content:center">'+(DDA.lendo?'⏳ Lendo os prints…':'📷 Enviar prints do DDA')+'<input type="file" id="ddaPrints" accept="image/*,application/pdf" multiple style="display:none"'+(DDA.lendo?' disabled':'')+'></label></div>';
+  var L=DDA.lidos||[];
+  if(L.length){h+='<div class="dda-lidos"><div class="hd">Confira o que li ('+L.filter(function(o){return o.ok;}).length+' de '+L.length+' marcados)</div>';
+    L.forEach(function(o,i){h+='<label class="ln"><input type="checkbox" data-lido="'+i+'"'+(o.ok?' checked':'')+'><span class="nm">'+ddaEsc(o.nome)+(o.doc?' <small>'+ddaDoc(o.doc)+'</small>':'')+'</span><span>venc. '+ddaD(o.venc)+'</span><b>'+ddaR(o.valor)+'</b></label>';});
+    h+='<div class="row"><button class="dda-b sec" id="ddaLidosLimpar">Descartar</button><button class="dda-b pagar" id="ddaLidosSalvar">💾 Salvar e cruzar com o Bling</button></div></div>';}
+  return h;
 }
 function ddaLigar(){
   var w=DDA.root;if(!w)return;
@@ -15811,6 +15854,13 @@ function ddaLigar(){
   var at=w.querySelector('#ddaAtual');if(at)at.onclick=function(){DDA.msg='';ddaCarregar();};
   w.querySelectorAll('[data-f]').forEach(function(b){b.onclick=function(){DDA.filtro=b.getAttribute('data-f');ddaDraw();};});
   w.querySelectorAll('[data-a]').forEach(function(b){b.onclick=function(){ddaAcao(b.getAttribute('data-a'),b);};});
+  var fi=w.querySelector('#ddaPrints');if(fi)fi.onchange=function(){if(fi.files&&fi.files.length)ddaLerPrints([].slice.call(fi.files));};
+  w.querySelectorAll('[data-lido]').forEach(function(c){c.onchange=function(){DDA.lidos[+c.getAttribute('data-lido')].ok=c.checked;ddaDraw();};});
+  var dl=w.querySelector('#ddaLidosLimpar');if(dl)dl.onclick=function(){DDA.lidos=[];ddaDraw();};
+  var ds=w.querySelector('#ddaLidosSalvar');if(ds)ds.onclick=function(){var it=(DDA.lidos||[]).filter(function(o){return o.ok;});if(!it.length)return;ds.disabled=true;ds.textContent='Salvando…';
+    blgApi('/dda/manual',{method:'POST',body:{itens:it,usuario:STATE.usuarioLogado||''}}).then(function(r){DDA.lidos=[];
+      var vs=it.map(function(o){return o.venc;}).sort(),fim=vs[vs.length-1];DDA.dia=ddaHoje(0);DDA.ate=fim>ddaHoje(0)?(fim>ddaHoje(31)?ddaHoje(31):fim):'';
+      DDA.msg=r&&r.ok?'✅ '+r.novos+' boleto(s) novo(s) na lista do DDA ('+r.total+' no total).':'❌ '+ddaEsc((r&&r.erro)||'falhou');DDA.msgTipo=r&&r.ok?'ok':'bad';ddaCarregar();});};
 }
 function ddaAviso(m,t){DDA.msg=m;DDA.msgTipo=t||'ok';ddaDraw();window.scrollTo({top:0,behavior:'smooth'});}
 function ddaModal(html,ligar){
@@ -15862,12 +15912,15 @@ function ddaAcao(a,b){
     ddaConfirma('✅ Dar baixa no Bling?','<b>'+ddaEsc(c.fornecedor)+'</b> · '+ddaR(c.valor)+'<br>Pago hoje ('+ddaD(ddaHoje(0))+'): '+ddaR(valor)+(valor>c.valor+0.01?' (juros '+ddaR(valor-c.valor)+')':'')+'<br><span style="color:#64748b">Só a baixa no Bling — nenhum pagamento sai daqui.</span>','Baixar',function(){ddaBaixar([x],b);});
     return;}
   if(a==='avisar'){ddaAvisarDialogo(x.dda,false);return;}
+  if(a==='printPago'||a==='printTirar'){var corpo=a==='printPago'?{pago:x.dda.cb}:{remover:x.dda.cb};
+    ddaConfirma(a==='printPago'?'✔️ Marcar como pago?':'🗑️ Tirar da lista?','<b>'+ddaEsc(x.dda.nome)+'</b> · '+ddaR(x.dda.valor)+' · venc. '+ddaD(x.dda.venc)+(a==='printPago'&&!x.conta?'<br><span style="color:#dc2626">Sem conta no Bling: avise o financeiro para lançar.</span>':''),a==='printPago'?'Marcar pago':'Tirar',function(){
+      blgApi('/dda/manual',{method:'POST',body:Object.assign(corpo,{usuario:STATE.usuarioLogado||''})}).then(function(){ddaCarregar();});});return;}
   if(a==='avisarPend'){var p=d.pendentes.filter(function(z){return z.cb===b.getAttribute('data-cb');})[0];if(p)ddaAvisarDialogo({nome:p.nome,doc:p.doc,valor:p.valor,venc:p.venc,ndoc:p.ndoc,cb:p.cb},true);return;}
   if(a==='resolver'){blgApi('/dda/pendente',{method:'POST',body:{cb:b.getAttribute('data-cb'),usuario:STATE.usuarioLogado||''}}).then(function(){ddaCarregar();});return;}
 }
 function ddaBaixar(V,b){
   b.disabled=true;
-  var itens=V.map(function(y){var v=y.dda?y.dda.valor:y.conta.valor;return {contaId:y.conta.id,valor:v,data:ddaHoje(0),juro:Math.max(0,Math.round((v-y.conta.valor)*100)/100),historico:'Pago no Sicoob'+(y.dda?' (DDA '+y.dda.nome+')':'')+' - baixa pelo app'};});
+  var itens=V.map(function(y){var v=y.dda?y.dda.valor:y.conta.valor;return {contaId:y.conta.id,dda:y.dda&&y.dda.manual?y.dda.cb:undefined,valor:v,data:ddaHoje(0),juro:Math.max(0,Math.round((v-y.conta.valor)*100)/100),historico:'Pago no Sicoob'+(y.dda?' (DDA '+y.dda.nome+')':'')+' - baixa pelo app'};});
   var todos=[],k=0;
   var passo=function(){var lote=itens.slice(k,k+15);if(!lote.length){var ok=todos.filter(function(z){return z.ok;}).length,er=todos.filter(function(z){return !z.ok;});
       ddaAviso((ok?'✅ '+ok+' baixa(s) no Bling. ':'')+(er.length?'❌ '+er.map(function(z){return ddaEsc(z.erro);}).join(' | '):''),er.length?'warn':'ok');ddaCarregar();return;}
@@ -16079,6 +16132,7 @@ function psDraw(){
   h+='<div class="ps-box"><div class="ps-bar"><div class="ps-abas">'+abas.map(function(a){return '<button class="'+(PS.aba===a[0]?'on':'')+'" data-ps="aba" data-k="'+a[0]+'">'+a[1]+' <i>'+gr(a[0]).length+'</i></button>';}).join('')+'</div>'+
      '<label>Buscar <input id="psBusca" value="'+cpgEsc(PS.busca)+'" placeholder="Fornecedor, CNPJ ou valor"></label></div>';
   if(PS.aba==='dda'&&PS.ddaErro)h+='<div class="ps-alerta" style="margin:10px">⚠️ O DDA do Sicoob não respondeu: '+cpgEsc(PS.ddaErro)+(/10039|ativo para pagamento/i.test(PS.ddaErro)?'<br>A cooperativa ainda precisa <b>habilitar a conta para pagamentos via API</b> (erro 10039). Enquanto isso, a conciliação pelo extrato (outras abas) funciona normalmente.':'')+' <button class="ps-btn s mini" data-ps="ddaRec">Tentar de novo</button></div>';
+  if(PS.aba==='dda'&&PS.dda&&PS.dda.fonte==='print')h+='<div class="ps-alerta" style="margin:10px;background:#F5F3FF;border-color:#DDD6FE;color:#3b0764">📷 A API do DDA está bloqueada pelo Sicoob (10039): esta lista vem dos <b>prints do app Sicoob</b> que você envia na Baixa Contas a Pagar. <button class="ps-btn p mini" data-ps="irDda">📷 Enviar prints</button></div>';
   var b=PS.busca.trim().toLowerCase();
   var lista=gr(PS.aba).filter(function(l){if(!b)return true;var x=l.x||{},c=l.c||(x.conta)||{},dl=l.d||{},db=dl.dda||{},dc=dl.conta||{};
     return [x.nome,x.desc,x.compl,x.doc,c.fornecedor,c.doc,db.nome,db.doc,dc.fornecedor,cpgR(l.v)].join(' ').toLowerCase().indexOf(b)>=0;});

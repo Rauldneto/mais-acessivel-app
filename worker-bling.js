@@ -251,6 +251,7 @@ export default {
       if (url.pathname === '/pagar/lancar' && req.method === 'POST') return resp(await pagarLancar(env, (await req.json().catch(() => ({}))) || {}));
       // Conciliação DDA (celular/tablet): DDA do dia × contas a pagar do Bling; pagar pelo Sicoob e baixar no Bling
       if (url.pathname === '/dda/painel') return resp(await ddaPainel(env, url.searchParams.get('dia'), url.searchParams.get('ate')));
+      if (url.pathname === '/dda/manual' && req.method === 'POST') return resp(await ddaManualSalvar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/pagar/cruz' && req.method === 'POST') return resp(await pagarAutoCruzar(env));
       if (url.pathname === '/pagar/cruz') return resp(Object.assign({ ok: true }, (await env.BLING_KV.get('pagar:cruz', 'json')) || {}));
       if (url.pathname === '/dda/diag') return resp(await ddaDiag(env));
@@ -2714,6 +2715,7 @@ async function pagarBaixar(env, b) {
       const res = await baixarContaPagar(env, it.contaId, Number(it.valor), soData(it.data), (it.historico || '').slice(0, 200), Number(it.juro || 0));
       if (it.chave) await salvarMarca(env, it.chave, { contaId: String(it.contaId), por: String(b.usuario || '').slice(0, 60), auto: b.auto ? 1 : undefined });
       // confirmou na mão: lembra que este CPF/CNPJ do extrato é deste fornecedor do Bling → próximos pagamentos saem automáticos
+      if (it.dda && /^m/.test(String(it.dda))) await ddaManualSalvar(env, { pago: String(it.dda) }).catch(() => {});
       if (!b.auto && dig(it.doc) && it.contatoId) { ligados = ligados || (await env.BLING_KV.get('pagar:ligados', 'json')) || {}; ligados[dig(it.doc)] = String(it.contatoId); }
       out.push({ contaId: it.contaId, ok: true, res });
       await logAcao(env, { origem: 'pagar', acao: 'baixa_pagar', contaId: it.contaId, valor: it.valor, data: it.data, resultado: res, por: b.usuario || '' });
@@ -2922,9 +2924,19 @@ async function ddaPainel(env, dia, ateP) {
   const hoje = hojeLocal(); dia = soData(dia) || hoje;
   let ate = soData(ateP) || dia; if (ate < dia) ate = dia; if (ate > somaDias(dia, 31)) ate = somaDias(dia, 31);   // período: do dia até "ate" (máx. 31 dias)
   const de = somaDias(dia, -10);
-  const abertos = await ddaListar(env, de, ate, 1);
-  const agendados = await ddaListar(env, de, somaDias(ate, 5), 2).catch(() => []);
-  const liquidados = await ddaListar(env, de, ate < hoje ? ate : hoje, 3).catch(() => []);
+  // API do DDA bloqueada (ex.: 10039 "cliente não está ativo para pagamento") → usa a lista lida dos prints do app Sicoob
+  let abertos, agendados = [], liquidados = [], fonte = 'api', apiErro = '';
+  try { abertos = await ddaListar(env, de, ate, 1); }
+  catch (e) { abertos = null; apiErro = String(e.message || e).slice(0, 200); }
+  if (abertos) {
+    agendados = await ddaListar(env, de, somaDias(ate, 5), 2).catch(() => []);
+    liquidados = await ddaListar(env, de, ate < hoje ? ate : hoje, 3).catch(() => []);
+  } else {
+    fonte = 'print';
+    const man = (await env.BLING_KV.get('dda:manual', 'json')) || [];
+    abertos = man.filter(m => m.venc && m.venc >= de && m.venc <= ate).map(m => ({ cb: m.k, linha: m.linha || '', doc: m.doc || '', nome: m.nome || '', valor: r2(m.valor), venc: m.venc, limite: '', emissao: '',
+      ndoc: '', situacao: m.pago ? 'Pago (baixado pelo app)' : 'Lido do print', pagoNoBanco: !!m.pago, juros: false, sit: m.pago ? 3 : 1, manual: true, lidoEm: m.em }));
+  }
   const dda = abertos.concat(agendados, liquidados).filter(b => b.venc && (b.venc <= ate || b.sit === 2));
   const pagos = {};
   for (const b of dda) { const k = await env.BLING_KV.get('ddapago:' + b.cb, 'json'); if (k) pagos[b.cb] = k; }
@@ -2957,9 +2969,30 @@ async function ddaPainel(env, dia, ateP) {
   }
   contas.filter(c => !usadas.has(c.id)).sort((a, b) => a.venc.localeCompare(b.venc)).forEach(c => linhas.push({ st: 'sem_dda', dda: null, conta: c }));
   const pend = (await env.BLING_KV.get('dda:pendentes', 'json')) || [];
-  return { ok: true, dia, ate, hoje, linhas, pendentes: pend.filter(p => !p.resolvido).slice(-50).reverse(), faltamNomes: info.faltam,
+  return { ok: true, dia, ate, hoje, fonte, apiErro, linhas, pendentes: pend.filter(p => !p.resolvido).slice(-50).reverse(), faltamNomes: info.faltam,
     pagarLigado: env.DDA_PAGAR === 'sim' && !!env.DDA_PIN, limiteDia: Number(env.DDA_LIMITE_DIA || 30000),
     pagoHoje: Number(((await env.BLING_KV.get('dda:dia:' + hoje, 'json')) || {}).total || 0) };
+}
+
+// Lista do DDA lida dos prints do app Sicoob (enquanto a API do DDA está bloqueada). KV dda:manual = [{k,nome,doc,valor,venc,linha,em,por,pago}]
+// POST /dda/manual {itens:[{nome,doc,valor,venc,linha}], usuario} junta (sem duplicar: mesmo nome+valor+vencimento); {pago:k} marca pago; {remover:k} apaga
+async function ddaManualSalvar(env, b) {
+  let L = (await env.BLING_KV.get('dda:manual', 'json')) || [];
+  const hoje = hojeLocal();
+  if (b.pago) L.forEach(m => { if (m.k === b.pago) m.pago = hoje; });
+  if (b.remover) L = L.filter(m => m.k !== b.remover);
+  let novos = 0;
+  for (const it of (b.itens || []).slice(0, 80)) {
+    const valor = r2(numBR(it.valor)), venc = soData(it.venc), nome = String(it.nome || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    if (!valor || !venc || !nome) continue;
+    const k = 'm' + (await sha256hex(semAcento(nome).replace(/\W/g, '') + '|' + valor.toFixed(2) + '|' + venc)).slice(0, 16);
+    const ja = L.find(m => m.k === k);
+    if (ja) { if (dig(it.doc) && !ja.doc) ja.doc = dig(it.doc); if (it.linha && !ja.linha) ja.linha = String(it.linha); continue; }
+    L.push({ k, nome, doc: dig(it.doc), valor, venc, linha: String(it.linha || '').slice(0, 60), em: Date.now(), por: String(b.usuario || '').slice(0, 60) }); novos++;
+  }
+  L = L.filter(m => m.venc >= somaDias(hoje, -60)).slice(-400);
+  await env.BLING_KV.put('dda:manual', JSON.stringify(L));
+  return { ok: true, novos, total: L.length };
 }
 
 async function ddaChave(cb, tentativa, conta) {
