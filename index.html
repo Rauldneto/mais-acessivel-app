@@ -202,6 +202,85 @@ pre{background:#f3f3f1;border:1px solid #e8e8e6;border-radius:7px;padding:12px;f
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <!-- v8:1782937830 1782937797 1782663552 1782662943 1782583259 1782578399 1782578055 1782577909 1782577490 <!-- old:1782573715 -->
+<!-- ═════ TABLET (nov/2026) ═════
+     Só age em telas de até 1180 px (tablet em pé ou deitado) e/ou com toque. No computador nada muda.
+     Cabeçalho que se adapta, tabelas largas deslizam dentro da própria caixa (não esticam a página),
+     botões/campos no tamanho do dedo e, no iPad, sem zoom automático ao tocar num campo. -->
+<style id="tabletCss">
+@media (max-width:1180px){
+  html body header{height:auto;min-height:76px;flex-wrap:wrap;padding:8px 14px;row-gap:8px}
+  html body header .app-sub{display:none}
+  html body header .header-right{min-width:0;max-width:100%;flex:0 1 auto;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;gap:8px;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:2px 0}
+  html body header .header-right::-webkit-scrollbar{display:none}
+  html body header .header-right .badge,html body header .header-right>span[style*="monospace"]{display:none}
+  html body header .header-right .btn-out{flex-shrink:0;white-space:nowrap}
+  html body .nios-seg{max-width:none}
+  /* Baixa Contas a Receber: o nome blg-sit também é usado na etiqueta de situação e deixava a tela "encolhida" com largura fixa */
+  html body main>.blg.blg-sit{display:block;max-width:100%}
+}
+@media (max-width:900px){
+  /* em pé: cartões lado a lado (Remetente | Destinatário etc.) ficam um embaixo do outro */
+  html body .grid2{grid-template-columns:1fr}
+  html body #app [style*="grid-template-columns:1fr 1fr;gap:12px"],
+  html body #app [style*="grid-template-columns:1fr 1fr;gap:14px"],
+  html body #app [style*="grid-template-columns:1fr 1fr;gap:16px"],
+  html body #app [style*="grid-template-columns: 1fr 1fr; gap: 12px"],
+  html body #app [style*="grid-template-columns: 1fr 1fr; gap: 14px"],
+  html body #app [style*="grid-template-columns: 1fr 1fr; gap: 16px"]{grid-template-columns:1fr!important}
+  html body header .header-right{flex:1 1 100%;margin-left:0;justify-content:flex-start}
+  html body .nios-segrow{padding:10px 12px 12px}
+  html body .nios-cur{padding:10px 12px}
+}
+@media (pointer:coarse){
+  html{-webkit-text-size-adjust:100%;touch-action:manipulation}
+  html body button,html body select,html body .btn-out,html body .fin-btn.sm{min-height:40px}
+  html body input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]):not([type=hidden]){min-height:40px}
+  html body input[type=checkbox],html body input[type=radio]{width:20px;height:20px;min-width:20px}
+  html body .nios-it{padding-top:12px;padding-bottom:12px}
+  /* menu de áreas: a lista de telas abre PARA BAIXO (acordeão), não para o lado (saía da tela) */
+  html body .nios-fly{position:static;box-shadow:none;border:none;border-top:1px solid #ececf0;border-radius:0;min-width:0}
+  html body .nios-fly .nios-ch{display:none}
+  html body .nios-fly .nios-it{padding-left:26px}
+  html body .nios-sub2:hover>.nios-fly{display:none}
+  html body .nios-sub2.aberto>.nios-fly{display:block}
+}
+@media (max-width:1180px){
+  html body .nios-fly{position:static;box-shadow:none;border:none;border-top:1px solid #ececf0;border-radius:0;min-width:0}
+  html body .nios-fly .nios-ch{display:none}
+  html body .nios-fly .nios-it{padding-left:26px}
+  html body .nios-sub2:hover>.nios-fly{display:none}
+  html body .nios-sub2.aberto>.nios-fly{display:block}
+  html body .nios-sg{min-height:44px}
+  html body a,html body button,html body [onclick]{-webkit-tap-highlight-color:rgba(0,0,0,.08)}
+}
+</style>
+<script>
+(function(){
+  // iPad/iPhone: evita o zoom automático ao tocar num campo (o zoom com dois dedos continua funcionando)
+  var ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  if(ios){var m=document.querySelector('meta[name=viewport]');if(m)m.setAttribute('content','width=device-width,initial-scale=1,maximum-scale=1');}
+  // Tabelas mais largas que a tela: a caixa da tabela ganha rolagem lateral (desliza com o dedo)
+  // em vez de esticar a página inteira. Só em telas de até 1180 px.
+  var pend=0;
+  function ajustar(){
+    pend=0;if(innerWidth>1180)return;
+    var W=document.documentElement.clientWidth;
+    document.querySelectorAll('#app table').forEach(function(t){
+      var p=t.parentElement;if(!p||p.getAttribute('data-tab-scroll'))return;
+      if(t.offsetWidth<=p.clientWidth+2&&t.getBoundingClientRect().right<=W+2)return;
+      var cs=getComputedStyle(p);if(cs.overflowX==='auto'||cs.overflowX==='scroll')return;
+      if(cs.display==='table-cell'||cs.display==='table-row'||cs.display==='contents')return;
+      p.setAttribute('data-tab-scroll','1');
+      p.style.overflowX='auto';p.style.webkitOverflowScrolling='touch';p.style.maxWidth='100%';p.style.minWidth='0';
+    });
+  }
+  function agendar(){if(!pend)pend=setTimeout(ajustar,300);}
+  document.addEventListener('DOMContentLoaded',function(){
+    new MutationObserver(agendar).observe(document.body,{childList:true,subtree:true});
+    addEventListener('resize',agendar);agendar();
+  });
+})();
+</script>
 </head>
 <body>
 
