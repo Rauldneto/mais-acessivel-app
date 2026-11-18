@@ -19718,7 +19718,14 @@ function fcLerObs(txt){
   var rePeso=/(\d+(?:[.,]\d+)*)\s*(kg|kgs|quilos?|kilos?)(?![a-z])/i;
   var rePesoLbl=/peso(?:\s*(?:bruto|total|l[ií]quido|liq\.?))?\s*[:=\-]?\s*(\d+(?:[.,]\d+)*)\s*(kg|kgs|t|ton|toneladas?)?(?![a-z])/i;
   var reTon=/(\d+(?:[.,]\d+)*)\s*(ton|toneladas?)(?![a-z])/i;
-  var partes=String(txt||'').replace(/\r/g,'').split(/\n|;/);
+  // separa por linha, ";" e "+"; e, numa mesma linha, antes de cada novo "N CX/PALLET/..." (ex.: "2 CX 52X26X12 6 CX 92X45X20")
+  var reIniVol=/\s(?=\d+\s*(?:x\s+)?(?:volumes?|vols?\.?|caixas?|cxs?\.?|pallets?|paletes?|palets?|pacotes?|pcts?\.?|fardos?|rolos?|amarrados?|sacos?|engradados?|bobinas?|barras?|tubos?)(?![a-z]))/i;
+  var partes=[];
+  String(txt||'').replace(/\r/g,'').split(/\n|;|\+/).forEach(function(l){
+    var ps=l.split(reIniVol);
+    // só divide se cada pedaço tiver medida ou quantidade; senão mantém a linha inteira
+    if(ps.length>1&&ps.every(function(x){return reVol.test(x)||reDim.test(x);}))partes=partes.concat(ps);else partes.push(l);
+  });
   partes.forEach(function(l0){
     var l=String(l0).trim();
     if(!l||/^[_\-=*.\s]+$/.test(l))return;
