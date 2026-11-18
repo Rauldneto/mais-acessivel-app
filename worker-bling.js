@@ -334,6 +334,7 @@ export default {
           if (a.visto || !a.e2e || a.e2e === 'geral') continue;
           const r = await env.BLING_KV.get('econf:' + a.e2e, 'json');
           if (r && r.ok) { a.visto = Date.now(); a.resolvido = r.ignorado ? 'marcado como teste' : 'aceito depois (' + (r.cStat || 'ok') + ')'; mud = true; }
+          else if (/\b429\b/.test(a.motivo || '')) { a.visto = Date.now(); a.resolvido = 'Bling ocupado na hora — não era erro do pagamento'; mud = true; }
         }
         if (mud) await env.BLING_KV.put('tef:alertas', JSON.stringify(l));
         return resp({ ok: true, alertas: l.slice(0, 60), naoVistos: l.filter(a => !a.visto).length });
@@ -1586,7 +1587,12 @@ async function econfPendentes(env, maxChamadas) {
           }
           if (item.status === 'pronto' && !item.subst) item.momento = nf.emissao && dia < nf.emissao ? 'anterior' : 'posterior';
           if (!item.subst) item.nSeq = Number((await env.BLING_KV.get('econfseq:' + nf.chave)) || 0) + 1;
-        } catch (e) { item.status = 'erro'; item.erro = String(e.message || e); }
+        } catch (e) {
+          const msg = String(e.message || e);
+          // Bling ocupado (429 = muitas consultas seguidas) ou fora do ar: não é problema do pagamento — tenta de novo na próxima rodada, sem aviso
+          if (/\b(429|5\d\d)\b|timeout|fetch failed|network/i.test(msg)) { item.status = 'aguardando_bling'; item.erro = 'Bling ocupado na consulta (' + msg.slice(0, 80) + ') — tenta de novo na próxima rodada'; }
+          else { item.status = 'erro'; item.erro = msg; }
+        }
         out.push(item);
       }
     }
