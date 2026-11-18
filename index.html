@@ -17505,7 +17505,8 @@ function sitDiasPer(){
   var hoje=crzHoje(),out=[],ini,fim=hoje;
   var util=function(d){var w=new Date(d+'T12:00:00').getDay();return w!==0&&w!==6;};
   var menos=function(d,n){return new Date(Date.parse(d+'T12:00:00')-n*864e5).toISOString().slice(0,10);};
-  if(SIT.per==='Hoje')ini=hoje;
+  if(SIT.per==='Pendências')ini=menos(hoje,30);
+  else if(SIT.per==='Hoje')ini=hoje;
   else if(SIT.per==='Ontem'){var o=menos(hoje,1);while(!util(o))o=menos(o,1);ini=fim=o;}
   else if(SIT.per==='7 dias')ini=menos(hoje,7);
   else if(SIT.per==='Este mês')ini=hoje.slice(0,8)+'01';
@@ -17568,6 +17569,7 @@ function sitTela(){
   var per=['Hoje','Ontem','7 dias','Este mês',sitMesPassadoNome()];
   h+='<div class="sit-top"><div><h2>Situação dos pagamentos</h2><p>O que entrou no Sicoob × o que está baixado no Bling — PIX e boletos Sicoob (boletos da Bling Conta a Bling baixa sozinha)</p></div>'+
      '<div class="sit-per">'+per.map(function(p){return '<button class="'+(SIT.per===p?'on':'')+'" data-a="sitPer" data-k="'+p+'">'+p+'</button>';}).join('')+
+     '<button class="'+(SIT.per==='Pendências'?'on':'')+'" style="'+(SIT.per==='Pendências'?'':'border-color:#B45309;color:#B45309')+'" data-a="sitPer" data-k="Pendências" title="Tudo que não foi baixado nos últimos 30 dias, com o motivo">⚠️ Pendências</button>'+
      '<button class="sit-rec" data-a="sitRec" title="Conferir de novo agora">'+BLG_IC.rec+'</button></div></div>';
   if(R.faltam)h+='<div class="sit-carr"><span class="blg-spin"></span> Lendo o extrato do Sicoob e o Bling… faltam '+R.faltam+' de '+R.dias+' dia(s)</div>';
   var ent=gr('todos'),pend=L.filter(function(l){return l.k==='falta'||l.k==='semconta';}),bx=gr('baixados');
@@ -17579,15 +17581,25 @@ function sitTela(){
   if(pend.length)h+='<div class="sit-alerta"><b>'+SIT.per+': '+pend.length+' pagamento(s) entraram no Sicoob e ainda não estão baixados no Bling ('+brl(soma(pend))+').</b> Cada linha abaixo diz o motivo e o que fazer.</div>';
   else if(!R.faltam&&ent.length)h+='<div class="sit-ok">✅ '+SIT.per+': tudo que entrou no Sicoob está baixado no Bling.</div>';
   if(SIT.msg)h+='<div class="blg-msg">'+SIT.msg+'</div>';h+=sitAcPainel();
-  var abas=[['atencao','Precisa da sua ação'],['baixados','Baixados'],['vencidos','Vencidos sem pagamento'],['todos','Todos']];
+  var PEND=SIT.per==='Pendências';if(PEND)SIT.aba='atencao';
+  if(PEND){var pg=gr('atencao'),cnt=function(k){var a=pg.filter(function(l){return l.k===k;});return a.length+' · '+brl(soma(a));};
+    h+='<div class="sit-alerta" style="background:#FFF7ED"><b>⚠️ Pendências dos últimos 30 dias: '+pg.length+' ('+brl(soma(pg))+')</b><br>'+
+      '🟠 Falta baixar: '+cnt('falta')+' &nbsp;·&nbsp; 🔴 Sem conta no Bling: '+cnt('semconta')+' &nbsp;·&nbsp; 🟣 Baixado sem entrada no banco: '+cnt('semBanco')+' &nbsp;·&nbsp; ⚪ Cartão: '+cnt('cartao')+'</div>';}
+  var abas=PEND?[['atencao','Pendências']]:[['atencao','Precisa da sua ação'],['baixados','Baixados'],['vencidos','Vencidos sem pagamento'],['todos','Todos']];
   h+='<div class="sit-box"><div class="sit-bar"><div class="sit-abas">'+abas.map(function(a){return '<button class="'+(SIT.aba===a[0]?'on':'')+'" data-a="sitAba" data-k="'+a[0]+'">'+a[1]+' <i>'+gr(a[0]).length+'</i></button>';}).join('')+'</div>'+
      '<label>Buscar <input id="sitBusca" value="'+blgEsc(SIT.busca)+'" placeholder="Cliente, CPF/CNPJ, NF ou valor"></label></div>';
   var b=SIT.busca.trim().toLowerCase(),lista=gr(SIT.aba).filter(function(l){if(!b)return true;var t=[l.x&&l.x.nome,l.x&&l.x.doc,l.c&&l.c.cliente,l.c&&l.c.numero,(l.cs||[]).map(function(c){return c.cliente+' '+c.numero;}).join(' '),blgMoeda(l.v)].join(' ').toLowerCase();return t.indexOf(b)>=0;});
   var ordem={falta:0,semconta:1,semBanco:2,cartao:3,auto:4,manual:5,vencido:6};
   lista.sort(function(a,c){return (ordem[a.k]-ordem[c.k])||String(c.dia||'').localeCompare(String(a.dia||''));});
   h+='<div class="sit-scroll"><div class="sit-tb"><div class="sit-hd"><div>Situação</div><div>Pago em</div><div>No banco (Sicoob)</div><div></div><div>No Bling (conta a receber)</div><div>Detalhe</div><div style="text-align:right">Ação</div></div>';
-  if(!lista.length)h+='<div class="sit-vazio">'+(R.faltam?'Carregando…':'Nada nesta situação no período.')+'</div>';
+  if(!lista.length)h+='<div class="sit-vazio">'+(R.faltam?'Carregando…':PEND?'✅ Nenhuma pendência nos últimos 30 dias.':'Nada nesta situação no período.')+'</div>';
+  var POR={falta:'🟠 <b>Pago — falta baixar.</b> Por quê: o app achou a conta provável no Bling, mas não tinha certeza suficiente para baixar sozinho (cliente diferente de quem pagou, mais de uma opção…). Os de ligação segura saem sozinhos na próxima rodada; os outros, confira e clique em Confirmar.',
+    semconta:'🔴 <b>Pago — sem conta no Bling.</b> Por quê: entrou no Sicoob e não existe conta a receber nem parcela de pedido em aberto com esse valor e esse cliente. Lance a conta/pedido no Bling (ou corrija o valor) — o app reconhece na próxima rodada — ou, se for dívida antiga, abra Contas em atraso.',
+    semBanco:'🟣 <b>Baixado no Bling sem entrada no banco.</b> Por quê: a conta está Recebida no Bling na conta Sicoob, mas o dinheiro não aparece no extrato (nem em outro dia próximo). Pode ser baixa no dia errado, na conta financeira errada ou baixa indevida — confira no Bling.',
+    cartao:'⚪ <b>Cartão.</b> Por quê: é repasse da maquininha (várias vendas juntas, já sem a taxa). A baixa automática do cartão ainda não está ligada.'};
+  var grAnt='';
   lista.slice(0,300).forEach(function(l,i){
+    if(SIT.aba==='atencao'&&l.k!==grAnt&&POR[l.k]){grAnt=l.k;var nk=lista.filter(function(o){return o.k===l.k;});h+='<div style="padding:10px 12px;background:#F8FAFC;border-top:2px solid #E2E6EA;font-size:12.5px;line-height:1.45">'+POR[l.k]+' <span style="color:#666">('+nk.length+' · '+brl(soma(nk))+')</span></div>';}
     var st=SIT_ST[l.k],x=l.x,c=l.c,cs=l.cs||[],ok=l.k==='auto'||l.k==='manual';
     var banco,bling,det='',acao='';
     if(x){banco='<div><b>R$ '+blgMoeda(x.valor)+'</b> <span class="sit-fp">'+crzTipoTxt(x.tipo)+'</span></div><div class="el">'+blgEsc(x.nome||x.desc)+'</div><small>'+blgEsc(x.bol?x.desc:(x.doc?crzDoc(x.doc):x.desc))+'</small>';}
