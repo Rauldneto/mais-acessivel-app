@@ -19802,6 +19802,26 @@ function fcBuscarPedido(numero){
     return fcAplicarPedido(r.pedido);
   }).catch(function(e){FC.carr=false;FC.erro='Não consegui buscar o pedido: '+e.message;render();});
 }
+// Tipo de material curto (padrão do resumo de venda): agrupa pelo tipo de produto, sem medidas/cores, mantendo o material.
+// Ex.: "BARRA DE APOIO RETA 800MM INOX POLIDO" + "PISO TÁTIL TEXTURIZADO ALERTA PVC AZUL" → "BARRA DE APOIO INOX, PISO TÁTIL PVC"
+var FC_MATS=['INOX','ACO','ALUMINIO','PVC','BORRACHA','POLIURETANO','CONCRETO','LATAO','CERAMICA','PORCELANATO','MADEIRA','VIDRO','ACRILICO','NYLON','POLIETILENO','FERRO','METAL','POLICARBONATO','EPOXI'];
+var FC_PARE=['DE','DA','DO','DAS','DOS','P','C','PARA','COM','E','EM','A','O'];
+function fcMatCurto(descs){
+  var sem=function(w){return w.normalize('NFD').replace(/[\u0300-\u036f]/g,'');};
+  var grupos=[],idx={};
+  (descs||[]).forEach(function(d){
+    d=String(d||'').toUpperCase().replace(/\s+e mais \d+ item\(s\)$/i,'').trim();if(!d)return;
+    var ws=d.split(/[\s,;\/\-]+/).filter(Boolean),base=[],sig=0;
+    for(var i=0;i<ws.length&&sig<2;i++){var w=ws[i];if(/\d/.test(w))break;if(FC_MATS.indexOf(sem(w))>=0||w.length<2)continue;base.push(w);if(FC_PARE.indexOf(sem(w))<0)sig++;}
+    if(sig<2)for(;i<ws.length&&sig<3;i++){var w2=ws[i];if(/\d/.test(w2)||FC_MATS.indexOf(sem(w2))>=0)continue;base.push(w2);if(FC_PARE.indexOf(sem(w2))<0)sig++;}
+    while(base.length&&FC_PARE.indexOf(sem(base[base.length-1]))>=0)base.pop();
+    var mat=ws.filter(function(w){return FC_MATS.indexOf(sem(w))>=0;})[0]||'';
+    var k=sem(base.join(' '))+'|'+sem(mat);
+    if(idx[k]==null){idx[k]=grupos.length;grupos.push((base.join(' ')+(mat?' '+mat:'')).trim());}
+  });
+  if(!grupos.length)return '';
+  return grupos.slice(0,4).join(', ')+(grupos.length>4?' e outros':'');
+}
 function fcAplicarPedido(p){
   var fo=p.fornecedor||{};
   var f=fcFormInicial();
@@ -19813,7 +19833,7 @@ function fcAplicarPedido(p){
   f.fornFone=fo.celular||fo.fone||'';
   f.solicitante=STATE.form.solicitante||INIT.solicitante;
   var its=(p.itens||[]).map(function(i){return String(i.descricao||'').trim();}).filter(Boolean);
-  f.material=its.slice(0,6).join(', ')+(its.length>6?' e mais '+(its.length-6)+' item(s)':'');
+  f.materialItens=its;f.material=fcMatCurto(its)||its.slice(0,3).join(', ');
   STATE.form=f;STATE.prods=fcRowVazia();STATE.manRows=[];FC.leitura=null;
   var temObs=Object.prototype.hasOwnProperty.call(p,'observacoesInternas');
   if(temObs){f.obsInternas=String(p.observacoesInternas||'');if(f.obsInternas.trim())fcAplicarLeitura(f.obsInternas);else FC.avisoObs='As observações internas deste pedido estão vazias no Bling. Escreva lá (ou cole aqui) os volumes, as medidas e o peso.';}
@@ -20357,7 +20377,7 @@ function calcResumo(){
   var primeiros6 = todosProds.slice(0,6).map(function(p){return p.nome;});
   var tipoMat = primeiros6.length ? primeiros6.join(', ') : '—';
   if(todosProds.length>6) tipoMat += ' e mais '+(todosProds.length-6)+' item(s)';
-  if(fcAtivo()&&f.material) tipoMat=f.material; // Frete compra: produtos do pedido de compra
+  if(fcAtivo()&&f.material) tipoMat=fcMatCurto(f.materialItens||String(f.material).split(/,\s*/))||f.material; // Frete compra: tipos de produto do pedido de compra, resumidos
   return [
     '* Nº Cotação: '+(f.numeroCotacao||'—'),
     '* CNPJ do pagador do frete: '+pagador,
