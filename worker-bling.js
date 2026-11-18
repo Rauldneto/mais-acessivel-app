@@ -3700,8 +3700,9 @@ async function cartaoCandidatos(env, ctx, de, ate) {
     if (!(cod === 3 || cod === 4 || /cart|cr[eé]dito|d[eé]bito/i.test(f.nome || ''))) continue;
     const k = (o.tipoOrigem === 'venda' ? 'pedido' : 'nota') + ':' + o.id;
     const x = por[k] || (por[k] = { tipo: o.tipoOrigem === 'venda' ? 'pedido' : 'nota', id: o.id, numero: String(o.numero || ''), data: o.dataEmissao || c.dataEmissao || '',
-      cliente: (c.contato && c.contato.nome) || '', valorCartao: 0, totalDoc: Number(o.valor || 0) });
+      cliente: (c.contato && c.contato.nome) || '', valorCartao: 0, totalDoc: Number(o.valor || 0), contas: [] });
     x.valorCartao = Math.round((x.valorCartao + Number(c.valor || 0)) * 100) / 100;
+    x.contas.push(Number(c.valor || 0));
   }
   return (ctx[ck] = Object.values(por));
 }
@@ -3724,21 +3725,46 @@ async function cartaoRegistrar(env, v, doc, como) {
 }
 
 function soDia(iso) { return String(iso || '').slice(0, 10); }
+async function cartaoJaPago(env, c, nsu) {
+  const pd = (await env.BLING_KV.get('pagosdoc:' + c.tipo + ':' + c.id, 'json')) || [];
+  return Math.round(pd.filter(x => x.cartao && x.e2e !== 'CARD-' + nsu).reduce((t, x) => t + Number(x.valor || 0), 0) * 100) / 100;
+}
 async function cartaoTentarCasar(env, v, ctx) {
   const de = somaDias(v.dia, -10), ate = [somaDias(v.dia, 20), hojeLocal()].sort()[0];
-  const cands = (await cartaoCandidatos(env, ctx, de, ate)).filter(c => Math.abs(c.valorCartao - v.total) <= 0.10);
-  // não usa um pedido/nota que já tem outra venda de cartão com o mesmo valor
+  const todos = await cartaoCandidatos(env, ctx, de, ate);
+  // mesmo valor do total no cartão do pedido/nota, ou de uma das parcelas/contas (cliente que pagou em mais de um cartão)
+  const cands = todos.filter(c => Math.abs(c.valorCartao - v.total) <= 0.10 || c.contas.some(x => Math.abs(x - v.total) <= 0.10));
   const livres = [];
-  for (const c of cands) {
-    const pd = (await env.BLING_KV.get('pagosdoc:' + c.tipo + ':' + c.id, 'json')) || [];
-    if (!pd.some(x => x.cartao && x.e2e !== 'CARD-' + v.nsu)) livres.push(c);
-  }
-  // prefere a nota (a venda pode ter conta no pedido e na nota)
+  for (const c of cands) if ((await cartaoJaPago(env, c, v.nsu)) + v.total <= c.valorCartao + 0.10) livres.push(c);
   const notas = livres.filter(c => c.tipo === 'nota');
   const unico = notas.length === 1 ? notas[0] : (!notas.length && livres.length === 1 ? livres[0] : null);
   v.sugestoes = livres.slice(0, 6).map(c => ({ tipo: c.tipo, id: c.id, numero: c.numero, cliente: c.cliente, data: soDia(c.data), valor: c.valorCartao }));
   if (unico) { await cartaoRegistrar(env, v, unico, 'automático: mesmo valor no cartão'); return true; }
   return false;
+}
+// cliente que dividiu o pagamento em 2 ou 3 cartões no mesmo dia: a soma bate com o total no cartão de um pedido/nota
+async function cartaoCasarDivididas(env, pend, ctx) {
+  let n = 0;
+  const porDia = {};
+  for (const v of pend) (porDia[v.dia] = porDia[v.dia] || []).push(v);
+  for (const dia of Object.keys(porDia)) {
+    const L = porDia[dia].filter(v => !v.vinculo);
+    if (L.length < 2) continue;
+    const todos = await cartaoCandidatos(env, ctx, somaDias(dia, -10), [somaDias(dia, 20), hojeLocal()].sort()[0]);
+    const combos = [];
+    for (let a = 0; a < L.length; a++) for (let b = a + 1; b < L.length; b++) { combos.push([L[a], L[b]]); for (let c = b + 1; c < L.length; c++) combos.push([L[a], L[b], L[c]]); }
+    for (const grupo of combos) {
+      if (grupo.some(v => v.vinculo)) continue;
+      const soma = Math.round(grupo.reduce((t, v) => t + v.total, 0) * 100) / 100;
+      const cands = [];
+      for (const c of todos) if (Math.abs(c.valorCartao - soma) <= 0.10 && (await cartaoJaPago(env, c, '')) < 0.01) cands.push(c);
+      const notas = cands.filter(c => c.tipo === 'nota');
+      const unico = notas.length === 1 ? notas[0] : (!notas.length && cands.length === 1 ? cands[0] : null);
+      if (!unico) continue;
+      for (const v of grupo) { await cartaoRegistrar(env, v, unico, 'automático: pago em ' + grupo.length + ' cartões, soma R$ ' + soma.toFixed(2)); n++; }
+    }
+  }
+  return n;
 }
 
 async function cartaoImportar(env, b) {
@@ -3764,6 +3790,12 @@ async function cartaoImportar(env, b) {
       else { await env.BLING_KV.put('cartao:' + nsu, JSON.stringify(v), { expirationTtl: 400 * 86400 }); out.pendentes++; }
     } catch (e) { v.erro = String(e.message || e).slice(0, 200); await env.BLING_KV.put('cartao:' + nsu, JSON.stringify(v), { expirationTtl: 400 * 86400 }); out.pendentes++; }
   }
+  // segunda passada: vendas divididas em mais de um cartão
+  try {
+    const pend = (await cartaoPendentes(env)).pendentes;
+    const n = await cartaoCasarDivididas(env, pend, ctx);
+    out.vinculadas += n; out.pendentes = Math.max(0, out.pendentes - n);
+  } catch (e) {}
   await env.BLING_KV.put('cartao:ultimaImportacao', JSON.stringify({ quando: Date.now(), por: String(b.usuario || '').slice(0, 60), resumo: out }));
   return out;
 }
