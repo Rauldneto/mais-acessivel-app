@@ -15764,7 +15764,9 @@ function ddaDraw(){
   h+=ddaPrintHtml(DDA.dados);
   if(!blgUrl()){w.innerHTML=h+'<div class="dda-vazio">Servidor (Worker) não configurado.</div>';ddaLigar();return;}
   if(!d){w.innerHTML=h+'<div class="dda-vazio">'+(DDA.carregando?'Lendo o DDA do Sicoob e o Contas a Pagar do Bling…':(DDA.erro?'':'Toque em 🔄 para carregar.'))+'</div>';ddaLigar();return;}
-  var L=d.linhas||[],cont={},tot={};
+  // O que vence no dia/período escolhido fica em cima; contas que venceram ANTES e continuam em aberto no Bling vão para uma seção à parte
+  var LT=d.linhas||[],ini=DDA.dia,fimP=DDA.ate||DDA.dia,vx=function(x){return (x.dda||x.conta||{}).venc||'';};
+  var L=LT.filter(function(x){var v=vx(x);return v>=ini&&v<=fimP;}),LA=LT.filter(function(x){return L.indexOf(x)<0;}),cont={},tot={};
   L.forEach(function(x){var g=ddaGrupo(x.st);cont[g]=(cont[g]||0)+1;tot[g]=(tot[g]||0)+((x.dda||x.conta||{}).valor||0);});
   var ks=[['todos','Tudo','#0f172a'],['ok','✅ Batem','#16a34a'],['divergente','⚠️ Valor diferente','#ea580c'],['sem_bling','❌ Sem Bling','#dc2626'],['sem_dda','📋 Sem DDA','#64748b'],['pago','💙 Pagos','#2563eb']];
   h+='<div class="dda-res">'+ks.map(function(k){var n=k[0]==='todos'?L.length:(cont[k[0]]||0),v=k[0]==='todos'?L.reduce(function(s,x){return s+((x.dda||x.conta||{}).valor||0);},0):(tot[k[0]]||0);
@@ -15775,8 +15777,11 @@ function ddaDraw(){
   if(!F.length)h+='<div class="dda-vazio">Nada aqui para '+(DDA.ate?'o período até '+ddaD(DDA.ate):DDA.dia===ddaHoje(0)?'hoje':ddaD(DDA.dia))+'. ✓</div>';
   else{
     h+='<div class="dda-cols"><div class="a">🏦 DDA Sicoob</div><div class="b">📋 Bling</div></div>';
-    F.forEach(function(x,i){h+=ddaCard(x,L.indexOf(x));});
+    F.forEach(function(x,i){h+=ddaCard(x,LT.indexOf(x));});
   }
+  if(LA.length){var tA=LA.reduce(function(s,x){return s+((x.dda||x.conta||{}).valor||0);},0);
+    h+='<button class="dda-sec dda-atras" id="ddaVerAtras" style="width:100%;text-align:left;border:1px solid #FED7AA;background:#FFF7ED;border-radius:14px;padding:12px 14px;cursor:pointer;font:inherit;color:#9a3412">'+(DDA.verAtras?'▾':'▸')+' 📌 Venceram antes de '+ddaD(ini)+' e continuam em aberto no Bling: <b>'+LA.length+'</b> · '+ddaR(tA)+'<div style="font-size:12px;font-weight:500;color:#9a3412;margin-top:3px">Podem já ter sido pagas e só falta a baixa (veja na Situação dos pagamentos), ou estão atrasadas.</div></button>';
+    if(DDA.verAtras)LA.forEach(function(x){h+=ddaCard(x,LT.indexOf(x));});}
   if(d.pendentes&&d.pendentes.length){
     h+='<div class="dda-sec">⏳ Pagos sem lançamento no Bling <span style="font-size:12px;color:#64748b;font-weight:600">('+d.pendentes.length+')</span></div>';
     d.pendentes.forEach(function(p){h+='<div class="dda-pend"><b>'+ddaEsc(p.nome)+'</b> · '+ddaR(p.valor)+'<div style="font-size:12px;color:#64748b">CNPJ '+ddaDoc(p.doc)+' · venc. '+ddaD(p.venc)+' · pago '+ddaD(p.data)+' por '+ddaEsc(p.por)+'</div>'+
@@ -15852,6 +15857,7 @@ function ddaLigar(){
   w.querySelectorAll('[data-per]').forEach(function(b){b.onclick=function(){DDA.dia=ddaHoje(0);DDA.ate=b.getAttribute('data-per')==='7'?ddaHoje(7):ddaFimMes();DDA.msg='';ddaCarregar();};});
   var di=w.querySelector('#ddaData');if(di)di.onchange=function(){if(di.value){DDA.dia=di.value;DDA.ate='';DDA.msg='';ddaCarregar();}};
   var at=w.querySelector('#ddaAtual');if(at)at.onclick=function(){DDA.msg='';ddaCarregar();};
+  var va=w.querySelector('#ddaVerAtras');if(va)va.onclick=function(){DDA.verAtras=!DDA.verAtras;ddaDraw();};
   w.querySelectorAll('[data-f]').forEach(function(b){b.onclick=function(){DDA.filtro=b.getAttribute('data-f');ddaDraw();};});
   w.querySelectorAll('[data-a]').forEach(function(b){b.onclick=function(){ddaAcao(b.getAttribute('data-a'),b);};});
   var fi=w.querySelector('#ddaPrints');if(fi)fi.onchange=function(){if(fi.files&&fi.files.length)ddaLerPrints([].slice.call(fi.files));};
@@ -15897,7 +15903,7 @@ function ddaAcao(a,b){
         ddaCarregar();});});});
     return;}
   if(a==='todos'){
-    var V=d.linhas.filter(function(y){return y.st==='ok'&&y.conta&&y.dda;}),tot=V.reduce(function(s,y){return s+y.dda.valor;},0);
+    var V=d.linhas.filter(function(y){var v=y.dda.venc||'';return y.st==='ok'&&y.conta&&y.dda&&v>=DDA.dia&&v<=(DDA.ate||DDA.dia);}),tot=V.reduce(function(s,y){return s+y.dda.valor;},0);
     if(!d.pagarLigado){
       ddaConfirma('✅ Baixar no Bling?','Você já pagou no banco os <b>'+V.length+'</b> boletos que batem ('+ddaR(tot)+')?<br>A baixa sai no Bling com a data de hoje, conta Sicoob.','Sim, baixar',function(){ddaBaixar(V,b);});return;}
     ddaConfirma('💸 Pagar '+V.length+' boletos?','Total <b>'+ddaR(tot)+'</b>, pela conta Sicoob da JDFER, e baixa de cada um no Bling.','Sim, pagar todos',function(){ddaPedirPin('PIN de pagamento','Pagar '+V.length+' boletos · '+ddaR(tot),function(){
