@@ -21604,7 +21604,6 @@ function preencherDoBling(bd) {
           emb=e; break;
         }
       }
-      // Só adiciona linha se encontrou embalagem com dimensões cadastradas
       if(emb){
         STATE.prods.push({
           nome: emb.n,
@@ -21612,6 +21611,10 @@ function preencherDoBling(bd) {
           dim: emb.d||'—',
           cabe: emb.c||1
         });
+      } else if(nomeProd){
+        // produto do Bling SEM embalagem cadastrada: antes era descartado em silêncio (cotação vinha vazia).
+        // Agora entra na tabela com o nome e a quantidade, para você escolher a embalagem/medidas.
+        STATE.prods.push({nome:nomeProd,vol:item.quantidade||1,dim:'',cabe:''});
       }
     });
   }
