@@ -21224,6 +21224,13 @@ function renderSalvas(){
           }
           return r;
         });
+        // transportadora salva que NÃO está na lista do estado (ex.: de outro cadastro ou nome diferente) também volta:
+        // antes ela sumia ao carregar e, ao salvar de novo, o valor se perdia para sempre
+        var jaNaTela={};STATE.manRows.forEach(function(r){jaNaTela[(r.nome||'').toUpperCase()]=1;});
+        (c.transportadoras||[]).forEach(function(t){
+          var k=(t.nome||'').toUpperCase();
+          if(!jaNaTela[k]){jaNaTela[k]=1;STATE.manRows.push(Object.assign({tel:'',tipo:'',triangulacao:false},t,{nr:STATE.manRows.length+1}));}
+        });
         STATE.tab='cotacao'; STATE.modulo='frete'; render();
       };
       hdr.appendChild(arrow); hdr.appendChild(badge); hdr.appendChild(title); hdr.appendChild(sub); hdr.appendChild(btnCarregar);
