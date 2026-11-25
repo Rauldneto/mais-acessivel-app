@@ -3087,7 +3087,7 @@ async function ddaPendenteResolver(env, b) {
 // O que entrou no Sicoob e não tem baixa no Bling: procura a conta em aberto e sugere a baixa (o Raul confirma).
 // O que foi baixado no Bling (conta Sicoob) e não aparece no extrato: aparece para corrigir.
 const CONTA_SICOOB_BLING = 14890739452;
-const RECDIA_VER = 11;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
+const RECDIA_VER = 12;   // muda quando a regra do cruzamento muda: os dias guardados são refeitos
 function tipoCredito(desc, doc) {
   const d = semAcento(desc);
   if (doc && doc === ECONF_CNPJ) return 'transf';
@@ -3270,7 +3270,7 @@ async function receberDia(env, dia, forcar) {
     if (!partes.length) { x.acordoAviso = 'Cliente com acordo (' + a.cliente + '), mas não achei conta em aberto dele no Bling.'; continue; }
     const p0 = partes[0];
     x.baixar = { acordo: true, partes, contatoId: a.contatoId, docCliente: a.doc || '', contaId: p0.contaId, valor: p0.valor, juros: 0, desconto: 0, data: dia, venc: p0.venc, atraso: diasAtraso(dia, p0.venc), cliente: a.cliente, numero: p0.numero, origemTipo: p0.origemTipo,
-      forte: resto <= 0.009,
+      forte: false,   // valor diferente da conta: só com a sua confirmação
       motivo: 'cliente que paga aos poucos: abate na conta mais antiga em aberto (' + partes.map(p => crzRefSrv(p) + ' venc. ' + brData(p.venc) + ': R$ ' + p.valor.toFixed(2).replace('.', ',') + (p.quita ? ' quita' : ' de saldo R$ ' + p.saldo.toFixed(2).replace('.', ','))).join('; ') + ')' +
         (resto > 0.009 ? ' · sobram R$ ' + resto.toFixed(2).replace('.', ',') + ' sem conta' : '') };
   }
@@ -3289,9 +3289,10 @@ async function receberDia(env, dia, forcar) {
     const m = cand[0];
     if (m && (m.doc || cand.length === 1) && (cand.length === 1 || m.p - cand[1].p >= 15)) {
       reservadas.add(String(m.c.id));
-      const forte = (m.doc || m.nomes >= 2) && (cand.length === 1 || m.p - cand[1].p >= 25) && m.dias >= -60 && m.dias <= 120;
+      // juros/multa só valem quando o pagamento veio pelo BOLETO (o arquivo do Sicoob traz o valor certo). PIX com valor diferente da conta nunca baixa sozinho: fica pendente
+      const forte = m.exato && (m.doc || m.nomes >= 2) && (cand.length === 1 || m.p - cand[1].p >= 25) && m.dias >= -60 && m.dias <= 120;
       x.baixar = { docOk: !!m.doc, docCliente: m.c.doc, contaId: m.c.id, valor: m.descP ? x.valor : m.c.valor, juros: m.descP ? 0 : r2(Math.max(0, x.valor - m.c.valor)), desconto: 0, data: dia, venc: m.c.venc, atraso: diasAtraso(dia, m.c.venc), cliente: m.c.cliente, numero: m.c.numero, origemTipo: m.c.origemTipo, forte,
-        motivo: (m.exato ? 'mesmo valor' : m.descP ? 'pago ' + String(100 - m.descP).replace('.', ',') + '% da conta (retenção de ' + String(m.descP).replace('.', ',') + '%: baixa parcial, R$ ' + r2(m.c.valor - x.valor).toFixed(2).replace('.', ',') + ' fica em aberto)' : 'valor + juros/multa') + (m.ap ? ' e pagador já ligado a este cliente' : m.doc ? ' e mesmo CPF/CNPJ' : m.nomes >= 2 ? ' e nome do pagador parecido com o do cliente' : m.nomes ? ' (nome do pagador parecido)' : ' (única conta em aberto com esse valor)') };
+        motivo: (m.exato ? 'mesmo valor' : m.descP ? 'pago ' + String(100 - m.descP).replace('.', ',') + '% da conta (retenção de ' + String(m.descP).replace('.', ',') + '%: baixa parcial, R$ ' + r2(m.c.valor - x.valor).toFixed(2).replace('.', ',') + ' fica em aberto)' : (x.tipo !== 'boleto' ? 'PIX com valor diferente da conta (R$ ' + r2(x.valor - m.c.valor).toFixed(2).replace('.', ',') + ' a mais): não baixa sozinho, confira' : 'valor + juros/multa')) + (m.ap ? ' e pagador já ligado a este cliente' : m.doc ? ' e mesmo CPF/CNPJ' : m.nomes >= 2 ? ' e nome do pagador parecido com o do cliente' : m.nomes ? ' (nome do pagador parecido)' : ' (única conta em aberto com esse valor)') };
     }
   }
   // ficou sem conta: pode ser um pedido de venda ainda sem contas lançadas (mesmo valor) — lança as contas do pedido e baixa
