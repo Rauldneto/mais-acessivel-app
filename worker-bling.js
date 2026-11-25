@@ -162,6 +162,7 @@ export default {
         await env.BLING_KV.delete('recAbertas').catch(() => {}); if (b.dia) await env.BLING_KV.delete('recdia:' + soData(b.dia)).catch(() => {});
         return resp({ ok: r.ok, status: r.status, corpo: t.slice(0, 200) });
       }
+      if (url.pathname === '/receber/pixboleto' && req.method === 'POST') { const b = (await req.json().catch(() => ({}))) || {}; return resp(Object.assign({ ok: true }, await pixEmContaBoleto(env, Number(b.contaId), b))); }
       if (url.pathname === '/receber/acordos') return resp({ ok: true, acordos: (await env.BLING_KV.get('recacordos', 'json')) || {} });
       if (url.pathname === '/receber/acordo' && req.method === 'POST') return resp(await receberAcordo(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/receber/clientes') return resp(await finSrvBuscarContato(env, { nome: url.searchParams.get('q') || '', doc: url.searchParams.get('doc') || '' }));
@@ -754,6 +755,8 @@ const SICOOB_PIX = 'https://api.sicoob.com.br/pix/api/v2';
 
 const ESCOPO_PIX = 'cob.write cob.read pix.read';
 const ESCOPO_BOLETOS = 'boletos_consulta';
+const ESCOPO_BOLETOS_ALT = 'boletos_alteracao';
+const FORMA_PIX_VENDA = 3901857;
 
 // O extrato (Conta Corrente) pode vir de um 2º app do portal Sicoob: variável SICOOB_CLIENT_ID_CCO (opcional)
 function clientSicoob(env, escopo) { return (/^(cco_|pagamentos_)/.test(escopo || '') && env.SICOOB_CLIENT_ID_CCO) || env.SICOOB_CLIENT_ID; }
@@ -1654,9 +1657,9 @@ const SICOOB_NUM_CLIENTE = 2547538;
 const BOL_POR_PASSO = 10;          // boletos tratados por chamada (limite de 50 chamadas externas do plano grátis)
 const BOL_INTERVALO = 30 * 60e3;   // leitura diária pelo cron: a cada 30 min
 
-async function sicoobCob(env, metodo, caminho, corpo) {
+async function sicoobCob(env, metodo, caminho, corpo, escopo) {
   if (!env.SICOOB_MTLS || !env.SICOOB_CLIENT_ID) throw new Error('Sicoob ainda não ativado no Worker.');
-  const tok = await sicoobToken(env, ESCOPO_BOLETOS);
+  const tok = await sicoobToken(env, escopo || ESCOPO_BOLETOS);
   const r = await env.SICOOB_MTLS.fetch(SICOOB_COB + caminho, {
     method: metodo,
     headers: { Authorization: 'Bearer ' + tok, client_id: env.SICOOB_CLIENT_ID, 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -3287,7 +3290,7 @@ async function receberDia(env, dia, forcar) {
     if (m && (m.doc || cand.length === 1) && (cand.length === 1 || m.p - cand[1].p >= 15)) {
       reservadas.add(String(m.c.id));
       const forte = (m.doc || m.nomes >= 2) && (cand.length === 1 || m.p - cand[1].p >= 25) && m.dias >= -60 && m.dias <= 120;
-      x.baixar = { docCliente: m.c.doc, contaId: m.c.id, valor: m.descP ? x.valor : m.c.valor, juros: m.descP ? 0 : r2(Math.max(0, x.valor - m.c.valor)), desconto: 0, data: dia, venc: m.c.venc, atraso: diasAtraso(dia, m.c.venc), cliente: m.c.cliente, numero: m.c.numero, origemTipo: m.c.origemTipo, forte,
+      x.baixar = { docOk: !!m.doc, docCliente: m.c.doc, contaId: m.c.id, valor: m.descP ? x.valor : m.c.valor, juros: m.descP ? 0 : r2(Math.max(0, x.valor - m.c.valor)), desconto: 0, data: dia, venc: m.c.venc, atraso: diasAtraso(dia, m.c.venc), cliente: m.c.cliente, numero: m.c.numero, origemTipo: m.c.origemTipo, forte,
         motivo: (m.exato ? 'mesmo valor' : m.descP ? 'pago ' + String(100 - m.descP).replace('.', ',') + '% da conta (retenção de ' + String(m.descP).replace('.', ',') + '%: baixa parcial, R$ ' + r2(m.c.valor - x.valor).toFixed(2).replace('.', ',') + ' fica em aberto)' : 'valor + juros/multa') + (m.ap ? ' e pagador já ligado a este cliente' : m.doc ? ' e mesmo CPF/CNPJ' : m.nomes >= 2 ? ' e nome do pagador parecido com o do cliente' : m.nomes ? ' (nome do pagador parecido)' : ' (única conta em aberto com esse valor)') };
     }
   }
@@ -3518,13 +3521,18 @@ async function receberBaixar(env, b) {
       continue;
     }
     const atraso = Number(it.atraso || 0);
-    const historico = 'Recebido no Sicoob em ' + brData(data) + (it.desc ? ' (' + String(it.desc).slice(0, 60) + ')' : '') + (atraso > 0 ? ' com ' + atraso + (atraso === 1 ? ' dia' : ' dias') + ' de atraso (venc. ' + brData(it.venc) + ')' : atraso < 0 ? ' adiantado' : '') +
+    let pixB = null;
+    if (it.tipo === 'pix' || /^PIX/i.test(String(it.desc || ''))) pixB = await pixEmContaBoleto(env, it.contaId, Object.assign({}, it, { usuario: b.usuario })).catch(() => null);
+    const viaPix = pixB && (pixB.trocou || pixB.nn !== undefined);
+    const historico = (viaPix ? 'Pago via PIX em ' + brData(data) + (pixB.nn ? ' (boleto Sicoob nº ' + pixB.nn + ' não utilizado' + (pixB.baixouBoleto ? ', baixado no banco' : '') + ')' : ' (conta lançada como boleto)') +
+        (atraso > 0 && !Number(it.juros) ? ' - pago o valor original com ' + atraso + (atraso === 1 ? ' dia' : ' dias') + ' de atraso, sem juros/multa' : '') + ' - ' : '') +
+      'Recebido no Sicoob em ' + brData(data) + (it.desc ? ' (' + String(it.desc).slice(0, 60) + ')' : '') + (atraso > 0 ? ' com ' + atraso + (atraso === 1 ? ' dia' : ' dias') + ' de atraso (venc. ' + brData(it.venc) + ')' : atraso < 0 ? ' adiantado' : '') +
       (Number(it.juros) ? ' - juros/multa R$ ' + Number(it.juros).toFixed(2).replace('.', ',') : '') + (Number(it.desconto) ? ' - desconto R$ ' + Number(it.desconto).toFixed(2).replace('.', ',') : '') + ' - baixa pelo cruzamento Sicoob × Bling (app Mais Acessível' + (b.usuario ? ', ' + String(b.usuario).slice(0, 40) : '') + ')';
     try {
       const r = await executarBaixa(env, it.contaId, r2(it.valor), data, { historico, historicoConta: true, conferir: true, juros: r2(it.juros || 0), desconto: r2(it.desconto || 0) });
       await logAcao(env, { modo: 'real', origem: it.auto ? 'cruzamento-auto' : 'cruzamento', acao: 'baixa', cliente: it.cliente || '', numero: it.numero || '', contaId: it.contaId, valorBaixa: r2(it.valor), valor: r2(Number(it.valor) + Number(it.juros || 0)), data, resultado: r, por: b.usuario || '',
         detalhe: 'Baixa pelo cruzamento Sicoob × Bling: R$ ' + r2(it.valor).toFixed(2) + (Number(it.juros) ? ' + juros/multa R$ ' + Number(it.juros).toFixed(2) : '') + ', data ' + brData(data) + ' (conta ' + it.contaId + ')' });
-      out.push({ contaId: it.contaId, ok: /^ok/.test(r), resultado: r });
+      out.push({ contaId: it.contaId, ok: /^ok/.test(r), resultado: r + (pixB && (pixB.trocou || pixB.boleto) ? ' · ' + (pixB.trocou ? 'forma trocada para PIX' : pixB.aviso || '') + (pixB.boleto ? ' · ' + pixB.boleto : '') : '') });
     } catch (e) { out.push({ contaId: it.contaId, ok: false, erro: String(e.message || e).slice(0, 200) }); }
   }
   if (novosAp) await env.BLING_KV.put('recapelidos', JSON.stringify(apelidos));
@@ -3532,6 +3540,51 @@ async function receberBaixar(env, b) {
   await env.BLING_KV.delete('recAbertas').catch(() => {});
   await abertosVelho(env);
   return { ok: out.every(x => x.ok), itens: out };
+}
+
+// ---- PIX pago numa conta lançada como BOLETO ----
+// 1) troca a forma da conta para "PIX - Venda"; 2) o histórico diz que foi PIX (e se veio o valor original mesmo em atraso);
+// 3) só com certeza total (mesmo CNPJ + valor idêntico ao da conta + boleto Sicoob ainda em aberto) pede ao Sicoob a baixa do boleto,
+//    para ele não ser pago de novo nem ir a protesto. Boleto da Bling Conta não é do Sicoob: fica só o aviso.
+async function pixEmContaBoleto(env, contaId, it) {
+  const out = { trocou: false, boleto: '', aviso: '' };
+  const c = ((await bling(env, '/contas/receber/' + contaId).catch(() => null)) || {}).data || {};
+  const fiscal = Number(c.formaPagamento && c.formaPagamento.codigoFiscal) || 0;
+  if (fiscal !== 15) return out;                                 // não é boleto: nada a fazer
+  const blingConta = Number(c.formaPagamento && c.formaPagamento.id) === 11272919 || Number((c.portador || c.contaContabil || {}).id) === 14893994469;
+  // nosso número do boleto desta conta (antes de trocar a forma)
+  let nn = '';
+  const origemId = c.origem && c.origem.id;
+  if (origemId) { const bb = ((await bling(env, '/contas/receber/boletos?idOrigem=' + origemId).catch(() => null)) || {}).data || {}; const bc = (bb.contas || []).find(x => String(x.id) === String(contaId)); nn = bc ? String(Number(bc.numeroExterno || 0) || '') : ''; }
+  out.nn = nn;
+  // 1) forma de pagamento → PIX
+  try {
+    const corpo = { vencimento: soData(c.vencimento), valor: r2(c.valor), contato: { id: c.contato && c.contato.id }, formaPagamento: { id: FORMA_PIX_VENDA },
+      dataEmissao: soData(c.dataEmissao) || undefined, competencia: soData(c.competencia) || undefined, historico: c.historico || undefined,
+      categoria: c.categoria && c.categoria.id ? { id: c.categoria.id } : undefined, portador: { id: PORTADOR_SICOOB }, vendedor: c.vendedor && c.vendedor.id ? { id: c.vendedor.id } : undefined };
+    const tok = await tokenValido(env);
+    const r = await fetch(API + '/contas/receber/' + contaId, { method: 'PUT', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(corpo) });
+    if (r.ok) out.trocou = true; else out.aviso = 'não consegui trocar a forma para PIX (Bling ' + r.status + ': ' + (await r.text()).slice(0, 120) + ')';
+  } catch (e) { out.aviso = 'não consegui trocar a forma para PIX (' + String(e.message || e).slice(0, 100) + ')'; }
+  // 3) baixa do boleto no Sicoob, só com certeza total
+  const certeza = it.docOk && Math.abs(Number(it.valor) - Number(c.valor)) <= 0.01 && !Number(it.juros) && !Number(it.desconto);
+  if (blingConta) out.boleto = 'boleto da Bling Conta: cancele na Bling Conta se ainda estiver em aberto';
+  else if (!nn) out.boleto = 'boleto Sicoob sem nosso número no Bling: confira no Sicoob';
+  else if (!certeza) out.boleto = 'boleto Sicoob nº ' + nn + ' NÃO foi baixado no banco (CNPJ ou valor não bateram 100%): confira';
+  else {
+    try {
+      const j = await sicoobCob(env, 'GET', '/boletos?numeroCliente=' + SICOOB_NUM_CLIENTE + '&codigoModalidade=1&nossoNumero=' + nn);
+      const bo = (j && j.resultado) || j || {};
+      if (!/aberto/i.test(semAcento(String(bo.situacaoBoleto || '')))) out.boleto = 'boleto Sicoob nº ' + nn + ' já não está em aberto no banco (' + (bo.situacaoBoleto || '?') + ')';
+      else {
+        await sicoobCob(env, 'POST', '/boletos/' + nn + '/baixar', { numeroCliente: SICOOB_NUM_CLIENTE, codigoModalidade: 1 }, ESCOPO_BOLETOS_ALT);
+        out.boleto = 'boleto Sicoob nº ' + nn + ' baixado no banco (pago por PIX)'; out.baixouBoleto = true;
+      }
+    } catch (e) { out.boleto = 'boleto Sicoob nº ' + nn + ': o pedido de baixa no banco falhou (' + String(e.msg || e.message || e).slice(0, 120) + ') — baixe no Sicoob'; }
+  }
+  await logAcao(env, { modo: 'real', origem: 'pix-em-boleto', acao: 'pix_boleto', cliente: it.cliente || '', numero: it.numero || '', contaId, data: hojeLocal(), resultado: (out.trocou ? 'forma → PIX' : 'forma não trocada') + ' · ' + (out.boleto || '-'), por: it.usuario || '',
+    detalhe: 'Pago por PIX numa conta lançada como boleto' + (out.aviso ? ' · ' + out.aviso : '') });
+  return out;
 }
 
 // pagamento parcial de cliente com acordo: uma baixa parcial (ou total) em cada conta, da mais antiga para a mais nova
@@ -3697,7 +3750,7 @@ async function receberAuto(env) {
   let feitas = 0;
   if (fortes.length) {
     const res = await receberBaixar(env, { dia, usuario: 'automático', itens: fortes.map(x => ({ contaId: x.baixar.contaId, valor: x.baixar.valor, juros: x.baixar.juros, desconto: x.baixar.desconto || 0, data: x.data,
-      atraso: x.baixar.atraso, venc: x.baixar.venc, desc: (x.tipo === 'pix' ? 'PIX' : x.tipo === 'boleto' ? 'Boleto Sicoob' : 'Crédito') + (x.nome ? ' de ' + x.nome : ''), auto: true, cliente: x.baixar.cliente, numero: x.baixar.numero, partes: x.baixar.partes, chave: x.chave, contatoId: x.baixar.contatoId, pedidoId: x.baixar.pedidoId, parcela: x.baixar.parcela })) });
+      atraso: x.baixar.atraso, venc: x.baixar.venc, desc: (x.tipo === 'pix' ? 'PIX' : x.tipo === 'boleto' ? 'Boleto Sicoob' : 'Crédito') + (x.nome ? ' de ' + x.nome : ''), auto: true, tipo: x.tipo, docOk: !!x.baixar.docOk, cliente: x.baixar.cliente, numero: x.baixar.numero, partes: x.baixar.partes, chave: x.chave, contatoId: x.baixar.contatoId, pedidoId: x.baixar.pedidoId, parcela: x.baixar.parcela })) });
     feitas = (res.itens || []).filter(i => i.ok).length;
   }
   await env.BLING_KV.put('recauto', JSON.stringify({ ultimo: dia, ts: Date.now(), feitas, fortes: fortes.length }));
