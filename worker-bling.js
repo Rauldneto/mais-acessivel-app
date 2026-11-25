@@ -3557,6 +3557,7 @@ async function pixEmContaBoleto(env, contaId, it) {
   let nn = '';
   const origemId = c.origem && c.origem.id;
   if (origemId) { const bb = ((await bling(env, '/contas/receber/boletos?idOrigem=' + origemId).catch(() => null)) || {}).data || {}; const bc = (bb.contas || []).find(x => String(x.id) === String(contaId)); nn = bc ? String(Number(bc.numeroExterno || 0) || '') : ''; }
+  if (!nn && !blingConta && Number(c.numeroBanco || 0)) nn = String(Number(c.numeroBanco));   // o Bling também guarda o nosso número em "Nº no banco"
   out.nn = nn;
   // 1) forma de pagamento → PIX
   try {
@@ -3565,7 +3566,8 @@ async function pixEmContaBoleto(env, contaId, it) {
       categoria: c.categoria && c.categoria.id ? { id: c.categoria.id } : undefined, portador: { id: PORTADOR_SICOOB }, vendedor: c.vendedor && c.vendedor.id ? { id: c.vendedor.id } : undefined };
     const tok = await tokenValido(env);
     const r = await fetch(API + '/contas/receber/' + contaId, { method: 'PUT', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(corpo) });
-    if (r.ok) out.trocou = true; else out.aviso = 'não consegui trocar a forma para PIX (Bling ' + r.status + ': ' + (await r.text()).slice(0, 120) + ')';
+    if (r.ok) { const dep = ((await bling(env, '/contas/receber/' + contaId).catch(() => null)) || {}).data || {}; out.trocou = Number(dep.formaPagamento && dep.formaPagamento.id) === FORMA_PIX_VENDA; if (!out.trocou) out.aviso = 'o Bling não trocou a forma (conta já recebida?)'; }
+    else out.aviso = 'não consegui trocar a forma para PIX (Bling ' + r.status + ': ' + (await r.text()).slice(0, 120) + ')';
   } catch (e) { out.aviso = 'não consegui trocar a forma para PIX (' + String(e.message || e).slice(0, 100) + ')'; }
   // 3) baixa do boleto no Sicoob, só com certeza total
   const certeza = it.docOk && Math.abs(Number(it.valor) - Number(c.valor)) <= 0.01 && !Number(it.juros) && !Number(it.desconto);
