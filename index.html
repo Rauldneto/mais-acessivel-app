@@ -17733,19 +17733,20 @@ function raChecar(){
 function raDesenhar(){
   var el=document.getElementById('raAviso');var rel=RA.rel;
   if(!rel){if(el)el.remove();return;}
-  if(!el){el=document.createElement('div');el.id='raAviso';el.style.cssText='position:fixed;right:16px;bottom:16px;z-index:99999;width:min(420px,calc(100vw - 32px));background:#fff;border:2px solid #B91C1C;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.22);font:13px/1.45 system-ui,sans-serif;color:#1f2937';document.body.appendChild(el);}
+  tefCss();
+  if(!document.getElementById('raCss')){var st=document.createElement('style');st.id='raCss';st.textContent='#raAviso{top:18px;bottom:auto;border-top-color:#B91C1C}#raAviso .ln{display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:12.5px}#raAviso .ln b{white-space:nowrap}#raAviso .bt button.pri{background:#B91C1C;border-color:#B91C1C}';document.head.appendChild(st);}
+  if(!el){el=document.createElement('div');el.id='raAviso';el.className='tef-toast';document.body.appendChild(el);}
   var m=function(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});},d=function(i){return String(i||'').slice(0,10).split('-').reverse().join('/');};
   var esc=function(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
-  var h='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:12px 14px;background:#FEF2F2;border-radius:10px 10px 0 0"><div><b style="color:#B91C1C">⚠️ Não pagos – vencimento '+d(rel.ref)+'</b><br>'+rel.itens.length+' conta(s) · <b>'+m(rel.total)+'</b></div>'+
-    '<button id="raFechar" title="Fechar (não mostra de novo hoje)" style="border:0;background:none;font-size:18px;cursor:pointer;color:#6b7280">✕</button></div>';
-  h+='<div style="max-height:'+(RA.aberto?'340px':'150px')+';overflow:auto;padding:4px 14px">'+rel.itens.slice(0,RA.aberto?200:4).map(function(c){
-    return '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #f1f1f1"><span><b>'+esc(c.cliente)+'</b><br><small style="color:#6b7280">'+(c.origemTipo==='notafiscal'?'NF ':c.origemTipo==='venda'?'Pedido ':'')+esc(c.numero)+' · '+esc(c.tipo)+(c.parcial?' · pago em parte':'')+'</small></span>'+
-      '<a href="https://www.bling.com.br/contas.receber.php#edit/'+c.id+'" target="_blank" style="white-space:nowrap;color:#B91C1C;text-decoration:none"><b>'+m(c.valor)+'</b> ↗</a></div>';}).join('')+'</div>';
-  h+='<div style="display:flex;justify-content:space-between;padding:8px 14px 12px">'+(rel.itens.length>4?'<a id="raMais" style="cursor:pointer;color:#1d4ed8">'+(RA.aberto?'Mostrar menos':'Ver todas ('+rel.itens.length+')')+'</a>':'<span></span>')+'<a id="raOk" style="cursor:pointer;color:#6b7280">Já vi</a></div>';
-  el.innerHTML=h;
+  var n=rel.itens.length;
+  el.innerHTML='<h4><span>⚠️ '+n+' conta'+(n>1?'s':'')+' em atraso · '+m(rel.total)+'</span><button data-t="x" title="Fechar">✕</button></h4>'+
+    '<p>Venceram em <b>'+d(rel.ref)+'</b> e não foram pagas até hoje:</p>'+
+    '<p>'+rel.itens.slice(0,3).map(function(c){return '<span class="ln"><span>'+esc(c.cliente)+' · '+(c.origemTipo==='notafiscal'?'NF ':c.origemTipo==='venda'?'Pedido ':'')+esc(c.numero)+'</span><b>'+m(c.valor)+'</b></span>';}).join('')+(n>3?'<span style="color:#666">+ '+(n-3)+' outra(s)</span>':'')+'</p>'+
+    '<div class="bt"><button class="pri" data-t="ver">Ver atrasados</button><button data-t="ok">Já vi</button></div>';
   var fechar=function(){try{localStorage.setItem('raVisto:'+rel.dia,'1');}catch(e){}RA.rel=null;raDesenhar();};
-  el.querySelector('#raFechar').onclick=fechar;el.querySelector('#raOk').onclick=fechar;
-  var mm=el.querySelector('#raMais');if(mm)mm.onclick=function(){RA.aberto=!RA.aberto;raDesenhar();};
+  el.onclick=function(e){var b=e.target.closest('button');if(!b)return;
+    if(b.dataset.t==='ver'){var ref=rel.ref;fechar();BLG.view='sit';BLG.sel=null;SIT.aba='vencidos';SIT.soRef=ref;SIT.busca='';SIT.venc=null;irParaModulo('mod17');setTimeout(function(){sitIniciar();blgDraw();},300);return;}
+    fechar();};
 }
 setInterval(raChecar,60e3);setTimeout(raChecar,8000);
 function blgCsvSipag(txt){
@@ -18006,7 +18007,8 @@ function sitTela(){
   var abas=PEND?[['atencao','Pendências']]:[['atencao','Precisa da sua ação'],['baixados','Baixados'],['vencidos','Vencidos sem pagamento'],['todos','Todos']];
   h+='<div class="sit-box"><div class="sit-bar"><div class="sit-abas">'+abas.map(function(a){return '<button class="'+(SIT.aba===a[0]?'on':'')+'" data-a="sitAba" data-k="'+a[0]+'">'+a[1]+' <i>'+gr(a[0]).length+'</i></button>';}).join('')+'</div>'+
      '<label>Buscar <input id="sitBusca" value="'+blgEsc(SIT.busca)+'" placeholder="Cliente, CPF/CNPJ, NF ou valor"></label></div>';
-  var b=SIT.busca.trim().toLowerCase(),lista=gr(SIT.aba).filter(function(l){if(!b)return true;var t=[l.x&&l.x.nome,l.x&&l.x.doc,l.c&&l.c.cliente,l.c&&l.c.numero,(l.cs||[]).map(function(c){return c.cliente+' '+c.numero;}).join(' '),blgMoeda(l.v)].join(' ').toLowerCase();return t.indexOf(b)>=0;});
+  if(SIT.aba==='vencidos'&&SIT.soRef)h+='<div class="blg-msg" style="margin:8px 12px">Mostrando só os que <b>venceram em '+blgData(SIT.soRef)+'</b> (aviso do dia). <a style="cursor:pointer;color:#1d4ed8" data-a="sitTodosVenc">Ver todos os vencidos</a></div>';
+  var b=SIT.busca.trim().toLowerCase(),lista=gr(SIT.aba).filter(function(l){if(SIT.aba==='vencidos'&&SIT.soRef&&l.c&&blgVencUtil(l.c.venc)!==SIT.soRef)return false;if(!b)return true;var t=[l.x&&l.x.nome,l.x&&l.x.doc,l.c&&l.c.cliente,l.c&&l.c.numero,(l.cs||[]).map(function(c){return c.cliente+' '+c.numero;}).join(' '),blgMoeda(l.v)].join(' ').toLowerCase();return t.indexOf(b)>=0;});
   var ordem={falta:0,semconta:1,semBanco:2,cartao:3,auto:4,manual:5,vencido:6};
   lista.sort(function(a,c){return (ordem[a.k]-ordem[c.k])||String(c.dia||'').localeCompare(String(a.dia||''));});
   h+='<div class="sit-scroll"><div class="sit-tb"><div class="sit-hd"><div>Situação</div><div>Pago em</div><div>No banco (Sicoob)</div><div></div><div>No Bling (conta a receber)</div><div>Detalhe</div><div style="text-align:right">Ação</div></div>';
@@ -18035,7 +18037,7 @@ function sitTela(){
     else if(l.k==='cartao'){bling='<span class="mut">Várias vendas no cartão</span>';det='Repasse da maquininha (já sem a taxa). A baixa do cartão ainda não está ligada.';}
     else if(l.k==='semBanco'){bling='<b class="el">'+blgEsc(c.cliente)+'</b><div>'+blgEsc(crzRef(c))+' · R$ '+blgMoeda(c.valor)+'</div><small>baixada no Bling em '+blgData(l.dia)+', conta Sicoob</small>';det='Confira no Bling a data da baixa e a conta financeira (pode ter sido baixada no dia errado ou em outra conta).';acao='<a class="sit-btn s" href="https://www.bling.com.br/contas.receber.php#edit/'+c.id+'" target="_blank">Abrir no Bling</a>';}
     else if(l.k==='vencido'){var dd=Math.round((Date.parse(crzHoje())-Date.parse(c.venc))/864e5);bling='<b class="el">'+blgEsc(c.cliente)+'</b><div>'+blgEsc(crzRef(c))+' · R$ '+blgMoeda(c.valor)+'</div><small>venceu '+blgData(c.venc)+' · '+dd+' dia(s)</small>';
-      det=(c.forma===15?'Boleto Sicoob':'PIX')+' sem pagamento no Sicoob. '+(dd>60?'Muito antigo: conferir se foi pago por fora.':'Cobrar o cliente.');acao='<a class="sit-btn s" href="https://www.bling.com.br/contas.receber.php#edit/'+c.id+'" target="_blank">Abrir no Bling</a>';}
+      det=(c.blingConta?'Boleto Bling Conta':c.forma===15?'Boleto Sicoob':'PIX')+' sem pagamento. '+(dd>60?'Muito antigo: conferir se foi pago por fora.':'Cobrar o cliente.');acao='<a class="sit-btn s" href="https://www.bling.com.br/contas.receber.php#edit/'+c.id+'" target="_blank">Abrir no Bling</a>';}
     h+='<div class="sit-ln k-'+l.k+'"><div><span class="sit-st" style="color:'+st[1]+';background:'+st[2]+'">'+st[0]+'</span></div><div class="num">'+dt+'</div><div class="col">'+banco+'</div><div class="seta" style="color:'+(ok?'#15803d':'#9AA3AD')+'">'+(ok?'⇄':l.k==='vencido'?'…':'✕')+'</div><div class="col">'+bling+'</div><div class="det">'+det+'</div><div style="text-align:right">'+acao+'</div></div>';
   });
   h+='</div></div></div>';
@@ -19052,7 +19054,8 @@ function blgAcao(a){
       if(!(r&&r.ok)){fim('❌ '+blgEsc((r&&(r.erro||r.resultado))||'Não abateu.'));return;}
       fim('✅ R$ '+blgMoeda(xk.valor)+' abatido em '+blgEsc(o.cliente)+': '+(r.partes||[]).map(function(p){return blgEsc(crzRef(p))+' venc. '+blgData(p.venc)+' R$ '+blgMoeda(p.valor)+(p.quita?' (quitou)':' (falta R$ '+blgMoeda(Math.round((p.saldo-p.valor)*100)/100)+')');}).join('; ')+'.');}).catch(function(e){fim('❌ Sem conexão: '+blgEsc(e&&e.message||e));});return;}
   if(a==='sitPer'){SIT.per=BLG._k;SIT.msg='';sitIniciar();blgDraw();return;}
-  if(a==='sitAba'){SIT.aba=BLG._k;blgDraw();return;}
+  if(a==='sitTodosVenc'){SIT.soRef=null;blgDraw();return;}
+  if(a==='sitAba'){SIT.soRef=null;SIT.aba=BLG._k;blgDraw();return;}
   if(a==='sitRec'){sitDiasPer().forEach(function(d){delete CRZ.det[d];});SIT.venc=null;SIT.msg='';sitIniciar();blgDraw();return;}
   if(a==='sitAbrirDia'){CRZ.dia=BLG._k;CRZ.mes=CRZ.dia.slice(0,7);BLG.view='cruz';crzCarregarMes();blgDraw();return;}
   if(a==='sitBaixar'){var pz=String(BLG._k).split('|'),Dz=CRZ.det[pz[0]];if(!Dz)return;var qz=(Dz.sicoob||[]).filter(function(q){return q.chave===pz[1];})[0];if(!qz||!qz.baixar)return;var bz=qz.baixar;
