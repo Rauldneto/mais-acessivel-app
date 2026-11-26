@@ -17398,6 +17398,7 @@ function ccAvCss(){
     '.cc-av tfoot td{font-weight:800;border-top:2px solid #94a3b8;background:#f8fafc}'+
     '.cc-avbar{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin:0 0 10px}.cc-avbar label{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#475569}'+
     '.cc-avbar input{width:150px}.cc-avbar .cc-mu{font-size:12px;max-width:520px}'+
+    '.cc-av .av-l{border-left:3px solid #475569!important}'+
     '.cc-avres{border-collapse:collapse;width:360px!important;max-width:100%;font-family:inherit!important;font-size:14px!important;flex:0 0 auto}.cc-avres td{font-family:inherit!important;font-size:14px!important;border:0!important;border-bottom:1px solid #f1f5f9!important;background:transparent!important}'+
     '.cc-avleg{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:#475569;margin:0 0 8px}.cc-avleg span{display:inline-flex;align-items:center;gap:6px}.cc-avleg i{width:14px;height:14px;border-radius:4px;display:inline-block}';
   document.head.appendChild(st);
@@ -17434,26 +17435,26 @@ function ccDrawAv(el,h){
   var t=dl+'<div class="cc-avleg"><span><i style="background:#fff;border:1px solid #94a3b8"></i>Campo para digitar</span><span><i style="background:#fffbeb;border:1px solid #fcd34d"></i>Custo (calculado)</span><span><i style="background:#f0fdf4;border:1px solid #86efac"></i>Venda (calculado)</span><span style="color:#2563eb">Número azul no campo = frete calculado pelo rateio</span></div>'+
     '<table class="cc-g cc-av" style="min-width:1402px"><colgroup><col class="a-prod"><col class="a-q"><col class="a-un"><col class="a-f"><col class="a-m"><col class="a-p"><col class="a-pc"><col class="a-pc"><col class="a-fr"><col class="a-pc"><col class="a-c"><col class="a-t"><col class="a-pc"><col class="a-v"><col class="a-t"></colgroup>'+
     '<thead><tr class="av-grp"><th class="prod av-prod" colspan="3" rowspan="2">Produto da cotação</th>'+
-      '<th class="av-b" colspan="7">1 · Compra<small>o que o fornecedor cobra, por unidade</small></th>'+
-      '<th class="av-a" colspan="2">2 · Custo<small>com impostos e frete</small></th>'+
-      '<th class="av-g" colspan="3">3 · Venda<small>custo + markup</small></th></tr>'+
+      '<th class="av-b av-l" colspan="7">1 · Compra<small>o que o fornecedor cobra, por unidade</small></th>'+
+      '<th class="av-a av-l" colspan="2">2 · Custo<small>com impostos e frete</small></th>'+
+      '<th class="av-g av-l" colspan="3">3 · Venda<small>custo + markup</small></th></tr>'+
     '<tr class="av-col">'+
-      '<th class="av-b">Fornecedor</th><th class="av-b">Marca</th><th class="n av-b">Preço</th><th class="n av-b">Desconto R$</th><th class="n av-b">IPI %</th><th class="n av-b">Frete R$</th><th class="n av-b">Créd. ICMS %</th>'+
-      '<th class="n av-a">Unitário</th><th class="n av-a">Total</th><th class="n av-g">Markup %</th><th class="n av-g">Unitário</th><th class="n av-g">Total</th></tr></thead><tbody>';
+      '<th class="av-b av-l">Fornecedor</th><th class="av-b">Marca</th><th class="n av-b">Preço</th><th class="n av-b">Desconto R$</th><th class="n av-b">IPI %</th><th class="n av-b">Frete R$</th><th class="n av-b">Créd. ICMS %</th>'+
+      '<th class="n av-a av-l">Unitário</th><th class="n av-a">Total</th><th class="n av-g av-l">Markup %</th><th class="n av-g">Unitário</th><th class="n av-g">Total</th></tr></thead><tbody>';
   var inp=function(a,i,cls,ph,txt,extra){return '<td class="inp av-in '+(txt?'':'n ')+(cls||'')+'"><input '+(txt?'':'inputmode="decimal" ')+'data-av="'+a+'" data-ai="'+i+'" value="'+(txt?ccEsc((f[a]||[])[i]||''):fv(a,i))+'" placeholder="'+(ph||'')+'"'+(extra||'')+'></td>';};
   c.itens.forEach(function(it,i){var x=A.linhas[i];
     t+='<tr class="it"><td class="prod"><div class="pd" data-tip="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div>'+((it.cod||it.peso)?'<div class="pc">'+(it.cod?'Cód. '+ccEsc(it.cod):'')+(it.peso?(it.cod?' · ':'')+ccIn(it.peso,3).replace(/0+$/,'').replace(/,$/,'')+' kg/un':'')+'</div>':'')+'</td>'+
       '<td class="n q">'+ccIn(it.q,0)+'</td><td class="c">'+ccEsc(it.un)+'</td>'+
-      inp('fornItem',i,'','',true,' list="ccAvForns"')+inp('marcas',i,'','',true)+inp('precos',i,'','0,00')+inp('descs',i,'','')+inp('ipis',i,'','')+
+      inp('fornItem',i,'av-l','',true,' list="ccAvForns"')+inp('marcas',i,'','',true)+inp('precos',i,'','0,00')+inp('descs',i,'','')+inp('ipis',i,'','')+
       '<td class="inp av-in n"><input inputmode="decimal" class="'+(x.ok&&!x.freteMan&&x.freteU?'av-sug':'')+'" data-av="fretes" data-ai="'+i+'" value="'+fv('fretes',i)+'" placeholder="'+(x.ok&&!x.freteMan&&x.freteU?ccIn(x.freteU,2):'')+'" title="Vazio = frete do rateio. Digite para fixar o frete deste produto."></td>'+
       inp('creds',i,'','')+
-      '<td class="n av-cu">'+(x.ok?ccMoeda(x.custoU).replace('R$ ',''):'')+'</td>'+
+      '<td class="n av-cu av-l">'+(x.ok?ccMoeda(x.custoU).replace('R$ ',''):'')+'</td>'+
       '<td class="n av-cu">'+(x.ok?ccMoeda(x.custoT).replace('R$ ',''):'')+'</td>'+
-      '<td class="inp av-in av-g n"><input inputmode="decimal" class="'+(x.mkPad?'av-pad':'')+'" data-av="markups" data-ai="'+i+'" value="'+fv('markups',i)+'" placeholder="'+(f.markupPadrao!==''&&f.markupPadrao!=null?ccIn(f.markupPadrao):'')+'"></td>'+
+      '<td class="inp av-in av-g av-l n"><input inputmode="decimal" class="'+(x.mkPad?'av-pad':'')+'" data-av="markups" data-ai="'+i+'" value="'+fv('markups',i)+'" placeholder="'+(f.markupPadrao!==''&&f.markupPadrao!=null?ccIn(f.markupPadrao):'')+'"></td>'+
       '<td class="n av-vd">'+(x.ok?ccMoeda(x.vendaU)+(it.venda?'<small class="'+(x.vendaU>it.venda+0.005?'av-alto':'')+'">no Bling '+ccMoeda(it.venda)+'</small>':''):'')+'</td>'+
       '<td class="n av-vd">'+(x.ok?ccMoeda(x.vendaT).replace('R$ ',''):'')+'</td></tr>';
   });
-  t+='</tbody><tfoot><tr><td class="prod" colspan="3">Total</td><td colspan="7"></td><td></td><td class="n" style="color:#92400e">'+ccMoeda(A.custo)+'</td><td></td><td></td><td class="n" style="color:#15803d">'+ccMoeda(A.venda)+'</td></tr></tfoot></table>';
+  t+='</tbody><tfoot><tr><td class="prod" colspan="3">Total</td><td colspan="7" class="av-l"></td><td class="av-l"></td><td class="n" style="color:#92400e">'+ccMoeda(A.custo)+'</td><td class="av-l"></td><td></td><td class="n" style="color:#15803d">'+ccMoeda(A.venda)+'</td></tr></tfoot></table>';
   h+='<div class="cc-gw">'+t+'</div>';
   // pagamento e entrega + resultado
   var campo=function(lab,k,tipo){var v=f[k];
@@ -17472,17 +17473,28 @@ function ccDrawAv(el,h){
       [['Custo total',ccMoeda(A.custo),'#fffbeb'],['Total de venda',ccMoeda(A.venda),'#f0fdf4'],['Lucro bruto',ccMoeda(lucro)+' <small style="font-size:13px;color:#15803d">'+pct.toFixed(1).replace('.',',')+'% da venda</small>','#f0fdf4'],
        ['Total na cotação do Bling',ccMoeda(c.totalPedido),'#fff']].map(function(b){return '<div style="flex:1;min-width:170px;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;background:'+b[2]+'"><div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:#64748b">'+b[0]+'</div><div style="font-size:18px;font-weight:800;color:#0f172a;margin-top:2px">'+b[1]+'</div></div>';}).join('')+
     '</div></div></div>';
+  var gw0=el.querySelector('.cc-gw'),sl=gw0?gw0.scrollLeft:0;
   el.innerHTML=h;
+  var gw1=el.querySelector('.cc-gw');if(gw1&&sl)gw1.scrollLeft=sl;
   ccLigar(el);ccLigarAv(el);
 }
+// Tab / Shift+Tab: vai para o próximo campo da linha (fornecedor → marca → preço → desconto → IPI → frete → créd. ICMS → markup → próxima linha).
+// A tabela é redesenhada quando um valor muda; o próximo campo é guardado e recebe o foco depois.
+function ccAvFoco(){var x=CC._prox;CC._prox=null;if(!x||!CC.root)return;
+  var n=CC.root.querySelector('#ccCorpo input[data-av="'+x.a+'"][data-ai="'+x.i+'"]');if(n){n.focus();if(n.select)n.select();}}
 function ccLigarAv(el){
   var c=CC.cot;if(!c)return;var f=c.forn[0];
   el.querySelectorAll('input[data-av]').forEach(function(inp){
     inp.addEventListener('change',function(){var a=inp.dataset.av,i=+inp.dataset.ai;f[a]=f[a]||[];
       f[a][i]=(a==='fornItem'||a==='marcas')?inp.value.trim():(inp.value.trim()===''?'':ccNum(inp.value));
       CC.aviso='';ccDraw();ccSalvar();});
-    inp.addEventListener('keydown',function(e){if(e.key!=='Enter')return;e.preventDefault();var a=inp.dataset.av,i=+inp.dataset.ai;inp.blur();
-      setTimeout(function(){var n=CC.root&&CC.root.querySelector('#ccCorpo input[data-av="'+a+'"][data-ai="'+(i+1)+'"]');if(n){n.focus();if(n.select)n.select();}},30);});
+    inp.addEventListener('keydown',function(e){
+      if(e.key==='Tab'){
+        var lista=Array.prototype.slice.call(el.querySelectorAll('.cc-av input[data-av]')),pos=lista.indexOf(inp),nx=lista[pos+(e.shiftKey?-1:1)];
+        if(!nx)return; // primeiro/último campo: Tab normal sai da tabela
+        e.preventDefault();CC._prox={a:nx.dataset.av,i:nx.dataset.ai};inp.blur();setTimeout(ccAvFoco,0);return;}
+      if(e.key!=='Enter')return;e.preventDefault();var a=inp.dataset.av,i=+inp.dataset.ai;
+      CC._prox={a:a,i:String(i+1)};inp.blur();setTimeout(ccAvFoco,0);});
   });
 }
 // Aplica a cotação lida pela IA nos produtos ligados: preço, marca, IPI e fornecedor do produto; crédito de ICMS pela UF do fornecedor (CNPJ)
