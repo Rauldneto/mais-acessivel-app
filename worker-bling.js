@@ -145,7 +145,8 @@ export default {
       if (url.pathname === '/receber/liq') return resp({ ok: true, l: (await env.BLING_KV.get('bolliq:' + soData(url.searchParams.get('dia')), 'json')) || [] });
       if (url.pathname === '/receber/vencidas') {
         const hoje = hojeLocal();
-        const l = (await contasAbertasJanela(env)).filter(c => c.venc && vencUtil(c.venc) < hoje && c.forma !== 3 && c.forma !== 4).map(c => Object.assign(c, { blingConta: ehBlingConta(c) }));
+        const limite = somaDias(hoje, -92);   // só os vencidos dos últimos 3 meses
+        const l = (await contasAbertasJanela(env)).filter(c => c.venc && c.venc >= limite && vencUtil(c.venc) < hoje && c.forma !== 3 && c.forma !== 4).map(c => Object.assign(c, { blingConta: ehBlingConta(c) }));
         return resp({ ok: true, itens: l.sort((a, b) => String(b.venc).localeCompare(String(a.venc))) });
       }
       if (url.pathname === '/boletos/consulta') {   // diagnóstico: o que o Sicoob devolve para um boleto

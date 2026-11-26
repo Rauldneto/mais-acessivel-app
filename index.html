@@ -17995,7 +17995,7 @@ function sitTela(){
   var card=function(id,t,cor,arr,sub){return '<button class="sit-card'+(SIT.aba===id?' on':'')+'" style="--c:'+cor+'" data-a="sitAba" data-k="'+id+'"><span class="t"><i></i>'+t+'</span><span class="n">'+arr.length+'<small>'+brl(soma(arr))+'</small></span><span class="s">'+sub+'</span></button>';};
   h+='<div class="sit-cards">'+card('atencao','Precisa da sua ação','#B45309',gr('atencao'),'Pago e não baixado, ou baixado sem entrada no banco')+
      card('baixados','Baixados no Bling','#15803d',bx,bx.filter(function(l){return l.k==='auto';}).length+' automáticos pelo app · '+bx.filter(function(l){return l.k==='manual';}).length+' por você ou na conferência')+
-     card('vencidos','Vencidos sem pagamento','#4B5563',gr('vencidos'),SIT.venc?'Contas vencidas (PIX e boleto Sicoob) sem nada no banco':'carregando…')+
+     card('vencidos','Vencidos sem pagamento','#4B5563',gr('vencidos'),SIT.venc?'Vencidas nos últimos 3 meses e ainda não pagas':'carregando…')+
      card('todos','Entraram no Sicoob','#1d4ed8',ent,'PIX, boletos Sicoob e cartão no período')+'</div>';
   if(pend.length)h+='<div class="sit-alerta"><b>'+SIT.per+': '+pend.length+' pagamento(s) entraram no Sicoob e ainda não estão baixados no Bling ('+brl(soma(pend))+').</b> Cada linha abaixo diz o motivo e o que fazer.</div>';
   else if(!R.faltam&&ent.length)h+='<div class="sit-ok">✅ '+SIT.per+': tudo que entrou no Sicoob está baixado no Bling.</div>';
