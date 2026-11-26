@@ -1556,6 +1556,17 @@ async function propostaComercial(env, numero) {
     try { const v = ((await bling(env, '/vendedores/' + pr.vendedor.id)) || {}).data || {}; vendedor = (v.contato && v.contato.nome) || ''; } catch (e) { }
   }
   const tr = pr.transporte || {};
+  // peso bruto de cada produto (kg por unidade) para ratear o frete na Cotação avulsa; guarda 7 dias no KV
+  const pesos = {};
+  for (const id of [...new Set((pr.itens || []).map(i => i.produto && i.produto.id).filter(Boolean))].slice(0, 40)) {
+    let pz = await env.BLING_KV.get('ppeso:' + id);
+    if (pz == null) {
+      try { const d = ((await bling(env, '/produtos/' + id)) || {}).data || {}; pz = String(Number(d.pesoBruto || d.pesoLiquido || 0)); }
+      catch (e) { pz = ''; }
+      if (pz !== '') await env.BLING_KV.put('ppeso:' + id, pz, { expirationTtl: 7 * 86400 });
+    }
+    pesos[id] = Number(pz || 0);
+  }
   return {
     ok: true,
     proposta: {
@@ -1564,6 +1575,7 @@ async function propostaComercial(env, numero) {
       itens: (pr.itens || []).map(i => ({
         produtoId: i.produto && i.produto.id, codigo: i.codigo || '', descricao: (i.produto && i.produto.descricao) || i.descricao || '',
         unidade: i.unidade || '', quantidade: Number(i.quantidade || 0), valor: Number(i.valor || 0), desconto: Number(i.desconto || 0),
+        peso: pesos[i.produto && i.produto.id] || 0,
       })),
       totalProdutos: Number(pr.totalProdutos || 0), total: Number(pr.total || 0),
       frete: Number(tr.frete || 0), transportador: (tr.contato && tr.contato.nome) || '',

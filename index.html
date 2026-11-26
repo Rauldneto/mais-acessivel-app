@@ -16902,7 +16902,7 @@ function ccDoPedido(p){
 }
 // Monta a cotação nova a partir da proposta comercial (cotação de venda) do Bling: sem fornecedor fixo, 3 colunas em branco
 function ccDaProposta(p){
-  var itens=(p.itens||[]).map(function(i){return {cod:i.codigo||'',desc:i.descricao||'',un:i.unidade||'',q:Number(i.quantidade)||0,pid:i.produtoId||'',venda:Number(i.valor)||0};});
+  var itens=(p.itens||[]).map(function(i){return {cod:i.codigo||'',desc:i.descricao||'',un:i.unidade||'',q:Number(i.quantidade)||0,pid:i.produtoId||'',venda:Number(i.valor)||0,peso:Number(i.peso)||0};});
   var cli=p.cliente||{};
   return {numero:String(p.numero),propostaId:p.id,data:p.data||'',totalPedido:p.total||0,proposta:true,
     cliente:{nome:cli.nome||'',doc:cli.doc||'',uf:cli.uf||'',cidade:cli.cidade||''},vendedor:p.vendedor||'',situacao:p.situacao||'',
@@ -17351,23 +17351,26 @@ function ccDraw(){
 
 // ===================== Cotação avulsa › Outros: formação do preço de venda por produto =====================
 // Por produto: fornecedor, marca, preço de compra, desconto %, IPI %, frete por unidade, crédito de ICMS %, markup %.
-// Custo un. = (preço − desconto) + IPI + frete − crédito de ICMS (IPI e crédito sobre o preço com desconto).
+// Custo un. = (preço − desconto R$/un) + IPI + frete − crédito de ICMS (IPI e crédito sobre o preço com desconto).
 // Preço de venda un. = custo un. × (1 + markup/100).
-// Frete: o "Frete total da compra" é rateado pelos produtos sem frete digitado, proporcional ao valor de cada um;
+// Frete: o "Frete total da compra" é rateado pelos produtos sem frete digitado, pelo peso (cadastro do Bling) ou pelo valor;
 // frete digitado no produto (R$ por unidade) vale no lugar do rateio.
 function ccCalcAv(c){
   var f=c.forn[0]||{},n=c.itens.length,g=function(a,i){return (f[a]||[])[i];};
-  var L=c.itens.map(function(it,i){var p=ccNum(g('precos',i)),d=ccNum(g('descs',i)),liq=p*(1-d/100);
+  var L=c.itens.map(function(it,i){var p=ccNum(g('precos',i)),d=ccNum(g('descs',i)),liq=Math.max(p-d,0);
     return {p:p,ok:p>0,liq:liq,ipi:liq*ccNum(g('ipis',i))/100,cred:liq*ccNum(g('creds',i))/100,freteMan:g('fretes',i)!==''&&g('fretes',i)!=null,freteU:ccNum(g('fretes',i)),
       mk:(g('markups',i)!==''&&g('markups',i)!=null)?ccNum(g('markups',i)):ccNum(f.markupPadrao),mkPad:!(g('markups',i)!==''&&g('markups',i)!=null),forn:g('fornItem',i)||''};});
-  var ft=ccNum(f.freteTotal),man=0,base=0;
-  L.forEach(function(x,i){if(!x.ok)return;if(x.freteMan)man+=x.freteU*c.itens[i].q;else base+=x.liq*c.itens[i].q;});
+  var ft=ccNum(f.freteTotal),man=0;
+  var rat=L.filter(function(x){return x.ok&&!x.freteMan;}),semPeso=c.itens.filter(function(it,i){return L[i].ok&&!L[i].freteMan&&!(Number(it.peso)>0);}).length;
+  var modo=f.freteBase==='valor'?'valor':(rat.length&&!semPeso?'peso':'valor');
+  var pesoUn=function(i){return modo==='peso'?Number(c.itens[i].peso)||0:L[i].liq;},base=0;
+  L.forEach(function(x,i){if(!x.ok)return;if(x.freteMan)man+=x.freteU*c.itens[i].q;else base+=pesoUn(i)*c.itens[i].q;});
   var resto=Math.max(ft-man,0);
   L.forEach(function(x,i){var q=c.itens[i].q||0;
-    if(x.ok&&!x.freteMan)x.freteU=base>0&&q>0?resto*(x.liq*q/base)/q:0;
+    if(x.ok&&!x.freteMan)x.freteU=base>0&&q>0?resto*(pesoUn(i)*q/base)/q:0;
     x.custoU=x.ok?x.liq+x.ipi+x.freteU-x.cred:0;x.vendaU=x.ok?ccR(x.custoU*(1+x.mk/100)):0;
     x.custoT=x.custoU*q;x.vendaT=x.vendaU*q;});
-  var T={linhas:L,prod:0,desc:0,ipi:0,frete:0,cred:0,custo:0,venda:0,faltam:0};
+  var T={linhas:L,prod:0,desc:0,ipi:0,frete:0,cred:0,custo:0,venda:0,faltam:0,freteModo:modo,semPeso:semPeso};
   L.forEach(function(x,i){var q=c.itens[i].q||0;if(!x.ok){T.faltam++;return;}T.prod+=x.p*q;T.desc+=(x.p-x.liq)*q;T.ipi+=x.ipi*q;T.frete+=x.freteU*q;T.cred+=x.cred*q;T.custo+=x.custoT;T.venda+=x.vendaT;});
   ['prod','desc','ipi','frete','cred','custo','venda'].forEach(function(k){T[k]=ccR(T[k]);});
   T.completo=T.faltam===0&&n>0;return T;
@@ -17406,20 +17409,23 @@ function ccDrawAv(el,h){
   // barra: frete total e markup padrão
   h+='<div class="cc-card"><div class="cc-avbar">'+
     '<label>Frete total da compra (R$)<input class="cc-inp" inputmode="decimal" data-j="0" data-k="freteTotal" placeholder="0,00" value="'+(f.freteTotal===''||f.freteTotal==null?'':ccEsc(ccIn(f.freteTotal)))+'"></label>'+
+    '<label>Ratear o frete por<select class="cc-inp" data-j="0" data-k="freteBase" style="width:170px">'+
+      '<option value=""'+(f.freteBase!=='valor'?' selected':'')+'>Peso (cadastro Bling)</option><option value="valor"'+(f.freteBase==='valor'?' selected':'')+'>Valor do produto</option></select></label>'+
     '<label>Markup padrão (%)<input class="cc-inp" inputmode="decimal" data-j="0" data-k="markupPadrao" placeholder="ex.: 40" value="'+(f.markupPadrao===''||f.markupPadrao==null?'':ccEsc(ccIn(f.markupPadrao)))+'"></label>'+
-    '<span class="cc-mu">O frete total é dividido entre os produtos pelo valor de cada um (vira R$ por unidade). Se digitar o frete no produto, vale o digitado. O markup padrão vale para os produtos sem markup próprio.</span>'+
+    '<span class="cc-mu">O frete total é dividido entre os produtos '+(A.freteModo==='peso'?'pelo <b>peso</b> (peso bruto do cadastro no Bling × quantidade)':'pelo <b>valor</b> de cada um')+' e vira R$ por unidade. Frete digitado no produto vale no lugar do rateio. O markup padrão vale para os produtos sem markup próprio.'+
+      (f.freteBase!=='valor'&&A.semPeso?' <b style="color:#b45309">⚠ '+A.semPeso+' produto'+(A.semPeso>1?'s':'')+' sem peso no Bling: rateando pelo valor. Cadastre o peso e clique em Atualizar do Bling.</b>':'')+'</span>'+
   '</div></div>';
   // grade
   var dl='<datalist id="ccAvForns">'+forns.map(function(x){return '<option value="'+ccEsc(x)+'">';}).join('')+'</datalist>';
   var t=dl+'<table class="cc-g cc-av" style="min-width:1348px"><colgroup><col class="a-prod"><col class="a-q"><col class="a-un"><col class="a-f"><col class="a-m"><col class="a-p"><col class="a-pc"><col class="a-pc"><col class="a-fr"><col class="a-pc"><col class="a-c"><col class="a-t"><col class="a-pc"><col class="a-v"><col class="a-t"></colgroup>'+
     '<thead><tr><th class="prod">Produto</th><th class="n">Qtd</th><th class="c">Un</th>'+
-    '<th class="g1">Fornecedor</th><th class="g1">Marca</th><th class="n g1">Preço un.</th><th class="n g1">Desc. %</th><th class="n g1">IPI %</th><th class="n g1">Frete un.</th><th class="n g1">ICMS créd. %</th>'+
+    '<th class="g1">Fornecedor</th><th class="g1">Marca</th><th class="n g1">Preço un.</th><th class="n g1">Desc. R$/un</th><th class="n g1">IPI %</th><th class="n g1">Frete un.</th><th class="n g1">ICMS créd. %</th>'+
     '<th class="n g2">Custo un.</th><th class="n g2">Total custo</th><th class="n g3">Markup %</th><th class="n g3">Preço venda un.</th><th class="n g3">Total venda</th></tr></thead><tbody>';
   var inp=function(a,i,cls,ph,txt,extra){return '<td class="inp '+(txt?'':'n ')+(cls||'')+'"><input '+(txt?'':'inputmode="decimal" ')+'data-av="'+a+'" data-ai="'+i+'" value="'+(txt?ccEsc((f[a]||[])[i]||''):fv(a,i))+'" placeholder="'+(ph||'—')+'"'+(extra||'')+'></td>';};
   c.itens.forEach(function(it,i){var x=A.linhas[i];
-    t+='<tr class="it"><td class="prod"><div class="pd" data-tip="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div>'+(it.cod?'<div class="pc">Cód. '+ccEsc(it.cod)+'</div>':'')+'</td>'+
+    t+='<tr class="it"><td class="prod"><div class="pd" data-tip="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div>'+((it.cod||it.peso)?'<div class="pc">'+(it.cod?'Cód. '+ccEsc(it.cod):'')+(it.peso?(it.cod?' · ':'')+ccIn(it.peso,3).replace(/0+$/,'').replace(/,$/,'')+' kg/un':'')+'</div>':'')+'</td>'+
       '<td class="n q">'+ccIn(it.q,0)+'</td><td class="c">'+ccEsc(it.un)+'</td>'+
-      inp('fornItem',i,'','Fornecedor',true,' list="ccAvForns"')+inp('marcas',i,'','—',true)+inp('precos',i)+inp('descs',i,'','0')+inp('ipis',i,'','0')+
+      inp('fornItem',i,'','Fornecedor',true,' list="ccAvForns"')+inp('marcas',i,'','—',true)+inp('precos',i)+inp('descs',i,'','0,00')+inp('ipis',i,'','0')+
       inp('fretes',i,'fr',x.ok&&!x.freteMan&&x.freteU?ccIn(x.freteU,2):'0')+inp('creds',i,'','0')+
       '<td class="n cu">'+(x.ok?ccMoeda(x.custoU).replace('R$ ',''):'<span class="nil">—</span>')+'</td>'+
       '<td class="n cu">'+(x.ok?ccMoeda(x.custoT).replace('R$ ',''):'<span class="nil">—</span>')+'</td>'+
@@ -17467,7 +17473,7 @@ function ccAplicarImpAv(c,f,I,k,usados){
     f.precos[i]=ccPrecoConv(l,k);if(l.marca)f.marcas[i]=l.marca;f.fornItem[i]=nome;
     f.ipis[i]=l.ipi!=null?l.ipi:(k.ipi===''||k.ipi==null?'':ccNum(k.ipi));});
   if(k.desconto!==''&&k.desconto!=null&&ccNum(k.desconto)>0){var tot=idx.reduce(function(a,i){return a+ccNum(f.precos[i])*c.itens[i].q;},0);
-    if(tot>0){var pd=Math.round(ccNum(k.desconto)/tot*1e6)/1e4;idx.forEach(function(i){f.descs[i]=pd;});}}
+    if(tot>0){var fr=ccNum(k.desconto)/tot;idx.forEach(function(i){f.descs[i]=Math.round(ccNum(f.precos[i])*fr*1e4)/1e4;});}}
   f.freteForn=f.freteForn||{};var fk=ccChave(nome);
   if(k.frete!==''&&k.frete!=null&&f.freteForn[fk]==null){f.freteForn[fk]=ccNum(k.frete);f.freteTotal=ccR(ccNum(f.freteTotal)+ccNum(k.frete));}
   if(k.formaPag&&!f.formaPag)f.formaPag=k.formaPag;if(k.prazoPag&&!f.prazoPag)f.prazoPag=k.prazoPag;
@@ -17520,7 +17526,7 @@ function ccLigar(el){
       else if(inp.dataset.k==='uf'){f.uf=inp.value;}
       else if(inp.dataset.i!=null){var v=inp.value.trim();f.precos[+inp.dataset.i]=v===''?'':ccNum(v);}
       else if(inp.dataset.ipi!=null){var v2=inp.value.trim();f.ipis=f.ipis||[];f.ipis[+inp.dataset.ipi]=v2===''?'':ccNum(v2);}
-      else{var k=inp.dataset.k;if(['nome','formaPag','prazoPag','obs','numCot','validade','doc'].indexOf(k)>=0)f[k]=inp.value;else f[k]=inp.value.trim()===''?'':ccNum(inp.value);}
+      else{var k=inp.dataset.k;if(['nome','formaPag','prazoPag','obs','numCot','validade','doc','freteBase'].indexOf(k)>=0)f[k]=inp.value;else f[k]=inp.value.trim()===''?'':ccNum(inp.value);}
       if(c.vencedor&&!c.vencedor.manual)c.vencedor=null;
       CC.aviso='';ccDraw();ccSalvar();
     });
