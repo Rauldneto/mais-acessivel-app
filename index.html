@@ -17351,25 +17351,29 @@ function ccDraw(){
 
 // ===================== Cotação avulsa › Outros: formação do preço de venda por produto =====================
 // Por produto: fornecedor, marca, preço de compra, desconto %, IPI %, frete por unidade, crédito de ICMS %, markup %.
-// Custo un. = (preço − desconto R$/un) + IPI + frete − crédito de ICMS (IPI e crédito sobre o preço com desconto).
+// Custo un. = (preço − desconto %) + IPI + frete − crédito de ICMS (IPI e crédito sobre o preço com desconto).
 // Preço de venda un. = custo un. × (1 + markup/100).
-// Frete: o "Frete total da compra" é rateado pelo valor entre os produtos sem frete digitado;
-// frete digitado no produto é o TOTAL daquele produto (o app divide pela quantidade) e vale no lugar do rateio.
+// Frete: por fornecedor (cada um tem a sua nota). % do frete = frete da nota ÷ valor da nota (produtos − desconto + IPI);
+// frete un. de cada produto = valor dele na nota (preço − desconto + IPI) × esse %.
+function ccAvChave(nome){return ccChave(String(nome||'').trim()||'(sem fornecedor)');}
 function ccCalcAv(c){
   var f=c.forn[0]||{},n=c.itens.length,g=function(a,i){return (f[a]||[])[i];};
-  var L=c.itens.map(function(it,i){var p=ccNum(g('precos',i)),d=ccNum(g('descs',i)),liq=Math.max(p-d,0);
-    var q0=Number(it.q)||0,fm=g('fretes',i)!==''&&g('fretes',i)!=null;
-    return {p:p,ok:p>0,liq:liq,ipi:liq*ccNum(g('ipis',i))/100,cred:liq*ccNum(g('creds',i))/100,freteMan:fm,freteU:fm&&q0>0?ccNum(g('fretes',i))/q0:0,
-      mk:(g('markups',i)!==''&&g('markups',i)!=null)?ccNum(g('markups',i)):ccNum(f.markupPadrao),mkPad:!(g('markups',i)!==''&&g('markups',i)!=null),forn:g('fornItem',i)||''};});
-  var ft=ccNum(f.freteTotal),man=0;
-  var modo='valor',semPeso=0,pesoUn=function(i){return L[i].liq;},base=0; // rateio sempre pelo valor (preço com desconto × qtd)
-  L.forEach(function(x,i){if(!x.ok)return;if(x.freteMan)man+=x.freteU*c.itens[i].q;else base+=pesoUn(i)*c.itens[i].q;});
-  var resto=Math.max(ft-man,0);
+  var L=c.itens.map(function(it,i){var p=ccNum(g('precos',i)),d=ccNum(g('descs',i)),liq=p*(1-d/100);
+    return {p:p,ok:p>0,liq:liq,ipi:liq*ccNum(g('ipis',i))/100,cred:liq*ccNum(g('creds',i))/100,freteU:0,
+      mk:(g('markups',i)!==''&&g('markups',i)!=null)?ccNum(g('markups',i)):ccNum(f.markupPadrao),mkPad:!(g('markups',i)!==''&&g('markups',i)!=null),forn:String(g('fornItem',i)||'').trim()};});
+  // Frete por nota fiscal (um por fornecedor): % do frete = frete ÷ valor da nota; frete un. = (preço − desconto + IPI) × %
+  var NT={},ordem=[],notas=f.notas||{};
+  L.forEach(function(x,i){if(!x.ok)return;var k=ccAvChave(x.forn);
+    if(!NT[k]){NT[k]={chave:k,nome:x.forn||'(sem fornecedor)',auto:0,itens:0};ordem.push(k);}
+    NT[k].auto+=(x.liq+x.ipi)*(c.itens[i].q||0);NT[k].itens++;});
+  ordem.forEach(function(k){var N=NT[k],o=notas[k]||{};N.auto=ccR(N.auto);
+    N.valorMan=o.valor!==''&&o.valor!=null;N.valor=N.valorMan?ccNum(o.valor):N.auto;N.frete=ccNum(o.frete);N.freteDig=o.frete!==''&&o.frete!=null;
+    N.pct=N.valor>0?N.frete/N.valor:0;});
   L.forEach(function(x,i){var q=c.itens[i].q||0;
-    if(x.ok&&!x.freteMan)x.freteU=base>0&&q>0?resto*(pesoUn(i)*q/base)/q:0;
+    if(x.ok){var N=NT[ccAvChave(x.forn)];x.fretePct=N?N.pct:0;x.freteU=(x.liq+x.ipi)*x.fretePct;}
     x.custoU=x.ok?x.liq+x.ipi+x.freteU-x.cred:0;x.vendaU=x.ok?ccR(x.custoU*(1+x.mk/100)):0;
     x.custoT=x.custoU*q;x.vendaT=x.vendaU*q;});
-  var T={linhas:L,prod:0,desc:0,ipi:0,frete:0,cred:0,custo:0,venda:0,faltam:0,freteModo:modo,semPeso:semPeso};
+  var T={linhas:L,notas:ordem.map(function(k){return NT[k];}),prod:0,desc:0,ipi:0,frete:0,cred:0,custo:0,venda:0,faltam:0};
   L.forEach(function(x,i){var q=c.itens[i].q||0;if(!x.ok){T.faltam++;return;}T.prod+=x.p*q;T.desc+=(x.p-x.liq)*q;T.ipi+=x.ipi*q;T.frete+=x.freteU*q;T.cred+=x.cred*q;T.custo+=x.custoT;T.venda+=x.vendaT;});
   ['prod','desc','ipi','frete','cred','custo','venda'].forEach(function(k){T[k]=ccR(T[k]);});
   T.completo=T.faltam===0&&n>0;return T;
@@ -17398,6 +17402,8 @@ function ccAvCss(){
     '.cc-avbar{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin:0 0 10px}.cc-avbar label{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#475569}'+
     '.cc-avbar input{width:150px}.cc-avbar .cc-mu{font-size:12px;max-width:520px}'+
     '.cc-av .av-l{border-left:3px solid #475569!important}'+
+    '.cc-avnt{border-collapse:collapse;font-family:inherit!important;width:auto!important}.cc-avnt th,.cc-avnt td{font-family:inherit!important;font-size:13px!important;padding:5px 10px!important;border:0!important;border-bottom:1px solid #e2e8f0!important;background:transparent!important;text-align:left;white-space:nowrap}'+
+    '.cc-avnt th{font-size:11px!important;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#475569}.cc-avnt .n{text-align:right}.cc-avnt input{width:130px;text-align:right}.cc-avnt input::placeholder{color:#2563eb;font-weight:600}'+
     '.cc-avres{border-collapse:collapse;width:360px!important;max-width:100%;font-family:inherit!important;font-size:14px!important;flex:0 0 auto}.cc-avres td{font-family:inherit!important;font-size:14px!important;border:0!important;border-bottom:1px solid #f1f5f9!important;background:transparent!important}'+
     '.cc-avleg{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:#475569;margin:0 0 8px}.cc-avleg span{display:inline-flex;align-items:center;gap:6px}.cc-avleg i{width:14px;height:14px;border-radius:4px;display:inline-block}';
   document.head.appendChild(st);
@@ -17420,30 +17426,36 @@ function ccDrawAv(el,h){
     '<button type="button" class="cc-btn sm pri cc-save'+(CC.sujo?' pend':'')+'" data-a="salvar">💾 Salvar cotação</button>'+
   '</div></div>'+
   '<input type="file" id="ccFile" multiple accept=".pdf,.xlsx,.xls,.csv,.ods,image/*" style="display:none">'+ccDrawImp();
-  // barra: frete total e markup padrão
-  h+='<div class="cc-card"><div class="cc-avbar">'+
-    '<label>Frete total da compra (R$)<input class="cc-inp" inputmode="decimal" data-j="0" data-k="freteTotal" placeholder="0,00" value="'+(f.freteTotal===''||f.freteTotal==null?'':ccEsc(ccIn(f.freteTotal)))+'"></label>'+
-    '<label>Markup padrão (%)<input class="cc-inp" inputmode="decimal" data-j="0" data-k="markupPadrao" placeholder="ex.: 40" value="'+(f.markupPadrao===''||f.markupPadrao==null?'':ccEsc(ccIn(f.markupPadrao)))+'"></label>'+
-    '<span class="cc-mu">O <b>frete total da compra</b> é dividido entre os produtos pelo <b>valor</b> de cada um. Se o frete de um produto for diferente, digite no produto o <b>frete total dele</b> (não por unidade): vale o digitado e o resto do frete total é dividido entre os outros.</span>'+
-  '</div></div>';
+  // frete por nota fiscal (um por fornecedor) + markup padrão
+  var nt='<div class="cc-card"><div style="font-weight:800;font-size:15px;margin-bottom:4px">🚚 Frete por nota fiscal (um por fornecedor)</div>'+
+    '<div class="cc-mu" style="margin-bottom:8px">% do frete = frete ÷ valor da nota. Frete por unidade de cada produto = (preço − desconto + IPI) × % do frete. O valor da nota é a soma dos produtos daquele fornecedor; se a nota real tiver outro valor, digite.</div>';
+  if(!A.notas.length)nt+='<div class="cc-mu">Preencha o fornecedor e o preço dos produtos para aparecerem as notas aqui.</div>';
+  else nt+='<table class="cc-avnt"><thead><tr><th>Fornecedor</th><th>Produtos</th><th class="n">Valor da nota (R$)</th><th class="n">Frete da nota (R$)</th><th class="n">% do frete</th></tr></thead><tbody>'+
+    A.notas.map(function(N){var o=(f.notas||{})[N.chave]||{};return '<tr><td><b>'+ccEsc(N.nome)+'</b></td><td>'+N.itens+'</td>'+
+      '<td class="n"><input class="cc-inp" inputmode="decimal" data-nota="'+ccEsc(N.chave)+'" data-nk="valor" value="'+(N.valorMan?ccEsc(ccIn(o.valor,2)):'')+'" placeholder="'+ccIn(N.auto,2)+'"></td>'+
+      '<td class="n"><input class="cc-inp" inputmode="decimal" data-nota="'+ccEsc(N.chave)+'" data-nk="frete" value="'+(N.freteDig?ccEsc(ccIn(o.frete,2)):'')+'" placeholder="0,00"></td>'+
+      '<td class="n"><b>'+(N.valor>0?(N.pct*100).toFixed(2).replace('.',',')+'%':'—')+'</b></td></tr>';}).join('')+'</tbody></table>';
+  nt+='<div class="cc-avbar" style="margin:12px 0 0"><label>Markup padrão (%)<input class="cc-inp" inputmode="decimal" data-j="0" data-k="markupPadrao" placeholder="ex.: 40" value="'+(f.markupPadrao===''||f.markupPadrao==null?'':ccEsc(ccIn(f.markupPadrao)))+'"></label>'+
+    '<span class="cc-mu">Vale para os produtos sem markup próprio.</span></div></div>';
+  h+=nt;
   // grade
   var dl='<datalist id="ccAvForns">'+forns.map(function(x){return '<option value="'+ccEsc(x)+'">';}).join('')+'</datalist>';
-  var t=dl+'<div class="cc-avleg"><span><i style="background:#fff;border:1px solid #94a3b8"></i>Campo para digitar</span><span><i style="background:#fffbeb;border:1px solid #fcd34d"></i>Custo (calculado)</span><span><i style="background:#f0fdf4;border:1px solid #86efac"></i>Venda (calculado)</span><span style="color:#2563eb">Número azul no frete = parte do frete total (rateio)</span></div>'+
-    '<div class="cc-avleg" style="font-size:12.5px;color:#334155;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px"><b>Como calcula (por unidade):</b>&nbsp; Custo = Preço − Desconto + IPI + (Frete do item ÷ Qtd) − Créd. ICMS &nbsp;·&nbsp; Venda = Custo × (1 + Markup%) &nbsp;·&nbsp; Totais = unitário × Qtd</div>'+
+  var t=dl+'<div class="cc-avleg"><span><i style="background:#fff;border:1px solid #94a3b8"></i>Campo para digitar</span><span><i style="background:#fffbeb;border:1px solid #fcd34d"></i>Custo (calculado)</span><span><i style="background:#f0fdf4;border:1px solid #86efac"></i>Venda (calculado)</span><span style="color:#2563eb">Azul = frete por unidade, calculado pela nota do fornecedor</span></div>'+
+    '<div class="cc-avleg" style="font-size:12.5px;color:#334155;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px"><b>Como calcula (por unidade):</b>&nbsp; Custo = Preço − Desconto% + IPI + Frete por un. − Créd. ICMS &nbsp;·&nbsp; Venda = Custo × (1 + Markup%) &nbsp;·&nbsp; Totais = unitário × Qtd</div>'+
     '<table class="cc-g cc-av" style="min-width:1402px"><colgroup><col class="a-prod"><col class="a-q"><col class="a-un"><col class="a-f"><col class="a-m"><col class="a-p"><col class="a-pc"><col class="a-pc"><col class="a-fr"><col class="a-pc"><col class="a-c"><col class="a-t"><col class="a-pc"><col class="a-v"><col class="a-t"></colgroup>'+
     '<thead><tr class="av-grp"><th class="prod av-prod" colspan="3" rowspan="2">Produto da cotação</th>'+
       '<th class="av-b av-l" colspan="7">1 · Compra<small>o que o fornecedor cobra</small></th>'+
       '<th class="av-a av-l" colspan="2">2 · Custo<small>com impostos e frete</small></th>'+
       '<th class="av-g av-l" colspan="3">3 · Venda<small>custo + markup</small></th></tr>'+
     '<tr class="av-col">'+
-      '<th class="av-b av-l">Fornecedor</th><th class="av-b">Marca</th><th class="n av-b">Preço</th><th class="n av-b">Desconto R$ por un.</th><th class="n av-b">IPI %</th><th class="n av-b">Frete R$ total do item</th><th class="n av-b">Créd. ICMS %</th>'+
+      '<th class="av-b av-l">Fornecedor</th><th class="av-b">Marca</th><th class="n av-b">Preço</th><th class="n av-b">Desconto %</th><th class="n av-b">IPI %</th><th class="n av-b">Frete por un. (da nota)</th><th class="n av-b">Créd. ICMS %</th>'+
       '<th class="n av-a av-l">Unitário</th><th class="n av-a">Total</th><th class="n av-g av-l">Markup %</th><th class="n av-g">Unitário</th><th class="n av-g">Total</th></tr></thead><tbody>';
   var inp=function(a,i,cls,ph,txt,extra){return '<td class="inp av-in '+(txt?'':'n ')+(cls||'')+'"><input '+(txt?'':'inputmode="decimal" ')+'data-av="'+a+'" data-ai="'+i+'" value="'+(txt?ccEsc((f[a]||[])[i]||''):fv(a,i))+'" placeholder="'+(ph||'')+'"'+(extra||'')+'></td>';};
   c.itens.forEach(function(it,i){var x=A.linhas[i];
     t+='<tr class="it"><td class="prod"><div class="pd" data-tip="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div>'+(it.cod?'<div class="pc">Cód. '+ccEsc(it.cod)+'</div>':'')+'</td>'+
       '<td class="n q">'+ccIn(it.q,0)+'</td><td class="c">'+ccEsc(it.un)+'</td>'+
       inp('fornItem',i,'av-l','',true,' list="ccAvForns"')+inp('marcas',i,'','',true)+inp('precos',i,'','0,00')+inp('descs',i,'','')+inp('ipis',i,'','')+
-      '<td class="inp av-in n"><input inputmode="decimal" class="'+(x.ok&&!x.freteMan&&x.freteU?'av-sug':'')+'" data-av="fretes" data-ai="'+i+'" value="'+fv('fretes',i,2)+'" placeholder="'+(x.ok&&!x.freteMan&&x.freteU?ccIn(x.freteU*it.q,2):'')+'" title="Frete TOTAL deste produto (o app divide pela quantidade). Vazio = parte do frete total da compra, pelo valor."></td>'+
+      '<td class="n" style="color:#2563eb;font-weight:600" title="'+(x.ok&&x.fretePct?'('+ccMoeda(x.liq+x.ipi)+' na nota) × '+(x.fretePct*100).toFixed(2).replace('.',',')+'% do frete':'')+'">'+(x.ok?ccIn(x.freteU,4).replace(/(,\d\d)0+$/,'$1').replace(/(,\d\d\d)0$/,'$1'):'')+'</td>'+
       inp('creds',i,'','')+
       '<td class="n av-cu av-l">'+(x.ok?ccMoeda(x.custoU).replace('R$ ',''):'')+'</td>'+
       '<td class="n av-cu">'+(x.ok?ccMoeda(x.custoT).replace('R$ ',''):'')+'</td>'+
@@ -17477,10 +17489,17 @@ function ccDrawAv(el,h){
 }
 // Tab / Shift+Tab: vai para o próximo campo da linha (fornecedor → marca → preço → desconto → IPI → frete → créd. ICMS → markup → próxima linha).
 // A tabela é redesenhada quando um valor muda; o próximo campo é guardado e recebe o foco depois.
-function ccAvFoco(){var x=CC._prox;CC._prox=null;if(!x||!CC.root)return;
-  var n=CC.root.querySelector('#ccCorpo input[data-av="'+x.a+'"][data-ai="'+x.i+'"]');if(n){n.focus();if(n.select)n.select();}}
+function ccAvFoco(){var x=CC._prox,sel=CC._proxSel;CC._prox=null;CC._proxSel=null;if(!CC.root)return;
+  var n=sel?CC.root.querySelector('#ccCorpo '+sel):(x?CC.root.querySelector('#ccCorpo input[data-av="'+x.a+'"][data-ai="'+x.i+'"]'):null);if(n){n.focus();if(n.select)n.select();}}
 function ccLigarAv(el){
   var c=CC.cot;if(!c)return;var f=c.forn[0];
+  el.querySelectorAll('input[data-nota]').forEach(function(inp){
+    inp.addEventListener('change',function(){f.notas=f.notas||{};var k=inp.dataset.nota,o=f.notas[k]=f.notas[k]||{};
+      o[inp.dataset.nk]=inp.value.trim()===''?'':ccNum(inp.value);CC.aviso='';ccDraw();ccSalvar();});
+    inp.addEventListener('keydown',function(e){if(e.key!=='Tab'&&e.key!=='Enter')return;
+      var lista=Array.prototype.slice.call(el.querySelectorAll('input[data-nota]')),nx=lista[lista.indexOf(inp)+(e.shiftKey?-1:1)];if(!nx)return;
+      e.preventDefault();CC._proxSel='input[data-nota="'+nx.dataset.nota+'"][data-nk="'+nx.dataset.nk+'"]';inp.blur();setTimeout(ccAvFoco,0);});
+  });
   el.querySelectorAll('input[data-av]').forEach(function(inp){
     inp.addEventListener('change',function(){var a=inp.dataset.av,i=+inp.dataset.ai;f[a]=f[a]||[];
       f[a][i]=(a==='fornItem'||a==='marcas')?inp.value.trim():(inp.value.trim()===''?'':ccNum(inp.value));
@@ -17502,9 +17521,9 @@ function ccAplicarImpAv(c,f,I,k,usados){
     f.precos[i]=ccPrecoConv(l,k);if(l.marca)f.marcas[i]=l.marca;f.fornItem[i]=nome;
     f.ipis[i]=l.ipi!=null?l.ipi:(k.ipi===''||k.ipi==null?'':ccNum(k.ipi));});
   if(k.desconto!==''&&k.desconto!=null&&ccNum(k.desconto)>0){var tot=idx.reduce(function(a,i){return a+ccNum(f.precos[i])*c.itens[i].q;},0);
-    if(tot>0){var fr=ccNum(k.desconto)/tot;idx.forEach(function(i){f.descs[i]=Math.round(ccNum(f.precos[i])*fr*1e4)/1e4;});}}
-  f.freteForn=f.freteForn||{};var fk=ccChave(nome);
-  if(k.frete!==''&&k.frete!=null&&f.freteForn[fk]==null){f.freteForn[fk]=ccNum(k.frete);f.freteTotal=ccR(ccNum(f.freteTotal)+ccNum(k.frete));}
+    if(tot>0){var pd=Math.round(ccNum(k.desconto)/tot*1e6)/1e4;idx.forEach(function(i){f.descs[i]=pd;});}}
+  f.notas=f.notas||{};var nk=ccAvChave(nome),no=f.notas[nk]=f.notas[nk]||{};
+  if(k.frete!==''&&k.frete!=null&&(no.frete===''||no.frete==null))no.frete=ccNum(k.frete);
   if(k.formaPag&&!f.formaPag)f.formaPag=k.formaPag;if(k.prazoPag&&!f.prazoPag)f.prazoPag=k.prazoPag;
   if(k.entrega!==''&&k.entrega!=null&&(f.entrega===''||f.entrega==null))f.entrega=k.entrega;if(k.validade&&!f.validade)f.validade=String(k.validade).slice(0,40);
   f.arquivos=(f.arquivos||[]).concat((I.nomes||[]).map(function(n){return {nome:n,em:Date.now()};})).slice(-10);
@@ -17516,7 +17535,7 @@ function ccAplicarImpAv(c,f,I,k,usados){
   ccDadosCnpj(tmp).then(function(){var a=ccCredAuto(tmp);if(a.pct==null||!CC.cot||CC.cot!==c)return;var mud=false;
     idx.forEach(function(i){if(f.creds[i]===''||f.creds[i]==null){f.creds[i]=a.pct;mud=true;}});
     if(mud){CC.aviso=(CC.aviso?CC.aviso+' ':'')+'Crédito de ICMS de '+nome+': '+ccIn(a.pct)+'% ('+a.motivo+').';ccDraw();ccSalvar();}});
-  CC.imp=null;CC.aviso='Cotação de '+nome+' aplicada em '+idx.length+' de '+c.itens.length+' produtos'+(k.frete!==''&&k.frete!=null&&ccNum(k.frete)>0?' (frete de '+ccMoeda(ccNum(k.frete))+' somado ao frete total)':'')+'. Confira as linhas.';
+  CC.imp=null;CC.aviso='Cotação de '+nome+' aplicada em '+idx.length+' de '+c.itens.length+' produtos'+(k.frete!==''&&k.frete!=null&&ccNum(k.frete)>0?' (frete de '+ccMoeda(ccNum(k.frete))+' lançado na nota de '+nome+')':'')+'. Confira as linhas.';
   ccDraw();ccSalvar();
 }
 // Dica flutuante: mostra o texto inteiro por cima, sem mexer na largura da coluna nem na altura da linha
