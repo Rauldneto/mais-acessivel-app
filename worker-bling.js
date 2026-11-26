@@ -24,6 +24,7 @@
 //   GET  /pagamentos         → PIX pagos e ações planejadas/feitas no Bling (para o administrador)
 //   POST /pagamentos/verificar → roda a verificação agora (a mesma do gatilho cron a cada 5 min)
 //   GET  /pedido-compra?numero=N → pedido de compra pelo número (itens, fornecedor, frete, impostos, parcelas)
+//   GET  /proposta?numero=N      → proposta comercial (cotação de venda) pelo número (itens, cliente, vendedor)
 //                             para a aba Compras › Cotação compra. Precisa do escopo "Pedidos de compra" no app do Bling.
 //   GET  /produtos-fornecedores?ids=1,2,3 → códigos que cada fornecedor usa para esses produtos (cadastro do Bling),
 //                             usados como pista para ligar a cotação do fornecedor aos itens do pedido. Cache de 1 dia.
@@ -470,6 +471,11 @@ export default {
         const numero = String(url.searchParams.get('numero') || '').replace(/\D/g, '');
         if (!numero) return resp({ ok: false, erro: 'Informe o número do pedido de compra' }, 400);
         return resp(await pedidoCompra(env, numero));
+      }
+      if (url.pathname === '/proposta') {
+        const numero = String(url.searchParams.get('numero') || '').replace(/\D/g, '');
+        if (!numero) return resp({ ok: false, erro: 'Informe o número da cotação (proposta comercial)' }, 400);
+        return resp(await propostaComercial(env, numero));
       }
       if (url.pathname === '/produtos-fornecedores') {
         const ids = String(url.searchParams.get('ids') || '').split(',').map(x => x.replace(/\D/g, '')).filter(Boolean).slice(0, 60);
@@ -1505,6 +1511,63 @@ async function pedidoCompra(env, numero) {
       totalIPI: Number(tb.totalIPI || 0), totalICMS: Number(tb.totalICMS || 0),
       parcelas: (pc.parcelas || []).map(pa => ({ vencimento: pa.dataVencimento, dias: dia(pa.dataVencimento), valor: Number(pa.valor || 0),
         forma: formas[pa.formaPagamento && pa.formaPagamento.id] || '' })),
+    },
+  };
+}
+
+// ---------------- proposta comercial (aba Vendas › Cotação avulsa › Outros) ----------------
+// A API não filtra proposta pelo número. A lista vem da mais nova para a mais antiga: varre páginas até achar o número
+// (para quando passa de números menores) e guarda o mapa número → id no KV.
+async function acharProposta(env, numero) {
+  const mapa = (await env.BLING_KV.get('prop:mapa', 'json')) || {};
+  if (mapa[numero]) return mapa[numero];
+  const alvo = Number(numero);
+  let achou = null;
+  for (let p = 1; p <= 60 && !achou; p++) {
+    const j = await bling(env, '/propostas-comerciais?limite=100&pagina=' + p);
+    const d = (j && j.data) || [];
+    let menor = Infinity;
+    for (const o of d) if (o && o.numero != null) { mapa[String(o.numero)] = o.id; menor = Math.min(menor, Number(o.numero)); }
+    if (mapa[numero]) achou = mapa[numero];
+    if (d.length < 100 || menor < alvo - 200) break;
+  }
+  // mantém o mapa enxuto (só os 3000 números mais altos)
+  const ks = Object.keys(mapa).sort((a, b) => Number(b) - Number(a)).slice(0, 3000), m2 = {};
+  for (const k of ks) m2[k] = mapa[k];
+  await env.BLING_KV.put('prop:mapa', JSON.stringify(m2), { expirationTtl: 30 * 86400 });
+  return achou;
+}
+
+async function propostaComercial(env, numero) {
+  const id = await acharProposta(env, numero);
+  if (!id) return { ok: false, erro: 'Cotação (proposta comercial) nº ' + numero + ' não encontrada no Bling.' };
+  const pr = ((await bling(env, '/propostas-comerciais/' + id)) || {}).data || {};
+  let cliente = { id: pr.contato && pr.contato.id, nome: '', doc: '', uf: '', cidade: '' };
+  if (cliente.id) {
+    try {
+      const c = ((await bling(env, '/contatos/' + cliente.id)) || {}).data || {};
+      const eg = (c.endereco && c.endereco.geral) || {};
+      cliente.nome = c.nome || c.fantasia || ''; cliente.doc = c.numeroDocumento || '';
+      cliente.uf = eg.uf || ''; cliente.cidade = eg.municipio || '';
+    } catch (e) { cliente.nome = 'Cliente ' + cliente.id; }
+  }
+  let vendedor = '';
+  if (pr.vendedor && pr.vendedor.id) {
+    try { const v = ((await bling(env, '/vendedores/' + pr.vendedor.id)) || {}).data || {}; vendedor = (v.contato && v.contato.nome) || ''; } catch (e) { }
+  }
+  const tr = pr.transporte || {};
+  return {
+    ok: true,
+    proposta: {
+      id: pr.id, numero: pr.numero, data: pr.data, situacao: pr.situacao || '',
+      cliente, vendedor, aosCuidadosDe: pr.aosCuidadosDe || '',
+      itens: (pr.itens || []).map(i => ({
+        produtoId: i.produto && i.produto.id, codigo: i.codigo || '', descricao: (i.produto && i.produto.descricao) || i.descricao || '',
+        unidade: i.unidade || '', quantidade: Number(i.quantidade || 0), valor: Number(i.valor || 0), desconto: Number(i.desconto || 0),
+      })),
+      totalProdutos: Number(pr.totalProdutos || 0), total: Number(pr.total || 0),
+      frete: Number(tr.frete || 0), transportador: (tr.contato && tr.contato.nome) || '',
+      prazoEntrega: pr.prazoEntrega || '', observacaoInterna: pr.observacaoInterna || '',
     },
   };
 }
