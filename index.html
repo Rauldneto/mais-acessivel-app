@@ -7798,7 +7798,11 @@ function frtFormAtual(){
   if(FRT.form)return FRT.form;var d=FRT.desp[FRT.sel];if(!d)return null;
   FRT.form=JSON.parse(JSON.stringify(d));FRT.form.fornecedor=FRT.form.fornecedor||{nome:'',doc:''};
   if(!FRT.form.emissao)FRT.form.emissao=frtHoje();if(!FRT.form.competencia)FRT.form.competencia=FRT.form.emissao;
-  if(!FRT.form.parcelas)FRT.form.parcelas=1;return FRT.form;
+  if(!FRT.form.parcelas)FRT.form.parcelas=1;
+  // item vindo da cotação: o nome do cliente (da observação) também entra no histórico, que é o que vai para o Bling
+  if(FRT.form.origem==='cotacao'&&FRT.form.status!=='lancado'){var mc=String(FRT.form.obs||'').match(/Cliente:\s*([^·|]+?)\s*(?:·|\||$)/);
+    if(mc&&mc[1]&&!/Cliente:/i.test(FRT.form.historico||'')){var h0=String(FRT.form.historico||'');FRT.form.historico=/Orçamento [^|]+/.test(h0)?h0.replace(/(Orçamento [^|]+?)(\s*\||$)/,'$1 | Cliente: '+mc[1]+'$2'):(h0+(h0?' | ':'')+'Cliente: '+mc[1]);}}
+  return FRT.form;
 }
 function frtLerCampos(){
   var f=FRT.form;if(!f||!frtEl('fNome'))return f;
@@ -21468,7 +21472,10 @@ function abrirLancarFinanceiro(c,onSaved){
       function com(u){return Promise.race([fetch(u).then(function(r){if(!r.ok)throw 0;return r.json();}),new Promise(function(_,rj){setTimeout(function(){rj(0);},6000);})]).then(function(j){return String(j.razao_social||j.nome_fantasia||'').trim();});}
       return com('https://brasilapi.com.br/api/cnpj/v1/'+dc).catch(function(){return com('https://minhareceita.org/'+dc);}).catch(function(){return '';});
     }
-    nomeClienteDaCotacao().then(function(nm){dados.obs=montaObs(nm||'');}).then(function(){return fetch(url,{cache:'no-store'});}).then(function(x){return x.ok?x.json():Promise.reject(new Error('HTTP '+x.status));}).then(function(ex){
+    nomeClienteDaCotacao().then(function(nm){dados.obs=montaObs(nm||'');
+      // o histórico é o texto que vai para o Bling: leva o nome do cliente junto
+      if(nm&&!/Cliente:/i.test(dados.historico||'')){var hh=String(dados.historico||'');dados.historico=/Orçamento [^|]+/.test(hh)?hh.replace(/(Orçamento [^|]+?)(\s*\||$)/,'$1 | Cliente: '+nm+'$2'):(hh+(hh?' | ':'')+'Cliente: '+nm);}
+    }).then(function(){return fetch(url,{cache:'no-store'});}).then(function(x){return x.ok?x.json():Promise.reject(new Error('HTTP '+x.status));}).then(function(ex){
       if(ex&&ex.status==='lancado'){
         // já lançado no Bling: NÃO mexe nos dados lançados; registra o pedido de alteração e avisa o financeiro (aba Lançados)
         var rot={valor:'Valor',emissao:'Emissão',vencimento:'Vencimento',nf:'NF',despacho:'Coleta',obs:'Observações',fornecedor:'Transportadora',categoria:'Categoria',aVista:'À vista'};
