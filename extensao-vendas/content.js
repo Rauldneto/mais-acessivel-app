@@ -304,7 +304,20 @@ async function checarProposta() {
       }
     }
   }
-  r.push(item('Cliente', 'Lembrete: cadastro na Baruc', 'aviso', 'Confirme se o cliente já está cadastrado na Baruc (com o mesmo telefone e e-mail)'));
+  var itB = item('Cliente', 'Lembrete: cadastro na Baruc', 'aviso', 'Confirme se o cliente já está cadastrado na Baruc. Se não estiver, copie os dados e mande para a Jéssica.');
+  // v2.7.0: dados prontos para copiar e mandar à Jéssica cadastrar na Baruc
+  if (c) {
+    var docB = String(c.cpf_cnpj || '').replace(/\D/g, '');
+    itB.baruc = {
+      razao: c.nome || nomeContato || '', fantasia: c.fantasia || '',
+      doc: docB.length === 14 ? docB.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : docB.length === 11 ? docB.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : (c.cpf_cnpj || ''),
+      tipoDoc: docB.length === 11 ? 'CPF' : 'CNPJ',
+      celular: String(c.celular || '').trim(), fone: String(c.fone || '').trim(),
+      email: String(c.email || '').split(/[;,\s]+/).filter(Boolean).join('; '),
+      contato: fld('contato_ac'), vendedor: fld('nomeVendedor'), numero: fld('numeroProposta')
+    };
+  } else itB.baruc = { razao: nomeContato || '', contato: fld('contato_ac'), vendedor: fld('nomeVendedor'), numero: fld('numeroProposta') };
+  r.push(itB);
 
   // ---------- Dados gerais ----------
   r.push(vazio(fld('contato_ac'))

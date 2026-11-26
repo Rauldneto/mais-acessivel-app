@@ -158,7 +158,7 @@ function mostrarCheck(res,tabId,dados,continuar){
   var html=lista.map(function(i){
     if(i.cad&&!cadItem)cadItem=i;
     return '<div class="ck-item ck-'+i.status+'"><span>'+ICON[i.status]+'</span><div style="flex:1"><b>'+esc(i.campo)+'</b>'+
-      (i.msg?'<div class="ck-msg">'+esc(i.msg)+'</div>':'')+(i.cad&&i===cadItem?cadHtml(i.cad):'')+'</div></div>';
+      (i.msg?'<div class="ck-msg">'+esc(i.msg)+'</div>':'')+(i.cad&&i===cadItem?cadHtml(i.cad):'')+(i.baruc?'<button class="baCopiar" style="margin-top:6px;width:100%;padding:7px;border:1px solid #f59e0b;border-radius:6px;background:#fff;color:#92400e;font-weight:700;font-size:12px;cursor:pointer">📋 Copiar dados para cadastrar na Baruc</button>':'')+'</div></div>';
   }).join('');
 
   dynamicWrap.innerHTML=
@@ -175,6 +175,26 @@ function mostrarCheck(res,tabId,dados,continuar){
   if(s)s.onclick=continuar;
   montarSugestoes(tabId,dados);
   if(cadItem)cadBind(cadItem.cad,tabId,dados,continuar,res);
+  var baItem=res.itens.filter(function(i){return i.baruc;})[0];
+  document.querySelectorAll('.baCopiar').forEach(function(b){b.onclick=function(){
+    navigator.clipboard.writeText(baTexto(baItem.baruc)).then(function(){b.textContent='✅ Copiado! Cole no WhatsApp da Jéssica';setTimeout(function(){b.textContent='📋 Copiar dados para cadastrar na Baruc';},2500);})
+      .catch(function(){b.textContent='⚠️ Não consegui copiar';});
+  };});
+}
+
+// ====================== 📋 TEXTO PARA CADASTRO NA BARUC ======================
+function baTexto(b){
+  var v=function(x){return x&&String(x).trim()?String(x).trim():'(não informado)';};
+  var fones=[b.celular,b.fone].filter(function(x){return x&&String(x).trim();});
+  return 'Oi Jéssica! Por favor, cadastre este cliente na Baruc:\n\n'+
+    '🏢 Razão social: '+v(b.razao)+'\n'+
+    (b.fantasia&&b.fantasia!==b.razao?'🏷️ Nome fantasia: '+b.fantasia+'\n':'')+
+    '🧾 '+(b.tipoDoc||'CNPJ')+': '+v(b.doc)+'\n'+
+    '📞 Telefone: '+(fones.length?fones.join(' / '):'(não informado)')+'\n'+
+    '✉️ E-mail: '+v(b.email)+'\n'+
+    '👤 Nome do cliente (comprador): '+v(b.contato)+'\n\n'+
+    'Proposta Nº '+v(b.numero)+(b.vendedor?' · Vendedor: '+b.vendedor:'')+'\n'+
+    'Obrigado!';
 }
 
 // ====================== CAMPANHA: CADASTRO ATUALIZADO? (pergunta 1x por cliente) ======================
