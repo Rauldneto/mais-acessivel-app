@@ -21554,7 +21554,9 @@ function renderSalvas(){
       var title=document.createElement('span'); title.style.cssText='font-weight:700;font-size:13px;flex:1';
       title.textContent=c.compra?((c.fornNome||'Fornecedor')+' · '+(c.origCity||'—')+'/'+(c.origUF||'—')+' → '+(c.destCity||'—')+'/'+(c.destUF||'—')):((c.destCity||'—')+' — '+(c.destUF||'—'));
       var sub=document.createElement('span'); sub.style.cssText='font-size:11px;color:#888;white-space:nowrap';
-      sub.textContent=(c.dataHora||'')+' | '+fmtBRL(c.valorNF);
+      // valor do FRETE (melhor cotação, igual ao quadro "Melhor Cotação" ao expandir), não o valor da NF
+      var vFrete=0;if(best){var bv=parseFloat(best.valor)||0,bo=parseFloat(best.outros)||0,bc=parseFloat(best.credito)||0,bl=parseFloat(best.lucro)||0;vFrete=bv>0?(bv+bo)*(1+bc/100)*(1+bl/100):0;}
+      sub.textContent=(c.dataHora||'')+(c.dataHora?' | ':'')+'Frete '+(vFrete>0?fmtBRL(vFrete):'—');
       var btnCarregar=document.createElement('button'); btnCarregar.className='btn-ok'; btnCarregar.textContent='↩ Carregar';
       btnCarregar.onclick=function(e){
         e.stopPropagation();
