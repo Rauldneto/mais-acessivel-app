@@ -193,7 +193,7 @@ function baTexto(b){
     '📞 Telefone: '+(fones.length?fones.join(' / '):'(não informado)')+'\n'+
     '✉️ E-mail: '+v(b.email)+'\n'+
     '👤 Nome do cliente (comprador): '+v(b.contato)+'\n\n'+
-    'Proposta Nº '+v(b.numero)+(b.vendedor?' · Vendedor: '+b.vendedor:'')+'\n'+
+    (b.vendedor?'Vendedor: '+b.vendedor+'\n':'')+
     'Obrigado!';
 }
 
