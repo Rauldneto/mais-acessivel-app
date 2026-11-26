@@ -25,6 +25,7 @@
 //   POST /pagamentos/verificar → roda a verificação agora (a mesma do gatilho cron a cada 5 min)
 //   GET  /pedido-compra?numero=N → pedido de compra pelo número (itens, fornecedor, frete, impostos, parcelas)
 //   GET  /proposta?numero=N      → proposta comercial (cotação de venda) pelo número (itens, cliente, vendedor)
+//   POST /proposta/precos        → grava o preço de venda dos itens na proposta (Cotação avulsa › Outros)
 //                             para a aba Compras › Cotação compra. Precisa do escopo "Pedidos de compra" no app do Bling.
 //   GET  /produtos-fornecedores?ids=1,2,3 → códigos que cada fornecedor usa para esses produtos (cadastro do Bling),
 //                             usados como pista para ligar a cotação do fornecedor aos itens do pedido. Cache de 1 dia.
@@ -472,6 +473,7 @@ export default {
         if (!numero) return resp({ ok: false, erro: 'Informe o número do pedido de compra' }, 400);
         return resp(await pedidoCompra(env, numero));
       }
+      if (url.pathname === '/proposta/precos' && req.method === 'POST') return resp(await propostaPrecos(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/proposta') {
         const numero = String(url.searchParams.get('numero') || '').replace(/\D/g, '');
         if (!numero) return resp({ ok: false, erro: 'Informe o número da cotação (proposta comercial)' }, 400);
@@ -1582,6 +1584,64 @@ async function propostaComercial(env, numero) {
       prazoEntrega: pr.prazoEntrega || '', observacaoInterna: pr.observacaoInterna || '',
     },
   };
+}
+
+// Grava preços de venda nos itens da proposta comercial. Corpo: { id, numero, itens:[{ i, produtoId, codigo, valor }], usuario }
+// Busca a proposta inteira, troca só o valor unitário dos itens pedidos (conferindo índice + produto), recalcula as parcelas
+// na mesma proporção, envia de volta (PUT) e confere lendo de novo.
+async function propostaPrecos(env, b) {
+  const id = Number(b.id) || await acharProposta(env, String(b.numero || '').replace(/\D/g, ''));
+  if (!id) return { ok: false, erro: 'Proposta não encontrada no Bling.' };
+  const pr = ((await bling(env, '/propostas-comerciais/' + id)) || {}).data || {};
+  if (b.numero && String(pr.numero) !== String(b.numero).replace(/\D/g, '')) return { ok: false, erro: 'O número da proposta não confere.' };
+  const itens = pr.itens || [], mud = [];
+  for (const x of (b.itens || [])) {
+    const it = itens[Number(x.i)], v = Math.round(Number(x.valor) * 100) / 100;
+    if (!it || !(v > 0)) continue;
+    const pid = it.produto && it.produto.id;
+    if ((x.produtoId && pid && String(pid) !== String(x.produtoId)) || (!x.produtoId && x.codigo && String(it.codigo || '') !== String(x.codigo)))
+      return { ok: false, erro: 'Os itens da proposta mudaram no Bling desde que a cotação foi puxada. Clique em Atualizar do Bling e envie de novo.' };
+    mud.push({ i: Number(x.i), antes: Number(it.valor || 0), depois: v });
+  }
+  if (!mud.length) return { ok: false, erro: 'Nenhum preço para enviar.' };
+  const liq = (it, val) => Number(it.quantidade || 0) * val * (1 - Number(it.desconto || 0) / 100);
+  const totItensAntes = itens.reduce((a, it) => a + liq(it, Number(it.valor || 0)), 0);
+  const novoValor = {}; mud.forEach(m => { novoValor[m.i] = m.depois; });
+  const totItensDepois = itens.reduce((a, it, k) => a + liq(it, k in novoValor ? novoValor[k] : Number(it.valor || 0)), 0);
+  const totalAntes = Number(pr.total || 0), totalDepois = Math.round((totalAntes + (totItensDepois - totItensAntes)) * 100) / 100;
+  const semZero = d => (d && !/^0000/.test(d)) ? d : undefined;
+  const corpo = {
+    numero: pr.numero, data: pr.data, dataProximoContato: semZero(pr.dataProximoContato), situacao: pr.situacao,
+    contato: pr.contato && { id: pr.contato.id }, vendedor: pr.vendedor && pr.vendedor.id ? { id: pr.vendedor.id } : undefined,
+    loja: pr.loja && pr.loja.id ? { id: pr.loja.id } : undefined,
+    desconto: pr.desconto, outrasDespesas: pr.outrasDespesas, garantia: pr.garantia, prazoEntrega: pr.prazoEntrega,
+    introducao: pr.introducao, observacoes: pr.observacoes, observacaoInterna: pr.observacaoInterna, aosCuidadosDe: pr.aosCuidadosDe,
+    itens: itens.map((it, k) => ({
+      produto: it.produto && it.produto.id ? { id: it.produto.id } : undefined, codigo: it.codigo,
+      descricao: (it.produto && it.produto.descricao) || it.descricao, descricaoDetalhada: it.descricaoDetalhada,
+      unidade: it.unidade, quantidade: it.quantidade, desconto: it.desconto, valor: k in novoValor ? novoValor[k] : it.valor,
+      aliquotaIPI: it.aliquotaIPI,
+    })),
+  };
+  if (pr.transporte) {
+    const t = pr.transporte; corpo.transporte = { frete: t.frete, freteModalidade: t.freteModalidade, pesoBruto: t.pesoBruto, prazoEntrega: t.prazoEntrega, quantidadeVolumes: t.quantidadeVolumes };
+    if (t.contato && t.contato.id) corpo.transporte.contato = { id: t.contato.id, nome: t.contato.nome };
+  }
+  const pa = pr.parcelas || [];
+  if (pa.length) {
+    const soma = pa.reduce((a, x) => a + Number(x.valor || 0), 0), fator = soma > 0 ? totalDepois / soma : 1;
+    let acum = 0;
+    corpo.parcelas = pa.map((x, k) => {
+      let v = k === pa.length - 1 ? Math.round((totalDepois - acum) * 100) / 100 : Math.round(Number(x.valor || 0) * fator * 100) / 100; acum += v;
+      return { dataVencimento: x.dataVencimento, valor: v, observacoes: x.observacoes, formaPagamento: x.formaPagamento && x.formaPagamento.id ? { id: x.formaPagamento.id } : undefined, numeroDias: x.numeroDias };
+    });
+  }
+  await blingEnviar(env, 'PUT', '/propostas-comerciais/' + id, JSON.parse(JSON.stringify(corpo)));
+  const dep = ((await bling(env, '/propostas-comerciais/' + id)) || {}).data || {};
+  const conf = mud.map(m => ({ i: m.i, antes: m.antes, enviado: m.depois, noBling: Number(((dep.itens || [])[m.i] || {}).valor || 0) }));
+  const erradas = conf.filter(x => Math.abs(x.noBling - x.enviado) > 0.005);
+  try { await env.BLING_KV.put('propprecos:' + id + ':' + Date.now(), JSON.stringify({ numero: pr.numero, por: String(b.usuario || '').slice(0, 60), mud, totalAntes, totalDepois: Number(dep.total || 0) }), { expirationTtl: 180 * 86400 }); } catch (e) { }
+  return { ok: !erradas.length, erro: erradas.length ? 'O Bling não gravou ' + erradas.length + ' preço(s). Confira a proposta no Bling.' : '', itens: conf, totalAntes, totalDepois: Number(dep.total || 0) };
 }
 
 // ---------------- ECONF (evento 110750): PIX vinculados a NF-e já emitidas ----------------

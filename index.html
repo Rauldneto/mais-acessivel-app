@@ -17391,12 +17391,17 @@ function ccAvCss(){
     '.cc-av td.av-in input:focus{border-color:#2563eb!important;box-shadow:0 0 0 2px #bfdbfe}.cc-av td.av-in:focus-within{box-shadow:none!important}'+
     '.cc-av td.av-in input::placeholder{color:#cbd5e1}.cc-av td.av-in input.av-sug::placeholder{color:#2563eb;font-weight:600}.cc-av td.av-in input.av-pad::placeholder{color:#15803d;font-weight:700}'+
     '.cc-av td.av-cu{background:#fffbeb!important;color:#78350f}.cc-av td.av-vd{background:#f0fdf4!important;font-weight:800;color:#15803d}'+
-    '.cc-av td.av-vd small{display:block;font-size:10.5px;font-weight:500;color:#64748b}.cc-av td.av-vd small.av-alto{color:#b91c1c;font-weight:700}'+
+    '.cc-av td.av-vd small{display:block;font-size:10px;font-weight:500;color:#64748b;white-space:normal;line-height:1.15}.cc-av td.av-vd small.av-alto{color:#b91c1c;font-weight:700}'+
     '.cc-av td.av-in.av-g input{border-color:#86efac!important}'+
     '.cc-av tfoot td{font-weight:800;border-top:2px solid #94a3b8;background:#f8fafc}'+
     '.cc-avbar{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin:0 0 10px}.cc-avbar label{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#475569}'+
     '.cc-avbar input{width:150px}.cc-avbar .cc-mu{font-size:12px;max-width:520px}'+
     '.cc-av .av-l{border-left:3px solid #475569!important}'+
+    '.cc-av col.a-fim{width:124px}.cc-av .av-fim2,.cc-av .av-fim3,.cc-av .av-fim1{position:sticky!important;z-index:3;border-left:3px solid #15803d!important}'+
+    '.cc-av .av-fim3{right:0;border-left:1px solid #bbf7d0!important}.cc-av .av-fim2{right:124px}.cc-av .av-fim1{right:0}'+
+    '.cc-av thead th.av-fim{background:#16a34a!important;color:#fff!important}.cc-av thead tr.av-col th.av-fim{background:#15803d!important;color:#fff!important}.cc-av thead tr.av-grp th.av-fim small{color:#dcfce7}'+
+    '.cc-av td.av-fim2,.cc-av td.av-fim3{background:#dcfce7!important;font-size:15px!important;color:#14532d!important;box-shadow:-6px 0 8px -6px rgba(15,23,42,.25)}.cc-av td.av-fim3{box-shadow:none}'+
+    '.cc-av tfoot td.av-fim2,.cc-av tfoot td.av-fim3{background:#bbf7d0!important}'+
     '.cc-avnt{border-collapse:collapse;font-family:inherit!important;width:auto!important}.cc-avnt th,.cc-avnt td{font-family:inherit!important;font-size:13px!important;padding:5px 10px!important;border:0!important;border-bottom:1px solid #e2e8f0!important;background:transparent!important;text-align:left;white-space:nowrap}'+
     '.cc-avnt th{font-size:11px!important;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#475569}.cc-avnt .n{text-align:right}.cc-avnt input{width:130px;text-align:right}.cc-avnt input::placeholder{color:#2563eb;font-weight:600}'+
     '.cc-avres{border-collapse:collapse;width:360px!important;max-width:100%;font-family:inherit!important;font-size:14px!important;flex:0 0 auto}.cc-avres td{font-family:inherit!important;font-size:14px!important;border:0!important;border-bottom:1px solid #f1f5f9!important;background:transparent!important}'+
@@ -17418,6 +17423,7 @@ function ccDrawAv(el,h){
     '<button type="button" class="cc-btn sm" data-a="bling">🔄 Atualizar do Bling</button>'+
     '<button type="button" class="cc-btn sm" data-a="carregar" data-j="0">📎 Carregar cotação de fornecedor</button>'+
     '<button type="button" class="cc-btn sm" data-a="copiar">📋 Copiar resumo</button>'+
+    '<button type="button" class="cc-btn sm" data-av-acao="enviar" style="border-color:#16a34a;color:#15803d">📤 Enviar preços ao Bling</button>'+
     '<button type="button" class="cc-btn sm pri cc-save'+(CC.sujo?' pend':'')+'" data-a="salvar">💾 Salvar cotação</button>'+
   '</div></div>'+
   '<input type="file" id="ccFile" multiple accept=".pdf,.xlsx,.xls,.csv,.ods,image/*" style="display:none">'+ccDrawImp();
@@ -17429,14 +17435,15 @@ function ccDrawAv(el,h){
   var dl='<datalist id="ccAvForns">'+forns.map(function(x){return '<option value="'+ccEsc(x)+'">';}).join('')+'</datalist>';
   var t=dl+'<div class="cc-avleg"><span><i style="background:#fff;border:1px solid #94a3b8"></i>Campo para digitar</span><span><i style="background:#fffbeb;border:1px solid #fcd34d"></i>Custo (calculado)</span><span><i style="background:#f0fdf4;border:1px solid #86efac"></i>Venda (calculado)</span><span style="color:#2563eb">Azul = frete por unidade e % do frete (calculados)</span></div>'+
     '<div class="cc-avleg" style="font-size:12.5px;color:#334155;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px"><b>Como calcula (por unidade):</b>&nbsp; Frete por un. = (Preço − Desconto% + IPI) × (Frete da nota ÷ Valor da nota) &nbsp;·&nbsp; Custo = Preço − Desconto% + IPI + Frete por un. − Créd. ICMS &nbsp;·&nbsp; Venda = Custo × (1 + Markup%) &nbsp;·&nbsp; Totais = unitário × Qtd</div>'+
-    '<table class="cc-g cc-av" style="min-width:1640px"><colgroup><col class="a-prod"><col class="a-q"><col class="a-un"><col class="a-f"><col class="a-m"><col class="a-p"><col class="a-pc"><col class="a-pc"><col class="a-fr"><col class="a-fn"><col class="a-fr"><col class="a-pc"><col class="a-c"><col class="a-t"><col class="a-pc"><col class="a-v"><col class="a-t"></colgroup>'+
+    '<table class="cc-g cc-av" style="min-width:1640px"><colgroup><col class="a-prod"><col class="a-q"><col class="a-un"><col class="a-f"><col class="a-m"><col class="a-p"><col class="a-pc"><col class="a-pc"><col class="a-fr"><col class="a-fn"><col class="a-fr"><col class="a-pc"><col class="a-c"><col class="a-t"><col class="a-pc"><col class="a-fim"><col class="a-fim"></colgroup>'+
     '<thead><tr class="av-grp"><th class="prod av-prod" colspan="3" rowspan="2">Produto da cotação</th>'+
       '<th class="av-b av-l" colspan="9">1 · Compra<small>o que o fornecedor cobra</small></th>'+
       '<th class="av-a av-l" colspan="2">2 · Custo<small>com impostos e frete</small></th>'+
-      '<th class="av-g av-l" colspan="3">3 · Venda<small>custo + markup</small></th></tr>'+
+      '<th class="av-g av-l" colspan="1">3 · Markup</th>'+
+      '<th class="av-fim av-fim1" colspan="2">✅ Preço final<small>de venda do produto</small></th></tr>'+
     '<tr class="av-col">'+
       '<th class="av-b av-l">Fornecedor</th><th class="av-b">Marca</th><th class="n av-b">Preço</th><th class="n av-b">Desconto %</th><th class="n av-b">IPI %</th><th class="n av-b">Frete da nota R$</th><th class="n av-b">Valor da nota R$</th><th class="n av-b">Frete por un.</th><th class="n av-b">Créd. ICMS %</th>'+
-      '<th class="n av-a av-l">Unitário</th><th class="n av-a">Total</th><th class="n av-g av-l">Markup %</th><th class="n av-g">Unitário</th><th class="n av-g">Total</th></tr></thead><tbody>';
+      '<th class="n av-a av-l">Unitário</th><th class="n av-a">Total</th><th class="n av-g av-l">%</th><th class="n av-fim av-fim2">Unitário</th><th class="n av-fim av-fim3">Total</th></tr></thead><tbody>';
   var inp=function(a,i,cls,ph,txt,extra){return '<td class="inp av-in '+(txt?'':'n ')+(cls||'')+'"><input '+(txt?'':'inputmode="decimal" ')+'data-av="'+a+'" data-ai="'+i+'" value="'+(txt?ccEsc((f[a]||[])[i]||''):fv(a,i))+'" placeholder="'+(ph||'')+'"'+(extra||'')+'></td>';};
   c.itens.forEach(function(it,i){var x=A.linhas[i];
     t+='<tr class="it"><td class="prod"><div class="pd" data-tip="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div>'+(it.cod?'<div class="pc">Cód. '+ccEsc(it.cod)+'</div>':'')+'</td>'+
@@ -17449,10 +17456,10 @@ function ccDrawAv(el,h){
       '<td class="n av-cu av-l">'+(x.ok?ccMoeda(x.custoU).replace('R$ ',''):'')+'</td>'+
       '<td class="n av-cu">'+(x.ok?ccMoeda(x.custoT).replace('R$ ',''):'')+'</td>'+
       '<td class="inp av-in av-g av-l n"><input inputmode="decimal" class="'+(x.mkPad?'av-pad':'')+'" data-av="markups" data-ai="'+i+'" value="'+fv('markups',i)+'" placeholder="'+(f.markupPadrao!==''&&f.markupPadrao!=null?ccIn(f.markupPadrao):'')+'"></td>'+
-      '<td class="n av-vd">'+(x.ok?ccMoeda(x.vendaU)+(it.venda?'<small class="'+(x.vendaU>it.venda+0.005?'av-alto':'')+'">no Bling '+ccMoeda(it.venda)+'</small>':''):'')+'</td>'+
-      '<td class="n av-vd">'+(x.ok?ccMoeda(x.vendaT).replace('R$ ',''):'')+'</td></tr>';
+      '<td class="n av-vd av-fim2">'+(x.ok?ccMoeda(x.vendaU)+(it.venda?'<small class="'+(x.vendaU>it.venda+0.005?'av-alto':'')+'">hoje no Bling '+ccMoeda(it.venda)+'</small>':''):'<small>falta preço</small>')+'</td>'+
+      '<td class="n av-vd av-fim3">'+(x.ok?ccMoeda(x.vendaT):'')+'</td></tr>';
   });
-  t+='</tbody><tfoot><tr><td class="prod" colspan="3">Total</td><td colspan="9" class="av-l"></td><td class="av-l"></td><td class="n" style="color:#92400e">'+ccMoeda(A.custo)+'</td><td class="av-l"></td><td></td><td class="n" style="color:#15803d">'+ccMoeda(A.venda)+'</td></tr></tfoot></table>';
+  t+='</tbody><tfoot><tr><td class="prod" colspan="3">Total</td><td colspan="9" class="av-l"></td><td class="av-l"></td><td class="n" style="color:#92400e">'+ccMoeda(A.custo)+'</td><td class="av-l"></td><td class="av-fim2"></td><td class="n av-fim3" style="color:#15803d">'+ccMoeda(A.venda)+'</td></tr></tfoot></table>';
   h+='<div class="cc-gw">'+t+'</div>';
   // pagamento e entrega + resultado
   var campo=function(lab,k,tipo){var v=f[k];
@@ -17467,6 +17474,8 @@ function ccDrawAv(el,h){
     '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start"><table class="cc-avres">'+
     lin('Produtos (preço de compra)',A.prod)+lin('Desconto',A.desc,'− ')+lin('IPI',A.ipi,'+ ')+lin('Frete',A.frete,'+ ')+lin('Crédito de ICMS',A.cred,'− ')+lin('Custo total',A.custo,'',1)+
     lin('Markup',lucro,'+ ')+lin('Total de venda',A.venda,'',1)+'</table>'+
+    '<div style="flex-basis:100%;order:3;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px"><button type="button" class="cc-btn pri" data-av-acao="enviar" style="padding:10px 16px;font-size:14px">📤 Enviar preços para a cotação nº '+ccEsc(c.numero)+' no Bling</button>'+
+      (f.enviadoEm?'<span class="cc-mu">Último envio: '+new Date(f.enviadoEm).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+(f.enviadoPor?' por '+ccEsc(f.enviadoPor):'')+'</span>':'<span class="cc-mu">Grava o preço final unitário de cada produto na proposta do Bling (só os produtos com preço).</span>')+'</div>'+
     '<div style="display:flex;flex-wrap:wrap;gap:10px;flex:1">'+
       [['Custo total',ccMoeda(A.custo),'#fffbeb'],['Total de venda',ccMoeda(A.venda),'#f0fdf4'],['Lucro bruto',ccMoeda(lucro)+' <small style="font-size:13px;color:#15803d">'+pct.toFixed(1).replace('.',',')+'% da venda</small>','#f0fdf4'],
        ['Total na cotação do Bling',ccMoeda(c.totalPedido),'#fff']].map(function(b){return '<div style="flex:1;min-width:170px;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;background:'+b[2]+'"><div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:#64748b">'+b[0]+'</div><div style="font-size:18px;font-weight:800;color:#0f172a;margin-top:2px">'+b[1]+'</div></div>';}).join('')+
@@ -17482,6 +17491,7 @@ function ccAvFoco(){var x=CC._prox,sel=CC._proxSel;CC._prox=null;CC._proxSel=nul
   var n=sel?CC.root.querySelector('#ccCorpo '+sel):(x?CC.root.querySelector('#ccCorpo input[data-av="'+x.a+'"][data-ai="'+x.i+'"]'):null);if(n){n.focus();if(n.select)n.select();}}
 function ccLigarAv(el){
   var c=CC.cot;if(!c)return;var f=c.forn[0];
+  el.querySelectorAll('[data-av-acao="enviar"]').forEach(function(b){b.onclick=function(){ccAvEnviarBling();};});
   el.querySelectorAll('input[data-nota]').forEach(function(inp){
     inp.addEventListener('change',function(){f.notas=f.notas||{};var k=inp.dataset.nota,o=f.notas[k]=f.notas[k]||{};
       o[inp.dataset.nk]=inp.value.trim()===''?'':ccNum(inp.value);CC.aviso='';ccDraw();ccSalvar();});
@@ -17501,6 +17511,28 @@ function ccLigarAv(el){
       if(e.key!=='Enter')return;e.preventDefault();var a=inp.dataset.av,i=+inp.dataset.ai;
       CC._prox={a:a,i:String(i+1)};inp.blur();setTimeout(ccAvFoco,0);});
   });
+}
+// Envia o preço final unitário de cada produto (com preço) para a proposta comercial no Bling
+function ccAvEnviarBling(){
+  var c=CC.cot;if(!c||CC.enviando)return;var f=c.forn[0],A=ccCalcAv(c),E=CC;
+  var L=[];A.linhas.forEach(function(x,i){if(x.ok&&x.vendaU>0)L.push({i:i,it:c.itens[i],v:x.vendaU});});
+  if(!L.length){alert('Nenhum produto com preço final para enviar.');return;}
+  var txt='Enviar estes preços para a cotação nº '+c.numero+' no Bling?\n\n'+L.map(function(x){return '• '+x.it.desc.slice(0,48)+': '+ccMoeda(x.it.venda||0)+' → '+ccMoeda(x.v);}).join('\n')+
+    (A.faltam?'\n\n'+A.faltam+' produto(s) sem preço ficam como estão.':'')+'\n\nO total e as parcelas da proposta são recalculados.';
+  if(!confirm(txt))return;
+  CC.enviando=true;CC.erro='';CC.aviso='⏳ Enviando preços ao Bling…';ccDraw();
+  var cfg=(typeof BLG!=='undefined'&&BLG.cfgCarregada)?Promise.resolve():blgCarregarCfg();
+  cfg.then(function(){return blgApi('/proposta/precos',{method:'POST',body:{id:c.propostaId||0,numero:c.numero,usuario:(STATE.usuarioLogado||STATE.loginUser||''),
+      itens:L.map(function(x){return {i:x.i,produtoId:x.it.pid||'',codigo:x.it.cod||'',valor:x.v};})}});})
+  .then(function(r){
+    E.enviando=false;
+    if(!r||!r.ok){var e=(r&&r.erro)||'Falhou';if(/Rota inexistente/.test(e))e='O Worker do Bling ainda não tem o envio de preços. Atualize o código do Worker na Cloudflare (arquivo worker-bling.js).';
+      E.aviso='';E.erro='Não consegui gravar no Bling: '+e;if(CC===E)ccDraw();return;}
+    (r.itens||[]).forEach(function(x){if(c.itens[x.i])c.itens[x.i].venda=x.noBling;});
+    c.totalPedido=r.totalDepois||c.totalPedido;f.enviadoEm=Date.now();f.enviadoPor=(STATE.usuarioLogado||STATE.loginUser||'');
+    var msg='✅ Preços gravados na cotação nº '+c.numero+' do Bling ('+(r.itens||[]).length+' produto(s)). Total da proposta: '+ccMoeda(r.totalAntes)+' → '+ccMoeda(r.totalDepois)+'.';
+    E.aviso=msg;if(CC===E){ccDraw();ccGravar().then(function(){E.aviso=msg;if(CC===E)ccDraw();});}
+  }).catch(function(e){E.enviando=false;E.aviso='';E.erro='Não consegui gravar no Bling: '+(e&&e.message||e);if(CC===E)ccDraw();});
 }
 // Aplica a cotação lida pela IA nos produtos ligados: preço, marca, IPI e fornecedor do produto; crédito de ICMS pela UF do fornecedor (CNPJ)
 function ccAplicarImpAv(c,f,I,k,usados){
