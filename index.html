@@ -16832,7 +16832,7 @@ var CC_MODOS={
   compra:{modulo:'mod20',col:'cotacoesCompra',rota:'/pedido-compra?numero=',doc:'pedido de compra',docC:'Pedido de compra',docCurto:'Pedido',
     titulo:'⚖️ Cotação compra',sub:'Compare o fornecedor do pedido de compra com outros fornecedores e defina a melhor condição.',btn:'🔎 Puxar pedido',ex:'Ex.: 1542'},
   proposta:{modulo:'mod4',col:'cotacoesAvulsas',rota:'/proposta?numero=',doc:'cotação',docC:'Cotação',docCurto:'Cotação',
-    titulo:'🧾 Cotação avulsa · Outros',sub:'Puxe a cotação (proposta comercial) do Bling e lance o preço do fornecedor para ver o custo e a margem.',btn:'🔎 Puxar cotação',ex:'Ex.: 7227'}
+    titulo:'🧾 Cotação avulsa · Outros',sub:'Puxe a cotação do Bling e monte o preço de venda de cada produto (custo do fornecedor + impostos + frete + markup).',btn:'🔎 Puxar cotação',ex:'Ex.: 7227'}
 };
 var CC_ESTADOS={compra:CC};
 function ccUsar(modo){
@@ -16882,7 +16882,11 @@ function ccIn(v,dec){if(v===''||v==null)return '';var n=Number(v);if(!isFinite(n
 function ccDataBr(d){if(!d)return '';var p=String(d).slice(0,10).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
 function ccEl(id){return CC.root?CC.root.querySelector('#'+id):null;}
 
-function ccFornVazio(nome,nItens){return {nome:nome||'',fixo:false,precos:Array(nItens).fill(''),desconto:'',ipi:'',st:'',credIcms:'',frete:'',formaPag:'',prazoPag:'',entrega:'',obs:'',numCot:'',validade:'',marcas:Array(nItens).fill(''),ipis:ccProp()?Array(nItens).fill(''):undefined,uf:'',simples:null};}
+function ccFornVazio(nome,nItens){return {nome:nome||'',fixo:false,precos:Array(nItens).fill(''),desconto:'',ipi:'',st:'',credIcms:'',frete:'',formaPag:'',prazoPag:'',entrega:'',obs:'',numCot:'',validade:'',marcas:Array(nItens).fill(''),ipis:ccProp()?Array(nItens).fill(''):undefined,uf:'',simples:null,
+  descs:ccProp()?Array(nItens).fill(''):undefined,fretes:ccProp()?Array(nItens).fill(''):undefined,creds:ccProp()?Array(nItens).fill(''):undefined,
+  markups:ccProp()?Array(nItens).fill(''):undefined,fornItem:ccProp()?Array(nItens).fill(''):undefined,freteTotal:'',markupPadrao:''};}
+// Cotação avulsa (Outros): campos por item, na ordem dos itens
+var CC_AV_ARR=['precos','marcas','ipis','descs','fretes','creds','markups','fornItem'];
 // Monta a cotação nova a partir do pedido que veio do Bling
 function ccDoPedido(p){
   var itens=(p.itens||[]).map(function(i){return {cod:i.codigo||'',desc:i.descricao||'',un:i.unidade||'',q:Number(i.quantidade)||0,pid:i.produtoId||'',codFornPedido:i.codigoFornecedor||''};});
@@ -16950,7 +16954,9 @@ function ccLimparAntigas(d,col){
 }
 function ccNormalizar(c){
   c.itens=c.itens||[];c.forn=(c.forn||[]).map(function(f){f.precos=f.precos||[];while(f.precos.length<c.itens.length)f.precos.push('');f.marcas=f.marcas||[];while(f.marcas.length<c.itens.length)f.marcas.push('');
-    if(c.proposta){if(!Array.isArray(f.ipis))f.ipis=c.itens.map(function(){return f.ipi===''||f.ipi==null?'':f.ipi;});while(f.ipis.length<c.itens.length)f.ipis.push('');f.ipi='';}
+    if(c.proposta){if(!Array.isArray(f.ipis))f.ipis=c.itens.map(function(){return f.ipi===''||f.ipi==null?'':f.ipi;});f.ipi='';
+      if(!Array.isArray(f.fornItem))f.fornItem=c.itens.map(function(_,i){return ccNum(f.precos[i])>0?(f.nome||''):'';});
+      CC_AV_ARR.forEach(function(k){if(!Array.isArray(f[k]))f[k]=[];while(f[k].length<c.itens.length)f[k].push('');});}
     return f;});return c;
 }
 // Abre o pedido: sempre consulta o Bling e junta com a cotação salva (se houver).
@@ -16973,7 +16979,7 @@ function ccMesclar(velho,novo){
   novo.forn=(temFixo?[p]:[]).concat(outros.map(function(f){
     var g=Object.assign({},f);g.precos=novo.itens.map(function(it){var k=mapa[ccItemK(it)];return k==null?'':(f.precos||[])[k];});
     g.marcas=novo.itens.map(function(it){var k=mapa[ccItemK(it)];return k==null?'':((f.marcas||[])[k]||'');});
-    if(Array.isArray(f.ipis))g.ipis=novo.itens.map(function(it){var k=mapa[ccItemK(it)];return k==null?'':(f.ipis[k]==null?'':f.ipis[k]);});return g;}));
+    ['ipis','descs','fretes','creds','markups','fornItem'].forEach(function(a){if(Array.isArray(f[a]))g[a]=novo.itens.map(function(it){var k=mapa[ccItemK(it)];return k==null?'':(f[a][k]==null?'':f[a][k]);});});return g;}));
   var antes={},depois={};velho.itens.forEach(function(it){antes[ccItemK(it)]=it;});novo.itens.forEach(function(it){depois[ccItemK(it)]=it;});
   var add=novo.itens.filter(function(it){return !antes[ccItemK(it)];}).length,rem=velho.itens.filter(function(it){return !depois[ccItemK(it)];}).length;
   var qtd=novo.itens.filter(function(it){var a=antes[ccItemK(it)];return a&&Number(a.q)!==Number(it.q);}).length;
@@ -17027,7 +17033,7 @@ function ccCarregarLista(){
   fetch(FIREBASE_DB+'/'+col+'.json').then(function(r){return r.ok?r.json():{};}).then(function(d){
     d=d||{};est.apagadas=ccLimparAntigas(d,col);est.limpou=true;
     est.lista=Object.keys(d).map(function(k){var c=d[k]||{},v=c.vencedor&&c.forn&&c.forn[c.vencedor.i];
-      return {num:k,data:c.data,forn:c.proposta?((c.cliente&&c.cliente.nome)||''):((c.forn&&c.forn[0]&&c.forn[0].nome)||''),vend:c.vendedor||'',f1:(c.forn&&c.forn[0]&&c.forn[0].nome)||'',venc:v?v.nome:'',em:c.atualizadoEm||c.criadoEm||0,por:c.atualizadoPor||'',nf:(c.forn||[]).filter(function(f){return f&&(f.nome||'').trim();}).length};})
+      return {num:k,data:c.data,forn:c.proposta?((c.cliente&&c.cliente.nome)||''):((c.forn&&c.forn[0]&&c.forn[0].nome)||''),vend:c.vendedor||'',f1:c.proposta&&c.forn&&c.forn[0]&&Array.isArray(c.forn[0].fornItem)?c.forn[0].fornItem.filter(function(x,i,a){return x&&a.indexOf(x)===i;}).join(', '):((c.forn&&c.forn[0]&&c.forn[0].nome)||''),venc:v?v.nome:'',em:c.atualizadoEm||c.criadoEm||0,por:c.atualizadoPor||'',nf:(c.forn||[]).filter(function(f){return f&&(f.nome||'').trim();}).length};})
       .sort(function(a,b){return b.em-a.em;});
     if(CC===est)ccDrawLista();
   }).catch(function(){est.lista=[];if(CC===est)ccDrawLista();});
@@ -17185,7 +17191,7 @@ function ccDrawLista(){
   if(!CC.lista.length){el.innerHTML='<div class="cc-card">'+nota+'<span class="cc-mu">Nenhuma cotação salva.</span></div>';return;}
   var dt=function(t){return t?new Date(t).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';};
   var resta=function(t){var d=Math.ceil((t+CC_DIAS_GUARDA*864e5-Date.now())/864e5);return d<=15?'<span class="cc-chip warn">expira em '+Math.max(d,0)+' dia'+(d===1?'':'s')+'</span>':'';};
-  el.innerHTML='<div class="cc-card">'+nota+'<table class="cc-lista"><thead><tr>'+(ccProp()?'<th>Cotação</th><th>Data</th><th>Cliente</th>':'<th>Pedido</th><th>Data do pedido</th><th>Fornecedor do pedido</th>')+(ccProp()?'<th>Fornecedor</th>':'<th>Fornecedores</th><th>Vencedor</th>')+'<th>Salva em</th></tr></thead><tbody>'+
+  el.innerHTML='<div class="cc-card">'+nota+'<table class="cc-lista"><thead><tr>'+(ccProp()?'<th>Cotação</th><th>Data</th><th>Cliente</th>':'<th>Pedido</th><th>Data do pedido</th><th>Fornecedor do pedido</th>')+(ccProp()?'<th>Fornecedores</th>':'<th>Fornecedores</th><th>Vencedor</th>')+'<th>Salva em</th></tr></thead><tbody>'+
     CC.lista.map(function(x){return '<tr data-n="'+ccEsc(x.num)+'"><td><b>'+ccEsc(x.num)+'</b></td><td>'+ccEsc(ccDataBr(x.data))+'</td><td>'+ccEsc(x.forn)+'</td>'+(ccProp()?'<td>'+ccEsc(x.f1||'—')+'</td>':'<td>'+x.nf+'</td><td>'+(x.venc?'🏆 '+ccEsc(x.venc):'<span class="cc-mu">a definir</span>')+'</td>')+
       '<td>'+ccEsc(dt(x.em))+(x.por?' <span class="cc-mu">· '+ccEsc(x.por)+'</span>':'')+' '+resta(x.em)+'</td></tr>';}).join('')+
     '</tbody></table></div>';
@@ -17198,7 +17204,8 @@ function ccDraw(){
   if(CC.aviso)h+='<div class="cc-msg inf">ℹ️ '+ccEsc(CC.aviso)+'</div>';
   if(CC.carr){el.innerHTML=h+'<div class="cc-card">⏳ Buscando '+(ccProp()?'a cotação':'o pedido de compra')+' nº '+ccEsc(CC.num)+' no Bling…</div>';return;}
   var c=CC.cot;
-  if(!c&&ccProp()){el.innerHTML=h+'<div class="cc-card"><b>Comece pelo número da cotação</b><p class="cc-mu" style="margin:6px 0 0">O app traz do Bling os itens e as quantidades da cotação (proposta comercial) do cliente. Depois é só incluir os fornecedores e os preços deles — digitando ou carregando o PDF/foto/Excel da cotação de cada um.</p></div>';return;}
+  if(!c&&ccProp()){el.innerHTML=h+'<div class="cc-card"><b>Comece pelo número da cotação</b><p class="cc-mu" style="margin:6px 0 0">O app traz do Bling os produtos e as quantidades da cotação do cliente. Depois você lança, por produto, o fornecedor, o preço de compra, desconto, IPI, frete e crédito de ICMS — digitando ou carregando o PDF/foto/Excel da cotação do fornecedor — e o markup. No fim o app mostra o preço de venda de cada produto.</p></div>';return;}
+  if(c&&c.proposta){ccDrawAv(el,h);return;}
   if(!c){el.innerHTML=h+'<div class="cc-card"><b>Comece pelo número do pedido de compra</b><p class="cc-mu" style="margin:6px 0 0">O app traz do Bling os itens, quantidades, preços, impostos, frete e pagamento do fornecedor do pedido. Depois é só incluir os outros fornecedores e os preços deles.</p></div>';return;}
   var calc=c.forn.map(function(f){return ccCalc(f,c.itens);});
   var rk=ccRanking(c),auto=rk.length?rk[0].i:-1;
@@ -17340,6 +17347,142 @@ function ccDraw(){
   el.innerHTML=h;
   var g=el.querySelector('.cc-g'),h1=g&&g.querySelector('tr.h1');if(h1)g.style.setProperty('--cc-h1',h1.offsetHeight+'px');
   ccLigar(el);
+}
+
+// ===================== Cotação avulsa › Outros: formação do preço de venda por produto =====================
+// Por produto: fornecedor, marca, preço de compra, desconto %, IPI %, frete por unidade, crédito de ICMS %, markup %.
+// Custo un. = (preço − desconto) + IPI + frete − crédito de ICMS (IPI e crédito sobre o preço com desconto).
+// Preço de venda un. = custo un. × (1 + markup/100).
+// Frete: o "Frete total da compra" é rateado pelos produtos sem frete digitado, proporcional ao valor de cada um;
+// frete digitado no produto (R$ por unidade) vale no lugar do rateio.
+function ccCalcAv(c){
+  var f=c.forn[0]||{},n=c.itens.length,g=function(a,i){return (f[a]||[])[i];};
+  var L=c.itens.map(function(it,i){var p=ccNum(g('precos',i)),d=ccNum(g('descs',i)),liq=p*(1-d/100);
+    return {p:p,ok:p>0,liq:liq,ipi:liq*ccNum(g('ipis',i))/100,cred:liq*ccNum(g('creds',i))/100,freteMan:g('fretes',i)!==''&&g('fretes',i)!=null,freteU:ccNum(g('fretes',i)),
+      mk:(g('markups',i)!==''&&g('markups',i)!=null)?ccNum(g('markups',i)):ccNum(f.markupPadrao),mkPad:!(g('markups',i)!==''&&g('markups',i)!=null),forn:g('fornItem',i)||''};});
+  var ft=ccNum(f.freteTotal),man=0,base=0;
+  L.forEach(function(x,i){if(!x.ok)return;if(x.freteMan)man+=x.freteU*c.itens[i].q;else base+=x.liq*c.itens[i].q;});
+  var resto=Math.max(ft-man,0);
+  L.forEach(function(x,i){var q=c.itens[i].q||0;
+    if(x.ok&&!x.freteMan)x.freteU=base>0&&q>0?resto*(x.liq*q/base)/q:0;
+    x.custoU=x.ok?x.liq+x.ipi+x.freteU-x.cred:0;x.vendaU=x.ok?ccR(x.custoU*(1+x.mk/100)):0;
+    x.custoT=x.custoU*q;x.vendaT=x.vendaU*q;});
+  var T={linhas:L,prod:0,desc:0,ipi:0,frete:0,cred:0,custo:0,venda:0,faltam:0};
+  L.forEach(function(x,i){var q=c.itens[i].q||0;if(!x.ok){T.faltam++;return;}T.prod+=x.p*q;T.desc+=(x.p-x.liq)*q;T.ipi+=x.ipi*q;T.frete+=x.freteU*q;T.cred+=x.cred*q;T.custo+=x.custoT;T.venda+=x.vendaT;});
+  ['prod','desc','ipi','frete','cred','custo','venda'].forEach(function(k){T[k]=ccR(T[k]);});
+  T.completo=T.faltam===0&&n>0;return T;
+}
+function ccAvCss(){
+  if(document.getElementById('ccAvCss'))return;var st=document.createElement('style');st.id='ccAvCss';
+  st.textContent='.cc-av{table-layout:fixed}.cc-av col.a-prod{width:220px}.cc-av col.a-q{width:52px}.cc-av col.a-un{width:44px}.cc-av col.a-f{width:130px}.cc-av col.a-m{width:80px}'+
+    '.cc-av col.a-p{width:86px}.cc-av col.a-pc{width:64px}.cc-av col.a-fr{width:80px}.cc-av col.a-c{width:90px}.cc-av col.a-t{width:100px}.cc-av col.a-v{width:106px}'+
+    '.cc-av thead th{height:auto!important;padding:8px 8px!important;white-space:normal!important;line-height:1.2;background:#1e293b!important;color:#fff!important;font-size:11px!important;font-weight:800;text-transform:uppercase;letter-spacing:.5px;vertical-align:bottom!important}'+
+    '.cc-av thead th.g1{box-shadow:inset 0 -3px 0 #2563eb}.cc-av thead th.g2{box-shadow:inset 0 -3px 0 #d97706}.cc-av thead th.g3{box-shadow:inset 0 -3px 0 #16a34a}'+
+    '.cc-av td.cu{background:#fffbeb}.cc-av td.vd{background:#f0fdf4;font-weight:800;color:#15803d}.cc-av td.vd small{display:block;font-size:10.5px;font-weight:500;color:#64748b}.cc-av td.vd small.baixo{color:#b91c1c;font-weight:700}'+
+    '.cc-av td.fr input::placeholder{color:#64748b}.cc-av td.inp input.pad::placeholder{color:#15803d;font-weight:700}'+
+    '.cc-av tfoot td{font-weight:800;border-top:2px solid #94a3b8;background:#f1f5f9}'+
+    '.cc-avbar{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin:0 0 10px}.cc-avbar label{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#475569}'+
+    '.cc-avbar input{width:150px}.cc-avbar .cc-mu{font-size:12px;max-width:520px}';
+  document.head.appendChild(st);
+}
+function ccDrawAv(el,h){
+  ccAvCss();
+  var c=CC.cot,f=c.forn[0];if(!f){f=ccFornVazio('',c.itens.length);c.forn=[f];ccNormalizar(c);}
+  var A=ccCalcAv(c),fv=function(a,i,dec){var v=(f[a]||[])[i];return v===''||v==null?'':ccEsc(ccIn(v,dec));};
+  var ci=function(lab,val,cls){return '<div class="ci'+(cls?' '+cls:'')+'"><span class="cl">'+lab+'</span><span class="cv">'+val+'</span></div>';};
+  var forns=(f.fornItem||[]).filter(function(x,i,a){return x&&a.indexOf(x)===i;});
+  h+='<div class="cc-info"><div class="cc-info-d">'+
+    ci('Cotação','nº '+ccEsc(c.numero),'pri')+ci('Data',ccEsc(ccDataBr(c.data)))+
+    ci('Cliente',ccEsc((c.cliente&&c.cliente.nome)||'—')+(c.cliente&&c.cliente.uf?' <small>'+ccEsc(c.cliente.uf)+'</small>':''))+
+    (c.vendedor?ci('Vendedor',ccEsc(c.vendedor)):'')+ci('Itens',c.itens.length)+
+    (A.custo?ci('Custo total',ccMoeda(A.custo)):'')+(A.venda?ci('Venda calculada',ccMoeda(A.venda),'ok'):'')+
+  '</div><div class="cc-info-a">'+
+    '<button type="button" class="cc-btn sm" data-a="bling">🔄 Atualizar do Bling</button>'+
+    '<button type="button" class="cc-btn sm" data-a="carregar" data-j="0">📎 Carregar cotação de fornecedor</button>'+
+    '<button type="button" class="cc-btn sm" data-a="copiar">📋 Copiar resumo</button>'+
+    '<button type="button" class="cc-btn sm pri cc-save'+(CC.sujo?' pend':'')+'" data-a="salvar">💾 Salvar cotação</button>'+
+  '</div></div>'+
+  '<input type="file" id="ccFile" multiple accept=".pdf,.xlsx,.xls,.csv,.ods,image/*" style="display:none">'+ccDrawImp();
+  // barra: frete total e markup padrão
+  h+='<div class="cc-card"><div class="cc-avbar">'+
+    '<label>Frete total da compra (R$)<input class="cc-inp" inputmode="decimal" data-j="0" data-k="freteTotal" placeholder="0,00" value="'+(f.freteTotal===''||f.freteTotal==null?'':ccEsc(ccIn(f.freteTotal)))+'"></label>'+
+    '<label>Markup padrão (%)<input class="cc-inp" inputmode="decimal" data-j="0" data-k="markupPadrao" placeholder="ex.: 40" value="'+(f.markupPadrao===''||f.markupPadrao==null?'':ccEsc(ccIn(f.markupPadrao)))+'"></label>'+
+    '<span class="cc-mu">O frete total é dividido entre os produtos pelo valor de cada um (vira R$ por unidade). Se digitar o frete no produto, vale o digitado. O markup padrão vale para os produtos sem markup próprio.</span>'+
+  '</div></div>';
+  // grade
+  var dl='<datalist id="ccAvForns">'+forns.map(function(x){return '<option value="'+ccEsc(x)+'">';}).join('')+'</datalist>';
+  var t=dl+'<table class="cc-g cc-av" style="min-width:1348px"><colgroup><col class="a-prod"><col class="a-q"><col class="a-un"><col class="a-f"><col class="a-m"><col class="a-p"><col class="a-pc"><col class="a-pc"><col class="a-fr"><col class="a-pc"><col class="a-c"><col class="a-t"><col class="a-pc"><col class="a-v"><col class="a-t"></colgroup>'+
+    '<thead><tr><th class="prod">Produto</th><th class="n">Qtd</th><th class="c">Un</th>'+
+    '<th class="g1">Fornecedor</th><th class="g1">Marca</th><th class="n g1">Preço un.</th><th class="n g1">Desc. %</th><th class="n g1">IPI %</th><th class="n g1">Frete un.</th><th class="n g1">ICMS créd. %</th>'+
+    '<th class="n g2">Custo un.</th><th class="n g2">Total custo</th><th class="n g3">Markup %</th><th class="n g3">Preço venda un.</th><th class="n g3">Total venda</th></tr></thead><tbody>';
+  var inp=function(a,i,cls,ph,txt,extra){return '<td class="inp '+(txt?'':'n ')+(cls||'')+'"><input '+(txt?'':'inputmode="decimal" ')+'data-av="'+a+'" data-ai="'+i+'" value="'+(txt?ccEsc((f[a]||[])[i]||''):fv(a,i))+'" placeholder="'+(ph||'—')+'"'+(extra||'')+'></td>';};
+  c.itens.forEach(function(it,i){var x=A.linhas[i];
+    t+='<tr class="it"><td class="prod"><div class="pd" data-tip="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div>'+(it.cod?'<div class="pc">Cód. '+ccEsc(it.cod)+'</div>':'')+'</td>'+
+      '<td class="n q">'+ccIn(it.q,0)+'</td><td class="c">'+ccEsc(it.un)+'</td>'+
+      inp('fornItem',i,'','Fornecedor',true,' list="ccAvForns"')+inp('marcas',i,'','—',true)+inp('precos',i)+inp('descs',i,'','0')+inp('ipis',i,'','0')+
+      inp('fretes',i,'fr',x.ok&&!x.freteMan&&x.freteU?ccIn(x.freteU,2):'0')+inp('creds',i,'','0')+
+      '<td class="n cu">'+(x.ok?ccMoeda(x.custoU).replace('R$ ',''):'<span class="nil">—</span>')+'</td>'+
+      '<td class="n cu">'+(x.ok?ccMoeda(x.custoT).replace('R$ ',''):'<span class="nil">—</span>')+'</td>'+
+      '<td class="inp n"><input inputmode="decimal" class="'+(x.mkPad?'pad':'')+'" data-av="markups" data-ai="'+i+'" value="'+fv('markups',i)+'" placeholder="'+(f.markupPadrao!==''&&f.markupPadrao!=null?ccIn(f.markupPadrao):'—')+'"></td>'+
+      '<td class="n vd">'+(x.ok?ccMoeda(x.vendaU)+(it.venda?'<small class="'+(x.vendaU<it.venda-0.005?'':(x.vendaU>it.venda+0.005?'baixo':''))+'">Bling '+ccMoeda(it.venda)+'</small>':''):'<span class="nil">—</span>')+'</td>'+
+      '<td class="n vd">'+(x.ok?ccMoeda(x.vendaT).replace('R$ ',''):'<span class="nil">—</span>')+'</td></tr>';
+  });
+  t+='</tbody><tfoot><tr><td class="prod" colspan="3">Total</td><td colspan="7"></td><td></td><td class="n">'+ccMoeda(A.custo)+'</td><td></td><td></td><td class="n">'+ccMoeda(A.venda)+'</td></tr></tfoot></table>';
+  h+='<div class="cc-gw">'+t+'</div>';
+  // pagamento e entrega + resultado
+  var campo=function(lab,k,tipo){var v=f[k];
+    if(tipo==='forma')return '<label>'+lab+'<select class="cc-inp" data-j="0" data-k="'+k+'" style="width:170px"><option value="">—</option>'+CC_FORMAS.concat(v&&CC_FORMAS.indexOf(v)<0?[v]:[]).map(function(o){return '<option'+(o===v?' selected':'')+'>'+ccEsc(o)+'</option>';}).join('')+'</select></label>';
+    return '<label>'+lab+'<input class="cc-inp" '+(tipo==='int'?'inputmode="numeric" ':'')+'data-j="0" data-k="'+k+'" value="'+ccEsc(v==null?'':(tipo==='int'&&v!==''?ccIn(v,0):v))+'" placeholder="—"'+(k==='obs'?' style="width:320px"':'')+'></label>';};
+  h+='<div class="cc-card" style="margin-top:12px"><div style="font-weight:800;font-size:15px;margin-bottom:8px">🚚 Pagamento e entrega</div><div class="cc-avbar">'+
+    campo('Validade da cotação','validade')+campo('Forma de pagamento','formaPag','forma')+campo('Prazo de pagamento','prazoPag')+campo('Prazo de entrega (dias)','entrega','int')+campo('Observação','obs')+'</div></div>';
+  var lin=function(l,v,s,b){return '<tr'+(b?' style="font-weight:800;border-top:2px solid #94a3b8"':'')+'><td style="padding:6px 10px">'+l+'</td><td style="padding:6px 10px;text-align:right">'+(s||'')+ccMoeda(v)+'</td></tr>';};
+  var lucro=ccR(A.venda-A.custo),pct=A.venda>0?lucro/A.venda*100:0;
+  h+='<div class="cc-card"><div style="font-weight:800;font-size:15px;margin-bottom:8px">📊 Resultado</div>'+
+    (A.faltam?'<div class="cc-msg inf" style="margin-bottom:8px">Faltam preços de '+A.faltam+' produto'+(A.faltam>1?'s':'')+'. Os totais abaixo contam só os produtos com preço.</div>':'')+
+    '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start"><table style="border-collapse:collapse;font-size:14px;min-width:340px">'+
+    lin('Produtos (preço de compra)',A.prod)+lin('Desconto',A.desc,'− ')+lin('IPI',A.ipi,'+ ')+lin('Frete',A.frete,'+ ')+lin('Crédito de ICMS',A.cred,'− ')+lin('Custo total',A.custo,'',1)+
+    lin('Markup',lucro,'+ ')+lin('Total de venda',A.venda,'',1)+'</table>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:10px;flex:1">'+
+      [['Custo total',ccMoeda(A.custo),'#fffbeb'],['Total de venda',ccMoeda(A.venda),'#f0fdf4'],['Lucro bruto',ccMoeda(lucro)+' <small style="font-size:13px;color:#15803d">'+pct.toFixed(1).replace('.',',')+'% da venda</small>','#f0fdf4'],
+       ['Total na cotação do Bling',ccMoeda(c.totalPedido),'#fff']].map(function(b){return '<div style="flex:1;min-width:170px;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;background:'+b[2]+'"><div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:#64748b">'+b[0]+'</div><div style="font-size:18px;font-weight:800;color:#0f172a;margin-top:2px">'+b[1]+'</div></div>';}).join('')+
+    '</div></div></div>';
+  el.innerHTML=h;
+  ccLigar(el);ccLigarAv(el);
+}
+function ccLigarAv(el){
+  var c=CC.cot;if(!c)return;var f=c.forn[0];
+  el.querySelectorAll('input[data-av]').forEach(function(inp){
+    inp.addEventListener('change',function(){var a=inp.dataset.av,i=+inp.dataset.ai;f[a]=f[a]||[];
+      f[a][i]=(a==='fornItem'||a==='marcas')?inp.value.trim():(inp.value.trim()===''?'':ccNum(inp.value));
+      CC.aviso='';ccDraw();ccSalvar();});
+    inp.addEventListener('keydown',function(e){if(e.key!=='Enter')return;e.preventDefault();var a=inp.dataset.av,i=+inp.dataset.ai;inp.blur();
+      setTimeout(function(){var n=CC.root&&CC.root.querySelector('#ccCorpo input[data-av="'+a+'"][data-ai="'+(i+1)+'"]');if(n){n.focus();if(n.select)n.select();}},30);});
+  });
+}
+// Aplica a cotação lida pela IA nos produtos ligados: preço, marca, IPI e fornecedor do produto; crédito de ICMS pela UF do fornecedor (CNPJ)
+function ccAplicarImpAv(c,f,I,k,usados){
+  var nome=(k.nome||'').trim()||'Fornecedor',idx=[];
+  CC_AV_ARR.forEach(function(a){f[a]=f[a]||[];});
+  c.itens.forEach(function(it,i){var l=usados[i];if(!l)return;idx.push(i);
+    f.precos[i]=ccPrecoConv(l,k);if(l.marca)f.marcas[i]=l.marca;f.fornItem[i]=nome;
+    f.ipis[i]=l.ipi!=null?l.ipi:(k.ipi===''||k.ipi==null?'':ccNum(k.ipi));});
+  if(k.desconto!==''&&k.desconto!=null&&ccNum(k.desconto)>0){var tot=idx.reduce(function(a,i){return a+ccNum(f.precos[i])*c.itens[i].q;},0);
+    if(tot>0){var pd=Math.round(ccNum(k.desconto)/tot*1e6)/1e4;idx.forEach(function(i){f.descs[i]=pd;});}}
+  f.freteForn=f.freteForn||{};var fk=ccChave(nome);
+  if(k.frete!==''&&k.frete!=null&&f.freteForn[fk]==null){f.freteForn[fk]=ccNum(k.frete);f.freteTotal=ccR(ccNum(f.freteTotal)+ccNum(k.frete));}
+  if(k.formaPag&&!f.formaPag)f.formaPag=k.formaPag;if(k.prazoPag&&!f.prazoPag)f.prazoPag=k.prazoPag;
+  if(k.entrega!==''&&k.entrega!=null&&(f.entrega===''||f.entrega==null))f.entrega=k.entrega;if(k.validade&&!f.validade)f.validade=String(k.validade).slice(0,40);
+  f.arquivos=(f.arquivos||[]).concat((I.nomes||[]).map(function(n){return {nome:n,em:Date.now()};})).slice(-10);
+  if(I.salvarDP){var fk2=ccFornChave(nome,k.doc),dp={},por=STATE.usuarioLogado||'';
+    I.linhas.forEach(function(l){if(l.item==null||!l.ok)return;dp[ccLinhaChave(l)]={item:ccItemChave(c.itens[l.item]),desc:c.itens[l.item].desc,fator:l.fator,equiv:!!l.equiv,dele:l.descricao.slice(0,120),por:por,em:Date.now()};});
+    if(Object.keys(dp).length)fetch(FIREBASE_DB+'/cotacoesCompraDePara/'+encodeURIComponent(fk2)+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(dp)}).catch(function(){});}
+  // crédito de ICMS pela UF/regime do fornecedor (BrasilAPI), só onde estiver em branco
+  var tmp={doc:ccDig(k.doc),uf:'',simples:null,st:''};
+  ccDadosCnpj(tmp).then(function(){var a=ccCredAuto(tmp);if(a.pct==null||!CC.cot||CC.cot!==c)return;var mud=false;
+    idx.forEach(function(i){if(f.creds[i]===''||f.creds[i]==null){f.creds[i]=a.pct;mud=true;}});
+    if(mud){CC.aviso=(CC.aviso?CC.aviso+' ':'')+'Crédito de ICMS de '+nome+': '+ccIn(a.pct)+'% ('+a.motivo+').';ccDraw();ccSalvar();}});
+  CC.imp=null;CC.aviso='Cotação de '+nome+' aplicada em '+idx.length+' de '+c.itens.length+' produtos'+(k.frete!==''&&k.frete!=null&&ccNum(k.frete)>0?' (frete de '+ccMoeda(ccNum(k.frete))+' somado ao frete total)':'')+'. Confira as linhas.';
+  ccDraw();ccSalvar();
 }
 // Dica flutuante: mostra o texto inteiro por cima, sem mexer na largura da coluna nem na altura da linha
 function ccTip(){
@@ -17491,7 +17634,7 @@ async function ccImportar(j,files){
     await ccCodsForn(c);
     var arq=await ccArquivosParaIA(files);
     var r=await ccChamarIA([{type:'text',text:ccPromptIA(c)}].concat(arq.partes));
-    var nome=(f.nome||'').trim()||r.fornecedor_nome||'',doc=ccDig(r.fornecedor_cnpj)||f.doc||'';
+    var nome=(c.proposta?'':(f.nome||'').trim())||r.fornecedor_nome||'',doc=ccDig(r.fornecedor_cnpj)||(c.proposta?'':f.doc)||'';
     var fk=ccFornChave(nome,doc),dp=(await ccDePara(fk))||{};
     var porChave={};c.itens.forEach(function(it,i){porChave[ccItemChave(it)]=i;});
     var linhas=(Array.isArray(r.linhas)?r.linhas:[]).filter(function(l){return l&&(l.descricao||l.codigo);}).map(function(l){
@@ -17579,6 +17722,7 @@ function ccAplicarImp(){
   if(dupl.length&&!confirm('Mais de uma linha ligada ao mesmo item ('+dupl.join('; ')+'). Vou usar a primeira de cada. Continuar?'))return;
   var f=c.forn[I.j];if(!f){CC.imp=null;ccDraw();return;}
   var k=I.cab;
+  if(c.proposta){ccAplicarImpAv(c,f,I,k,usados);return;}
   if(!f.fixo&&(k.nome||'').trim())f.nome=k.nome.trim();
   if(k.doc)f.doc=ccDig(k.doc);
   ccDadosCnpj(f).then(function(m){if(m&&CC.cot&&CC.cot.forn.indexOf(f)>=0){ccDraw();ccSalvar();}});
@@ -17602,7 +17746,11 @@ function ccAplicarImp(){
   ccDraw();ccSalvar();
 }
 function ccCopiar(){
-  var c=CC.cot;if(!c)return;var rk=ccRanking(c),venc=c.vencedor?c.vencedor.i:(rk.length?rk[0].i:-1);
+  var c=CC.cot;if(!c)return;
+  if(c.proposta){var A=ccCalcAv(c),L=['*Cotação avulsa nº '+c.numero+((c.cliente&&c.cliente.nome)?' — '+c.cliente.nome:'')+'*',''];
+    A.linhas.forEach(function(x,i){var it=c.itens[i];L.push('• '+it.desc+' — '+ccIn(it.q,0)+' '+it.un+(x.forn?' · '+x.forn:'')+': '+(x.ok?'venda '+ccMoeda(x.vendaU)+'/'+it.un+' (total '+ccMoeda(x.vendaT)+')':'sem preço'));});
+    L.push('','Total de venda: '+ccMoeda(A.venda)+' · custo '+ccMoeda(A.custo)+' · lucro '+ccMoeda(A.venda-A.custo));
+    var tx=L.join('\n');(navigator.clipboard?navigator.clipboard.writeText(tx):Promise.reject()).then(function(){CC.aviso='Resumo copiado. É só colar no WhatsApp.';ccDraw();}).catch(function(){prompt('Copie o resumo:',tx);});return;}var rk=ccRanking(c),venc=c.vencedor?c.vencedor.i:(rk.length?rk[0].i:-1);
   var l=[c.proposta?'*Cotação avulsa — cotação nº '+c.numero+((c.cliente&&c.cliente.nome)?' ('+c.cliente.nome+')':'')+'*':'*Cotação de compra — pedido nº '+c.numero+'*',''];
   rk.forEach(function(x,pos){var f=c.forn[x.i];l.push((pos+1)+'º '+f.nome+(f.numCot?' (cot. '+f.numCot+')':'')+(x.i===venc?' 🏆':'')+': '+ccMoeda(x.c.custo)+(f.formaPag?' · '+f.formaPag:'')+(f.prazoPag?' · '+f.prazoPag:'')+(x.c.entrega!=null?' · entrega '+x.c.entrega+' dias':''));});
   c.forn.forEach(function(f){var k=ccCalc(f,c.itens);if(!k.completo&&(f.nome||'').trim())l.push('— '+f.nome+': cotação incompleta');});
