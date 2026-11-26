@@ -17377,15 +17377,29 @@ function ccCalcAv(c){
 }
 function ccAvCss(){
   if(document.getElementById('ccAvCss'))return;var st=document.createElement('style');st.id='ccAvCss';
-  st.textContent='.cc-av{table-layout:fixed}.cc-av col.a-prod{width:220px}.cc-av col.a-q{width:52px}.cc-av col.a-un{width:44px}.cc-av col.a-f{width:130px}.cc-av col.a-m{width:80px}'+
-    '.cc-av col.a-p{width:86px}.cc-av col.a-pc{width:64px}.cc-av col.a-fr{width:80px}.cc-av col.a-c{width:90px}.cc-av col.a-t{width:100px}.cc-av col.a-v{width:106px}'+
-    '.cc-av thead th{height:auto!important;padding:8px 8px!important;white-space:normal!important;line-height:1.2;background:#1e293b!important;color:#fff!important;font-size:11px!important;font-weight:800;text-transform:uppercase;letter-spacing:.5px;vertical-align:bottom!important}'+
-    '.cc-av thead th.g1{box-shadow:inset 0 -3px 0 #2563eb}.cc-av thead th.g2{box-shadow:inset 0 -3px 0 #d97706}.cc-av thead th.g3{box-shadow:inset 0 -3px 0 #16a34a}'+
-    '.cc-av td.cu{background:#fffbeb}.cc-av td.vd{background:#f0fdf4;font-weight:800;color:#15803d}.cc-av td.vd small{display:block;font-size:10.5px;font-weight:500;color:#64748b}.cc-av td.vd small.baixo{color:#b91c1c;font-weight:700}'+
-    '.cc-av td.fr input::placeholder{color:#64748b}.cc-av td.inp input.pad::placeholder{color:#15803d;font-weight:700}'+
-    '.cc-av tfoot td{font-weight:800;border-top:2px solid #94a3b8;background:#f1f5f9}'+
+  // classes com prefixo av- (o app já usa .g2/.g3 em outro lugar)
+  st.textContent='.cc-av{table-layout:fixed}.cc-av col.a-prod{width:230px}.cc-av col.a-q{width:56px}.cc-av col.a-un{width:46px}.cc-av col.a-f{width:140px}.cc-av col.a-m{width:90px}'+
+    '.cc-av col.a-p{width:92px}.cc-av col.a-pc{width:70px}.cc-av col.a-fr{width:80px}.cc-av col.a-c{width:92px}.cc-av col.a-t{width:104px}.cc-av col.a-v{width:110px}'+
+    '.cc-av thead th{height:auto!important;padding:7px 8px!important;white-space:normal!important;line-height:1.25;vertical-align:middle!important;text-transform:none!important;letter-spacing:0!important;border-right:1px solid #e2e8f0!important}'+
+    '.cc-av thead tr.av-grp th{font-size:12px!important;font-weight:800!important;text-transform:uppercase!important;letter-spacing:.6px!important;text-align:center;padding:8px!important}'+
+    '.cc-av thead tr.av-col th{font-size:12px!important;font-weight:700!important;color:#334155!important}'+
+    '.cc-av thead th.av-prod{background:#f1f5f9!important;color:#0f172a!important;text-align:left;vertical-align:bottom!important;font-size:12px!important}'+
+    '.cc-av thead th.av-b{background:#dbeafe!important;color:#1e3a8a!important}.cc-av thead tr.av-col th.av-b{background:#eff6ff!important}'+
+    '.cc-av thead th.av-a{background:#fef3c7!important;color:#92400e!important}.cc-av thead tr.av-col th.av-a{background:#fffbeb!important}'+
+    '.cc-av thead th.av-g{background:#dcfce7!important;color:#166534!important}.cc-av thead tr.av-col th.av-g{background:#f0fdf4!important}'+
+    '.cc-av thead tr.av-grp th small{display:block;font-size:11px;font-weight:500;text-transform:none;letter-spacing:0;opacity:.85;margin-top:1px}'+
+    '.cc-av td.av-in{padding:4px 5px!important;background:#fff!important}'+
+    '.cc-av td.av-in input{min-height:30px!important;height:30px!important;border:1px solid #cbd5e1!important;border-radius:6px!important;background:#fff!important;padding:0 7px!important}'+
+    '.cc-av td.av-in input:focus{border-color:#2563eb!important;box-shadow:0 0 0 2px #bfdbfe}.cc-av td.av-in:focus-within{box-shadow:none!important}'+
+    '.cc-av td.av-in input::placeholder{color:#cbd5e1}.cc-av td.av-in input.av-sug::placeholder{color:#2563eb;font-weight:600}.cc-av td.av-in input.av-pad::placeholder{color:#15803d;font-weight:700}'+
+    '.cc-av td.av-cu{background:#fffbeb!important;color:#78350f}.cc-av td.av-vd{background:#f0fdf4!important;font-weight:800;color:#15803d}'+
+    '.cc-av td.av-vd small{display:block;font-size:10.5px;font-weight:500;color:#64748b}.cc-av td.av-vd small.av-alto{color:#b91c1c;font-weight:700}'+
+    '.cc-av td.av-in.av-g input{border-color:#86efac!important}'+
+    '.cc-av tfoot td{font-weight:800;border-top:2px solid #94a3b8;background:#f8fafc}'+
     '.cc-avbar{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin:0 0 10px}.cc-avbar label{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#475569}'+
-    '.cc-avbar input{width:150px}.cc-avbar .cc-mu{font-size:12px;max-width:520px}';
+    '.cc-avbar input{width:150px}.cc-avbar .cc-mu{font-size:12px;max-width:520px}'+
+    '.cc-avres{border-collapse:collapse;width:360px!important;max-width:100%;font-family:inherit!important;font-size:14px!important;flex:0 0 auto}.cc-avres td{font-family:inherit!important;font-size:14px!important;border:0!important;border-bottom:1px solid #f1f5f9!important;background:transparent!important}'+
+    '.cc-avleg{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:#475569;margin:0 0 8px}.cc-avleg span{display:inline-flex;align-items:center;gap:6px}.cc-avleg i{width:14px;height:14px;border-radius:4px;display:inline-block}';
   document.head.appendChild(st);
 }
 function ccDrawAv(el,h){
@@ -17417,23 +17431,29 @@ function ccDrawAv(el,h){
   '</div></div>';
   // grade
   var dl='<datalist id="ccAvForns">'+forns.map(function(x){return '<option value="'+ccEsc(x)+'">';}).join('')+'</datalist>';
-  var t=dl+'<table class="cc-g cc-av" style="min-width:1348px"><colgroup><col class="a-prod"><col class="a-q"><col class="a-un"><col class="a-f"><col class="a-m"><col class="a-p"><col class="a-pc"><col class="a-pc"><col class="a-fr"><col class="a-pc"><col class="a-c"><col class="a-t"><col class="a-pc"><col class="a-v"><col class="a-t"></colgroup>'+
-    '<thead><tr><th class="prod">Produto</th><th class="n">Qtd</th><th class="c">Un</th>'+
-    '<th class="g1">Fornecedor</th><th class="g1">Marca</th><th class="n g1">Preço un.</th><th class="n g1">Desc. R$/un</th><th class="n g1">IPI %</th><th class="n g1">Frete un.</th><th class="n g1">ICMS créd. %</th>'+
-    '<th class="n g2">Custo un.</th><th class="n g2">Total custo</th><th class="n g3">Markup %</th><th class="n g3">Preço venda un.</th><th class="n g3">Total venda</th></tr></thead><tbody>';
-  var inp=function(a,i,cls,ph,txt,extra){return '<td class="inp '+(txt?'':'n ')+(cls||'')+'"><input '+(txt?'':'inputmode="decimal" ')+'data-av="'+a+'" data-ai="'+i+'" value="'+(txt?ccEsc((f[a]||[])[i]||''):fv(a,i))+'" placeholder="'+(ph||'—')+'"'+(extra||'')+'></td>';};
+  var t=dl+'<div class="cc-avleg"><span><i style="background:#fff;border:1px solid #94a3b8"></i>Campo para digitar</span><span><i style="background:#fffbeb;border:1px solid #fcd34d"></i>Custo (calculado)</span><span><i style="background:#f0fdf4;border:1px solid #86efac"></i>Venda (calculado)</span><span style="color:#2563eb">Número azul no campo = frete calculado pelo rateio</span></div>'+
+    '<table class="cc-g cc-av" style="min-width:1402px"><colgroup><col class="a-prod"><col class="a-q"><col class="a-un"><col class="a-f"><col class="a-m"><col class="a-p"><col class="a-pc"><col class="a-pc"><col class="a-fr"><col class="a-pc"><col class="a-c"><col class="a-t"><col class="a-pc"><col class="a-v"><col class="a-t"></colgroup>'+
+    '<thead><tr class="av-grp"><th class="prod av-prod" colspan="3" rowspan="2">Produto da cotação</th>'+
+      '<th class="av-b" colspan="7">1 · Compra<small>o que o fornecedor cobra, por unidade</small></th>'+
+      '<th class="av-a" colspan="2">2 · Custo<small>com impostos e frete</small></th>'+
+      '<th class="av-g" colspan="3">3 · Venda<small>custo + markup</small></th></tr>'+
+    '<tr class="av-col">'+
+      '<th class="av-b">Fornecedor</th><th class="av-b">Marca</th><th class="n av-b">Preço</th><th class="n av-b">Desconto R$</th><th class="n av-b">IPI %</th><th class="n av-b">Frete R$</th><th class="n av-b">Créd. ICMS %</th>'+
+      '<th class="n av-a">Unitário</th><th class="n av-a">Total</th><th class="n av-g">Markup %</th><th class="n av-g">Unitário</th><th class="n av-g">Total</th></tr></thead><tbody>';
+  var inp=function(a,i,cls,ph,txt,extra){return '<td class="inp av-in '+(txt?'':'n ')+(cls||'')+'"><input '+(txt?'':'inputmode="decimal" ')+'data-av="'+a+'" data-ai="'+i+'" value="'+(txt?ccEsc((f[a]||[])[i]||''):fv(a,i))+'" placeholder="'+(ph||'')+'"'+(extra||'')+'></td>';};
   c.itens.forEach(function(it,i){var x=A.linhas[i];
     t+='<tr class="it"><td class="prod"><div class="pd" data-tip="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div>'+((it.cod||it.peso)?'<div class="pc">'+(it.cod?'Cód. '+ccEsc(it.cod):'')+(it.peso?(it.cod?' · ':'')+ccIn(it.peso,3).replace(/0+$/,'').replace(/,$/,'')+' kg/un':'')+'</div>':'')+'</td>'+
       '<td class="n q">'+ccIn(it.q,0)+'</td><td class="c">'+ccEsc(it.un)+'</td>'+
-      inp('fornItem',i,'','Fornecedor',true,' list="ccAvForns"')+inp('marcas',i,'','—',true)+inp('precos',i)+inp('descs',i,'','0,00')+inp('ipis',i,'','0')+
-      inp('fretes',i,'fr',x.ok&&!x.freteMan&&x.freteU?ccIn(x.freteU,2):'0')+inp('creds',i,'','0')+
-      '<td class="n cu">'+(x.ok?ccMoeda(x.custoU).replace('R$ ',''):'<span class="nil">—</span>')+'</td>'+
-      '<td class="n cu">'+(x.ok?ccMoeda(x.custoT).replace('R$ ',''):'<span class="nil">—</span>')+'</td>'+
-      '<td class="inp n"><input inputmode="decimal" class="'+(x.mkPad?'pad':'')+'" data-av="markups" data-ai="'+i+'" value="'+fv('markups',i)+'" placeholder="'+(f.markupPadrao!==''&&f.markupPadrao!=null?ccIn(f.markupPadrao):'—')+'"></td>'+
-      '<td class="n vd">'+(x.ok?ccMoeda(x.vendaU)+(it.venda?'<small class="'+(x.vendaU<it.venda-0.005?'':(x.vendaU>it.venda+0.005?'baixo':''))+'">Bling '+ccMoeda(it.venda)+'</small>':''):'<span class="nil">—</span>')+'</td>'+
-      '<td class="n vd">'+(x.ok?ccMoeda(x.vendaT).replace('R$ ',''):'<span class="nil">—</span>')+'</td></tr>';
+      inp('fornItem',i,'','',true,' list="ccAvForns"')+inp('marcas',i,'','',true)+inp('precos',i,'','0,00')+inp('descs',i,'','')+inp('ipis',i,'','')+
+      '<td class="inp av-in n"><input inputmode="decimal" class="'+(x.ok&&!x.freteMan&&x.freteU?'av-sug':'')+'" data-av="fretes" data-ai="'+i+'" value="'+fv('fretes',i)+'" placeholder="'+(x.ok&&!x.freteMan&&x.freteU?ccIn(x.freteU,2):'')+'" title="Vazio = frete do rateio. Digite para fixar o frete deste produto."></td>'+
+      inp('creds',i,'','')+
+      '<td class="n av-cu">'+(x.ok?ccMoeda(x.custoU).replace('R$ ',''):'')+'</td>'+
+      '<td class="n av-cu">'+(x.ok?ccMoeda(x.custoT).replace('R$ ',''):'')+'</td>'+
+      '<td class="inp av-in av-g n"><input inputmode="decimal" class="'+(x.mkPad?'av-pad':'')+'" data-av="markups" data-ai="'+i+'" value="'+fv('markups',i)+'" placeholder="'+(f.markupPadrao!==''&&f.markupPadrao!=null?ccIn(f.markupPadrao):'')+'"></td>'+
+      '<td class="n av-vd">'+(x.ok?ccMoeda(x.vendaU)+(it.venda?'<small class="'+(x.vendaU>it.venda+0.005?'av-alto':'')+'">no Bling '+ccMoeda(it.venda)+'</small>':''):'')+'</td>'+
+      '<td class="n av-vd">'+(x.ok?ccMoeda(x.vendaT).replace('R$ ',''):'')+'</td></tr>';
   });
-  t+='</tbody><tfoot><tr><td class="prod" colspan="3">Total</td><td colspan="7"></td><td></td><td class="n">'+ccMoeda(A.custo)+'</td><td></td><td></td><td class="n">'+ccMoeda(A.venda)+'</td></tr></tfoot></table>';
+  t+='</tbody><tfoot><tr><td class="prod" colspan="3">Total</td><td colspan="7"></td><td></td><td class="n" style="color:#92400e">'+ccMoeda(A.custo)+'</td><td></td><td></td><td class="n" style="color:#15803d">'+ccMoeda(A.venda)+'</td></tr></tfoot></table>';
   h+='<div class="cc-gw">'+t+'</div>';
   // pagamento e entrega + resultado
   var campo=function(lab,k,tipo){var v=f[k];
@@ -17445,7 +17465,7 @@ function ccDrawAv(el,h){
   var lucro=ccR(A.venda-A.custo),pct=A.venda>0?lucro/A.venda*100:0;
   h+='<div class="cc-card"><div style="font-weight:800;font-size:15px;margin-bottom:8px">📊 Resultado</div>'+
     (A.faltam?'<div class="cc-msg inf" style="margin-bottom:8px">Faltam preços de '+A.faltam+' produto'+(A.faltam>1?'s':'')+'. Os totais abaixo contam só os produtos com preço.</div>':'')+
-    '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start"><table style="border-collapse:collapse;font-size:14px;min-width:340px">'+
+    '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start"><table class="cc-avres">'+
     lin('Produtos (preço de compra)',A.prod)+lin('Desconto',A.desc,'− ')+lin('IPI',A.ipi,'+ ')+lin('Frete',A.frete,'+ ')+lin('Crédito de ICMS',A.cred,'− ')+lin('Custo total',A.custo,'',1)+
     lin('Markup',lucro,'+ ')+lin('Total de venda',A.venda,'',1)+'</table>'+
     '<div style="display:flex;flex-wrap:wrap;gap:10px;flex:1">'+
