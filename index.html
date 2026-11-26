@@ -17353,17 +17353,16 @@ function ccDraw(){
 // Por produto: fornecedor, marca, preço de compra, desconto %, IPI %, frete por unidade, crédito de ICMS %, markup %.
 // Custo un. = (preço − desconto R$/un) + IPI + frete − crédito de ICMS (IPI e crédito sobre o preço com desconto).
 // Preço de venda un. = custo un. × (1 + markup/100).
-// Frete: o "Frete total da compra" é rateado pelos produtos sem frete digitado, pelo peso (cadastro do Bling) ou pelo valor;
-// frete digitado no produto (R$ por unidade) vale no lugar do rateio.
+// Frete: o "Frete total da compra" é rateado pelo valor entre os produtos sem frete digitado;
+// frete digitado no produto é o TOTAL daquele produto (o app divide pela quantidade) e vale no lugar do rateio.
 function ccCalcAv(c){
   var f=c.forn[0]||{},n=c.itens.length,g=function(a,i){return (f[a]||[])[i];};
   var L=c.itens.map(function(it,i){var p=ccNum(g('precos',i)),d=ccNum(g('descs',i)),liq=Math.max(p-d,0);
-    return {p:p,ok:p>0,liq:liq,ipi:liq*ccNum(g('ipis',i))/100,cred:liq*ccNum(g('creds',i))/100,freteMan:g('fretes',i)!==''&&g('fretes',i)!=null,freteU:ccNum(g('fretes',i)),
+    var q0=Number(it.q)||0,fm=g('fretes',i)!==''&&g('fretes',i)!=null;
+    return {p:p,ok:p>0,liq:liq,ipi:liq*ccNum(g('ipis',i))/100,cred:liq*ccNum(g('creds',i))/100,freteMan:fm,freteU:fm&&q0>0?ccNum(g('fretes',i))/q0:0,
       mk:(g('markups',i)!==''&&g('markups',i)!=null)?ccNum(g('markups',i)):ccNum(f.markupPadrao),mkPad:!(g('markups',i)!==''&&g('markups',i)!=null),forn:g('fornItem',i)||''};});
   var ft=ccNum(f.freteTotal),man=0;
-  var rat=L.filter(function(x){return x.ok&&!x.freteMan;}),semPeso=c.itens.filter(function(it,i){return L[i].ok&&!L[i].freteMan&&!(Number(it.peso)>0);}).length;
-  var modo=f.freteBase==='valor'?'valor':(rat.length&&!semPeso?'peso':'valor');
-  var pesoUn=function(i){return modo==='peso'?Number(c.itens[i].peso)||0:L[i].liq;},base=0;
+  var modo='valor',semPeso=0,pesoUn=function(i){return L[i].liq;},base=0; // rateio sempre pelo valor (preço com desconto × qtd)
   L.forEach(function(x,i){if(!x.ok)return;if(x.freteMan)man+=x.freteU*c.itens[i].q;else base+=pesoUn(i)*c.itens[i].q;});
   var resto=Math.max(ft-man,0);
   L.forEach(function(x,i){var q=c.itens[i].q||0;
@@ -17424,29 +17423,27 @@ function ccDrawAv(el,h){
   // barra: frete total e markup padrão
   h+='<div class="cc-card"><div class="cc-avbar">'+
     '<label>Frete total da compra (R$)<input class="cc-inp" inputmode="decimal" data-j="0" data-k="freteTotal" placeholder="0,00" value="'+(f.freteTotal===''||f.freteTotal==null?'':ccEsc(ccIn(f.freteTotal)))+'"></label>'+
-    '<label>Ratear o frete por<select class="cc-inp" data-j="0" data-k="freteBase" style="width:170px">'+
-      '<option value=""'+(f.freteBase!=='valor'?' selected':'')+'>Peso (cadastro Bling)</option><option value="valor"'+(f.freteBase==='valor'?' selected':'')+'>Valor do produto</option></select></label>'+
     '<label>Markup padrão (%)<input class="cc-inp" inputmode="decimal" data-j="0" data-k="markupPadrao" placeholder="ex.: 40" value="'+(f.markupPadrao===''||f.markupPadrao==null?'':ccEsc(ccIn(f.markupPadrao)))+'"></label>'+
-    '<span class="cc-mu">O frete total é dividido entre os produtos '+(A.freteModo==='peso'?'pelo <b>peso</b> (peso bruto do cadastro no Bling × quantidade)':'pelo <b>valor</b> de cada um')+' e vira R$ por unidade. Frete digitado no produto vale no lugar do rateio. O markup padrão vale para os produtos sem markup próprio.'+
-      (f.freteBase!=='valor'&&A.semPeso?' <b style="color:#b45309">⚠ '+A.semPeso+' produto'+(A.semPeso>1?'s':'')+' sem peso no Bling: rateando pelo valor. Cadastre o peso e clique em Atualizar do Bling.</b>':'')+'</span>'+
+    '<span class="cc-mu">O <b>frete total da compra</b> é dividido entre os produtos pelo <b>valor</b> de cada um. Se o frete de um produto for diferente, digite no produto o <b>frete total dele</b> (não por unidade): vale o digitado e o resto do frete total é dividido entre os outros.</span>'+
   '</div></div>';
   // grade
   var dl='<datalist id="ccAvForns">'+forns.map(function(x){return '<option value="'+ccEsc(x)+'">';}).join('')+'</datalist>';
-  var t=dl+'<div class="cc-avleg"><span><i style="background:#fff;border:1px solid #94a3b8"></i>Campo para digitar</span><span><i style="background:#fffbeb;border:1px solid #fcd34d"></i>Custo (calculado)</span><span><i style="background:#f0fdf4;border:1px solid #86efac"></i>Venda (calculado)</span><span style="color:#2563eb">Número azul no campo = frete calculado pelo rateio</span></div>'+
+  var t=dl+'<div class="cc-avleg"><span><i style="background:#fff;border:1px solid #94a3b8"></i>Campo para digitar</span><span><i style="background:#fffbeb;border:1px solid #fcd34d"></i>Custo (calculado)</span><span><i style="background:#f0fdf4;border:1px solid #86efac"></i>Venda (calculado)</span><span style="color:#2563eb">Número azul no frete = parte do frete total (rateio)</span></div>'+
+    '<div class="cc-avleg" style="font-size:12.5px;color:#334155;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px"><b>Como calcula (por unidade):</b>&nbsp; Custo = Preço − Desconto + IPI + (Frete do item ÷ Qtd) − Créd. ICMS &nbsp;·&nbsp; Venda = Custo × (1 + Markup%) &nbsp;·&nbsp; Totais = unitário × Qtd</div>'+
     '<table class="cc-g cc-av" style="min-width:1402px"><colgroup><col class="a-prod"><col class="a-q"><col class="a-un"><col class="a-f"><col class="a-m"><col class="a-p"><col class="a-pc"><col class="a-pc"><col class="a-fr"><col class="a-pc"><col class="a-c"><col class="a-t"><col class="a-pc"><col class="a-v"><col class="a-t"></colgroup>'+
     '<thead><tr class="av-grp"><th class="prod av-prod" colspan="3" rowspan="2">Produto da cotação</th>'+
-      '<th class="av-b av-l" colspan="7">1 · Compra<small>o que o fornecedor cobra, por unidade</small></th>'+
+      '<th class="av-b av-l" colspan="7">1 · Compra<small>o que o fornecedor cobra</small></th>'+
       '<th class="av-a av-l" colspan="2">2 · Custo<small>com impostos e frete</small></th>'+
       '<th class="av-g av-l" colspan="3">3 · Venda<small>custo + markup</small></th></tr>'+
     '<tr class="av-col">'+
-      '<th class="av-b av-l">Fornecedor</th><th class="av-b">Marca</th><th class="n av-b">Preço</th><th class="n av-b">Desconto R$</th><th class="n av-b">IPI %</th><th class="n av-b">Frete R$</th><th class="n av-b">Créd. ICMS %</th>'+
+      '<th class="av-b av-l">Fornecedor</th><th class="av-b">Marca</th><th class="n av-b">Preço</th><th class="n av-b">Desconto R$ por un.</th><th class="n av-b">IPI %</th><th class="n av-b">Frete R$ total do item</th><th class="n av-b">Créd. ICMS %</th>'+
       '<th class="n av-a av-l">Unitário</th><th class="n av-a">Total</th><th class="n av-g av-l">Markup %</th><th class="n av-g">Unitário</th><th class="n av-g">Total</th></tr></thead><tbody>';
   var inp=function(a,i,cls,ph,txt,extra){return '<td class="inp av-in '+(txt?'':'n ')+(cls||'')+'"><input '+(txt?'':'inputmode="decimal" ')+'data-av="'+a+'" data-ai="'+i+'" value="'+(txt?ccEsc((f[a]||[])[i]||''):fv(a,i))+'" placeholder="'+(ph||'')+'"'+(extra||'')+'></td>';};
   c.itens.forEach(function(it,i){var x=A.linhas[i];
-    t+='<tr class="it"><td class="prod"><div class="pd" data-tip="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div>'+((it.cod||it.peso)?'<div class="pc">'+(it.cod?'Cód. '+ccEsc(it.cod):'')+(it.peso?(it.cod?' · ':'')+ccIn(it.peso,3).replace(/0+$/,'').replace(/,$/,'')+' kg/un':'')+'</div>':'')+'</td>'+
+    t+='<tr class="it"><td class="prod"><div class="pd" data-tip="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div>'+(it.cod?'<div class="pc">Cód. '+ccEsc(it.cod)+'</div>':'')+'</td>'+
       '<td class="n q">'+ccIn(it.q,0)+'</td><td class="c">'+ccEsc(it.un)+'</td>'+
       inp('fornItem',i,'av-l','',true,' list="ccAvForns"')+inp('marcas',i,'','',true)+inp('precos',i,'','0,00')+inp('descs',i,'','')+inp('ipis',i,'','')+
-      '<td class="inp av-in n"><input inputmode="decimal" class="'+(x.ok&&!x.freteMan&&x.freteU?'av-sug':'')+'" data-av="fretes" data-ai="'+i+'" value="'+fv('fretes',i)+'" placeholder="'+(x.ok&&!x.freteMan&&x.freteU?ccIn(x.freteU,2):'')+'" title="Vazio = frete do rateio. Digite para fixar o frete deste produto."></td>'+
+      '<td class="inp av-in n"><input inputmode="decimal" class="'+(x.ok&&!x.freteMan&&x.freteU?'av-sug':'')+'" data-av="fretes" data-ai="'+i+'" value="'+fv('fretes',i,2)+'" placeholder="'+(x.ok&&!x.freteMan&&x.freteU?ccIn(x.freteU*it.q,2):'')+'" title="Frete TOTAL deste produto (o app divide pela quantidade). Vazio = parte do frete total da compra, pelo valor."></td>'+
       inp('creds',i,'','')+
       '<td class="n av-cu av-l">'+(x.ok?ccMoeda(x.custoU).replace('R$ ',''):'')+'</td>'+
       '<td class="n av-cu">'+(x.ok?ccMoeda(x.custoT).replace('R$ ',''):'')+'</td>'+
