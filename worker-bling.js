@@ -65,6 +65,11 @@ export default {
     if (env.SICOOB_CLIENT_ID_CCO && horaAgora >= 7 && horaAgora <= 22 && ((minAgora >= 25 && minAgora < 30) || minAgora >= 55)) {
       ctx.waitUntil(pagarAutoCruzar(env).catch(e => registrarErro(env, 'Cruzamento automático (pagar): ' + String(e.message || e)))); return;
     }
+    // 08h10: relatório do que venceu no dia útil anterior e não foi pago (aviso para Raul e Renata no app)
+    if (horaAgora === 8 && minAgora >= 10) {
+      const ra = await env.BLING_KV.get('relatraso:' + hojeLocal(), 'json');
+      if (!ra) { ctx.waitUntil(relatorioAtraso(env).catch(e => registrarErro(env, 'Relatório de atraso (08h10): ' + String(e.message || e)))); return; }
+    }
     if (env.SICOOB_CLIENT_ID_CCO && ((minAgora >= 10 && minAgora < 15) || (minAgora >= 40 && minAgora < 45))) {
       ctx.waitUntil(receberAuto(env).catch(e => registrarErro(env, 'Cruzamento automático: ' + String(e.message || e)))); return;
     }
@@ -163,6 +168,12 @@ export default {
         return resp({ ok: r.ok, status: r.status, corpo: t.slice(0, 200) });
       }
       if (url.pathname === '/receber/pixboleto' && req.method === 'POST') { const b = (await req.json().catch(() => ({}))) || {}; return resp(Object.assign({ ok: true }, await pixEmContaBoleto(env, Number(b.contaId), b))); }
+      if (url.pathname === '/receber/relatorio-atraso') {
+        const dia = soData(url.searchParams.get('dia')) || hojeLocal();
+        let r = await env.BLING_KV.get('relatraso:' + dia, 'json');
+        if (!r && url.searchParams.get('gerar') === '1') r = await relatorioAtraso(env, dia);
+        return resp({ ok: true, rel: r || null });
+      }
       if (url.pathname === '/receber/acordos') return resp({ ok: true, acordos: (await env.BLING_KV.get('recacordos', 'json')) || {} });
       if (url.pathname === '/receber/acordo' && req.method === 'POST') return resp(await receberAcordo(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/receber/clientes') return resp(await finSrvBuscarContato(env, { nome: url.searchParams.get('q') || '', doc: url.searchParams.get('doc') || '' }));
@@ -3487,6 +3498,23 @@ async function receberAbater(env, b) {
   await env.BLING_KV.delete('recAtraso5').catch(() => {});
   await env.BLING_KV.delete('recAbertas').catch(() => {});
   return { ok: r.ok, resultado: r.resultado, partes, sobra: resto };
+}
+// ---- Relatório diário (08h10): contas que venceram no dia útil anterior e não foram pagas ----
+// Vencimento em fim de semana/feriado vale até o próximo dia útil, então o "dia anterior" inclui os vencimentos
+// que caíram entre o penúltimo e o último dia útil. Cartão fica de fora (quem paga é a maquininha).
+async function relatorioAtraso(env, dia) {
+  dia = dia || hojeLocal();
+  let ref = somaDias(dia, -1); while (!diaUtil(ref)) ref = somaDias(ref, -1);
+  const lista = await paginas(env, '/contas/receber?situacoes[]=1&situacoes[]=3&tipoFiltroData=V&dataInicial=' + somaDias(ref, -6) + '&dataFinal=' + ref, 5);
+  const itens = lista.map(x => ({ id: x.id, valor: r2(x.valor), venc: soData(x.vencimento), situacao: Number(x.situacao), cliente: (x.contato && x.contato.nome) || '', doc: dig(x.contato && x.contato.numeroDocumento),
+      origemTipo: (x.origem && x.origem.tipoOrigem) || '', numero: String((x.origem && x.origem.numero) || ''), forma: Number(x.formaPagamento && x.formaPagamento.codigoFiscal) || 0,
+      formaId: (x.formaPagamento && x.formaPagamento.id) || 0, portador: (x.contaContabil && x.contaContabil.id) || 0 }))
+    .filter(c => c.venc && vencUtil(c.venc) === ref && c.forma !== 3 && c.forma !== 4)
+    .map(c => Object.assign(c, { tipo: ehBlingConta(c) ? 'Boleto Bling Conta' : c.forma === 15 ? 'Boleto Sicoob' : c.forma === 17 ? 'PIX' : 'Outra forma', parcial: c.situacao === 3 }))
+    .sort((a, b) => b.valor - a.valor);
+  const rel = { dia, ref, ts: Date.now(), itens, total: r2(itens.reduce((t, c) => t + c.valor, 0)) };
+  await env.BLING_KV.put('relatraso:' + dia, JSON.stringify(rel), { expirationTtl: 90 * 86400 });
+  return rel;
 }
 async function receberMes(env, mes) {
   if (!/^\d{4}-\d{2}$/.test(String(mes || ''))) mes = hojeLocal().slice(0, 7);

@@ -17720,6 +17720,34 @@ function blgPainelTefHist(x){
   return h;
 }
 // ---------- Vendas no cartão (Sipag): importar o CSV do Portal do Lojista e vincular à nota/pedido para o TEF ----------
+// ---------- Aviso diário (08h10): contas que venceram no dia útil anterior e não foram pagas — só para Raul e Renata ----------
+var RA={ult:0,rel:null,aberto:false};
+function raPode(){var u=String(STATE.usuarioLogado||'').toLowerCase().trim();return !!STATE.auth&&(u.indexOf('raul')===0||u.indexOf('renata')===0);}
+function raChecar(){
+  if(!raPode()||Date.now()-RA.ult<15*60e3)return;RA.ult=Date.now();
+  var base=(typeof blgUrl==='function'&&blgUrl())||'https://bling.rauldias.workers.dev';
+  fetch(base+'/receber/relatorio-atraso').then(function(r){return r.json();}).then(function(r){var rel=r&&r.rel;if(!rel||!(rel.itens||[]).length)return;
+    var k='raVisto:'+rel.dia;try{if(localStorage.getItem(k))return;}catch(e){}
+    RA.rel=rel;raDesenhar();}).catch(function(){});
+}
+function raDesenhar(){
+  var el=document.getElementById('raAviso');var rel=RA.rel;
+  if(!rel){if(el)el.remove();return;}
+  if(!el){el=document.createElement('div');el.id='raAviso';el.style.cssText='position:fixed;right:16px;bottom:16px;z-index:99999;width:min(420px,calc(100vw - 32px));background:#fff;border:2px solid #B91C1C;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.22);font:13px/1.45 system-ui,sans-serif;color:#1f2937';document.body.appendChild(el);}
+  var m=function(v){return 'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});},d=function(i){return String(i||'').slice(0,10).split('-').reverse().join('/');};
+  var esc=function(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
+  var h='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:12px 14px;background:#FEF2F2;border-radius:10px 10px 0 0"><div><b style="color:#B91C1C">⚠️ Não pagos – vencimento '+d(rel.ref)+'</b><br>'+rel.itens.length+' conta(s) · <b>'+m(rel.total)+'</b></div>'+
+    '<button id="raFechar" title="Fechar (não mostra de novo hoje)" style="border:0;background:none;font-size:18px;cursor:pointer;color:#6b7280">✕</button></div>';
+  h+='<div style="max-height:'+(RA.aberto?'340px':'150px')+';overflow:auto;padding:4px 14px">'+rel.itens.slice(0,RA.aberto?200:4).map(function(c){
+    return '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #f1f1f1"><span><b>'+esc(c.cliente)+'</b><br><small style="color:#6b7280">'+(c.origemTipo==='notafiscal'?'NF ':c.origemTipo==='venda'?'Pedido ':'')+esc(c.numero)+' · '+esc(c.tipo)+(c.parcial?' · pago em parte':'')+'</small></span>'+
+      '<a href="https://www.bling.com.br/contas.receber.php#edit/'+c.id+'" target="_blank" style="white-space:nowrap;color:#B91C1C;text-decoration:none"><b>'+m(c.valor)+'</b> ↗</a></div>';}).join('')+'</div>';
+  h+='<div style="display:flex;justify-content:space-between;padding:8px 14px 12px">'+(rel.itens.length>4?'<a id="raMais" style="cursor:pointer;color:#1d4ed8">'+(RA.aberto?'Mostrar menos':'Ver todas ('+rel.itens.length+')')+'</a>':'<span></span>')+'<a id="raOk" style="cursor:pointer;color:#6b7280">Já vi</a></div>';
+  el.innerHTML=h;
+  var fechar=function(){try{localStorage.setItem('raVisto:'+rel.dia,'1');}catch(e){}RA.rel=null;raDesenhar();};
+  el.querySelector('#raFechar').onclick=fechar;el.querySelector('#raOk').onclick=fechar;
+  var mm=el.querySelector('#raMais');if(mm)mm.onclick=function(){RA.aberto=!RA.aberto;raDesenhar();};
+}
+setInterval(raChecar,60e3);setTimeout(raChecar,8000);
 function blgCsvSipag(txt){
   var L=String(txt||'').replace(/^﻿/,'').split(/\r?\n/),hi=-1;
   for(var i=0;i<Math.min(L.length,15);i++){if(/Data da transa/i.test(L[i])&&/autoriza/i.test(L[i])){hi=i;break;}}
