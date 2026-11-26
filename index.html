@@ -17576,8 +17576,16 @@ function ccTipMostrar(alvo){
 }
 function ccTipEsconder(){var t=document.getElementById('ccTip');if(t)t.style.display='none';}
 window.addEventListener('scroll',ccTipEsconder,{passive:true,capture:true});
+// Campos numéricos (cotação): só números, vírgula e ponto
+function ccSoNumeros(el){
+  el.querySelectorAll('input[inputmode="decimal"],input[inputmode="numeric"]').forEach(function(inp){
+    if(inp._soNum)return;inp._soNum=1;
+    inp.addEventListener('keydown',function(e){if(e.ctrlKey||e.metaKey||e.altKey||e.key.length!==1)return;if(!/[0-9.,]/.test(e.key))e.preventDefault();});
+    inp.addEventListener('input',function(){var v=inp.value,n=v.replace(/[^0-9.,]/g,'');if(n!==v){var p=inp.selectionStart-(v.length-n.length);inp.value=n;try{inp.setSelectionRange(p,p);}catch(_e){}}});
+  });
+}
 function ccLigar(el){
-  var c=CC.cot;if(!c)return;
+  var c=CC.cot;if(!c)return;ccSoNumeros(el);
   el.querySelectorAll('[data-tip]').forEach(function(x){
     x.addEventListener('mouseenter',function(){ccTipMostrar(x);});
     x.addEventListener('mousemove',function(){var t=document.getElementById('ccTip');if(!t||t.style.display!=='block')ccTipMostrar(x);});
