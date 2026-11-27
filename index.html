@@ -11602,7 +11602,8 @@ function esValorItem(r,xValor){
   var num=/^-?[\d.]+,\d{2,}$/,cand=[];
   for(var k=1;k<r.length;k++){if(/%/.test(r[k]))break;if(num.test(r[k]))cand.push(k);}
   if(!cand.length)return NaN;
-  if(isFinite(xValor)&&r.xc){var best=cand[0],dist=Infinity;cand.forEach(function(k){var dd=Math.abs(r.xc[k]-xValor);if(dd<dist){dist=dd;best=k;}});return esNum(r[best]);}
+  if(isFinite(xValor)&&r.xc){var best=-1,dist=Infinity;cand.forEach(function(k){var dd=Math.abs(r.xc[k]-xValor);if(dd<dist){dist=dd;best=k;}});if(best>=0&&dist<=40)return esNum(r[best]);return NaN;}
+  if(r.xc){cand=cand.filter(function(k){return !(r.xc[k]>600);});if(!cand.length)return NaN;}
   var dois=cand.filter(function(k){return /^-?[\d.]+,\d{2}$/.test(r[k]);});
   return esNum(r[(dois.length?dois:cand)[(dois.length?dois:cand).length-1]]);
 }
@@ -11628,6 +11629,7 @@ function esParse(L){
   // Itens da fatura: entre "FORNECIMENTO" e "TOTAL"
   var dentro=false,fin=false,xValor=NaN;
   for(var h=0;h<L.length;h++){if(/^FORNECIMENTO$/i.test(L[h][0]||''))break;var kv=L[h].findIndex(function(x){return /^Valor(\s|$)/i.test(x);});if(kv>=0&&L[h].xc&&L[h].some(function(x){return /^Quant/i.test(x);})){xValor=L[h].xc[kv];}}
+  if(!isFinite(xValor)){var dk=false;for(var h2=0;h2<L.length;h2++){var rk=L[h2];if(/^FORNECIMENTO$/i.test(rk[0]||'')){dk=true;continue;}if(dk&&/^kWh$/i.test(rk[1]||'')&&rk.length>=5&&rk.xc&&isFinite(esNum(rk[4]))){xValor=rk.xc[4];break;}if(dk&&/^TOTAL$/i.test(rk[0]||''))break;}}
   for(var j=0;j<L.length;j++){
     var r=L[j],c0=r[0]||'';
     if(/^FORNECIMENTO$/i.test(c0)){dentro=true;fin=false;continue;}
@@ -11639,7 +11641,7 @@ function esParse(L){
       d.itens.push({desc:c0,qtd:esNum(r[2]),unit:esNum(r[3]),valor:esNum(r[4]),tipo:'fornecimento'});
     }else if(/^-?[\d.]+,\d{2}$/.test(r[1])){
       var vIt=esValorItem(r,xValor);
-      d.itens.push({desc:c0.replace(/\.$/,''),valor:isFinite(vIt)?vIt:esNum(r[1]),tipo:fin?'financeiro':'outro'});
+      d.itens.push({desc:c0.replace(/\.$/,''),valor:isFinite(vIt)?vIt:esNum(r[r.length>2&&/^-?[\d.]+,\d{2}$/.test(r[2])?2:1]),tipo:fin?'financeiro':'outro'});
     }
   }
   // Classificação
@@ -12994,10 +12996,24 @@ async function esRevisar(){
     ES.rev.status='Corrigindo '+L2.d.ref+'...';esDraw();
     try{await esMigrarUc(uc2,certo,esUcFmt(certo),'revisão: UC lida errado');movidas++;}catch(e){erros++;}
   }
+  // 2b) relê os itens (bandeira, multas, juros, IPCA...) das cobranças já salvas; não mexe em valor, desconto, vencimento nem pagamentos
+  var itensFix=0;
+  for(var c3=0;c3<lidos.length;c3++){
+    var L3=lidos[c3],k3=esAl(L3.bruta||L3.k.split('_')[0])+L3.k.slice(L3.k.indexOf('_')),h3=ES.hist&&(ES.hist[k3]||ES.hist[L3.k]);if(h3&&!ES.hist[k3])k3=L3.k;
+    if(!h3||!L3.d.itens||!L3.d.itens.length)continue;
+    var soma3=L3.d.itens.reduce(function(s0,it){return s0+(+it.valor||0);},0);
+    if(Math.abs(soma3-(+h3.totalFatura||0))>0.02)continue;           // só grava leitura que fecha com o total
+    var antes=JSON.stringify((h3.itens||[]).map(function(it){return [it.desc,it.valor];})),depois=JSON.stringify(L3.d.itens.map(function(it){return [it.desc,it.valor];}));
+    if(antes===depois)continue;
+    try{
+      var rr=await fetch(FIREBASE_DB+'/'+FIREBASE_ENERGIA_PATH+'/'+k3+'.json',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({itens:L3.d.itens})});
+      if(rr.ok){h3.itens=L3.d.itens;itensFix++;}
+    }catch(e){erros++;}
+  }
   // 3) cobranças que faltam
   ES.rev.status='Criando cobranças que faltam...';esDraw();
   var cri=0;try{cri=await esGerarFaltantes();}catch(e){erros++;}
-  ES.rev={rodando:false,status:'✅ Revisão feita: '+lidos.length+' PDF(s) relido(s), '+movidas+' fatura(s) corrigida(s), '+vinc+' número(s) antigo(s) aprendido(s), '+cri+' cobrança(s) criada(s)'+(erros?', '+erros+' erro(s)':'')+'.'};
+  ES.rev={rodando:false,status:'✅ Revisão feita: '+lidos.length+' PDF(s) relido(s), '+movidas+' fatura(s) corrigida(s), '+itensFix+' fatura(s) com itens relidos, '+vinc+' número(s) antigo(s) aprendido(s), '+cri+' cobrança(s) criada(s)'+(erros?', '+erros+' erro(s)':'')+'.'};
   esDraw();
 }
 
