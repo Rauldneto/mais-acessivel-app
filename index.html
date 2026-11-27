@@ -17076,8 +17076,10 @@ function ccBuscar(numero,doBling){
     }
     var novo=prop?ccDaProposta(dado):ccDoPedido(dado);
     if(prop&&dado.id){ // % da lista de preço usada na cotação (preço na cotação ÷ preço do cadastro)
-      blgApi('/proposta/lista?id='+dado.id).then(function(l){if(!l||!l.ok||!E.cot||E.cot.numero!==String(dado.numero))return;
-        E.cot.lista={pct:l.pct,iguais:l.iguais||0,total:l.total||0};if(CC===E)ccDraw();}).catch(function(){});}
+      var fimLista=function(v){if(!E.cot||E.cot.numero!==String(dado.numero))return;E.cot.lista=v;if(CC===E)ccDraw();};
+      blgApi('/proposta/lista?id='+dado.id).then(function(l){
+        if(!l||!l.ok){var e=(l&&l.erro)||'sem resposta';fimLista({pct:null,erro:/Rota inexistente/.test(e)?'o Worker do Bling precisa ser atualizado':e});return;}
+        fimLista({pct:l.pct,iguais:l.iguais||0,total:l.total||0});}).catch(function(e){fimLista({pct:null,erro:String(e&&e.message||e)});});}
     if(s){
       var m=ccMesclar(s,novo);E.cot=novo;E.salvoEm=s.atualizadoEm||0;
       if(m.mudou){
@@ -17496,7 +17498,7 @@ function ccDrawAv(el,h){
   '<input type="file" id="ccFile" multiple accept=".pdf,.xlsx,.xls,.csv,.ods,image/*" style="display:none">'+ccDrawImp();
   // markup padrão + lista de preço da cotação
   var pgc=c.pagamento||{},fnomes=(pgc.formas||[]).map(function(x){return x.nome;}).filter(Boolean).join(' + '),ls=c.lista;
-  var lsTxt=!ls?'⏳ verificando no Bling…':(ls.pct==null?'não identificada':(ls.pct>0?'+':'')+ccIn(ls.pct)+'%');
+  var lsTxt=!ls?'⏳ verificando no Bling…':ls.erro?'<span style="color:#b45309;font-size:13px">⚠ não consegui verificar ('+ccEsc(ls.erro)+'). Digite o % ao lado.</span>':(ls.pct==null?'não identificada':(ls.pct>0?'+':'')+ccIn(ls.pct)+'%');
   h+='<div class="cc-card"><div class="cc-avbar" style="margin:0 0 10px;padding-bottom:10px;border-bottom:1px solid #e2e8f0">'+
     '<div style="display:flex;flex-direction:column;gap:3px;min-width:280px"><span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#475569">📋 Lista de preço da cotação (Bling)</span>'+
       '<span style="font-size:15px;font-weight:800;color:#0f172a">'+lsTxt+(ls&&ls.total?' <small style="color:#64748b;font-weight:500">· '+ls.iguais+' de '+ls.total+' produtos com esse %</small>':'')+'</span>'+
