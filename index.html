@@ -21562,6 +21562,49 @@ function abrirLancarFinanceiro(c,onSaved){
   };
 }
 
+// ── Situação das cotações no Bling (separa as "Não aprovadas") ──
+// O Bling não informa QUANDO a situação mudou; o app guarda a data em que percebeu a mudança em cotSitBling/<nº>.
+var COTSIT=null,COTSIT_RODANDO=false;
+function cotSitChave(id){return String(id).replace(/[^a-zA-Z0-9_-]/g,'_');}
+function cotSitDe(c){return (COTSIT&&c&&!c.compra)?(COTSIT[cotSitChave(c.id)]||null):null;}
+function cotSitNA(c){var x=cotSitDe(c);return !!(x&&x.situacao==='Não aprovado');}
+function cotSitData(ms){return new Date(ms).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});}
+function cotSitIdadeDias(c){var t=Number(c&&c._savedAt)||0;if(!t){var m=String(c&&c.dataHora||'').match(/(\d{2})\/(\d{2})\/(\d{4})/);if(m)t=new Date(m[3]+'-'+m[2]+'-'+m[1]+'T12:00:00').getTime();}return t?(Date.now()-t)/864e5:9999;}
+function cotSitCarregar(redesenhar){
+  return fetch(FIREBASE_DB+'/cotSitBling.json').then(function(r){return r.ok?r.json():null;}).then(function(j){COTSIT=j||{};if(redesenhar)redesenhar();}).catch(function(){COTSIT=COTSIT||{};});
+}
+async function cotSitConferir(redesenhar,forcar){
+  if(COTSIT_RODANDO)return;COTSIT_RODANDO=true;
+  try{
+    if(typeof BLG==='undefined'||typeof blgUrl!=='function')return;
+    if(!BLG.cfgCarregada)await blgCarregarCfg();
+    if(!blgUrl())return;
+    var agora=Date.now(),lim=forcar?0:12*36e5;
+    var cand=SAVED.filter(function(c){
+      if(!c||c.compra||!/^\d{4,}$/.test(String(c.id)))return false;
+      if(cotSitIdadeDias(c)>60)return false;
+      var x=COTSIT&&COTSIT[cotSitChave(c.id)];
+      if(x&&x.visto&&agora-x.visto<lim)return false;
+      if(x&&(x.situacao==='Aprovado'||x.situacao==='Concluído')&&agora-x.visto<7*864e5&&!forcar)return false;
+      return true;
+    }).slice(0,30);
+    var mudou=false;
+    for(var i=0;i<cand.length;i++){
+      var c=cand[i],k=cotSitChave(c.id),r=null;
+      try{r=await blgApi('/proposta?numero='+encodeURIComponent(c.id));}catch(e){r=null;}
+      if(r&&/Rota inexistente/.test(r.erro||''))break;
+      if(r&&r.ok&&r.proposta){
+        var sit=r.proposta.situacao||'',prev=COTSIT[k];
+        var ent={situacao:sit,visto:Date.now(),desde:(prev&&prev.situacao===sit)?(prev.desde||Date.now()):Date.now(),aprox:(prev&&prev.situacao===sit)?!!prev.aprox:!prev};
+        if(!prev||prev.situacao!==sit)mudou=true;
+        COTSIT[k]=ent;
+        try{await fetch(FIREBASE_DB+'/cotSitBling/'+k+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(ent)});}catch(e){}
+      }
+      await new Promise(function(ok){setTimeout(ok,800);});
+    }
+    if(mudou&&redesenhar)redesenhar();
+  }finally{COTSIT_RODANDO=false;}
+}
 function renderSalvas(){
   var SAVED=fcSaved(), _fc=fcAtivo(); // Frete compra: lista própria (fretesCompra)
   var wrap=document.createElement('div');
@@ -21593,7 +21636,9 @@ function renderSalvas(){
       listEl.innerHTML='<div style="padding:20px;text-align:center;color:#888;font-size:13px">Nenhuma cotação encontrada.</div>';
       return;
     }
-    dados.forEach(function(c,ci){
+    var _na=dados.filter(cotSitNA);
+    var _ativos=_na.length?dados.filter(function(c){return _na.indexOf(c)<0;}):dados;
+    var _desenha=function(c,ci){
       var best=c.transportadoras&&c.transportadoras.filter(function(t){return t.valor>0;}).sort(function(a,b){return a.valor-b.valor;})[0];
       var item=document.createElement('div');
       item.style.cssText='background:#fff;border:1.5px solid #c8c8c4;border-radius:10px;margin-bottom:8px;overflow:hidden';
@@ -21664,6 +21709,14 @@ function renderSalvas(){
         e.stopPropagation();
         abrirLancarFinanceiro(c,function(){ buildList(srch.value.trim()); });
       };
+      var _sx=cotSitDe(c);
+      if(_sx&&_sx.situacao==='Não aprovado'){
+        var pillNA=document.createElement('span');
+        pillNA.textContent='🚫 Não aprovada · '+(_sx.aprox?'detectada em ':'mudou em ')+cotSitData(_sx.desde||_sx.visto);
+        pillNA.title=_sx.aprox?'Já estava Não aprovada quando o app conferiu pela primeira vez':'Data em que o app percebeu a mudança no Bling';
+        pillNA.style.cssText='background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap';
+        hdr.insertBefore(pillNA,btnCarregar);
+      }
       var stFin=finStatusLabel(c);
       if(stFin){
         var pillFin=document.createElement('span');
@@ -21719,10 +21772,25 @@ function renderSalvas(){
         arrow.style.transform=open?'rotate(0)':'rotate(0)';
       };
       listEl.appendChild(item);
-    });
+    };
+    _ativos.forEach(_desenha);
+    if(_na.length){
+      var sep=document.createElement('div');
+      sep.style.cssText='margin:18px 0 8px;padding:9px 12px;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;color:#991b1b;font-size:13px;font-weight:700';
+      sep.innerHTML='🚫 Não aprovadas no Bling ('+_na.length+') <span style="font-weight:400;font-size:12px">— separadas da lista acima; nada foi apagado. A data é de quando o app percebeu a mudança (o Bling não informa).</span>';
+      listEl.appendChild(sep);
+      _na.slice().sort(function(a,b){return (cotSitDe(b).desde||0)-(cotSitDe(a).desde||0);}).forEach(_desenha);
+    }
   }
 
   buildList('');
+  if(!_fc){
+    var _redes=function(){buildList(srch.value.trim());};
+    var bConf=document.createElement('button');bConf.className='btn-main';bConf.style.cssText='background:#fff;color:#92400e;border:1px solid #fde68a';bConf.textContent='🔄 Conferir situação no Bling';
+    bConf.onclick=function(){bConf.disabled=true;bConf.textContent='⏳ Conferindo...';cotSitConferir(_redes,true).then(function(){bConf.disabled=false;bConf.textContent='🔄 Conferir situação no Bling';_redes();});};
+    searchBar.appendChild(bConf);
+    (COTSIT?Promise.resolve():cotSitCarregar(_redes)).then(function(){cotSitConferir(_redes,false);});
+  }
   srchBtn.onclick=function(){buildList(srch.value.trim());};
   srch.onkeydown=function(e){if(e.key==='Enter')buildList(srch.value.trim());};
   srch.oninput=function(){if(!this.value)buildList('');};
