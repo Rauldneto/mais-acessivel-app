@@ -17471,6 +17471,7 @@ function ccAvCss(){
     '.cc-avbar{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin:0 0 10px}.cc-avbar label{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#475569}'+
     '.cc-avbar input{width:150px}.cc-avbar .cc-mu{font-size:12px;max-width:520px}'+
     '.cc-av .av-l{border-left:3px solid #475569!important}'+
+    '.cc-av col.a-ls{width:78px}.cc-av td.av-ls{background:#f0fdf4!important;text-align:center;font-weight:700;color:#334155}.cc-av td.av-ls small{display:block;font-size:10.5px;font-weight:500;color:#64748b}'+
     '.cc-av col.a-fim{width:132px}.cc-av .av-fim1,.cc-av .av-fim2{border-left:3px solid #15803d!important}.cc-av .av-fim3{border-left:1px solid #bbf7d0!important}'+
     '.cc-av thead th.av-fim{background:#16a34a!important;color:#fff!important}.cc-av thead tr.av-col th.av-fim{background:#15803d!important;color:#fff!important}.cc-av thead tr.av-grp th.av-fim small{color:#dcfce7}'+
     '.cc-av td.av-fim2,.cc-av td.av-fim3{background:#dcfce7!important;font-size:14.5px!important;color:#14532d!important}'+
@@ -17530,22 +17531,22 @@ function ccDrawAv(el,h){
     '<div class="cc-avleg" style="align-items:center">'+(A.ocultos?'<span style="color:#475569">🙈 <b>'+A.ocultos+'</b> produto'+(A.ocultos>1?'s':'')+' oculto'+(A.ocultos>1?'s':'')+' (não entram no cálculo nem vão para o Bling)</span>'+
       '<button type="button" class="cc-btn sm" data-av-acao="verOc">'+(CC.avVerOcultos?'Esconder ocultos':'Mostrar ocultos')+'</button>':'<span style="color:#475569">Use o <b>✕</b> ao lado do produto para ocultar o que você não vai orçar.</span>')+
       (A.faltam?'<button type="button" class="cc-btn sm" data-av-acao="ocSemPreco">✕ Ocultar os '+A.faltam+' sem preço</button>':'')+'</div>'+
-    '<table class="cc-g cc-av" style="width:100%;min-width:1330px"><colgroup><col class="a-prod"><col class="a-q"><col class="a-f"><col class="a-m"><col class="a-p"><col class="a-pc"><col class="a-pc"><col class="a-fr"><col class="a-fn"><col class="a-fr"><col class="a-pc"><col class="a-pc"><col class="a-c"><col class="a-t"><col class="a-mk"><col class="a-fim"></colgroup>'+
+    '<table class="cc-g cc-av" style="width:100%;min-width:1408px"><colgroup><col class="a-prod"><col class="a-q"><col class="a-f"><col class="a-m"><col class="a-p"><col class="a-pc"><col class="a-pc"><col class="a-fr"><col class="a-fn"><col class="a-fr"><col class="a-pc"><col class="a-pc"><col class="a-c"><col class="a-t"><col class="a-mk"><col class="a-ls"><col class="a-fim"></colgroup>'+
     '<thead><tr class="av-grp"><th class="prod av-prod" colspan="2" rowspan="2">Produto da cotação</th>'+
       '<th class="av-b av-l" colspan="10">1 · Compra<small>o que o fornecedor cobra</small></th>'+
       '<th class="av-a av-l" colspan="2">2 · Custo<small>com impostos e frete</small></th>'+
-      '<th class="av-g av-l" colspan="1">3 · Markup</th>'+
+      '<th class="av-g av-l" colspan="2">3 · Markup e lista</th>'+
       '<th class="av-fim av-fim1" colspan="1">✅ Preço final<small>'+(A.acr?'com '+(A.acr>0?'+':'')+ccIn(A.acr)+'% da lista':'vai para o Bling')+'</small></th></tr>'+
     '<tr class="av-col">'+
       '<th class="av-b av-l">Fornecedor</th><th class="av-b">Marca</th><th class="n av-b">Preço</th><th class="n av-b">Desconto %</th><th class="n av-b">IPI %</th><th class="n av-b">Frete da nota R$</th><th class="n av-b">Valor da nota R$</th><th class="n av-b">Frete por un.</th><th class="n av-b">Créd. ICMS %</th><th class="n av-b" title="Prazo de entrega deste produto (vai na descrição detalhada da proposta e no pedido de compra)">Entrega (dias)</th>'+
-      '<th class="n av-a av-l">Unitário</th><th class="n av-a">Total</th><th class="n av-g av-l">%</th><th class="n av-fim av-fim2">Preço de venda un.</th></tr></thead><tbody>';
+      '<th class="n av-a av-l">Unitário</th><th class="n av-a">Total</th><th class="n av-g av-l">Markup %</th><th class="av-g" title="% da lista de preço da cotação, aplicado depois do markup">Lista</th><th class="n av-fim av-fim2">Preço de venda un.</th></tr></thead><tbody>';
   var inp=function(a,i,cls,ph,txt,extra){return '<td class="inp av-in '+(txt?'':'n ')+(cls||'')+'"><input '+(txt?'':'inputmode="decimal" ')+'data-av="'+a+'" data-ai="'+i+'" value="'+(txt?ccEsc((f[a]||[])[i]||''):fv(a,i))+'" placeholder="'+(ph||'')+'"'+(extra||'')+'></td>';};
   c.itens.forEach(function(it,i){var x=A.linhas[i];
     if(x.oculto&&!CC.avVerOcultos)return;
     var btOc='<button type="button" class="av-oc" data-oc="'+i+'" title="'+(x.oculto?'Voltar a orçar este produto':'Ocultar: não vou orçar este produto (não entra no cálculo nem vai para o Bling)')+'">'+(x.oculto?'↩':'✕')+'</button>';
     if(x.oculto){t+='<tr class="it av-ocl"><td class="prod">'+btOc+(it.cod?'<div class="pc" style="margin:0 0 1px">Cód. '+ccEsc(it.cod)+'</div>':'')+'<div class="pd">'+ccEsc(it.desc)+'</div></td>'+
       '<td class="n q" style="white-space:nowrap">'+ccIn(it.q,0)+' <span style="font-size:11px;color:#64748b">'+ccEsc(it.un)+'</span></td>'+
-      '<td colspan="14" class="av-l" style="color:#94a3b8;font-style:italic">Oculto — não vou orçar'+(it.venda?' · fica com Bling '+ccMoeda(it.venda):'')+'</td></tr>';return;}
+      '<td colspan="15" class="av-l" style="color:#94a3b8;font-style:italic">Oculto — não vou orçar'+(it.venda?' · fica com Bling '+ccMoeda(it.venda):'')+'</td></tr>';return;}
     t+='<tr class="it"><td class="prod">'+btOc+(it.cod?'<div class="pc" style="margin:0 0 1px">Cód. '+ccEsc(it.cod)+'</div>':'')+'<div class="pd" data-tip="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div></td>'+
       '<td class="n q" style="white-space:nowrap">'+ccIn(it.q,0)+' <span style="font-size:11px;color:#64748b">'+ccEsc(it.un)+'</span></td>'+
       '<td class="inp av-in av-l" style="position:relative">'+((f.fornItem||[])[i]&&!(f.fornIds||[])[i]?'<button type="button" class="av-cad" data-cad="'+i+'" title="Cadastrar este fornecedor no Bling">＋</button>':'')+'<input data-av="fornItem" data-ai="'+i+'" autocomplete="off" class="'+((f.fornIds||[])[i]?'av-vinc':((f.fornItem||[])[i]?'av-novinc':''))+'" value="'+ccEsc((f.fornItem||[])[i]||'')+'" placeholder="buscar no Bling" title="'+((f.fornIds||[])[i]?'Fornecedor do cadastro do Bling':((f.fornItem||[])[i]?'Não está ligado ao cadastro do Bling: digite e escolha na lista (sem isso não gera pedido de compra)':'Digite o nome ou CNPJ e escolha na lista do Bling'))+'"></td>'+inp('marcas',i,'','',true)+inp('precos',i,'','0,00')+inp('descs',i,'','')+inp('ipis',i,'','')+
@@ -17557,9 +17558,10 @@ function ccDrawAv(el,h){
       '<td class="n av-cu av-l">'+(x.ok?ccMoeda(x.custoU).replace('R$ ',''):'')+'</td>'+
       '<td class="n av-cu">'+(x.ok?ccMoeda(x.custoT).replace('R$ ',''):'')+'</td>'+
       '<td class="inp av-in av-g av-l n"><input inputmode="decimal" class="'+(x.mkPad?'av-pad':'')+'" data-av="markups" data-ai="'+i+'" value="'+fv('markups',i)+'" placeholder="'+(f.markupPadrao!==''&&f.markupPadrao!=null?ccIn(f.markupPadrao):'')+'"></td>'+
+      '<td class="av-ls">'+(x.ok?(A.acr?(A.acr>0?'+':'')+ccIn(A.acr)+'%<small>'+(A.acr>0?'+':'−')+' '+ccMoeda(Math.abs(x.vendaU-ccR(x.custoU*(1+x.mk/100)))).replace('R$ ','R$ ')+'</small>':'0%'):'')+'</td>'+
       '<td class="n av-vd av-fim2">'+(x.ok?ccMoeda(x.vendaU)+(it.venda?'<small class="'+(x.vendaU>it.venda+0.005?'av-alto':'')+'">Bling '+ccMoeda(it.venda)+'</small>':''):'<span style="color:#94a3b8;font-weight:500;font-size:12px">—</span>'+(it.venda?'<small>Bling '+ccMoeda(it.venda)+'</small>':''))+'</td></tr>';
   });
-  t+='</tbody><tfoot><tr><td class="prod" colspan="2">Total</td><td colspan="10" class="av-l"></td><td class="av-l"></td><td class="n" style="color:#92400e">'+ccMoeda(A.custo)+'</td><td class="av-l"></td><td class="av-fim2"></td></tr></tfoot></table>';
+  t+='</tbody><tfoot><tr><td class="prod" colspan="2">Total</td><td colspan="10" class="av-l"></td><td class="av-l"></td><td class="n" style="color:#92400e">'+ccMoeda(A.custo)+'</td><td class="av-l"></td><td></td><td class="av-fim2"></td></tr></tfoot></table>';
   h+='<div class="cc-gw">'+t+'</div>';
   // pagamento e entrega + resultado
   var campo=function(lab,k,tipo){var v=f[k];
