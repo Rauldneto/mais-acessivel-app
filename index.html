@@ -17436,7 +17436,7 @@ function ccAvCss(){
   // classes com prefixo av- (o app já usa .g2/.g3 em outro lugar)
   st.textContent='.cc-av{table-layout:fixed}.cc-av col.a-prod{width:170px}.cc-av col.a-q{width:64px}.cc-av col.a-f{width:112px}.cc-av col.a-m{width:74px}'+
     '.cc-av col.a-p{width:76px}.cc-av col.a-pc{width:56px}.cc-av col.a-mk{width:68px}.cc-av col.a-fr{width:74px}.cc-av col.a-fn{width:88px}.cc-av col.a-c{width:76px}.cc-av col.a-t{width:90px}.cc-av col.a-v{width:110px}'+
-    '.cc-av td.q small{display:block;font-size:10.5px;color:#64748b;line-height:1}'+
+    ''+
     '.cc-av thead th{height:auto!important;padding:7px 8px!important;white-space:normal!important;line-height:1.25;vertical-align:middle!important;text-transform:none!important;letter-spacing:0!important;border-right:1px solid #e2e8f0!important}'+
     '.cc-av thead tr.av-grp th{font-size:12px!important;font-weight:800!important;text-transform:uppercase!important;letter-spacing:.6px!important;text-align:center;padding:8px!important}'+
     '.cc-av thead tr.av-col th{font-size:12px!important;font-weight:700!important;color:#334155!important;text-align:center!important}'+
@@ -17450,7 +17450,7 @@ function ccAvCss(){
     '.cc-av td.av-in input:focus{border-color:#2563eb!important;box-shadow:0 0 0 2px #bfdbfe}.cc-av td.av-in:focus-within{box-shadow:none!important}'+
     '.cc-av td.av-in input::placeholder{color:#cbd5e1}.cc-av td.av-in input.av-sug::placeholder{color:#2563eb;font-weight:600}.cc-av td.av-in input.av-pad::placeholder{color:#15803d;font-weight:700}'+
     '.cc-av td.av-cu{background:#fffbeb!important;color:#78350f}.cc-av td.av-vd{background:#f0fdf4!important;font-weight:800;color:#15803d}'+
-    '.cc-av td.av-vd small{display:block;font-size:10px;font-weight:500;color:#64748b;white-space:normal;line-height:1.15}.cc-av td.av-vd small.av-alto{color:#b91c1c;font-weight:700}'+
+    '.cc-av td.av-vd small{display:block;font-size:10.5px;font-weight:500;color:#64748b;white-space:nowrap;line-height:1.15}.cc-av td.av-vd small.av-alto{color:#b91c1c;font-weight:700}'+
     '.cc-av td.av-in.av-g input{border-color:#86efac!important}'+
     '.cc-av tfoot td{font-weight:800;border-top:2px solid #94a3b8;background:#f8fafc}'+
     '.cc-avbar{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin:0 0 10px}.cc-avbar label{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#475569}'+
@@ -17504,8 +17504,8 @@ function ccDrawAv(el,h){
       '<th class="n av-a av-l">Unitário</th><th class="n av-a">Total</th><th class="n av-g av-l">%</th><th class="n av-fim av-fim2">Unitário</th><th class="n av-fim av-fim3">Total</th></tr></thead><tbody>';
   var inp=function(a,i,cls,ph,txt,extra){return '<td class="inp av-in '+(txt?'':'n ')+(cls||'')+'"><input '+(txt?'':'inputmode="decimal" ')+'data-av="'+a+'" data-ai="'+i+'" value="'+(txt?ccEsc((f[a]||[])[i]||''):fv(a,i))+'" placeholder="'+(ph||'')+'"'+(extra||'')+'></td>';};
   c.itens.forEach(function(it,i){var x=A.linhas[i];
-    t+='<tr class="it"><td class="prod"><div class="pd" data-tip="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div>'+(it.cod?'<div class="pc">Cód. '+ccEsc(it.cod)+'</div>':'')+'</td>'+
-      '<td class="n q">'+ccIn(it.q,0)+'<small>'+ccEsc(it.un)+'</small></td>'+
+    t+='<tr class="it"><td class="prod">'+(it.cod?'<div class="pc" style="margin:0 0 1px">Cód. '+ccEsc(it.cod)+'</div>':'')+'<div class="pd" data-tip="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div></td>'+
+      '<td class="n q" style="white-space:nowrap">'+ccIn(it.q,0)+' <span style="font-size:11px;color:#64748b">'+ccEsc(it.un)+'</span></td>'+
       inp('fornItem',i,'av-l','',true,' list="ccAvForns"')+inp('marcas',i,'','',true)+inp('precos',i,'','0,00')+inp('descs',i,'','')+inp('ipis',i,'','')+
       inp('fretes',i,'','')+
       '<td class="inp av-in n"><input inputmode="decimal" data-av="notasV" data-ai="'+i+'" value="'+fv('notasV',i,2)+'" placeholder="" title="Valor total da nota fiscal (ou da cotação do fornecedor) de onde vem o frete."></td>'+
@@ -17514,7 +17514,7 @@ function ccDrawAv(el,h){
       '<td class="n av-cu av-l">'+(x.ok?ccMoeda(x.custoU).replace('R$ ',''):'')+'</td>'+
       '<td class="n av-cu">'+(x.ok?ccMoeda(x.custoT).replace('R$ ',''):'')+'</td>'+
       '<td class="inp av-in av-g av-l n"><input inputmode="decimal" class="'+(x.mkPad?'av-pad':'')+'" data-av="markups" data-ai="'+i+'" value="'+fv('markups',i)+'" placeholder="'+(f.markupPadrao!==''&&f.markupPadrao!=null?ccIn(f.markupPadrao):'')+'"></td>'+
-      '<td class="n av-vd av-fim2">'+(x.ok?ccMoeda(x.vendaU)+(it.venda?'<small class="'+(x.vendaU>it.venda+0.005?'av-alto':'')+'">hoje no Bling '+ccMoeda(it.venda)+'</small>':''):'<span style="color:#94a3b8;font-weight:500;font-size:12px">—</span>'+(it.venda?'<small>hoje no Bling '+ccMoeda(it.venda)+'</small>':''))+'</td>'+
+      '<td class="n av-vd av-fim2">'+(x.ok?ccMoeda(x.vendaU)+(it.venda?'<small class="'+(x.vendaU>it.venda+0.005?'av-alto':'')+'">Bling '+ccMoeda(it.venda)+'</small>':''):'<span style="color:#94a3b8;font-weight:500;font-size:12px">—</span>'+(it.venda?'<small>Bling '+ccMoeda(it.venda)+'</small>':''))+'</td>'+
       '<td class="n av-vd av-fim3">'+(x.ok?ccMoeda(x.vendaT):'')+'</td></tr>';
   });
   t+='</tbody><tfoot><tr><td class="prod" colspan="2">Total</td><td colspan="9" class="av-l"></td><td class="av-l"></td><td class="n" style="color:#92400e">'+ccMoeda(A.custo)+'</td><td class="av-l"></td><td class="av-fim2"></td><td class="n av-fim3" style="color:#15803d">'+ccMoeda(A.venda)+'</td></tr></tfoot></table>';
