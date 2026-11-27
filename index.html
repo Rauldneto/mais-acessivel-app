@@ -11774,7 +11774,7 @@ function esDescPara(uc){
   return (ant&&isFinite(ant.desc))?ant.desc:((ES.cfg&&isFinite(+ES.cfg.descPadrao)&&ES.cfg.descPadrao!=='')?+ES.cfg.descPadrao:17);
 }
 async function esLerPdf(file){
-  ES.lendo=true;ES.erro='';ES.dup=null;ES.dupLido=null;ES.substituida='';ES.salvo=false;ES.chave='';ES.arquivo=file.name;ES.lote=null;esDraw();
+  ES.lendo=true;ES.erro='';ES.dup=null;ES.dupLido=null;ES.substituida='';ES.deHist=false;ES.salvo=false;ES.chave='';ES.arquivo=file.name;ES.lote=null;esDraw();
   try{
     var x=await esExtrair(file),d=x.d;
     var dup=esJaCarregada(d);
@@ -12009,7 +12009,7 @@ function esAbrirHist(k){
   ES.dados={uc:h.uc,cliente:h.cliente,doc:h.doc,endereco:h.endereco,ref:h.ref,venc:h.venc,leitAnt:h.leitAnt,leitAtu:h.leitAtu,dias:h.dias,kwh:h.kwh,unit:h.unit,totalPagar:h.totalFatura,
     itens:h.itens||[],avisos:h.avisos||[],saldoKwh:h.saldoKwh==null?NaN:h.saldoKwh,geracaoCiclo:h.geracaoCiclo==null?NaN:h.geracaoCiclo};
   var sc0=ES.scee&&ES.scee[k];if(sc0)ES.dados.scee=sc0;
-  ES.desc=h.desc;ES.pagarManual=h.pagarManual!=null?h.pagarManual:null;ES.vencCli=h.vencCli||h.venc||'';ES.salvo=true;ES.chave=k;ES.erro='';ES.arquivo='';ES.pdfB64=null;ES.aba='nova';
+  ES.desc=h.desc;ES.pagarManual=h.pagarManual!=null?h.pagarManual:null;ES.vencCli=h.vencCli||h.venc||'';ES.salvo=true;ES.chave=k;ES.erro='';ES.arquivo='';ES.pdfB64=null;ES.deHist=(ES.aba==='hist');ES.aba='nova';
   esDraw();window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -12162,6 +12162,7 @@ function esHtmlNova(){
      '</div>';
   var d=ES.dados;if(!d)return h+(ES.lote?esHtmlLote():'');
   if(ES.lote)h+='<button id="esLoteVoltar" style="'+esBtn('#fff','#1c1917','1.5px solid #e7e5e4')+';margin-bottom:12px">← Voltar ao lote</button>';
+  else if(ES.deHist)h+='<button id="esHistVoltar" style="'+esBtn('#fff','#1c1917','1.5px solid #e7e5e4')+';margin-bottom:12px">← Voltar ao histórico</button>';
   var r=esMontarReg(d);
   var rec=ES.chave&&ES.hist&&ES.hist[ES.chave];
   if(rec){r.pagoCliente=rec.pagoCliente;r.pagoEquatorial=rec.pagoEquatorial;r._k=ES.chave;}
@@ -12252,7 +12253,7 @@ function esHtmlHist(){
     regs.forEach(function(x){
       var up=(x.uploads||[]),ult=up[up.length-1];
       var tip=ult?'PDF enviado por '+(ult.por||'?')+' em '+new Date(ult.em).toLocaleString('pt-BR')+(up.length>1?' ('+up.length+' envios)':''):'';
-      h+='<tr style="border-top:1px solid #f5f5f4"><td style="padding:8px;font-weight:800;color:#d97706;white-space:nowrap" title="'+esEsc(tip)+'">'+esEsc(x.ref)+(up.length>1?' <span style="font-size:10px;color:#a8a29e">×'+up.length+'</span>':'')+'</td>'+
+      h+='<tr style="border-top:1px solid #f5f5f4"><td style="padding:6px 8px;white-space:nowrap" title="'+esEsc(tip)+'"><button data-es-abrir="'+esEsc(x._k)+'" title="Ver o resumo desta fatura" style="'+esBtn('#fffbeb','#b45309','1.5px solid #fcd34d')+';padding:5px 10px;font-size:13px;font-weight:800">📊 '+esEsc(x.ref)+'</button>'+(up.length>1?' <span style="font-size:10px;color:#a8a29e">×'+up.length+'</span>':'')+'</td>'+
          '<td style="padding:8px;text-align:right">'+esFmt(x.kwh,2)+'</td>'+
          '<td style="padding:8px;text-align:right;color:#92400e;font-weight:700;white-space:nowrap;'+(x.pagoCliente&&x.pagoCliente.dispensado?'text-decoration:line-through;color:#a8a29e':'')+'">'+esBRL(x.valorEnergia)+'</td>'+
          '<td style="padding:8px;text-align:right;white-space:nowrap">'+esBRL(x.totalFatura)+'</td>'+
@@ -12260,7 +12261,7 @@ function esHtmlHist(){
          '<td style="padding:8px">'+esCampoVenc(x)+'</td>'+
          '<td style="padding:8px">'+esCampoPg(x,'pagoEquatorial')+'</td><td style="padding:8px">'+esCampoPg(x,'pagoCliente')+'</td>'+
          '<td style="padding:8px;text-align:right;white-space:nowrap">'+
-           '<button data-es-abrir="'+esEsc(x._k)+'" style="'+ES_BTN_SM+'" title="Abrir cálculo">Abrir</button> '+
+           '<button data-es-abrir="'+esEsc(x._k)+'" style="'+ES_BTN_SM+'" title="Ver o resumo desta fatura">📊 Resumo</button> '+
            '<button data-es-fat="'+esEsc(x._k)+'" style="'+ES_BTN_SM+'" title="Fatura do cliente">🧾</button> '+
            (x.temPdf?'<button data-es-pdf="'+esEsc(x._k)+'" style="'+ES_BTN_SM+'" title="PDF da fatura Equatorial">📄</button> ':'')+
            (STATE.roleLogado==='admin'?'<button data-es-del="'+esEsc(x._k)+'" style="'+ES_BTN_SM+';color:#ef4444;border-color:#fecaca" title="Excluir">🗑</button>':'')+
@@ -12384,7 +12385,7 @@ function esLigar(root){
   if(b=document.getElementById('esSubstituir'))b.onclick=esSubstituirDup;
   if(b=document.getElementById('esFatura'))b.onclick=function(){
     var r=esMontarReg(ES.dados),rec=ES.chave&&ES.hist&&ES.hist[ES.chave];if(rec)r.pagoCliente=rec.pagoCliente;esFaturaCliente(r);};
-  if(b=document.getElementById('esLimpar'))b.onclick=function(){ES.dados=null;ES.erro='';ES.dup=null;ES.dupLido=null;ES.substituida='';ES.arquivo='';ES.salvo=false;ES.chave='';ES.pdfB64=null;esDraw();};
+  if(b=document.getElementById('esLimpar'))b.onclick=function(){ES.dados=null;ES.erro='';ES.dup=null;ES.dupLido=null;ES.substituida='';ES.deHist=false;ES.arquivo='';ES.salvo=false;ES.chave='';ES.pdfB64=null;esDraw();};
   if(b=document.getElementById('esCopiar'))b.onclick=function(){
     var t=esResumoTexto(esMontarReg(ES.dados)),self=this;
     (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){self.textContent='✅ Copiado!';setTimeout(function(){self.textContent='📋 Copiar resumo (WhatsApp)';},1500);}).catch(function(){prompt('Copie o resumo:',t);});
@@ -12397,6 +12398,7 @@ function esLigar(root){
   root.querySelectorAll('[data-es-vencli]').forEach(function(x){x.onchange=function(){esMudarVenc(x.getAttribute('data-es-vencli'),x.value);};});
   if(b=document.getElementById('esLoteFechar'))b.onclick=function(){ES.lote=null;esDraw();};
   if(b=document.getElementById('esLoteVoltar'))b.onclick=function(){ES.dados=null;ES.chave='';esDraw();};
+  if(b=document.getElementById('esHistVoltar'))b.onclick=function(){ES.dados=null;ES.chave='';ES.deHist=false;ES.salvo=false;ES.aba='hist';esDraw();};
   root.querySelectorAll('[data-es-lote-abrir]').forEach(function(x){x.onclick=function(){
     var it=ES.lote.itens[+x.getAttribute('data-es-lote-abrir')],d=it.d,k=esChave(d),hrec=ES.hist&&ES.hist[k];
     ES.dados=d;ES.chave=hrec?k:'';ES.salvo=!!hrec;ES.desc=hrec?hrec.desc:esDescPara(d.uc);ES.pagarManual=hrec&&hrec.pagarManual!=null?hrec.pagarManual:null;ES.vencCli=hrec?(hrec.vencCli||d.venc):(d.venc||'');ES.arquivo=it.arquivo;ES.pdfB64=null;ES.pdfSalvo=hrec?'':(it.temPdf?k:'');ES.cobrarGeradora=false;
