@@ -16944,7 +16944,7 @@ function ccFornVazio(nome,nItens){return {nome:nome||'',fixo:false,precos:Array(
   descs:ccProp()?Array(nItens).fill(''):undefined,fretes:ccProp()?Array(nItens).fill(''):undefined,creds:ccProp()?Array(nItens).fill(''):undefined,
   markups:ccProp()?Array(nItens).fill(''):undefined,fornItem:ccProp()?Array(nItens).fill(''):undefined,freteTotal:'',markupPadrao:''};}
 // Cotação avulsa (Outros): campos por item, na ordem dos itens
-var CC_AV_ARR=['precos','marcas','ipis','descs','fretes','notasV','creds','markups','fornItem','ocultos'];
+var CC_AV_ARR=['precos','marcas','ipis','descs','fretes','notasV','creds','markups','fornItem','ocultos','fornIds','entregas'];
 // Monta a cotação nova a partir do pedido que veio do Bling
 function ccDoPedido(p){
   var itens=(p.itens||[]).map(function(i){return {cod:i.codigo||'',desc:i.descricao||'',un:i.unidade||'',q:Number(i.quantidade)||0,pid:i.produtoId||'',codFornPedido:i.codigoFornecedor||''};});
@@ -17038,7 +17038,7 @@ function ccMesclar(velho,novo){
   novo.forn=(temFixo?[p]:[]).concat(outros.map(function(f){
     var g=Object.assign({},f);g.precos=novo.itens.map(function(it){var k=mapa[ccItemK(it)];return k==null?'':(f.precos||[])[k];});
     g.marcas=novo.itens.map(function(it){var k=mapa[ccItemK(it)];return k==null?'':((f.marcas||[])[k]||'');});
-    ['ipis','descs','fretes','notasV','creds','markups','fornItem','ocultos'].forEach(function(a){if(Array.isArray(f[a]))g[a]=novo.itens.map(function(it){var k=mapa[ccItemK(it)];return k==null?'':(f[a][k]==null?'':f[a][k]);});});return g;}));
+    ['ipis','descs','fretes','notasV','creds','markups','fornItem','ocultos','fornIds','entregas'].forEach(function(a){if(Array.isArray(f[a]))g[a]=novo.itens.map(function(it){var k=mapa[ccItemK(it)];return k==null?'':(f[a][k]==null?'':f[a][k]);});});return g;}));
   var antes={},depois={};velho.itens.forEach(function(it){antes[ccItemK(it)]=it;});novo.itens.forEach(function(it){depois[ccItemK(it)]=it;});
   var add=novo.itens.filter(function(it){return !antes[ccItemK(it)];}).length,rem=velho.itens.filter(function(it){return !depois[ccItemK(it)];}).length;
   var qtd=novo.itens.filter(function(it){var a=antes[ccItemK(it)];return a&&Number(a.q)!==Number(it.q);}).length;
@@ -17473,6 +17473,9 @@ function ccAvCss(){
     '.cc-avnt th{font-size:11px!important;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#475569}.cc-avnt .n{text-align:right}.cc-avnt input{width:130px;text-align:right}.cc-avnt input::placeholder{color:#2563eb;font-weight:600}'+
     '.cc-av .av-oc{float:right;margin:0 0 0 6px;width:22px;height:22px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#94a3b8;font-size:12px;line-height:1;cursor:pointer;padding:0}'+
     '.cc-av .av-oc:hover{color:#b91c1c;border-color:#fca5a5;background:#fef2f2}.cc-av tr.av-ocl td{background:#f8fafc!important;opacity:.75}.cc-av tr.av-ocl .av-oc{color:#15803d}'+
+    '.cc-av td.av-in input.av-vinc{border-color:#16a34a!important;background:#f0fdf4!important;color:#14532d;font-weight:600}.cc-av td.av-in input.av-novinc{border-color:#f59e0b!important;background:#fffbeb!important}'+
+    '#ccAvDrop{position:fixed;z-index:10001;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 10px 30px rgba(15,23,42,.18);max-height:260px;overflow:auto;min-width:280px;font-size:13px}'+
+    '#ccAvDrop div{padding:7px 10px;cursor:pointer;border-bottom:1px solid #f1f5f9}#ccAvDrop div.on,#ccAvDrop div:hover{background:#eff6ff}#ccAvDrop small{display:block;color:#64748b;font-size:11px}#ccAvDrop .vz{color:#64748b;cursor:default}'+
     '.cc-avres{border-collapse:collapse;width:360px!important;max-width:100%;font-family:inherit!important;font-size:14px!important;flex:0 0 auto}.cc-avres td{font-family:inherit!important;font-size:14px!important;border:0!important;border-bottom:1px solid #f1f5f9!important;background:transparent!important}'+
     '.cc-avleg{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:#475569;margin:0 0 8px}.cc-avleg span{display:inline-flex;align-items:center;gap:6px}.cc-avleg i{width:14px;height:14px;border-radius:4px;display:inline-block}';
   document.head.appendChild(st);
@@ -17511,19 +17514,19 @@ function ccDrawAv(el,h){
 
   // grade
   var dl='<datalist id="ccAvForns">'+forns.map(function(x){return '<option value="'+ccEsc(x)+'">';}).join('')+'</datalist>';
-  var t=dl+'<div class="cc-avleg"><span><i style="background:#fff;border:1px solid #94a3b8"></i>Campo para digitar</span><span><i style="background:#fffbeb;border:1px solid #fcd34d"></i>Custo (calculado)</span><span><i style="background:#f0fdf4;border:1px solid #86efac"></i>Venda (calculado)</span><span style="color:#2563eb">Azul = frete por unidade e % do frete (calculados)</span></div>'+
+  var t=dl+'<div class="cc-avleg"><span><i style="background:#fff;border:1px solid #94a3b8"></i>Campo para digitar</span><span><i style="background:#fffbeb;border:1px solid #fcd34d"></i>Custo (calculado)</span><span><i style="background:#f0fdf4;border:1px solid #86efac"></i>Venda (calculado)</span><span style="color:#2563eb">Azul = frete por unidade e % do frete (calculados)</span><span><i style="background:#f0fdf4;border:1px solid #16a34a"></i>Fornecedor do cadastro do Bling</span><span><i style="background:#fffbeb;border:1px solid #f59e0b"></i>Fornecedor não ligado ao Bling</span></div>'+
     '<div class="cc-avleg" style="font-size:12.5px;color:#334155;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px"><div style="display:block;line-height:1.5"><b>Como calcula (por unidade):</b>&nbsp; Frete por un. = (Preço − Desconto% + IPI) × (Frete da nota ÷ Valor da nota) &nbsp;·&nbsp; Custo = Preço − Desconto% + IPI + Frete por un. − Créd. ICMS &nbsp;·&nbsp; <b>Preço final</b> = Custo × (1 + Markup%) × (1 + Ajuste da lista%'+(A.acr?' = '+(A.acr>0?'+':'')+ccIn(A.acr)+'%':'')+') — é este valor que vai para o preço unitário no Bling</div></div>'+
     '<div class="cc-avleg" style="align-items:center">'+(A.ocultos?'<span style="color:#475569">🙈 <b>'+A.ocultos+'</b> produto'+(A.ocultos>1?'s':'')+' oculto'+(A.ocultos>1?'s':'')+' (não entram no cálculo nem vão para o Bling)</span>'+
       '<button type="button" class="cc-btn sm" data-av-acao="verOc">'+(CC.avVerOcultos?'Esconder ocultos':'Mostrar ocultos')+'</button>':'<span style="color:#475569">Use o <b>✕</b> ao lado do produto para ocultar o que você não vai orçar.</span>')+
       (A.faltam?'<button type="button" class="cc-btn sm" data-av-acao="ocSemPreco">✕ Ocultar os '+A.faltam+' sem preço</button>':'')+'</div>'+
-    '<table class="cc-g cc-av" style="width:100%;min-width:1270px"><colgroup><col class="a-prod"><col class="a-q"><col class="a-f"><col class="a-m"><col class="a-p"><col class="a-pc"><col class="a-pc"><col class="a-fr"><col class="a-fn"><col class="a-fr"><col class="a-pc"><col class="a-c"><col class="a-t"><col class="a-mk"><col class="a-fim"></colgroup>'+
+    '<table class="cc-g cc-av" style="width:100%;min-width:1330px"><colgroup><col class="a-prod"><col class="a-q"><col class="a-f"><col class="a-m"><col class="a-p"><col class="a-pc"><col class="a-pc"><col class="a-fr"><col class="a-fn"><col class="a-fr"><col class="a-pc"><col class="a-pc"><col class="a-c"><col class="a-t"><col class="a-mk"><col class="a-fim"></colgroup>'+
     '<thead><tr class="av-grp"><th class="prod av-prod" colspan="2" rowspan="2">Produto da cotação</th>'+
-      '<th class="av-b av-l" colspan="9">1 · Compra<small>o que o fornecedor cobra</small></th>'+
+      '<th class="av-b av-l" colspan="10">1 · Compra<small>o que o fornecedor cobra</small></th>'+
       '<th class="av-a av-l" colspan="2">2 · Custo<small>com impostos e frete</small></th>'+
       '<th class="av-g av-l" colspan="1">3 · Markup</th>'+
       '<th class="av-fim av-fim1" colspan="1">✅ Preço final<small>'+(A.acr?'com '+(A.acr>0?'+':'')+ccIn(A.acr)+'% da lista':'vai para o Bling')+'</small></th></tr>'+
     '<tr class="av-col">'+
-      '<th class="av-b av-l">Fornecedor</th><th class="av-b">Marca</th><th class="n av-b">Preço</th><th class="n av-b">Desconto %</th><th class="n av-b">IPI %</th><th class="n av-b">Frete da nota R$</th><th class="n av-b">Valor da nota R$</th><th class="n av-b">Frete por un.</th><th class="n av-b">Créd. ICMS %</th>'+
+      '<th class="av-b av-l">Fornecedor</th><th class="av-b">Marca</th><th class="n av-b">Preço</th><th class="n av-b">Desconto %</th><th class="n av-b">IPI %</th><th class="n av-b">Frete da nota R$</th><th class="n av-b">Valor da nota R$</th><th class="n av-b">Frete por un.</th><th class="n av-b">Créd. ICMS %</th><th class="n av-b" title="Prazo de entrega deste produto (vai na descrição detalhada da proposta e no pedido de compra)">Entrega (dias)</th>'+
       '<th class="n av-a av-l">Unitário</th><th class="n av-a">Total</th><th class="n av-g av-l">%</th><th class="n av-fim av-fim2">Preço de venda un.</th></tr></thead><tbody>';
   var inp=function(a,i,cls,ph,txt,extra){return '<td class="inp av-in '+(txt?'':'n ')+(cls||'')+'"><input '+(txt?'':'inputmode="decimal" ')+'data-av="'+a+'" data-ai="'+i+'" value="'+(txt?ccEsc((f[a]||[])[i]||''):fv(a,i))+'" placeholder="'+(ph||'')+'"'+(extra||'')+'></td>';};
   c.itens.forEach(function(it,i){var x=A.linhas[i];
@@ -17531,20 +17534,21 @@ function ccDrawAv(el,h){
     var btOc='<button type="button" class="av-oc" data-oc="'+i+'" title="'+(x.oculto?'Voltar a orçar este produto':'Ocultar: não vou orçar este produto (não entra no cálculo nem vai para o Bling)')+'">'+(x.oculto?'↩':'✕')+'</button>';
     if(x.oculto){t+='<tr class="it av-ocl"><td class="prod">'+btOc+(it.cod?'<div class="pc" style="margin:0 0 1px">Cód. '+ccEsc(it.cod)+'</div>':'')+'<div class="pd">'+ccEsc(it.desc)+'</div></td>'+
       '<td class="n q" style="white-space:nowrap">'+ccIn(it.q,0)+' <span style="font-size:11px;color:#64748b">'+ccEsc(it.un)+'</span></td>'+
-      '<td colspan="13" class="av-l" style="color:#94a3b8;font-style:italic">Oculto — não vou orçar'+(it.venda?' · fica com Bling '+ccMoeda(it.venda):'')+'</td></tr>';return;}
+      '<td colspan="14" class="av-l" style="color:#94a3b8;font-style:italic">Oculto — não vou orçar'+(it.venda?' · fica com Bling '+ccMoeda(it.venda):'')+'</td></tr>';return;}
     t+='<tr class="it"><td class="prod">'+btOc+(it.cod?'<div class="pc" style="margin:0 0 1px">Cód. '+ccEsc(it.cod)+'</div>':'')+'<div class="pd" data-tip="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div></td>'+
       '<td class="n q" style="white-space:nowrap">'+ccIn(it.q,0)+' <span style="font-size:11px;color:#64748b">'+ccEsc(it.un)+'</span></td>'+
-      inp('fornItem',i,'av-l','',true,' list="ccAvForns"')+inp('marcas',i,'','',true)+inp('precos',i,'','0,00')+inp('descs',i,'','')+inp('ipis',i,'','')+
+      '<td class="inp av-in av-l"><input data-av="fornItem" data-ai="'+i+'" autocomplete="off" class="'+((f.fornIds||[])[i]?'av-vinc':((f.fornItem||[])[i]?'av-novinc':''))+'" value="'+ccEsc((f.fornItem||[])[i]||'')+'" placeholder="buscar no Bling" title="'+((f.fornIds||[])[i]?'Fornecedor do cadastro do Bling':((f.fornItem||[])[i]?'Não está ligado ao cadastro do Bling: digite e escolha na lista (sem isso não gera pedido de compra)':'Digite o nome ou CNPJ e escolha na lista do Bling'))+'"></td>'+inp('marcas',i,'','',true)+inp('precos',i,'','0,00')+inp('descs',i,'','')+inp('ipis',i,'','')+
       inp('fretes',i,'','')+
       '<td class="inp av-in n"><input inputmode="decimal" data-av="notasV" data-ai="'+i+'" value="'+fv('notasV',i,2)+'" placeholder="" title="Valor total da nota fiscal (ou da cotação do fornecedor) de onde vem o frete."></td>'+
       '<td class="n" style="color:#2563eb;font-weight:600" title="'+(x.ok&&x.fretePct?ccMoeda(x.freteNota)+' ÷ '+ccMoeda(x.nota)+' = '+(x.fretePct*100).toFixed(2).replace('.',',')+'% × '+ccMoeda(x.liq+x.ipi):'')+'">'+(x.ok&&x.freteNota&&!x.notaMan?'<span style="display:block;white-space:normal;line-height:1.15;color:#b45309;font-size:10.5px;font-weight:700;text-align:center">⚠ falta o valor da nota</span>':'')+(x.ok&&x.freteU?ccIn(x.freteU,4).replace(/0{1,2}$/,''):'')+(x.ok&&x.fretePct?'<div style="font-size:10.5px;color:#64748b;font-weight:500">'+(x.fretePct*100).toFixed(2).replace('.',',')+'%</div>':'')+'</td>'+
       inp('creds',i,'','')+
+      '<td class="inp av-in n"><input inputmode="numeric" data-av="entregas" data-ai="'+i+'" value="'+fv('entregas',i,0)+'" placeholder="'+(f.entrega!==''&&f.entrega!=null?ccIn(f.entrega,0):'')+'" title="Vazio = prazo de entrega geral (Pagamento e entrega)"></td>'+
       '<td class="n av-cu av-l">'+(x.ok?ccMoeda(x.custoU).replace('R$ ',''):'')+'</td>'+
       '<td class="n av-cu">'+(x.ok?ccMoeda(x.custoT).replace('R$ ',''):'')+'</td>'+
       '<td class="inp av-in av-g av-l n"><input inputmode="decimal" class="'+(x.mkPad?'av-pad':'')+'" data-av="markups" data-ai="'+i+'" value="'+fv('markups',i)+'" placeholder="'+(f.markupPadrao!==''&&f.markupPadrao!=null?ccIn(f.markupPadrao):'')+'"></td>'+
       '<td class="n av-vd av-fim2">'+(x.ok?ccMoeda(x.vendaU)+(it.venda?'<small class="'+(x.vendaU>it.venda+0.005?'av-alto':'')+'">Bling '+ccMoeda(it.venda)+'</small>':''):'<span style="color:#94a3b8;font-weight:500;font-size:12px">—</span>'+(it.venda?'<small>Bling '+ccMoeda(it.venda)+'</small>':''))+'</td></tr>';
   });
-  t+='</tbody><tfoot><tr><td class="prod" colspan="2">Total</td><td colspan="9" class="av-l"></td><td class="av-l"></td><td class="n" style="color:#92400e">'+ccMoeda(A.custo)+'</td><td class="av-l"></td><td class="av-fim2"></td></tr></tfoot></table>';
+  t+='</tbody><tfoot><tr><td class="prod" colspan="2">Total</td><td colspan="10" class="av-l"></td><td class="av-l"></td><td class="n" style="color:#92400e">'+ccMoeda(A.custo)+'</td><td class="av-l"></td><td class="av-fim2"></td></tr></tfoot></table>';
   h+='<div class="cc-gw">'+t+'</div>';
   // pagamento e entrega + resultado
   var campo=function(lab,k,tipo){var v=f[k];
@@ -17559,8 +17563,9 @@ function ccDrawAv(el,h){
     '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start"><table class="cc-avres">'+
     lin('Produtos (preço de compra)',A.prod)+lin('Desconto',A.desc,'− ')+lin('IPI',A.ipi,'+ ')+lin('Frete',A.frete,'+ ')+lin('Crédito de ICMS',A.cred,'− ')+lin('Custo total',A.custo,'',1)+
     lin('Markup',mkV,'+ ')+(acrV?lin('Ajuste da lista ('+(A.acr>0?'+':'')+ccIn(A.acr)+'%)',Math.abs(acrV),acrV<0?'− ':'+ '):'')+lin('Total de venda',A.venda,'',1)+'</table>'+
-    '<div style="flex-basis:100%;order:3;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px"><button type="button" class="cc-btn pri" data-av-acao="enviar" style="padding:10px 16px;font-size:14px">📤 Enviar preços para a cotação nº '+ccEsc(c.numero)+' no Bling</button>'+
-      (f.enviadoEm?'<span class="cc-mu">Último envio: '+new Date(f.enviadoEm).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+(f.enviadoPor?' por '+ccEsc(f.enviadoPor):'')+'</span>':'<span class="cc-mu">Grava o preço final unitário de cada produto na proposta do Bling (só os produtos com preço).</span>')+'</div>'+
+    '<div style="flex-basis:100%;order:3;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px"><button type="button" class="cc-btn pri" data-av-acao="enviar" style="padding:10px 16px;font-size:14px">📤 Enviar preços ao Bling e gerar pedido(s) de compra</button>'+
+      (Object.keys(f.pedidosCompra||{}).length?'<span class="cc-mu" style="color:#0f172a">🛒 Pedidos de compra gerados: '+Object.keys(f.pedidosCompra).map(function(k){var p=f.pedidosCompra[k];return '<b>nº '+ccEsc(p.numero||'?')+'</b> ('+ccEsc(p.nome||'')+')';}).join(', ')+'</span>':'')+
+      (f.enviadoEm?'<span class="cc-mu">Último envio: '+new Date(f.enviadoEm).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+(f.enviadoPor?' por '+ccEsc(f.enviadoPor):'')+'</span>':'<span class="cc-mu">Grava o preço final unitário e o prazo de entrega de cada produto na proposta do Bling e gera um pedido de compra para cada fornecedor do cadastro.</span>')+'</div>'+
     '<div style="display:flex;flex-wrap:wrap;gap:10px;flex:1">'+
       [['Custo total',ccMoeda(A.custo),'#fffbeb'],['Total de venda',ccMoeda(A.venda),'#f0fdf4'],['Lucro bruto',ccMoeda(lucro)+' <small style="font-size:13px;color:#15803d">'+pct.toFixed(1).replace('.',',')+'% da venda</small>','#f0fdf4'],
        ['Total na cotação do Bling',ccMoeda(c.totalPedido),'#fff']].map(function(b){return '<div style="flex:1;min-width:170px;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;background:'+b[2]+'"><div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:#64748b">'+b[0]+'</div><div style="font-size:18px;font-weight:800;color:#0f172a;margin-top:2px">'+b[1]+'</div></div>';}).join('')+
@@ -17588,11 +17593,15 @@ function ccLigarAv(el){
       var lista=Array.prototype.slice.call(el.querySelectorAll('input[data-nota]')),nx=lista[lista.indexOf(inp)+(e.shiftKey?-1:1)];if(!nx)return;
       e.preventDefault();CC._proxSel='input[data-nota="'+nx.dataset.nota+'"][data-nk="'+nx.dataset.nk+'"]';inp.blur();setTimeout(ccAvFoco,0);});
   });
+  el.querySelectorAll('input[data-av="fornItem"]').forEach(function(inp){ccAvForn(inp,+inp.dataset.ai,c,f);});
   el.querySelectorAll('input[data-av]').forEach(function(inp){
-    inp.addEventListener('change',function(){var a=inp.dataset.av,i=+inp.dataset.ai;f[a]=f[a]||[];
+    inp.addEventListener('change',function(){if(inp._escolhendo)return;var a=inp.dataset.av,i=+inp.dataset.ai;f[a]=f[a]||[];
       f[a][i]=(a==='fornItem'||a==='marcas')?inp.value.trim():(inp.value.trim()===''?'':ccNum(inp.value));
+      if(a==='fornItem'){f.fornIds=f.fornIds||[];var nm=f[a][i].toLowerCase(),id='';
+        (f.fornItem||[]).forEach(function(x,k){if(k!==i&&x&&x.toLowerCase()===nm&&(f.fornIds||[])[k])id=f.fornIds[k];});f.fornIds[i]=id;}
       CC.aviso='';ccDraw();ccSalvar();});
     inp.addEventListener('keydown',function(e){
+      if(inp.dataset.av==='fornItem'&&ccAvDropTecla(e,inp))return;
       if(e.key==='Tab'){
         var lista=Array.prototype.slice.call(el.querySelectorAll('.cc-av input[data-av]')),pos=lista.indexOf(inp),nx=lista[pos+(e.shiftKey?-1:1)];
         if(!nx)return; // primeiro/último campo: Tab normal sai da tabela
@@ -17601,18 +17610,82 @@ function ccLigarAv(el){
       CC._prox={a:a,i:String(i+1)};inp.blur();setTimeout(ccAvFoco,0);});
   });
 }
+// ---- Fornecedor: busca no cadastro de contatos do Bling (nome ou CNPJ) ----
+function ccAvDropFechar(){var d=document.getElementById('ccAvDrop');if(d)d.remove();}
+function ccAvForn(inp,i,c,f){
+  var t=null,seq=0;
+  inp.addEventListener('input',function(){clearTimeout(t);var v=inp.value.trim(),dig=v.replace(/\D/g,'');
+    if(v.length<3&&dig.length<11){ccAvDropFechar();return;}
+    t=setTimeout(function(){var me=++seq;
+      var cfg=(typeof BLG!=='undefined'&&BLG.cfgCarregada)?Promise.resolve():blgCarregarCfg();
+      cfg.then(function(){return blgApi('/receber/clientes?'+(dig.length>=11?'doc='+dig:'q='+encodeURIComponent(v)));}).then(function(r){
+        if(me!==seq||document.activeElement!==inp)return;ccAvDropMostrar(inp,i,c,f,(r&&r.ok&&r.itens)||[]);}).catch(function(){});},350);});
+  inp.addEventListener('blur',function(){setTimeout(ccAvDropFechar,180);});
+}
+function ccAvDropMostrar(inp,i,c,f,L){
+  ccAvDropFechar();var d=document.createElement('div');d.id='ccAvDrop';var r=inp.getBoundingClientRect();
+  d.style.left=r.left+'px';d.style.top=(r.bottom+2)+'px';d._inp=inp;d._L=L;d._on=-1;
+  d.innerHTML=L.length?L.slice(0,12).map(function(x,k){return '<div data-k="'+k+'"><b>'+ccEsc(x.nome)+'</b>'+(x.doc?'<small>'+ccEsc(x.doc)+'</small>':'')+'</div>';}).join(''):'<div class="vz">Nenhum contato encontrado no Bling</div>';
+  d.querySelectorAll('div[data-k]').forEach(function(o){o.addEventListener('mousedown',function(e){e.preventDefault();ccAvEscolher(inp,i,c,f,L[+o.dataset.k]);});});
+  document.body.appendChild(d);
+}
+function ccAvDropTecla(e,inp){
+  var d=document.getElementById('ccAvDrop');if(!d||d._inp!==inp)return false;var ops=d.querySelectorAll('div[data-k]');if(!ops.length)return false;
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();d._on=Math.max(0,Math.min(ops.length-1,d._on+(e.key==='ArrowDown'?1:-1)));
+    ops.forEach(function(o,k){o.classList.toggle('on',k===d._on);});ops[d._on].scrollIntoView({block:'nearest'});return true;}
+  if((e.key==='Enter'||e.key==='Tab')&&(d._on>=0||ops.length===1)){e.preventDefault();var c=CC.cot;ccAvEscolher(inp,+inp.dataset.ai,c,c.forn[0],d._L[d._on>=0?d._on:0]);return true;}
+  if(e.key==='Escape'){ccAvDropFechar();return true;}
+  return false;
+}
+function ccAvEscolher(inp,i,c,f,x){
+  if(!x)return;ccAvDropFechar();inp._escolhendo=1;
+  f.fornItem=f.fornItem||[];f.fornIds=f.fornIds||[];var antes=(f.fornItem[i]||'').toLowerCase();
+  f.fornItem[i]=x.nome;f.fornIds[i]=x.id;
+  // outras linhas com o mesmo nome digitado (sem vínculo) passam a usar este cadastro
+  f.fornItem.forEach(function(nm,k){if(k!==i&&nm&&!f.fornIds[k]&&(nm.toLowerCase()===antes||nm.toLowerCase()===x.nome.toLowerCase())){f.fornItem[k]=x.nome;f.fornIds[k]=x.id;}});
+  CC._prox={a:'marcas',i:String(i)};CC.aviso='';ccDraw();ccSalvar();setTimeout(ccAvFoco,0);
+}
+// ---- Pedidos de compra (um por fornecedor do Bling) com os produtos orçados ----
+function ccAvGruposCompra(c,A){
+  var f=c.forn[0],G={},semCad=[];
+  A.linhas.forEach(function(x,i){if(!x.ok)return;var fid=(f.fornIds||[])[i],it=c.itens[i];
+    if(!fid){semCad.push(it.desc);return;}
+    var g=G[fid]=G[fid]||{fid:fid,nome:(f.fornItem||[])[i]||'',itens:[],fretes:{},entrega:0,total:0};
+    var ent=ccNum((f.entregas||[])[i]!==''&&(f.entregas||[])[i]!=null?f.entregas[i]:f.entrega);
+    g.itens.push({produtoId:it.pid||'',codigo:it.cod||'',descricao:it.desc,unidade:it.un,quantidade:it.q,valor:Math.round(x.liq*10000)/10000,ipi:ccNum((f.ipis||[])[i]),
+      detalhe:ent?'Prazo de entrega: '+ent+' dia'+(ent>1?'s':''):''});
+    g.total+=(x.liq+x.ipi)*it.q;g.entrega=Math.max(g.entrega,ent);
+    if(x.freteNota)g.fretes[x.freteNota+'|'+x.nota]=x.freteNota;});
+  return {grupos:Object.keys(G).map(function(k){var g=G[k];g.frete=Object.keys(g.fretes).reduce(function(a,q){return a+g.fretes[q];},0);g.total=ccR(g.total+g.frete);return g;}),semCad:semCad};
+}
+function ccAvCriarCompras(c,grupos){
+  var f=c.forn[0],out=[],usu=(STATE.usuarioLogado||STATE.loginUser||'');f.pedidosCompra=f.pedidosCompra||{};
+  var cli=(c.cliente&&c.cliente.nome)||'';
+  return grupos.reduce(function(p,g){return p.then(function(){
+    var prev='';if(g.entrega){var d=new Date(Date.now()-3*3600e3+g.entrega*864e5);prev=d.toISOString().slice(0,10);}
+    return blgApi('/compra/criar',{method:'POST',body:{fornecedorId:g.fid,itens:g.itens,frete:g.frete,dataPrevista:prev,
+      observacoes:'Cotação avulsa nº '+c.numero+(cli?' — cliente '+cli:''),observacoesInternas:'Gerado pelo app (Vendas › Cotação avulsa › Outros) por '+usu}})
+      .then(function(r){if(r&&r.ok){f.pedidosCompra[g.fid]={numero:r.numero,id:r.id,nome:g.nome,em:Date.now(),por:usu};}out.push({g:g,r:r||{ok:false,erro:'sem resposta'}});})
+      .catch(function(e){out.push({g:g,r:{ok:false,erro:String(e&&e.message||e)}});});});},Promise.resolve()).then(function(){return out;});
+}
 // Envia o preço final unitário de cada produto (com preço) para a proposta comercial no Bling
 function ccAvEnviarBling(){
   var c=CC.cot;if(!c||CC.enviando)return;var f=c.forn[0],A=ccCalcAv(c),E=CC;
-  var L=[];A.linhas.forEach(function(x,i){if(x.ok&&x.vendaU>0)L.push({i:i,it:c.itens[i],v:x.vendaU});});
+  var L=[];A.linhas.forEach(function(x,i){if(!(x.ok&&x.vendaU>0))return;
+    var ent=ccNum((f.entregas||[])[i]!==''&&(f.entregas||[])[i]!=null?f.entregas[i]:f.entrega);
+    L.push({i:i,it:c.itens[i],v:x.vendaU,det:ent?'Prazo de entrega: '+ent+' dia'+(ent>1?'s':''):null});});
   if(!L.length){alert('Nenhum produto com preço final para enviar.');return;}
-  var txt='Enviar estes preços de venda (preço unitário) para a cotação nº '+c.numero+' no Bling?\n\n'+L.map(function(x){return '• '+x.it.desc.slice(0,48)+': '+ccMoeda(x.it.venda||0)+' → '+ccMoeda(x.v);}).join('\n')+
-    ((A.faltam+A.ocultos)?'\n\n'+(A.faltam+A.ocultos)+' produto(s) sem preço ou ocultos ficam como estão no Bling.':'')+'\n\nO total e as parcelas da proposta são recalculados.';
+  var GC=ccAvGruposCompra(c,A),jaPC=f.pedidosCompra||{},novos=GC.grupos.filter(function(g){return !jaPC[g.fid];}),repet=GC.grupos.filter(function(g){return jaPC[g.fid];});
+  var txt='Enviar estes preços de venda (preço unitário) para a cotação nº '+c.numero+' no Bling?\n\n'+L.map(function(x){return '• '+x.it.desc.slice(0,44)+': '+ccMoeda(x.it.venda||0)+' → '+ccMoeda(x.v)+(x.det?' ('+x.det.replace('Prazo de entrega: ','entrega ')+')':'');}).join('\n')+
+    ((A.faltam+A.ocultos)?'\n\n'+(A.faltam+A.ocultos)+' produto(s) sem preço ou ocultos ficam como estão no Bling.':'')+'\nO prazo de entrega vai na descrição detalhada de cada produto. O total e as parcelas da proposta são recalculados.'+
+    (novos.length?'\n\nE gerar '+novos.length+' pedido(s) de compra:\n'+novos.map(function(g){return '• '+g.nome+': '+g.itens.length+' produto(s), '+ccMoeda(g.total)+(g.frete?' (frete '+ccMoeda(g.frete)+')':'');}).join('\n'):'')+
+    (repet.length?'\n\nJá têm pedido de compra (não gera de novo): '+repet.map(function(g){return g.nome+' nº '+jaPC[g.fid].numero;}).join(', '):'')+
+    (GC.semCad.length?'\n\n⚠ Sem fornecedor do cadastro do Bling (não gera pedido): '+GC.semCad.map(function(d){return d.slice(0,30);}).join('; '):'');
   if(!confirm(txt))return;
   CC.enviando=true;CC.erro='';CC.aviso='⏳ Enviando preços ao Bling…';ccDraw();
   var cfg=(typeof BLG!=='undefined'&&BLG.cfgCarregada)?Promise.resolve():blgCarregarCfg();
   cfg.then(function(){return blgApi('/proposta/precos',{method:'POST',body:{id:c.propostaId||0,numero:c.numero,usuario:(STATE.usuarioLogado||STATE.loginUser||''),
-      itens:L.map(function(x){return {i:x.i,produtoId:x.it.pid||'',codigo:x.it.cod||'',valor:x.v};})}});})
+      itens:L.map(function(x){return {i:x.i,produtoId:x.it.pid||'',codigo:x.it.cod||'',valor:x.v,detalhe:x.det};})}});})
   .then(function(r){
     E.enviando=false;
     if(!r||!r.ok){var e=(r&&r.erro)||'Falhou';if(/Rota inexistente/.test(e))e='O Worker do Bling ainda não tem o envio de preços. Atualize o código do Worker na Cloudflare (arquivo worker-bling.js).';
@@ -17620,7 +17693,15 @@ function ccAvEnviarBling(){
     (r.itens||[]).forEach(function(x){if(c.itens[x.i])c.itens[x.i].venda=x.noBling;});
     c.totalPedido=r.totalDepois||c.totalPedido;f.enviadoEm=Date.now();f.enviadoPor=(STATE.usuarioLogado||STATE.loginUser||'');
     var msg='✅ Preços gravados na cotação nº '+c.numero+' do Bling ('+(r.itens||[]).length+' produto(s)). Total da proposta: '+ccMoeda(r.totalAntes)+' → '+ccMoeda(r.totalDepois)+'.';
-    E.aviso=msg;if(CC===E){ccDraw();ccGravar().then(function(){E.aviso=msg;if(CC===E)ccDraw();});}
+    if(!novos.length){E.aviso=msg;if(CC===E){ccDraw();ccGravar().then(function(){E.aviso=msg;if(CC===E)ccDraw();});}return;}
+    E.enviando=true;E.aviso=msg+' ⏳ Gerando pedido(s) de compra…';if(CC===E)ccDraw();
+    return ccAvCriarCompras(c,novos).then(function(res){
+      E.enviando=false;
+      var okL=res.filter(function(x){return x.r.ok;}),erL=res.filter(function(x){return !x.r.ok;});
+      msg+=(okL.length?' 🛒 Pedido(s) de compra: '+okL.map(function(x){return 'nº '+(x.r.numero||'?')+' ('+x.g.nome+')';}).join(', ')+'.':'');
+      if(erL.length){var e2=erL.map(function(x){var m=x.r.erro||'falhou';if(/Rota inexistente/.test(m))m='atualize o Worker do Bling';return x.g.nome+': '+m;}).join(' · ');E.erro='Não consegui gerar pedido de compra — '+e2;}
+      E.aviso=msg;if(CC===E){ccDraw();ccGravar().then(function(){E.aviso=msg;if(CC===E)ccDraw();});}
+    });
   }).catch(function(e){E.enviando=false;E.aviso='';E.erro='Não consegui gravar no Bling: '+(e&&e.message||e);if(CC===E)ccDraw();});
 }
 // Aplica a cotação lida pela IA nos produtos ligados: preço, marca, IPI e fornecedor do produto; crédito de ICMS pela UF do fornecedor (CNPJ)

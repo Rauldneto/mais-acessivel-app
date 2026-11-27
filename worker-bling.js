@@ -27,6 +27,7 @@
 //   GET  /proposta?numero=N      → proposta comercial (cotação de venda) pelo número (itens, cliente, vendedor)
 //   POST /proposta/precos        → grava o preço de venda dos itens na proposta (Cotação avulsa › Outros)
 //   GET  /proposta/lista?id=N    → % da lista de preço usada na proposta (preço na proposta ÷ preço do cadastro)
+//   POST /compra/criar           → cria pedido de compra no Bling (Cotação avulsa › Outros: um por fornecedor)
 //                             para a aba Compras › Cotação compra. Precisa do escopo "Pedidos de compra" no app do Bling.
 //   GET  /produtos-fornecedores?ids=1,2,3 → códigos que cada fornecedor usa para esses produtos (cadastro do Bling),
 //                             usados como pista para ligar a cotação do fornecedor aos itens do pedido. Cache de 1 dia.
@@ -474,6 +475,7 @@ export default {
         if (!numero) return resp({ ok: false, erro: 'Informe o número do pedido de compra' }, 400);
         return resp(await pedidoCompra(env, numero));
       }
+      if (url.pathname === '/compra/criar' && req.method === 'POST') return resp(await compraCriar(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/proposta/lista') return resp(await propostaLista(env, Number(url.searchParams.get('id')) || 0));
       if (url.pathname === '/proposta/precos' && req.method === 'POST') return resp(await propostaPrecos(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/proposta') {
@@ -1625,6 +1627,35 @@ async function propostaLista(env, id) {
   return { ok: true, pct: Number(kMais), iguais: nMais, total: amostra.length, amostra };
 }
 
+// Cria um pedido de compra. Corpo: { fornecedorId, itens:[{ produtoId, codigo, descricao, unidade, quantidade, valor, ipi, detalhe }],
+//   frete, dataPrevista (AAAA-MM-DD), observacoes, observacoesInternas }
+async function compraCriar(env, b) {
+  const fid = Number(b.fornecedorId);
+  if (!fid) return { ok: false, erro: 'Fornecedor sem cadastro no Bling.' };
+  const itens = (b.itens || []).filter(x => Number(x.quantidade) > 0 && Number(x.valor) > 0);
+  if (!itens.length) return { ok: false, erro: 'Nenhum produto com quantidade e preço.' };
+  const hoje = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+  const corpo = {
+    data: hoje, fornecedor: { id: fid },
+    itens: itens.map(x => ({
+      produto: x.produtoId ? { id: Number(x.produtoId) } : undefined, descricao: String(x.descricao || x.codigo || 'Produto').slice(0, 120),
+      codigoFornecedor: x.codigoFornecedor || undefined, unidade: x.unidade || undefined, quantidade: Number(x.quantidade),
+      valor: Math.round(Number(x.valor) * 10000) / 10000, aliquotaIPI: Number(x.ipi) || 0,
+      descricaoDetalhada: x.detalhe ? String(x.detalhe).slice(0, 500) : undefined,
+    })),
+    observacoes: String(b.observacoes || '').slice(0, 1000) || undefined,
+    observacoesInternas: String(b.observacoesInternas || '').slice(0, 1000) || undefined,
+  };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(b.dataPrevista || '')) corpo.dataPrevista = b.dataPrevista;
+  if (Number(b.frete) > 0) corpo.transporte = { frete: Math.round(Number(b.frete) * 100) / 100, fretePorConta: '1' };
+  const r = await blingEnviar(env, 'POST', '/pedidos/compras', JSON.parse(JSON.stringify(corpo)));
+  const id = r && r.data && r.data.id;
+  let numero = '';
+  if (id) { try { numero = String((((await bling(env, '/pedidos/compras/' + id)) || {}).data || {}).numero || ''); } catch (e) { } }
+  if (numero) { try { const m = (await env.BLING_KV.get('pc:mapa', 'json')) || {}; m[numero] = id; await env.BLING_KV.put('pc:mapa', JSON.stringify(m), { expirationTtl: 30 * 86400 }); } catch (e) { } }
+  return { ok: !!id, id, numero, erro: id ? '' : 'O Bling não devolveu o pedido criado.' };
+}
+
 // Grava preços de venda nos itens da proposta comercial. Corpo: { id, numero, itens:[{ i, produtoId, codigo, valor }], usuario }
 // Busca a proposta inteira, troca só o valor unitário dos itens pedidos (conferindo índice + produto), recalcula as parcelas
 // na mesma proporção, envia de volta (PUT) e confere lendo de novo.
@@ -1640,12 +1671,12 @@ async function propostaPrecos(env, b) {
     const pid = it.produto && it.produto.id;
     if ((x.produtoId && pid && String(pid) !== String(x.produtoId)) || (!x.produtoId && x.codigo && String(it.codigo || '') !== String(x.codigo)))
       return { ok: false, erro: 'Os itens da proposta mudaram no Bling desde que a cotação foi puxada. Clique em Atualizar do Bling e envie de novo.' };
-    mud.push({ i: Number(x.i), antes: Number(it.valor || 0), depois: v });
+    mud.push({ i: Number(x.i), antes: Number(it.valor || 0), depois: v, detalhe: x.detalhe != null ? String(x.detalhe).slice(0, 500) : null });
   }
   if (!mud.length) return { ok: false, erro: 'Nenhum preço para enviar.' };
   const liq = (it, val) => Number(it.quantidade || 0) * val * (1 - Number(it.desconto || 0) / 100);
   const totItensAntes = itens.reduce((a, it) => a + liq(it, Number(it.valor || 0)), 0);
-  const novoValor = {}; mud.forEach(m => { novoValor[m.i] = m.depois; });
+  const novoValor = {}, novoDet = {}; mud.forEach(m => { novoValor[m.i] = m.depois; if (m.detalhe != null) novoDet[m.i] = m.detalhe; });
   const totItensDepois = itens.reduce((a, it, k) => a + liq(it, k in novoValor ? novoValor[k] : Number(it.valor || 0)), 0);
   const totalAntes = Number(pr.total || 0), totalDepois = Math.round((totalAntes + (totItensDepois - totItensAntes)) * 100) / 100;
   const semZero = d => (d && !/^0000/.test(d)) ? d : undefined;
@@ -1657,7 +1688,7 @@ async function propostaPrecos(env, b) {
     introducao: pr.introducao, observacoes: pr.observacoes, observacaoInterna: pr.observacaoInterna, aosCuidadosDe: pr.aosCuidadosDe,
     itens: itens.map((it, k) => ({
       produto: it.produto && it.produto.id ? { id: it.produto.id } : undefined, codigo: it.codigo,
-      descricao: (it.produto && it.produto.descricao) || it.descricao, descricaoDetalhada: it.descricaoDetalhada,
+      descricao: (it.produto && it.produto.descricao) || it.descricao, descricaoDetalhada: k in novoDet ? novoDet[k] : it.descricaoDetalhada,
       unidade: it.unidade, quantidade: it.quantidade, desconto: it.desconto, valor: k in novoValor ? novoValor[k] : it.valor,
       aliquotaIPI: it.aliquotaIPI,
     })),
