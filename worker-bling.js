@@ -1568,6 +1568,19 @@ async function propostaComercial(env, numero) {
   }
   const tr = pr.transporte || {};
   // (peso dos produtos não é mais buscado: o frete da Cotação avulsa é pela nota; economiza chamadas ao Bling)
+  // Forma(s) de pagamento das parcelas, com a taxa cadastrada no Bling (Cadastros › Formas de pagamento): vira acréscimo no preço
+  const formas = [];
+  for (const fid of [...new Set((pr.parcelas || []).map(x => x.formaPagamento && x.formaPagamento.id).filter(Boolean))].slice(0, 3)) {
+    let fp = await env.BLING_KV.get('fpag:' + fid, 'json');
+    if (!fp) {
+      try {
+        const d = ((await bling(env, '/formas-pagamentos/' + fid)) || {}).data || {}, tx = d.taxas || {};
+        fp = { id: fid, nome: d.descricao || '', tipo: Number(d.tipoPagamento || 0), taxaPct: Number(tx.aliquota || 0), taxaValor: Number(tx.valor || 0) };
+        await env.BLING_KV.put('fpag:' + fid, JSON.stringify(fp), { expirationTtl: 86400 });
+      } catch (e) { fp = { id: fid, nome: '', tipo: 0, taxaPct: 0, taxaValor: 0 }; }
+    }
+    formas.push(fp);
+  }
   return {
     ok: true,
     proposta: {
@@ -1580,6 +1593,8 @@ async function propostaComercial(env, numero) {
       totalProdutos: Number(pr.totalProdutos || 0), total: Number(pr.total || 0),
       frete: Number(tr.frete || 0), transportador: (tr.contato && tr.contato.nome) || '',
       prazoEntrega: pr.prazoEntrega || '', observacaoInterna: pr.observacaoInterna || '',
+      formasPagamento: formas, parcelas: (pr.parcelas || []).length,
+      parcelasObs: (pr.parcelas || []).map(x => x.observacoes || '').filter(Boolean).slice(0, 3).join(' · '),
     },
   };
 }
