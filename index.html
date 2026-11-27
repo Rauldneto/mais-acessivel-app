@@ -17514,7 +17514,7 @@ function ccDrawAv(el,h){
       '<td class="n av-cu av-l">'+(x.ok?ccMoeda(x.custoU).replace('R$ ',''):'')+'</td>'+
       '<td class="n av-cu">'+(x.ok?ccMoeda(x.custoT).replace('R$ ',''):'')+'</td>'+
       '<td class="inp av-in av-g av-l n"><input inputmode="decimal" class="'+(x.mkPad?'av-pad':'')+'" data-av="markups" data-ai="'+i+'" value="'+fv('markups',i)+'" placeholder="'+(f.markupPadrao!==''&&f.markupPadrao!=null?ccIn(f.markupPadrao):'')+'"></td>'+
-      '<td class="n av-vd av-fim2">'+(x.ok?ccMoeda(x.vendaU)+(it.venda?'<small class="'+(x.vendaU>it.venda+0.005?'av-alto':'')+'">hoje no Bling '+ccMoeda(it.venda)+'</small>':''):'<small>falta preço</small>')+'</td>'+
+      '<td class="n av-vd av-fim2">'+(x.ok?ccMoeda(x.vendaU)+(it.venda?'<small class="'+(x.vendaU>it.venda+0.005?'av-alto':'')+'">hoje no Bling '+ccMoeda(it.venda)+'</small>':''):'<span style="color:#94a3b8;font-weight:500;font-size:12px">—</span>'+(it.venda?'<small>hoje no Bling '+ccMoeda(it.venda)+'</small>':''))+'</td>'+
       '<td class="n av-vd av-fim3">'+(x.ok?ccMoeda(x.vendaT):'')+'</td></tr>';
   });
   t+='</tbody><tfoot><tr><td class="prod" colspan="2">Total</td><td colspan="9" class="av-l"></td><td class="av-l"></td><td class="n" style="color:#92400e">'+ccMoeda(A.custo)+'</td><td class="av-l"></td><td class="av-fim2"></td><td class="n av-fim3" style="color:#15803d">'+ccMoeda(A.venda)+'</td></tr></tfoot></table>';
