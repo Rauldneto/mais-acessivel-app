@@ -1521,27 +1521,35 @@ async function pedidoCompra(env, numero) {
 // A API não filtra proposta pelo número. A lista vem da mais nova para a mais antiga: varre páginas até achar o número
 // (para quando passa de números menores) e guarda o mapa número → id no KV.
 async function acharProposta(env, numero) {
+  // Limite da Cloudflare (plano grátis): 50 chamadas externas por pedido. Lê no máximo 25 páginas por vez e
+  // guarda até onde já leu ('_ate' = última página, '_min' = menor número visto): o próximo clique continua dali.
   const mapa = (await env.BLING_KV.get('prop:mapa', 'json')) || {};
   if (mapa[numero]) return mapa[numero];
-  const alvo = Number(numero);
-  let achou = null;
-  for (let p = 1; p <= 60 && !achou; p++) {
+  const alvo = Number(numero), meta = mapa._meta || {};
+  // número menor que o menor já visto → continua de onde parou; senão começa do início (propostas novas)
+  let ini = meta.min && alvo < meta.min && meta.ate ? Math.max(1, meta.ate - 1) : 1;
+  let achou = null, ultima = ini - 1, menorVisto = meta.min || Infinity, fim = false;
+  for (let p = ini; p < ini + 25 && !achou; p++) {
     const j = await bling(env, '/propostas-comerciais?limite=100&pagina=' + p);
     const d = (j && j.data) || [];
-    let menor = Infinity;
-    for (const o of d) if (o && o.numero != null) { mapa[String(o.numero)] = o.id; menor = Math.min(menor, Number(o.numero)); }
+    ultima = p;
+    for (const o of d) if (o && o.numero != null) { mapa[String(o.numero)] = o.id; menorVisto = Math.min(menorVisto, Number(o.numero)); }
     if (mapa[numero]) achou = mapa[numero];
-    if (d.length < 100 || menor < alvo - 200) break;
+    const menorPag = Math.min(...d.map(o => Number(o.numero)).filter(n => n > 0), Infinity);
+    if (d.length < 100) { fim = true; break; }
+    if (menorPag < alvo - 200) break;
   }
-  // mantém o mapa enxuto (só os 3000 números mais altos)
-  const ks = Object.keys(mapa).sort((a, b) => Number(b) - Number(a)).slice(0, 3000), m2 = {};
+  const ks = Object.keys(mapa).filter(k => k !== '_meta').sort((a, b) => Number(b) - Number(a)).slice(0, 6000), m2 = {};
   for (const k of ks) m2[k] = mapa[k];
+  m2._meta = { ate: Math.max(ultima, meta.ate || 0), min: menorVisto === Infinity ? (meta.min || 0) : menorVisto, fim: fim || !!meta.fim };
   await env.BLING_KV.put('prop:mapa', JSON.stringify(m2), { expirationTtl: 30 * 86400 });
+  if (!achou && !fim && !(m2._meta.min && m2._meta.min < alvo - 200)) return { procurando: true };
   return achou;
 }
 
 async function propostaComercial(env, numero) {
   const id = await acharProposta(env, numero);
+  if (id && id.procurando) return { ok: false, erro: 'A cotação nº ' + numero + ' é antiga e ainda estou procurando no Bling (ele não busca pelo número). Clique em Puxar cotação de novo para continuar a busca.' };
   if (!id) return { ok: false, erro: 'Cotação (proposta comercial) nº ' + numero + ' não encontrada no Bling.' };
   const pr = ((await bling(env, '/propostas-comerciais/' + id)) || {}).data || {};
   let cliente = { id: pr.contato && pr.contato.id, nome: '', doc: '', uf: '', cidade: '' };
@@ -1558,17 +1566,7 @@ async function propostaComercial(env, numero) {
     try { const v = ((await bling(env, '/vendedores/' + pr.vendedor.id)) || {}).data || {}; vendedor = (v.contato && v.contato.nome) || ''; } catch (e) { }
   }
   const tr = pr.transporte || {};
-  // peso bruto de cada produto (kg por unidade) para ratear o frete na Cotação avulsa; guarda 7 dias no KV
-  const pesos = {};
-  for (const id of [...new Set((pr.itens || []).map(i => i.produto && i.produto.id).filter(Boolean))].slice(0, 40)) {
-    let pz = await env.BLING_KV.get('ppeso:' + id);
-    if (pz == null) {
-      try { const d = ((await bling(env, '/produtos/' + id)) || {}).data || {}; pz = String(Number(d.pesoBruto || d.pesoLiquido || 0)); }
-      catch (e) { pz = ''; }
-      if (pz !== '') await env.BLING_KV.put('ppeso:' + id, pz, { expirationTtl: 7 * 86400 });
-    }
-    pesos[id] = Number(pz || 0);
-  }
+  // (peso dos produtos não é mais buscado: o frete da Cotação avulsa é pela nota; economiza chamadas ao Bling)
   return {
     ok: true,
     proposta: {
@@ -1577,7 +1575,6 @@ async function propostaComercial(env, numero) {
       itens: (pr.itens || []).map(i => ({
         produtoId: i.produto && i.produto.id, codigo: i.codigo || '', descricao: (i.produto && i.produto.descricao) || i.descricao || '',
         unidade: i.unidade || '', quantidade: Number(i.quantidade || 0), valor: Number(i.valor || 0), desconto: Number(i.desconto || 0),
-        peso: pesos[i.produto && i.produto.id] || 0,
       })),
       totalProdutos: Number(pr.totalProdutos || 0), total: Number(pr.total || 0),
       frete: Number(tr.frete || 0), transportador: (tr.contato && tr.contato.nome) || '',
@@ -1591,7 +1588,7 @@ async function propostaComercial(env, numero) {
 // na mesma proporção, envia de volta (PUT) e confere lendo de novo.
 async function propostaPrecos(env, b) {
   const id = Number(b.id) || await acharProposta(env, String(b.numero || '').replace(/\D/g, ''));
-  if (!id) return { ok: false, erro: 'Proposta não encontrada no Bling.' };
+  if (!id || id.procurando) return { ok: false, erro: 'Proposta não encontrada no Bling. Clique em Atualizar do Bling e tente de novo.' };
   const pr = ((await bling(env, '/propostas-comerciais/' + id)) || {}).data || {};
   if (b.numero && String(pr.numero) !== String(b.numero).replace(/\D/g, '')) return { ok: false, erro: 'O número da proposta não confere.' };
   const itens = pr.itens || [], mud = [];
