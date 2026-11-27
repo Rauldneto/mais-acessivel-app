@@ -17553,7 +17553,7 @@ function ccDrawAv(el,h){
       '<td class="inp av-in n"><input inputmode="decimal" data-av="notasV" data-ai="'+i+'" value="'+fv('notasV',i,2)+'" placeholder="" title="Valor total da nota fiscal (ou da cotação do fornecedor) de onde vem o frete."></td>'+
       '<td class="n" style="color:#2563eb;font-weight:600" title="'+(x.ok&&x.fretePct?ccMoeda(x.freteNota)+' ÷ '+ccMoeda(x.nota)+' = '+(x.fretePct*100).toFixed(2).replace('.',',')+'% × '+ccMoeda(x.liq+x.ipi):'')+'">'+(x.ok&&x.freteNota&&!x.notaMan?'<span style="display:block;white-space:normal;line-height:1.15;color:#b45309;font-size:10.5px;font-weight:700;text-align:center">⚠ falta o valor da nota</span>':'')+(x.ok&&x.freteU?ccIn(x.freteU,4).replace(/0{1,2}$/,''):'')+(x.ok&&x.fretePct?'<div style="font-size:10.5px;color:#64748b;font-weight:500">'+(x.fretePct*100).toFixed(2).replace('.',',')+'%</div>':'')+'</td>'+
       inp('creds',i,'','')+
-      '<td class="inp av-in n"><input inputmode="numeric" data-av="entregas" data-ai="'+i+'" value="'+fv('entregas',i,0)+'" placeholder="'+(f.entrega!==''&&f.entrega!=null?ccIn(f.entrega,0):'')+'" title="Vazio = prazo de entrega geral (Pagamento e entrega)"></td>'+
+      '<td class="inp av-in n"><input inputmode="numeric" data-av="entregas" data-ai="'+i+'" value="'+fv('entregas',i,0)+'" placeholder="'+(f.entrega!==''&&f.entrega!=null?ccIn(f.entrega,0):'')+'" title="Prazo de entrega deste produto, em dias"></td>'+
       '<td class="n av-cu av-l">'+(x.ok?ccMoeda(x.custoU).replace('R$ ',''):'')+'</td>'+
       '<td class="n av-cu">'+(x.ok?ccMoeda(x.custoT).replace('R$ ',''):'')+'</td>'+
       '<td class="inp av-in av-g av-l n"><input inputmode="decimal" class="'+(x.mkPad?'av-pad':'')+'" data-av="markups" data-ai="'+i+'" value="'+fv('markups',i)+'" placeholder="'+(f.markupPadrao!==''&&f.markupPadrao!=null?ccIn(f.markupPadrao):'')+'"></td>'+
@@ -17565,8 +17565,8 @@ function ccDrawAv(el,h){
   var campo=function(lab,k,tipo){var v=f[k];
     if(tipo==='forma')return '<label>'+lab+'<select class="cc-inp" data-j="0" data-k="'+k+'" style="width:170px"><option value="">—</option>'+CC_FORMAS.concat(v&&CC_FORMAS.indexOf(v)<0?[v]:[]).map(function(o){return '<option'+(o===v?' selected':'')+'>'+ccEsc(o)+'</option>';}).join('')+'</select></label>';
     return '<label>'+lab+'<input class="cc-inp" '+(tipo==='int'?'inputmode="numeric" ':'')+'data-j="0" data-k="'+k+'" value="'+ccEsc(v==null?'':(tipo==='int'&&v!==''?ccIn(v,0):v))+'" placeholder="—"'+(k==='obs'?' style="width:320px"':'')+'></label>';};
-  h+='<div class="cc-card" style="margin-top:12px"><div style="font-weight:800;font-size:15px;margin-bottom:8px">🚚 Pagamento e entrega</div><div class="cc-avbar">'+
-    campo('Validade da cotação','validade')+campo('Forma de pagamento','formaPag','forma')+campo('Prazo de pagamento','prazoPag')+campo('Prazo de entrega (dias)','entrega','int')+campo('Observação','obs')+'</div></div>';
+  // (Pagamento e entrega saiu da Cotação avulsa: o prazo de entrega é por produto, na coluna Entrega)
+  h+='<div style="height:12px"></div>';
   var lin=function(l,v,s,b){return '<tr'+(b?' style="font-weight:800;border-top:2px solid #94a3b8"':'')+'><td style="padding:6px 10px">'+l+'</td><td style="padding:6px 10px;text-align:right">'+(s||'')+ccMoeda(v)+'</td></tr>';};
   var mkV=ccR(A.semAcr-A.custo),acrV=ccR(A.venda-A.semAcr),lucro=ccR(A.venda-A.custo),pct=A.venda>0?lucro/A.venda*100:0;
   h+='<div class="cc-card"><div style="font-weight:800;font-size:15px;margin-bottom:8px">📊 Resultado</div>'+
