@@ -11774,18 +11774,37 @@ function esDescPara(uc){
   return (ant&&isFinite(ant.desc))?ant.desc:((ES.cfg&&isFinite(+ES.cfg.descPadrao)&&ES.cfg.descPadrao!=='')?+ES.cfg.descPadrao:17);
 }
 async function esLerPdf(file){
-  ES.lendo=true;ES.erro='';ES.dup=null;ES.salvo=false;ES.chave='';ES.arquivo=file.name;ES.lote=null;esDraw();
+  ES.lendo=true;ES.erro='';ES.dup=null;ES.dupLido=null;ES.substituida='';ES.salvo=false;ES.chave='';ES.arquivo=file.name;ES.lote=null;esDraw();
   try{
     var x=await esExtrair(file),d=x.d;
     var dup=esJaCarregada(d);
-    if(dup){ES.dup=dup;ES.dados=null;ES.pdfB64=null;ES.lendo=false;esDraw();return;}
-    ES.pdfB64=x.b64;
-    ES.dados=d;ES.vencCli=d.venc||'';ES.desc=esDescPara(d.uc);ES.pagarManual=null;
-    ES.cobrarGeradora=false;ES.pdfSalvo='';
-    await esSalvarScee(d);
-    if(d.scee&&d.scee.ehGeradora){try{await esUnificarUsina();}catch(e){}}
+    // já existe: guarda o PDF lido para o usuário poder substituir a antiga com um clique
+    if(dup){ES.dup=dup;ES.dupLido=x;ES.dados=null;ES.pdfB64=null;ES.lendo=false;esDraw();return;}
+    await esUsarLido(x);
   }catch(e){ES.erro=e.message||String(e);ES.dados=null;ES.pdfB64=null;}
   ES.lendo=false;esDraw();
+}
+// Substitui a fatura já salva do mesmo mês pela que acabou de ser lida.
+// Os dados de geração/rateio e o PDF são regravados agora; a cobrança é atualizada
+// ao clicar em "Salvar no histórico" (pagamentos já confirmados são mantidos).
+async function esSubstituirDup(){
+  var x=ES.dupLido,dup=ES.dup;if(!x||!dup)return;
+  if(!confirm('Substituir a fatura '+dup.ref+' (UC '+dup.uc+') já salva pela que você acabou de carregar?\n\nOs valores da fatura serão lidos de novo deste PDF. Pagamentos já confirmados são mantidos.'))return;
+  ES.lendo=true;ES.erro='';ES.dup=null;ES.dupLido=null;esDraw();
+  try{
+    await esUsarLido(x);ES.substituida=dup.ref;
+    var velho=ES.hist&&ES.hist[dup.k];if(velho&&isFinite(velho.desc))ES.desc=velho.desc; // mantém o desconto já usado nesse mês
+  }
+  catch(e){ES.erro=e.message||String(e);ES.dados=null;ES.pdfB64=null;}
+  ES.lendo=false;esDraw();
+}
+async function esUsarLido(x){
+  var d=x.d;
+  ES.pdfB64=x.b64;
+  ES.dados=d;ES.vencCli=d.venc||'';ES.desc=esDescPara(d.uc);ES.pagarManual=null;
+  ES.cobrarGeradora=false;ES.pdfSalvo='';
+  await esSalvarScee(d);
+  if(d.scee&&d.scee.ehGeradora){try{await esUnificarUsina();}catch(e){}}
 }
 
 // ---- lote: várias faturas de uma vez ----
@@ -12135,9 +12154,10 @@ function esHtmlNova(){
      '<span style="font-weight:800;color:#92400e">'+(ES.lendo?'Lendo a fatura...':'Clique ou arraste os PDFs das faturas aqui')+'</span><span style="font-size:12px;color:#a16207">Pode ser uma só ou várias de uma vez (ex.: todas de 2026)</span>'+
      (ES.arquivo&&!ES.lendo?'<span style="font-size:12px;color:#a16207">'+esEsc(ES.arquivo)+'</span>':'')+
      '<input id="esFile" type="file" accept="application/pdf,.pdf" multiple style="display:none"></label>'+
-     (ES.dup?'<div style="margin-top:12px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:12px 14px;font-size:13px">🔁 <b>Esta fatura já foi carregada</b>: '+esEsc(ES.dup.nome)+' – UC '+esEsc(ES.dup.uc)+' – <b>'+esEsc(ES.dup.ref)+'</b>'+(ES.dup.quando?', em '+esEsc(ES.dup.quando):'')+(ES.dup.por?' por '+esEsc(ES.dup.por):'')+'. Nada foi alterado.'+
-       '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">'+(ES.dup.temCob?'<button data-es-abrir="'+esEsc(ES.dup.k)+'" style="'+esBtn('#d97706','#fff')+';padding:6px 12px">Abrir a que já está salva</button>':'<button data-es-aba="ger" style="'+esBtn('#d97706','#fff')+';padding:6px 12px">Ver em Geração e rateio</button>')+'</div>'+
-       '<div style="margin-top:6px;font-size:12px;color:#a16207">Para substituir, exclua a fatura antiga (🗑) e carregue de novo.</div></div>':'')+
+     (ES.dup?'<div style="margin-top:12px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:12px 14px;font-size:13px">🔁 <b>Esta fatura já foi carregada</b>: '+esEsc(ES.dup.nome)+' – UC '+esEsc(ES.dup.uc)+' – <b>'+esEsc(ES.dup.ref)+'</b>'+(ES.dup.quando?', em '+esEsc(ES.dup.quando):'')+(ES.dup.por?' por '+esEsc(ES.dup.por):'')+'. Nada foi alterado ainda.'+
+       '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">'+(ES.dupLido?'<button id="esSubstituir" style="'+esBtn('#b91c1c','#fff')+';padding:6px 12px">♻️ Substituir pela nova</button>':'')+(ES.dup.temCob?'<button data-es-abrir="'+esEsc(ES.dup.k)+'" style="'+esBtn('#d97706','#fff')+';padding:6px 12px">Abrir a que já está salva</button>':'<button data-es-aba="ger" style="'+esBtn('#d97706','#fff')+';padding:6px 12px">Ver em Geração e rateio</button>')+'</div>'+
+       '<div style="margin-top:6px;font-size:12px;color:#a16207">Clique em <b>Substituir pela nova</b> para salvar este PDF por cima da fatura antiga (os pagamentos já confirmados ficam).</div></div>':'')+
+     (ES.substituida&&ES.dados&&!ES.salvo?'<div style="margin-top:12px;background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;border-radius:10px;padding:10px 14px;font-size:13px">♻️ Fatura '+esEsc(ES.substituida)+' relida do novo PDF. Confira os valores e clique em <b>💾 Salvar no histórico</b> para atualizar a cobrança.</div>':'')+
      (ES.erro?'<div style="margin-top:12px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:10px;padding:10px 12px;font-size:13px">❌ '+esEsc(ES.erro)+'</div>':'')+
      '</div>';
   var d=ES.dados;if(!d)return h+(ES.lote?esHtmlLote():'');
@@ -12361,9 +12381,10 @@ function esLigar(root){
   if(b=document.getElementById('esPagarAuto'))b.onclick=function(){if(ES.dados&&ES.chave&&ES.hist&&ES.hist[ES.chave]&&ES.hist[ES.chave].descAuto!=null)ES.desc=ES.hist[ES.chave].descAuto;ES.pagarManual=null;ES.salvo=false;esDraw();};
   var b;
   if(b=document.getElementById('esSalvar'))b.onclick=esSalvar;
+  if(b=document.getElementById('esSubstituir'))b.onclick=esSubstituirDup;
   if(b=document.getElementById('esFatura'))b.onclick=function(){
     var r=esMontarReg(ES.dados),rec=ES.chave&&ES.hist&&ES.hist[ES.chave];if(rec)r.pagoCliente=rec.pagoCliente;esFaturaCliente(r);};
-  if(b=document.getElementById('esLimpar'))b.onclick=function(){ES.dados=null;ES.erro='';ES.dup=null;ES.arquivo='';ES.salvo=false;ES.chave='';ES.pdfB64=null;esDraw();};
+  if(b=document.getElementById('esLimpar'))b.onclick=function(){ES.dados=null;ES.erro='';ES.dup=null;ES.dupLido=null;ES.substituida='';ES.arquivo='';ES.salvo=false;ES.chave='';ES.pdfB64=null;esDraw();};
   if(b=document.getElementById('esCopiar'))b.onclick=function(){
     var t=esResumoTexto(esMontarReg(ES.dados)),self=this;
     (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){self.textContent='✅ Copiado!';setTimeout(function(){self.textContent='📋 Copiar resumo (WhatsApp)';},1500);}).catch(function(){prompt('Copie o resumo:',t);});
