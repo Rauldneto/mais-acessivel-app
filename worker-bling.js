@@ -26,6 +26,7 @@
 //   GET  /pedido-compra?numero=N → pedido de compra pelo número (itens, fornecedor, frete, impostos, parcelas)
 //   GET  /proposta?numero=N      → proposta comercial (cotação de venda) pelo número (itens, cliente, vendedor)
 //   POST /proposta/precos        → grava o preço de venda dos itens na proposta (Cotação avulsa › Outros)
+//   GET  /proposta/lista?id=N    → % da lista de preço usada na proposta (preço na proposta ÷ preço do cadastro)
 //                             para a aba Compras › Cotação compra. Precisa do escopo "Pedidos de compra" no app do Bling.
 //   GET  /produtos-fornecedores?ids=1,2,3 → códigos que cada fornecedor usa para esses produtos (cadastro do Bling),
 //                             usados como pista para ligar a cotação do fornecedor aos itens do pedido. Cache de 1 dia.
@@ -473,6 +474,7 @@ export default {
         if (!numero) return resp({ ok: false, erro: 'Informe o número do pedido de compra' }, 400);
         return resp(await pedidoCompra(env, numero));
       }
+      if (url.pathname === '/proposta/lista') return resp(await propostaLista(env, Number(url.searchParams.get('id')) || 0));
       if (url.pathname === '/proposta/precos' && req.method === 'POST') return resp(await propostaPrecos(env, (await req.json().catch(() => ({}))) || {}));
       if (url.pathname === '/proposta') {
         const numero = String(url.searchParams.get('numero') || '').replace(/\D/g, '');
@@ -1597,6 +1599,30 @@ async function propostaComercial(env, numero) {
       parcelasObs: (pr.parcelas || []).map(x => x.observacoes || '').filter(Boolean).slice(0, 3).join(' · '),
     },
   };
+}
+
+// Descobre o % da lista de preço aplicada na proposta: para cada produto, preço na proposta ÷ preço de venda do cadastro.
+// O % que mais se repete é o da lista (ex.: PIX −3% → 0,97). Rota separada para caber no limite de 50 chamadas.
+async function propostaLista(env, id) {
+  if (!id) return { ok: false, erro: 'Faltou o id da proposta' };
+  const pr = ((await bling(env, '/propostas-comerciais/' + id)) || {}).data || {};
+  const amostra = [];
+  for (const it of (pr.itens || []).slice(0, 20)) {
+    const pid = it.produto && it.produto.id, v = Number(it.valor || 0);
+    if (!pid || !(v > 0)) continue;
+    let base = await env.BLING_KV.get('pprec:' + pid);
+    if (base == null) {
+      try { const d = ((await bling(env, '/produtos/' + pid)) || {}).data || {}; base = String(Number(d.preco || 0)); await env.BLING_KV.put('pprec:' + pid, base, { expirationTtl: 86400 }); }
+      catch (e) { continue; }
+    }
+    base = Number(base);
+    if (base > 0) amostra.push({ codigo: it.codigo || '', base, valor: v, pct: Math.round((v / base - 1) * 10000) / 100 });
+  }
+  if (!amostra.length) return { ok: true, pct: null, iguais: 0, total: 0, amostra };
+  const cont = {};
+  amostra.forEach(a => { const k = a.pct.toFixed(2); cont[k] = (cont[k] || 0) + 1; });
+  const [kMais, nMais] = Object.entries(cont).sort((a, b) => b[1] - a[1] || Math.abs(a[0]) - Math.abs(b[0]))[0];
+  return { ok: true, pct: Number(kMais), iguais: nMais, total: amostra.length, amostra };
 }
 
 // Grava preços de venda nos itens da proposta comercial. Corpo: { id, numero, itens:[{ i, produtoId, codigo, valor }], usuario }

@@ -17075,6 +17075,9 @@ function ccBuscar(numero,doBling){
       if(CC===E)ccDraw();return;
     }
     var novo=prop?ccDaProposta(dado):ccDoPedido(dado);
+    if(prop&&dado.id){ // % da lista de preço usada na cotação (preço na cotação ÷ preço do cadastro)
+      blgApi('/proposta/lista?id='+dado.id).then(function(l){if(!l||!l.ok||!E.cot||E.cot.numero!==String(dado.numero))return;
+        E.cot.lista={pct:l.pct,iguais:l.iguais||0,total:l.total||0};if(CC===E)ccDraw();}).catch(function(){});}
     if(s){
       var m=ccMesclar(s,novo);E.cot=novo;E.salvoEm=s.atualizadoEm||0;
       if(m.mudou){
@@ -17417,8 +17420,8 @@ function ccDraw(){
 function ccAvChave(nome){return ccChave(String(nome||'').trim()||'(sem fornecedor)');}
 function ccCalcAv(c){
   var f=c.forn[0]||{},n=c.itens.length,g=function(a,i){return (f[a]||[])[i];};
-  // acréscimo da forma de pagamento (ex.: cartão): taxa cadastrada na forma de pagamento do Bling, ou o % digitado
-  var pg=c.pagamento||{},acrAuto=(pg.formas||[]).reduce(function(m,x){return Math.max(m,Number(x.taxaPct)||0);},0);
+  // ajuste da lista de preço da cotação (ex.: PIX −3%, cartão +x%): detectado no Bling (preço na cotação ÷ preço do cadastro) ou digitado
+  var acrAuto=c.lista&&c.lista.pct!=null?Number(c.lista.pct):0;
   var acrMan=f.acrescimoPag!==''&&f.acrescimoPag!=null,acr=acrMan?ccNum(f.acrescimoPag):acrAuto;
   var L=c.itens.map(function(it,i){var p=ccNum(g('precos',i)),d=ccNum(g('descs',i)),liq=p*(1-d/100),oc=!!g('ocultos',i);
     return {p:p,ok:p>0&&!oc,oculto:oc,liq:liq,ipi:liq*ccNum(g('ipis',i))/100,cred:liq*ccNum(g('creds',i))/100,freteU:0,
@@ -17491,14 +17494,15 @@ function ccDrawAv(el,h){
     '<button type="button" class="cc-btn sm pri cc-save'+(CC.sujo?' pend':'')+'" data-a="salvar">💾 Salvar cotação</button>'+
   '</div></div>'+
   '<input type="file" id="ccFile" multiple accept=".pdf,.xlsx,.xls,.csv,.ods,image/*" style="display:none">'+ccDrawImp();
-  // markup padrão + forma de pagamento
-  var pgc=c.pagamento||{},fnomes=(pgc.formas||[]).map(function(x){return x.nome+(x.taxaPct?' ('+ccIn(x.taxaPct)+'%)':'');}).filter(Boolean).join(' + ');
+  // markup padrão + lista de preço da cotação
+  var pgc=c.pagamento||{},fnomes=(pgc.formas||[]).map(function(x){return x.nome;}).filter(Boolean).join(' + '),ls=c.lista;
+  var lsTxt=!ls?'⏳ verificando no Bling…':(ls.pct==null?'não identificada':(ls.pct>0?'+':'')+ccIn(ls.pct)+'%');
   h+='<div class="cc-card"><div class="cc-avbar" style="margin:0 0 10px;padding-bottom:10px;border-bottom:1px solid #e2e8f0">'+
-    '<div style="display:flex;flex-direction:column;gap:3px;min-width:260px"><span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#475569">💳 Forma de pagamento na cotação (Bling)</span>'+
-      '<span style="font-size:14px;font-weight:700;color:#0f172a">'+(fnomes?ccEsc(fnomes):'— não informada —')+(pgc.parcelas>1?' <small style="color:#64748b;font-weight:500">· '+pgc.parcelas+' parcelas</small>':'')+'</span>'+
-      (pgc.obs?'<span class="cc-mu" style="font-size:12px">'+ccEsc(pgc.obs)+'</span>':'')+'</div>'+
-    '<label>Acréscimo da forma de pagamento (%)<input class="cc-inp" inputmode="decimal" data-j="0" data-k="acrescimoPag" placeholder="'+ccIn(A.acrAuto)+'" value="'+(A.acrMan?ccEsc(ccIn(f.acrescimoPag)):'')+'" style="'+(A.acrMan?'':'color:#2563eb')+'"></label>'+
-    '<span class="cc-mu">'+(A.acrMan?'Digitado por você (apague para usar a taxa do Bling: '+ccIn(A.acrAuto)+'%).':(A.acrAuto?'Taxa cadastrada na forma de pagamento do Bling.':'Sem taxa cadastrada no Bling para esta forma de pagamento. Digite o % se houver (ex.: cartão de crédito).'))+
+    '<div style="display:flex;flex-direction:column;gap:3px;min-width:280px"><span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#475569">📋 Lista de preço da cotação (Bling)</span>'+
+      '<span style="font-size:15px;font-weight:800;color:#0f172a">'+lsTxt+(ls&&ls.total?' <small style="color:#64748b;font-weight:500">· '+ls.iguais+' de '+ls.total+' produtos com esse %</small>':'')+'</span>'+
+      '<span class="cc-mu" style="font-size:12px">'+(fnomes?'Forma de pagamento: '+ccEsc(fnomes)+(pgc.parcelas>1?' · '+pgc.parcelas+' parcelas':''):'')+'</span></div>'+
+    '<label>Ajuste da lista de preço (%)<input class="cc-inp" inputmode="decimal" data-neg="1" data-j="0" data-k="acrescimoPag" placeholder="'+(A.acrAuto?ccIn(A.acrAuto):'0')+'" value="'+(A.acrMan?ccEsc(ccIn(f.acrescimoPag)):'')+'"></label>'+
+    '<span class="cc-mu">'+(A.acrMan?'Digitado por você (apague para usar o da lista: '+ccIn(A.acrAuto)+'%).':'Calculado comparando o preço de cada produto na cotação com o preço do cadastro no Bling. Negativo = desconto (ex.: PIX), positivo = acréscimo (ex.: cartão).')+
       ' Entra no preço final de todos os produtos.</span></div>'+
     '<div class="cc-avbar" style="margin:0"><label>Markup padrão (%)<input class="cc-inp" inputmode="decimal" data-j="0" data-k="markupPadrao" placeholder="ex.: 40" value="'+(f.markupPadrao===''||f.markupPadrao==null?'':ccEsc(ccIn(f.markupPadrao)))+'"></label>'+
     '<span class="cc-mu">Vale para os produtos sem markup próprio.<br>Frete: em cada produto, digite o <b>frete da nota</b> e o <b>valor total da nota</b> (ou da cotação do fornecedor) de onde ele vem. O app calcula o % e o frete por unidade.</span></div></div>';
@@ -17506,7 +17510,7 @@ function ccDrawAv(el,h){
   // grade
   var dl='<datalist id="ccAvForns">'+forns.map(function(x){return '<option value="'+ccEsc(x)+'">';}).join('')+'</datalist>';
   var t=dl+'<div class="cc-avleg"><span><i style="background:#fff;border:1px solid #94a3b8"></i>Campo para digitar</span><span><i style="background:#fffbeb;border:1px solid #fcd34d"></i>Custo (calculado)</span><span><i style="background:#f0fdf4;border:1px solid #86efac"></i>Venda (calculado)</span><span style="color:#2563eb">Azul = frete por unidade e % do frete (calculados)</span></div>'+
-    '<div class="cc-avleg" style="font-size:12.5px;color:#334155;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px"><div style="display:block;line-height:1.5"><b>Como calcula (por unidade):</b>&nbsp; Frete por un. = (Preço − Desconto% + IPI) × (Frete da nota ÷ Valor da nota) &nbsp;·&nbsp; Custo = Preço − Desconto% + IPI + Frete por un. − Créd. ICMS &nbsp;·&nbsp; <b>Preço final</b> = Custo × (1 + Markup%) × (1 + Acréscimo da forma de pagamento%'+(A.acr?' = '+ccIn(A.acr)+'%':'')+') — é este valor que vai para o preço unitário no Bling</div></div>'+
+    '<div class="cc-avleg" style="font-size:12.5px;color:#334155;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:7px 10px"><div style="display:block;line-height:1.5"><b>Como calcula (por unidade):</b>&nbsp; Frete por un. = (Preço − Desconto% + IPI) × (Frete da nota ÷ Valor da nota) &nbsp;·&nbsp; Custo = Preço − Desconto% + IPI + Frete por un. − Créd. ICMS &nbsp;·&nbsp; <b>Preço final</b> = Custo × (1 + Markup%) × (1 + Ajuste da lista%'+(A.acr?' = '+(A.acr>0?'+':'')+ccIn(A.acr)+'%':'')+') — é este valor que vai para o preço unitário no Bling</div></div>'+
     '<div class="cc-avleg" style="align-items:center">'+(A.ocultos?'<span style="color:#475569">🙈 <b>'+A.ocultos+'</b> produto'+(A.ocultos>1?'s':'')+' oculto'+(A.ocultos>1?'s':'')+' (não entram no cálculo nem vão para o Bling)</span>'+
       '<button type="button" class="cc-btn sm" data-av-acao="verOc">'+(CC.avVerOcultos?'Esconder ocultos':'Mostrar ocultos')+'</button>':'<span style="color:#475569">Use o <b>✕</b> ao lado do produto para ocultar o que você não vai orçar.</span>')+
       (A.faltam?'<button type="button" class="cc-btn sm" data-av-acao="ocSemPreco">✕ Ocultar os '+A.faltam+' sem preço</button>':'')+'</div>'+
@@ -17515,7 +17519,7 @@ function ccDrawAv(el,h){
       '<th class="av-b av-l" colspan="9">1 · Compra<small>o que o fornecedor cobra</small></th>'+
       '<th class="av-a av-l" colspan="2">2 · Custo<small>com impostos e frete</small></th>'+
       '<th class="av-g av-l" colspan="1">3 · Markup</th>'+
-      '<th class="av-fim av-fim1" colspan="1">✅ Preço final<small>'+(A.acr?'com '+ccIn(A.acr)+'% da forma de pag.':'vai para o Bling')+'</small></th></tr>'+
+      '<th class="av-fim av-fim1" colspan="1">✅ Preço final<small>'+(A.acr?'com '+(A.acr>0?'+':'')+ccIn(A.acr)+'% da lista':'vai para o Bling')+'</small></th></tr>'+
     '<tr class="av-col">'+
       '<th class="av-b av-l">Fornecedor</th><th class="av-b">Marca</th><th class="n av-b">Preço</th><th class="n av-b">Desconto %</th><th class="n av-b">IPI %</th><th class="n av-b">Frete da nota R$</th><th class="n av-b">Valor da nota R$</th><th class="n av-b">Frete por un.</th><th class="n av-b">Créd. ICMS %</th>'+
       '<th class="n av-a av-l">Unitário</th><th class="n av-a">Total</th><th class="n av-g av-l">%</th><th class="n av-fim av-fim2">Preço de venda un.</th></tr></thead><tbody>';
@@ -17547,16 +17551,16 @@ function ccDrawAv(el,h){
   h+='<div class="cc-card" style="margin-top:12px"><div style="font-weight:800;font-size:15px;margin-bottom:8px">🚚 Pagamento e entrega</div><div class="cc-avbar">'+
     campo('Validade da cotação','validade')+campo('Forma de pagamento','formaPag','forma')+campo('Prazo de pagamento','prazoPag')+campo('Prazo de entrega (dias)','entrega','int')+campo('Observação','obs')+'</div></div>';
   var lin=function(l,v,s,b){return '<tr'+(b?' style="font-weight:800;border-top:2px solid #94a3b8"':'')+'><td style="padding:6px 10px">'+l+'</td><td style="padding:6px 10px;text-align:right">'+(s||'')+ccMoeda(v)+'</td></tr>';};
-  var lucro=ccR(A.semAcr-A.custo),acrV=ccR(A.venda-A.semAcr),pct=A.venda>0?lucro/A.venda*100:0;
+  var mkV=ccR(A.semAcr-A.custo),acrV=ccR(A.venda-A.semAcr),lucro=ccR(A.venda-A.custo),pct=A.venda>0?lucro/A.venda*100:0;
   h+='<div class="cc-card"><div style="font-weight:800;font-size:15px;margin-bottom:8px">📊 Resultado</div>'+
     (A.faltam?'<div class="cc-msg inf" style="margin-bottom:8px">Faltam preços de '+A.faltam+' produto'+(A.faltam>1?'s':'')+' (não ocultos). Os totais abaixo contam só os produtos com preço.</div>':'')+
     '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start"><table class="cc-avres">'+
     lin('Produtos (preço de compra)',A.prod)+lin('Desconto',A.desc,'− ')+lin('IPI',A.ipi,'+ ')+lin('Frete',A.frete,'+ ')+lin('Crédito de ICMS',A.cred,'− ')+lin('Custo total',A.custo,'',1)+
-    lin('Markup',lucro,'+ ')+(acrV?lin('Acréscimo forma de pag. ('+ccIn(A.acr)+'%)',acrV,'+ '):'')+lin('Total de venda',A.venda,'',1)+'</table>'+
+    lin('Markup',mkV,'+ ')+(acrV?lin('Ajuste da lista ('+(A.acr>0?'+':'')+ccIn(A.acr)+'%)',Math.abs(acrV),acrV<0?'− ':'+ '):'')+lin('Total de venda',A.venda,'',1)+'</table>'+
     '<div style="flex-basis:100%;order:3;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px"><button type="button" class="cc-btn pri" data-av-acao="enviar" style="padding:10px 16px;font-size:14px">📤 Enviar preços para a cotação nº '+ccEsc(c.numero)+' no Bling</button>'+
       (f.enviadoEm?'<span class="cc-mu">Último envio: '+new Date(f.enviadoEm).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+(f.enviadoPor?' por '+ccEsc(f.enviadoPor):'')+'</span>':'<span class="cc-mu">Grava o preço final unitário de cada produto na proposta do Bling (só os produtos com preço).</span>')+'</div>'+
     '<div style="display:flex;flex-wrap:wrap;gap:10px;flex:1">'+
-      [['Custo total',ccMoeda(A.custo),'#fffbeb'],['Total de venda',ccMoeda(A.venda),'#f0fdf4'],['Lucro bruto'+(acrV?' (sem o acréscimo)':''),ccMoeda(lucro)+' <small style="font-size:13px;color:#15803d">'+pct.toFixed(1).replace('.',',')+'% da venda</small>','#f0fdf4'],
+      [['Custo total',ccMoeda(A.custo),'#fffbeb'],['Total de venda',ccMoeda(A.venda),'#f0fdf4'],['Lucro bruto',ccMoeda(lucro)+' <small style="font-size:13px;color:#15803d">'+pct.toFixed(1).replace('.',',')+'% da venda</small>','#f0fdf4'],
        ['Total na cotação do Bling',ccMoeda(c.totalPedido),'#fff']].map(function(b){return '<div style="flex:1;min-width:170px;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;background:'+b[2]+'"><div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:#64748b">'+b[0]+'</div><div style="font-size:18px;font-weight:800;color:#0f172a;margin-top:2px">'+b[1]+'</div></div>';}).join('')+
     '</div></div></div>';
   var gw0=el.querySelector('.cc-gw'),sl=gw0?gw0.scrollLeft:0;
@@ -17663,8 +17667,9 @@ window.addEventListener('scroll',ccTipEsconder,{passive:true,capture:true});
 function ccSoNumeros(el){
   el.querySelectorAll('input[inputmode="decimal"],input[inputmode="numeric"]').forEach(function(inp){
     if(inp._soNum)return;inp._soNum=1;
-    inp.addEventListener('keydown',function(e){if(e.ctrlKey||e.metaKey||e.altKey||e.key.length!==1)return;if(!/[0-9.,]/.test(e.key))e.preventDefault();});
-    inp.addEventListener('input',function(){var v=inp.value,n=v.replace(/[^0-9.,]/g,'');if(n!==v){var p=inp.selectionStart-(v.length-n.length);inp.value=n;try{inp.setSelectionRange(p,p);}catch(_e){}}});
+    var neg=!!inp.dataset.neg,ok=neg?/[0-9.,\-]/:/[0-9.,]/,tira=neg?/[^0-9.,\-]/g:/[^0-9.,]/g;
+    inp.addEventListener('keydown',function(e){if(e.ctrlKey||e.metaKey||e.altKey||e.key.length!==1)return;if(!ok.test(e.key))e.preventDefault();});
+    inp.addEventListener('input',function(){var v=inp.value,n=v.replace(tira,'');if(n!==v){var p=inp.selectionStart-(v.length-n.length);inp.value=n;try{inp.setSelectionRange(p,p);}catch(_e){}}});
   });
 }
 function ccLigar(el){
