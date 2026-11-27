@@ -17473,7 +17473,12 @@ function ccAvCss(){
     '.cc-avnt th{font-size:11px!important;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#475569}.cc-avnt .n{text-align:right}.cc-avnt input{width:130px;text-align:right}.cc-avnt input::placeholder{color:#2563eb;font-weight:600}'+
     '.cc-av .av-oc{float:right;margin:0 0 0 6px;width:22px;height:22px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#94a3b8;font-size:12px;line-height:1;cursor:pointer;padding:0}'+
     '.cc-av .av-oc:hover{color:#b91c1c;border-color:#fca5a5;background:#fef2f2}.cc-av tr.av-ocl td{background:#f8fafc!important;opacity:.75}.cc-av tr.av-ocl .av-oc{color:#15803d}'+
-    '.cc-av td.av-in input.av-vinc{border-color:#16a34a!important;background:#f0fdf4!important;color:#14532d;font-weight:600}.cc-av td.av-in input.av-novinc{border-color:#f59e0b!important;background:#fffbeb!important}'+
+    '.cc-av td.av-in input.av-vinc{border-color:#16a34a!important;background:#f0fdf4!important;color:#14532d;font-weight:600}.cc-av td.av-in input.av-novinc{border-color:#f59e0b!important;background:#fffbeb!important;padding-right:30px!important}'+
+    '.cc-av .av-cad{position:absolute;right:7px;top:50%;transform:translateY(-50%);z-index:2;width:20px;height:20px;border:0;border-radius:5px;background:#f59e0b;color:#fff;font-weight:800;font-size:13px;line-height:1;cursor:pointer;padding:0}.cc-av .av-cad:hover{background:#d97706}'+
+    '#ccAvCad{position:fixed;inset:0;z-index:10002;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center}'+
+    '#ccAvCad .bx{background:#fff;border-radius:12px;padding:18px 20px;width:min(640px,94vw);max-height:92vh;overflow:auto;box-shadow:0 20px 50px rgba(15,23,42,.3)}'+
+    '#ccAvCad .gr{display:grid;grid-template-columns:1fr 1fr;gap:10px}#ccAvCad label{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#475569}'+
+    '#ccAvCad input{border:1px solid #cbd5e1;border-radius:7px;padding:7px 9px;font-size:14px;font-family:inherit}#ccAvCad .full{grid-column:1/-1}'+
     '#ccAvDrop{position:fixed;z-index:10001;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 10px 30px rgba(15,23,42,.18);max-height:260px;overflow:auto;min-width:280px;font-size:13px}'+
     '#ccAvDrop div{padding:7px 10px;cursor:pointer;border-bottom:1px solid #f1f5f9}#ccAvDrop div.on,#ccAvDrop div:hover{background:#eff6ff}#ccAvDrop small{display:block;color:#64748b;font-size:11px}#ccAvDrop .vz{color:#64748b;cursor:default}'+
     '.cc-avres{border-collapse:collapse;width:360px!important;max-width:100%;font-family:inherit!important;font-size:14px!important;flex:0 0 auto}.cc-avres td{font-family:inherit!important;font-size:14px!important;border:0!important;border-bottom:1px solid #f1f5f9!important;background:transparent!important}'+
@@ -17537,7 +17542,7 @@ function ccDrawAv(el,h){
       '<td colspan="14" class="av-l" style="color:#94a3b8;font-style:italic">Oculto — não vou orçar'+(it.venda?' · fica com Bling '+ccMoeda(it.venda):'')+'</td></tr>';return;}
     t+='<tr class="it"><td class="prod">'+btOc+(it.cod?'<div class="pc" style="margin:0 0 1px">Cód. '+ccEsc(it.cod)+'</div>':'')+'<div class="pd" data-tip="'+ccEsc(it.desc)+'">'+ccEsc(it.desc)+'</div></td>'+
       '<td class="n q" style="white-space:nowrap">'+ccIn(it.q,0)+' <span style="font-size:11px;color:#64748b">'+ccEsc(it.un)+'</span></td>'+
-      '<td class="inp av-in av-l"><input data-av="fornItem" data-ai="'+i+'" autocomplete="off" class="'+((f.fornIds||[])[i]?'av-vinc':((f.fornItem||[])[i]?'av-novinc':''))+'" value="'+ccEsc((f.fornItem||[])[i]||'')+'" placeholder="buscar no Bling" title="'+((f.fornIds||[])[i]?'Fornecedor do cadastro do Bling':((f.fornItem||[])[i]?'Não está ligado ao cadastro do Bling: digite e escolha na lista (sem isso não gera pedido de compra)':'Digite o nome ou CNPJ e escolha na lista do Bling'))+'"></td>'+inp('marcas',i,'','',true)+inp('precos',i,'','0,00')+inp('descs',i,'','')+inp('ipis',i,'','')+
+      '<td class="inp av-in av-l" style="position:relative">'+((f.fornItem||[])[i]&&!(f.fornIds||[])[i]?'<button type="button" class="av-cad" data-cad="'+i+'" title="Cadastrar este fornecedor no Bling">＋</button>':'')+'<input data-av="fornItem" data-ai="'+i+'" autocomplete="off" class="'+((f.fornIds||[])[i]?'av-vinc':((f.fornItem||[])[i]?'av-novinc':''))+'" value="'+ccEsc((f.fornItem||[])[i]||'')+'" placeholder="buscar no Bling" title="'+((f.fornIds||[])[i]?'Fornecedor do cadastro do Bling':((f.fornItem||[])[i]?'Não está ligado ao cadastro do Bling: digite e escolha na lista (sem isso não gera pedido de compra)':'Digite o nome ou CNPJ e escolha na lista do Bling'))+'"></td>'+inp('marcas',i,'','',true)+inp('precos',i,'','0,00')+inp('descs',i,'','')+inp('ipis',i,'','')+
       inp('fretes',i,'','')+
       '<td class="inp av-in n"><input inputmode="decimal" data-av="notasV" data-ai="'+i+'" value="'+fv('notasV',i,2)+'" placeholder="" title="Valor total da nota fiscal (ou da cotação do fornecedor) de onde vem o frete."></td>'+
       '<td class="n" style="color:#2563eb;font-weight:600" title="'+(x.ok&&x.fretePct?ccMoeda(x.freteNota)+' ÷ '+ccMoeda(x.nota)+' = '+(x.fretePct*100).toFixed(2).replace('.',',')+'% × '+ccMoeda(x.liq+x.ipi):'')+'">'+(x.ok&&x.freteNota&&!x.notaMan?'<span style="display:block;white-space:normal;line-height:1.15;color:#b45309;font-size:10.5px;font-weight:700;text-align:center">⚠ falta o valor da nota</span>':'')+(x.ok&&x.freteU?ccIn(x.freteU,4).replace(/0{1,2}$/,''):'')+(x.ok&&x.fretePct?'<div style="font-size:10.5px;color:#64748b;font-weight:500">'+(x.fretePct*100).toFixed(2).replace('.',',')+'%</div>':'')+'</td>'+
@@ -17594,6 +17599,7 @@ function ccLigarAv(el){
       e.preventDefault();CC._proxSel='input[data-nota="'+nx.dataset.nota+'"][data-nk="'+nx.dataset.nk+'"]';inp.blur();setTimeout(ccAvFoco,0);});
   });
   el.querySelectorAll('input[data-av="fornItem"]').forEach(function(inp){ccAvForn(inp,+inp.dataset.ai,c,f);});
+  el.querySelectorAll('button[data-cad]').forEach(function(b){b.onclick=function(){var i=+b.dataset.cad;ccAvCadForn(i,(f.fornItem||[])[i]||'');};});
   el.querySelectorAll('input[data-av]').forEach(function(inp){
     inp.addEventListener('change',function(){if(inp._escolhendo)return;var a=inp.dataset.av,i=+inp.dataset.ai;f[a]=f[a]||[];
       f[a][i]=(a==='fornItem'||a==='marcas')?inp.value.trim():(inp.value.trim()===''?'':ccNum(inp.value));
@@ -17625,8 +17631,10 @@ function ccAvForn(inp,i,c,f){
 function ccAvDropMostrar(inp,i,c,f,L){
   ccAvDropFechar();var d=document.createElement('div');d.id='ccAvDrop';var r=inp.getBoundingClientRect();
   d.style.left=r.left+'px';d.style.top=(r.bottom+2)+'px';d._inp=inp;d._L=L;d._on=-1;
-  d.innerHTML=L.length?L.slice(0,12).map(function(x,k){return '<div data-k="'+k+'"><b>'+ccEsc(x.nome)+'</b>'+(x.doc?'<small>'+ccEsc(x.doc)+'</small>':'')+'</div>';}).join(''):'<div class="vz">Nenhum contato encontrado no Bling</div>';
+  d.innerHTML=(L.length?L.slice(0,12).map(function(x,k){return '<div data-k="'+k+'"><b>'+ccEsc(x.nome)+'</b>'+(x.doc?'<small>'+ccEsc(x.doc)+'</small>':'')+'</div>';}).join(''):'<div class="vz">Nenhum contato encontrado no Bling</div>')+
+    '<div data-novo="1" style="color:#15803d;font-weight:700">➕ Cadastrar novo fornecedor no Bling</div>';
   d.querySelectorAll('div[data-k]').forEach(function(o){o.addEventListener('mousedown',function(e){e.preventDefault();ccAvEscolher(inp,i,c,f,L[+o.dataset.k]);});});
+  d.querySelector('div[data-novo]').addEventListener('mousedown',function(e){e.preventDefault();ccAvDropFechar();ccAvCadForn(i,inp.value.trim());});
   document.body.appendChild(d);
 }
 function ccAvDropTecla(e,inp){
@@ -17644,6 +17652,58 @@ function ccAvEscolher(inp,i,c,f,x){
   // outras linhas com o mesmo nome digitado (sem vínculo) passam a usar este cadastro
   f.fornItem.forEach(function(nm,k){if(k!==i&&nm&&!f.fornIds[k]&&(nm.toLowerCase()===antes||nm.toLowerCase()===x.nome.toLowerCase())){f.fornItem[k]=x.nome;f.fornIds[k]=x.id;}});
   CC._prox={a:'marcas',i:String(i)};CC.aviso='';ccDraw();ccSalvar();setTimeout(ccAvFoco,0);
+}
+// ---- Cadastrar fornecedor no Bling (dados do CNPJ pela BrasilAPI; se o CNPJ já existir no Bling, só liga) ----
+function ccAvCadForn(i,texto){
+  var c=CC.cot;if(!c)return;var f=c.forn[0],E=CC;
+  var old=document.getElementById('ccAvCad');if(old)old.remove();
+  var dig=String(texto||'').replace(/\D/g,''),ehDoc=dig.length===14||dig.length===11;
+  var m=document.createElement('div');m.id='ccAvCad';
+  var campo=function(k,lab,cls,ph){return '<label class="'+(cls||'')+'">'+lab+'<input data-cf="'+k+'" placeholder="'+(ph||'')+'"></label>';};
+  m.innerHTML='<div class="bx"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><b style="font-size:16px">➕ Cadastrar fornecedor no Bling</b><span style="flex:1"></span><button type="button" class="cc-btn sm" data-cf-x="1">✕</button></div>'+
+    '<div class="cc-mu" style="margin-bottom:10px">Digite o CNPJ: o app preenche os dados pela Receita. Se o CNPJ já estiver no Bling, ele só liga a linha ao cadastro existente.</div>'+
+    '<div class="gr">'+campo('doc','CNPJ ou CPF','','00.000.000/0000-00')+'<div id="ccAvCadSt" class="cc-mu" style="align-self:end;padding-bottom:8px"></div>'+
+    campo('nome','Razão social / nome *','full')+campo('fantasia','Nome fantasia','full')+campo('fone','Telefone')+campo('email','E-mail')+
+    campo('cep','CEP')+campo('cidade','Cidade')+campo('endereco','Endereço','full')+campo('numero','Número')+campo('bairro','Bairro')+campo('complemento','Complemento')+campo('uf','UF','','GO')+'</div>'+
+    '<div id="ccAvCadErr" class="cc-msg err" style="display:none;margin:10px 0 0"></div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button type="button" class="cc-btn" data-cf-x="1">Cancelar</button><button type="button" class="cc-btn pri" id="ccAvCadOk">💾 Cadastrar no Bling</button></div></div>';
+  document.body.appendChild(m);
+  var q=function(k){return m.querySelector('[data-cf="'+k+'"]');},st=m.querySelector('#ccAvCadSt'),err=m.querySelector('#ccAvCadErr'),existente=null;
+  if(ehDoc)q('doc').value=dig;else q('nome').value=texto||'';
+  var fechar=function(){m.remove();};
+  m.querySelectorAll('[data-cf-x]').forEach(function(b){b.onclick=fechar;});
+  m.addEventListener('mousedown',function(e){if(e.target===m)fechar();});
+  var ultimo='';
+  var buscar=function(){var d=q('doc').value.replace(/\D/g,'');if(d===ultimo||(d.length!==14&&d.length!==11))return;ultimo=d;existente=null;
+    st.textContent='⏳ verificando…';
+    var cfg=(typeof BLG!=='undefined'&&BLG.cfgCarregada)?Promise.resolve():blgCarregarCfg();
+    var noBling=cfg.then(function(){return blgApi('/receber/clientes?doc='+d);}).catch(function(){return null;});
+    var receita=d.length===14?fetch('https://brasilapi.com.br/api/cnpj/v1/'+d).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}):Promise.resolve(null);
+    Promise.all([noBling,receita]).then(function(x){var b=x[0],j=x[1];
+      var achado=b&&b.ok&&b.porDoc&&(b.itens||[])[0];
+      if(achado){existente=achado;st.innerHTML='<b style="color:#15803d">✓ Já cadastrado no Bling: '+ccEsc(achado.nome)+'</b>';m.querySelector('#ccAvCadOk').textContent='🔗 Usar este cadastro';}
+      else{st.textContent=j?'✓ dados da Receita preenchidos':(d.length===14?'CNPJ não encontrado na Receita — preencha à mão':'');m.querySelector('#ccAvCadOk').textContent='💾 Cadastrar no Bling';}
+      if(j){var set=function(k,v){if(v&&!q(k).value)q(k).value=v;},dig0=q('nome').value.trim();
+        if(j.razao_social){q('nome').value=j.razao_social;if(dig0&&!j.nome_fantasia&&dig0.toLowerCase()!==j.razao_social.toLowerCase())set('fantasia',dig0);}
+        set('fantasia',j.nome_fantasia);set('fone',j.ddd_telefone_1);set('email',(j.email||'').toLowerCase());set('cep',j.cep);
+        set('endereco',[j.descricao_tipo_de_logradouro,j.logradouro].filter(Boolean).join(' '));set('numero',j.numero);set('bairro',j.bairro);set('complemento',j.complemento);set('cidade',j.municipio);set('uf',j.uf);}
+    });};
+  q('doc').addEventListener('input',buscar);q('doc').addEventListener('blur',buscar);if(ehDoc)buscar();
+  setTimeout(function(){(ehDoc?q('nome'):q('doc')).focus();},30);
+  m.querySelector('#ccAvCadOk').onclick=function(){
+    var ligar=function(id,nome){f.fornItem=f.fornItem||[];f.fornIds=f.fornIds||[];var antes=String(f.fornItem[i]||'').toLowerCase();
+      f.fornItem[i]=nome;f.fornIds[i]=id;
+      f.fornItem.forEach(function(nm,k){if(k!==i&&nm&&!f.fornIds[k]&&antes&&nm.toLowerCase()===antes){f.fornItem[k]=nome;f.fornIds[k]=id;}});
+      fechar();E.aviso='Fornecedor '+nome+' ligado ao cadastro do Bling.';if(CC===E){CC._prox={a:'marcas',i:String(i)};ccDraw();ccSalvar();setTimeout(ccAvFoco,0);}};
+    if(existente){ligar(existente.id,existente.nome);return;}
+    var dados={};['doc','nome','fantasia','fone','email','cep','cidade','endereco','numero','bairro','complemento','uf'].forEach(function(k){dados[k]=q(k).value.trim();});
+    if(!dados.nome){err.style.display='';err.textContent='Informe a razão social / nome.';return;}
+    var bt=this;bt.disabled=true;bt.textContent='⏳ Cadastrando…';err.style.display='none';
+    blgApi('/fin/bling',{method:'POST',body:{op:'criarContato',dados:dados}}).then(function(r){
+      if(!r||!r.ok||!r.id){bt.disabled=false;bt.textContent='💾 Cadastrar no Bling';err.style.display='';err.textContent='O Bling recusou: '+((r&&r.erro)||'sem resposta');return;}
+      ligar(r.id,dados.fantasia||dados.nome);
+    }).catch(function(e){bt.disabled=false;bt.textContent='💾 Cadastrar no Bling';err.style.display='';err.textContent='Falhou: '+(e&&e.message||e);});
+  };
 }
 // ---- Pedidos de compra (um por fornecedor do Bling) com os produtos orçados ----
 function ccAvGruposCompra(c,A){
