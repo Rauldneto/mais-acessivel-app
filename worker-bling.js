@@ -1521,30 +1521,31 @@ async function pedidoCompra(env, numero) {
 // A API não filtra proposta pelo número. A lista vem da mais nova para a mais antiga: varre páginas até achar o número
 // (para quando passa de números menores) e guarda o mapa número → id no KV.
 async function acharProposta(env, numero) {
-  // Limite da Cloudflare (plano grátis): 50 chamadas externas por pedido. Lê no máximo 25 páginas por vez e
-  // guarda até onde já leu ('_ate' = última página, '_min' = menor número visto): o próximo clique continua dali.
+  // A lista do Bling vem por DATA (não por número) e a API não busca pelo número: lê as páginas e guarda número → id.
+  // Limite da Cloudflare (plano grátis): 50 chamadas por pedido → no máximo 25 páginas por vez.
+  // Lê sempre as 3 primeiras (cotações novas) e depois continua de onde parou ('_meta.ate'); '_meta.fim' = já leu tudo.
   const mapa = (await env.BLING_KV.get('prop:mapa', 'json')) || {};
   if (mapa[numero]) return mapa[numero];
-  const alvo = Number(numero), meta = mapa._meta || {};
-  // número menor que o menor já visto → continua de onde parou; senão começa do início (propostas novas)
-  let ini = meta.min && alvo < meta.min && meta.ate ? Math.max(1, meta.ate - 1) : 1;
-  let achou = null, ultima = ini - 1, menorVisto = meta.min || Infinity, fim = false;
-  for (let p = ini; p < ini + 25 && !achou; p++) {
-    const j = await bling(env, '/propostas-comerciais?limite=100&pagina=' + p);
+  const meta = mapa._meta || {};
+  let lidas = 0, achou = null;
+  const ler = async p => {
+    const j = await bling(env, '/propostas-comerciais?limite=100&pagina=' + p); lidas++;
     const d = (j && j.data) || [];
-    ultima = p;
-    for (const o of d) if (o && o.numero != null) { mapa[String(o.numero)] = o.id; menorVisto = Math.min(menorVisto, Number(o.numero)); }
+    for (const o of d) if (o && o.numero != null) mapa[String(o.numero)] = o.id;
     if (mapa[numero]) achou = mapa[numero];
-    const menorPag = Math.min(...d.map(o => Number(o.numero)).filter(n => n > 0), Infinity);
-    if (d.length < 100) { fim = true; break; }
-    if (menorPag < alvo - 200) break;
+    return d.length;
+  };
+  for (let p = 1; p <= 3 && !achou; p++) if (await ler(p) < 100) { meta.fim = true; meta.ate = p; break; }
+  if (!achou && !meta.fim) {
+    let p = Math.max(4, (meta.ate || 3) - 1);
+    while (!achou && lidas < 25) { const n = await ler(p); meta.ate = p; if (n < 100) { meta.fim = true; break; } p++; }
   }
-  const ks = Object.keys(mapa).filter(k => k !== '_meta').sort((a, b) => Number(b) - Number(a)).slice(0, 6000), m2 = {};
+  const ks = Object.keys(mapa).filter(k => k !== '_meta'), m2 = {};
   for (const k of ks) m2[k] = mapa[k];
-  m2._meta = { ate: Math.max(ultima, meta.ate || 0), min: menorVisto === Infinity ? (meta.min || 0) : menorVisto, fim: fim || !!meta.fim };
+  m2._meta = { ate: meta.ate || 3, fim: !!meta.fim };
   await env.BLING_KV.put('prop:mapa', JSON.stringify(m2), { expirationTtl: 30 * 86400 });
-  if (!achou && !fim && !(m2._meta.min && m2._meta.min < alvo - 200)) return { procurando: true };
-  return achou;
+  if (achou) return achou;
+  return meta.fim ? null : { procurando: true };
 }
 
 async function propostaComercial(env, numero) {
