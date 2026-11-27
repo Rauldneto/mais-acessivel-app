@@ -11587,10 +11587,24 @@ function esLinhasDoConteudo(ct){
     var y=it.transform[5],x=it.transform[4],r=null;
     for(var i=0;i<rows.length;i++){if(Math.abs(rows[i].y-y)<=2){r=rows[i];break;}}
     if(!r){r={y:y,c:[]};rows.push(r);}
-    r.c.push({x:x,t:t});
+    r.c.push({x:x,t:t,xc:x+(it.width||0)/2});
   });
   rows.sort(function(a,b){return b.y-a.y;});
-  return rows.map(function(r){return r.c.sort(function(a,b){return a.x-b.x;}).map(function(c){return c.t;});});
+  // Cada linha é um array de textos; .xc guarda o centro (x) de cada célula, para achar a coluna certa
+  return rows.map(function(r){r.c.sort(function(a,b){return a.x-b.x;});var out=r.c.map(function(c){return c.t;});out.xc=r.c.map(function(c){return c.xc;});return out;});
+}
+
+// Valor de um item sem coluna "Unid." (itens financeiros, taxas). Nessas linhas a quantidade
+// (ex.: 38,00 = conta vencida usada de base para juros/multa) vem antes do valor, então
+// pegar a primeira célula numérica lia a quantidade. Usa a coluna "Valor (R$)" do cabeçalho;
+// sem cabeçalho, pega o último número antes das colunas de tributo (%).
+function esValorItem(r,xValor){
+  var num=/^-?[\d.]+,\d{2,}$/,cand=[];
+  for(var k=1;k<r.length;k++){if(/%/.test(r[k]))break;if(num.test(r[k]))cand.push(k);}
+  if(!cand.length)return NaN;
+  if(isFinite(xValor)&&r.xc){var best=cand[0],dist=Infinity;cand.forEach(function(k){var dd=Math.abs(r.xc[k]-xValor);if(dd<dist){dist=dd;best=k;}});return esNum(r[best]);}
+  var dois=cand.filter(function(k){return /^-?[\d.]+,\d{2}$/.test(r[k]);});
+  return esNum(r[(dois.length?dois:cand)[(dois.length?dois:cand).length-1]]);
 }
 
 // Interpreta a fatura a partir das linhas (array de arrays de células)
@@ -11612,7 +11626,8 @@ function esParse(L){
     if(!d.leitAnt&&c.length>=4&&/^\d{2}\/\d{2}\/\d{4}$/.test(c[0])&&/^\d{2}\/\d{2}\/\d{4}$/.test(c[1])&&/^\d+$/.test(c[2])){d.leitAnt=c[0];d.leitAtu=c[1];d.dias=+c[2];d.proxLeit=c[3]||'';}
   }
   // Itens da fatura: entre "FORNECIMENTO" e "TOTAL"
-  var dentro=false,fin=false;
+  var dentro=false,fin=false,xValor=NaN;
+  for(var h=0;h<L.length;h++){if(/^FORNECIMENTO$/i.test(L[h][0]||''))break;var kv=L[h].findIndex(function(x){return /^Valor(\s|$)/i.test(x);});if(kv>=0&&L[h].xc&&L[h].some(function(x){return /^Quant/i.test(x);})){xValor=L[h].xc[kv];}}
   for(var j=0;j<L.length;j++){
     var r=L[j],c0=r[0]||'';
     if(/^FORNECIMENTO$/i.test(c0)){dentro=true;fin=false;continue;}
@@ -11623,7 +11638,8 @@ function esParse(L){
     if(/^kWh$/i.test(r[1])&&r.length>=5&&isFinite(esNum(r[4]))){
       d.itens.push({desc:c0,qtd:esNum(r[2]),unit:esNum(r[3]),valor:esNum(r[4]),tipo:'fornecimento'});
     }else if(/^-?[\d.]+,\d{2}$/.test(r[1])){
-      d.itens.push({desc:c0.replace(/\.$/,''),valor:esNum(r[1]),tipo:fin?'financeiro':'outro'});
+      var vIt=esValorItem(r,xValor);
+      d.itens.push({desc:c0.replace(/\.$/,''),valor:isFinite(vIt)?vIt:esNum(r[1]),tipo:fin?'financeiro':'outro'});
     }
   }
   // Classificação
