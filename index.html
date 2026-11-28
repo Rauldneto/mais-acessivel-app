@@ -1132,6 +1132,7 @@ function render(){
   var app=document.getElementById('app');
   if(!app) return;
   app.innerHTML='';
+  if(ppEhCatalogo()){ app.appendChild(ppRenderCatalogoPublico()); return; }
   if(ppEhApresentacao()){ app.appendChild(ppRenderApresentacao()); return; }
   if(!STATE.auth){ app.appendChild(renderLogin()); return; }
   if(typeof fcTrocarContexto==='function') fcTrocarContexto();
@@ -13253,7 +13254,7 @@ var PP_CAT={
   o:{nome:'produto',tit:'Outros produtos',icon:'📦',F:[['categoria','Categoria'],['tipo','Tipo / aplicação'],['material','Material'],['cor','Cor'],['medida','Medida'],['lado','Lado'],['marca','Marca'],['rec','Recursos']],req:[['categoria','Categoria']],RC:['Modelo PCD','Fotoluminescente']},
   a:{nome:'assento',tit:'Assentos sanitários',icon:'🚽',F:[['formato','Formato'],['material','Material'],['fech','Fechamento'],['cor','Cor'],['compat','Compatível com'],['alt','Altura elevada'],['marca','Marca'],['rec','Recursos']],req:[['marca','Marca'],['formato','Formato'],['material','Material'],['fech','Fechamento'],['cor','Cor']],RC:['Modelo PCD','Abertura frontal']}
 };
-var PP={T:'t',est:false,soP:false,openP:false,S:{},fresh:{},ST:{},q:'',ord:'c',L:{t:[],a:[],o:[]},cfg:{t:{Fauzi:{m:'site',u:'https://www.fauzimetais.com.br'}},a:{Astra:{m:'site',u:'https://www.astrasa.com.br'}},o:{}},cust:{t:{},a:{},o:{}},edits:{t:{},a:{},o:{}},bling:null,blingInfo:null,probing:0,carregado:false,carregando:false,erro:'',aviso:null,root:null,sel:{}};
+var PP={T:'t',est:false,soP:false,openP:false,S:{},fresh:{},ST:{},q:'',ord:'c',L:{t:[],a:[],o:[]},cfg:{t:{Fauzi:{m:'site',u:'https://www.fauzimetais.com.br'}},a:{Astra:{m:'site',u:'https://www.astrasa.com.br'}},o:{}},cust:{t:{},a:{},o:{}},edits:{t:{},a:{},o:{}},bling:null,blingInfo:null,site:null,siteInfo:null,probing:0,carregado:false,carregando:false,erro:'',aviso:null,root:null,sel:{}};
 
 function ppEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function ppKey(c){return String(c).replace(/[^A-Za-z0-9-]/g,function(ch){return '_'+ch.charCodeAt(0).toString(16)+'_';});}
@@ -13270,6 +13271,7 @@ function ppMontaBase(){
   }
   var nomes={};PP.bling.forEach(function(b){var k=ppN(b.n);nomes[k]=(nomes[k]||0)+1;});
   var usados={};
+  function marcaBling(m){m=String(m||'').trim();if(!m)return '';return m.toLowerCase().split(/\s+/).map(function(w,i){return (i>0&&/^(do|da|de|dos|das|e)$/.test(w))?w:(w.length<=3&&/^[a-z0-9+]+$/.test(w)&&!/[aeiou]/.test(w)?w.toUpperCase():w.charAt(0).toUpperCase()+w.slice(1));}).join(' ');}
   PP.bling.forEach(function(b){
     var cat=ppClassifica(b.n),code=String(b.c||'').trim(),semCod=!code;
     if(semCod)code='id'+b.id;
@@ -13284,6 +13286,7 @@ function ppMontaBase(){
       if(/FOTOLUMI/.test(ppN(b.n)))p.rec.push('Fotoluminescente');
       if(/PCD|PNE/.test(ppN(b.n)))p.rec.push('Modelo PCD');
     }
+    if(b.m&&!(p._T==='t'&&bt[code])&&!(p._T==='a'&&ba[code]))p.marca=ppMarcaDe(b.n)||(ppMarcaDe(' '+b.m+' ')||marcaBling(b.m));
     p.n=b.n;p.e=Number(b.e)||0;p.img=b.img||'';p.x=p.x||{};p.imgApp='';p.link='';p.man=false;p.bid=b.id;
     p.semCod=semCod;p.dup=nomes[ppN(b.n)]>1;p.catNome=p._T==='t'?'Torneiras':p._T==='a'?'Assentos sanitários':p.categoria;
     PP.L[p._T].push(p);
@@ -13311,11 +13314,13 @@ function ppCarregar(){
     d=d||{};
     ppMontaBase();
     if(d.bling&&Array.isArray(d.bling.itens)&&d.bling.itens.length){PP.bling=d.bling.itens;PP.blingInfo={em:d.bling.atualizado,por:d.bling.por,total:d.bling.itens.length};}else{PP.bling=null;PP.blingInfo=null;}
+    if(d.site&&Array.isArray(d.site.itens)){PP.site=d.site.itens;PP.siteInfo={em:d.site.atualizado,total:d.site.itens.length};}else{PP.site=null;PP.siteInfo=null;}
     ppMontaBase();
     if(d.config){['t','a','o'].forEach(function(T){if(d.config[T])PP.cfg[T]=d.config[T];});}
     if(d.custom){['t','a','o'].forEach(function(T){if(d.custom[T])PP.cust[T]=d.custom[T];});}
     PP.edits={t:(d.edicoes&&d.edicoes.t)||{},a:(d.edicoes&&d.edicoes.a)||{},o:(d.edicoes&&d.edicoes.o)||{}};
     ppAplicaEdicoes();
+    ppSiteCalc();
     PP.carregado=true;
   }).catch(function(e){
     if(!PP.carregado)ppMontaBase();
@@ -13398,10 +13403,24 @@ function ppTodos(){return PP.L.t.concat(PP.L.a,PP.L.o);}
 function ppKeyOf(p){return p._T+'|'+p.c;}
 function ppByKey(k){var i=k.indexOf('|'),T=k.slice(0,i),c=k.slice(i+1);return (PP.L[T]||[]).find(function(x){return x.c===c;});}
 function ppXKall(){var s={};ppTodos().forEach(function(p){Object.keys(p.x||{}).forEach(function(k){s[k]=1;});});return Object.keys(s).sort();}
-function ppFacets(){var f=[['cat','Categoria'],['marca','Marca']];['t','a','o'].forEach(function(T){PP_CAT[T].F.forEach(function(x){if(x[0]!=='marca'&&x[0]!=='rec'&&x[0]!=='categoria')f.push([T+':'+x[0],x[1]]);});});ppXKall().forEach(function(k){f.push(['x:'+k,k]);});f.push(['rec','Recursos']);return f;}
+var PP_SITE_URL='https://www.maisacessivel.com.br/Produto.aspx?idProduto=';
+var PP_SITE_LBL={com:'No site, com foto',sem:'No site, sem foto',fora:'Não está no site'};
+function ppCodN(c){return String(c||'').toUpperCase().replace(/[^A-Z0-9]/g,'').replace(/^0+/,'');}
+function ppSiteCalc(){
+  if(!PP.site)return;
+  var porCod={},porNome={};
+  PP.site.forEach(function(x){if(x.c)porCod[ppCodN(x.c)]=x;if(x.n)porNome[ppN(x.n)]=x;x._bling=false;});
+  ppTodos().forEach(function(p){
+    var m=porCod[ppCodN(p.c)]||porNome[ppN(p.n)],u=p.img||'',mf=u.match(/\/Repositorio\/5721\/Produtos\/(\d+)\//);
+    if(m){m._bling=true;p.siteId=m.sid;p.siteSt=m.f>0?'com':'sem';}
+    else if(mf){p.siteId=mf[1];p.siteSt='com';}
+    else{p.siteId='';p.siteSt='fora';}
+  });
+}
+function ppFacets(){var f=PP.site?[['site','🌐 Site maisacessivel.com.br'],['cat','Categoria'],['marca','Marca']]:[['cat','Categoria'],['marca','Marca']];['t','a','o'].forEach(function(T){PP_CAT[T].F.forEach(function(x){if(x[0]!=='marca'&&x[0]!=='rec'&&x[0]!=='categoria')f.push([T+':'+x[0],x[1]]);});});ppXKall().forEach(function(k){f.push(['x:'+k,k]);});f.push(['rec','Recursos']);return f;}
 function ppCatOk(p){var s=Object.keys(ppSk('cat'));return !s.length||s.indexOf(p.catNome)>=0;}
 function ppSk(k){return PP.S[k]||(PP.S[k]={});}
-function ppVals(p,k){if(k==='rec')return p.rec;if(k==='cat')return [p.catNome||PP_CAT[p._T].tit];if(k.indexOf('x:')===0){var v=p.x[k.slice(2)];return v?[v]:[];}if(k.charAt(1)===':'){if(k.charAt(0)!==p._T)return [];k=k.slice(2);}return p[k]?[p[k]]:[];}
+function ppVals(p,k){if(k==='rec')return p.rec;if(k==='site')return p.siteSt?[PP_SITE_LBL[p.siteSt]]:[];if(k==='cat')return [p.catNome||PP_CAT[p._T].tit];if(k.indexOf('x:')===0){var v=p.x[k.slice(2)];return v?[v]:[];}if(k.charAt(1)===':'){if(k.charAt(0)!==p._T)return [];k=k.slice(2);}return p[k]?[p[k]]:[];}
 function ppMode(p){var m=PP.cfg[p._T||PP.T][p.marca];return m&&m.m==='site'?'site':'manual';}
 function ppImg(p){return p.imgApp||p.img;}
 function ppOpts(k){var s={};if(k==='categoria'&&PP.T==='o')PP_CAT_ORDEM.forEach(function(v){if(v!=='Torneiras'&&v!=='Assentos sanitários')s[v]=1;});(PP_BASEOPT[k]||[]).forEach(function(v){s[v]=1;});(PP.cust[PP.T][k]||[]).forEach(function(v){s[v]=1;});ppLista().forEach(function(p){if(p[k])s[p[k]]=1;});if(k==='marca')Object.keys(PP.cfg[PP.T]).forEach(function(v){s[v]=1;});return Object.keys(s).sort(function(a,b){return a.localeCompare(b,'pt',{numeric:true});});}
@@ -13510,11 +13529,11 @@ function renderPesquisaProdutos(){
   wrap.innerHTML=
     '<div class="pp-top"><div class="pp-cats" id="ppCats"></div>'+
     '<div class="pp-stat"><span class="pp-pill" id="ppBl">🔌 Bling</span><span class="pp-pill" id="ppSync">☁️ Edições: carregando…</span>'+
-    '<button type="button" class="pp-btn" id="ppReload">🔄 Recarregar</button><button type="button" class="pp-btn" id="ppCfgBtn">⚙️ Configurações</button><button type="button" class="pp-btn pp-pri" id="ppCatBtn">📚 Gerar catálogo</button></div></div>'+
+    '<button type="button" class="pp-btn" id="ppReload">🔄 Recarregar</button><button type="button" class="pp-btn" id="ppCfgBtn">⚙️ Configurações</button><button type="button" class="pp-btn pp-pri" id="ppCatBtn">📖 Catálogo digital</button></div></div>'+
     '<div id="ppErr"></div><div id="ppToast"></div><div id="ppPend"></div>'+
     '<div class="pp-bar"><input id="ppQ" type="search" placeholder="Buscar por código ou nome" aria-label="Buscar produto"><select id="ppOrd" aria-label="Ordenar"><option value="c">Ordenar por código</option><option value="n">Ordenar por nome</option><option value="e">Maior estoque</option></select>'+
-    '<button type="button" class="pp-btn pp-pri" id="ppNew">＋ Cadastrar características</button></div>'+
-    '<div id="ppForm"></div><div class="pp-act" id="ppAct"></div>'+
+    '<button type="button" class="pp-btn" id="ppSemSite" style="border-color:#d97706;color:#b45309">🌐 Sem foto no site</button><button type="button" class="pp-btn pp-pri" id="ppNew">＋ Cadastrar características</button></div>'+
+    '<div id="ppForm"></div><div class="pp-act" id="ppAct"></div><div id="ppSiteBox"></div>'+
     '<div class="pp-main"><aside class="pp-side" id="ppSide" aria-label="Filtros"></aside><section><div id="ppCnt" style="font-size:13px;color:#777;margin-bottom:8px"></div><div class="pp-grid" id="ppGrid"></div></section></div><div id="ppSelBar"></div>';
   PP.root=wrap;
   var q=wrap.querySelector('#ppQ');q.value=PP.q;q.oninput=function(){PP.q=q.value;PP.lim=0;ppDrawSide();ppDrawGrid();ppDrawAct();};
@@ -13523,6 +13542,7 @@ function renderPesquisaProdutos(){
   wrap.querySelector('#ppCfgBtn').onclick=function(){ppConfig();};
   wrap.querySelector('#ppNew').onclick=ppPicker;
   wrap.querySelector('#ppCatBtn').onclick=ppCatalogo;
+  wrap.querySelector('#ppSemSite').onclick=ppFiltroSemFotoSite;
   if(!PP.carregado){ppMontaBase();ppCarregar();}
   setTimeout(ppDraw,0);
   return wrap;
@@ -13533,6 +13553,7 @@ function ppDraw(){
   var cats=ppEl('ppCats');
   var nCat={};ppTodos().forEach(function(p){nCat[p.catNome]=1;});
   cats.innerHTML='<div style="font-size:16px;font-weight:700;color:#1a1a1a">📦 Todos os produtos <span style="font-weight:400;color:#999;font-size:13px">('+ppTodos().length+' em '+Object.keys(nCat).length+' categorias)</span></div>';
+  var bs=ppEl('ppSemSite');if(bs){if(!PP.site){bs.style.display='none';}else{bs.style.display='';var nsf=ppTodos().filter(function(p){return !p.fora&&(p.siteSt==='sem'||p.siteSt==='fora');}).length;bs.textContent='🌐 Sem foto no site ('+nsf+')';bs.title='Produtos do Bling que não têm foto no site maisacessivel.com.br (lido em '+ppDataBR(PP.siteInfo&&PP.siteInfo.em)+')';}}
   var bl=ppEl('ppBl');
   if(PP.blingInfo){var dt='';try{dt=new Date(PP.blingInfo.em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){}
     bl.textContent='🔌 Bling sincronizado em '+dt+' · '+PP.blingInfo.total+' produtos';bl.style.color='';bl.title='Para atualizar: abra o Bling e clique em Sincronizar produtos na extensão Mais Acessível';}
@@ -13596,10 +13617,12 @@ function ppDrawAct(){
 }
 function ppDrawGrid(){
   var el=ppEl('ppGrid');if(!el)return;
+  ppDrawSiteBox();
   var r=ppTodos().filter(function(p){return ppPass(p);});
   if(PP.ord==='c')r.sort(function(a,b){return a.c.localeCompare(b.c,'pt',{numeric:true});});
   if(PP.ord==='n')r.sort(function(a,b){return a.n.localeCompare(b.n,'pt');});
   if(PP.ord==='e')r.sort(function(a,b){return b.e-a.e;});
+  if(Object.keys(ppSk('site')).length){var so={sem:0,fora:1,com:2};r.sort(function(a,b){return (so[a.siteSt]||0)-(so[b.siteSt]||0);});}
   var LIM=PP.lim||120,tot=r.length;r=r.slice(0,LIM);
   ppEl('ppCnt').textContent=tot+' produto'+(tot===1?'':'s')+' do Bling'+(tot>LIM?' · mostrando '+LIM:'');
   if(!r.length){el.innerHTML='<div style="grid-column:1/-1;padding:2rem;text-align:center;color:#888;font-size:14px">Nenhum produto com essa combinação de filtros. Remova um filtro acima.</div>';return;}
@@ -13614,7 +13637,7 @@ function ppDrawGrid(){
       '<div class="pp-nome">'+ppEsc(p.n)+'</div><div style="font-size:12px;color:#888">'+ppEsc(p.catNome)+(p.marca?' · '+ppEsc(p.marca):'')+'</div>'+
       (p.fora?'<div style="font-size:12px;background:#f3f4f6;color:#555;border-radius:6px;padding:4px 8px">🚫 Fora do catálogo <button type="button" class="pp-btn" data-rv="'+pk+'" data-d="desfazer" style="padding:2px 8px;margin-left:4px">Desfazer</button></div>':'')+
       (ppReview(p)?'<div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="pp-btn" data-rv="'+pk+'" data-d="manter" style="border-color:#16a34a;color:#166534">✓ Manter no catálogo</button><button type="button" class="pp-btn" data-rv="'+pk+'" data-d="fora" style="border-color:#dc2626;color:#991b1b">✕ Tirar do catálogo</button></div>':'')+
-      '<div>'+ch+'</div>'+ppSrcHtml(p)+
+      '<div>'+ch+'</div>'+ppSrcHtml(p)+ppSiteSelo(p)+
       '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:auto;padding-top:6px;flex-wrap:wrap"><button type="button" class="pp-btn pp-selb'+(sl?' on':'')+'" data-sel="'+pk+'" aria-pressed="'+sl+'">'+(sl?'☑ Selecionado':'☐ Selecionar')+'</button><button type="button" class="pp-btn" data-ed="'+pk+'">✏️ Editar</button><button type="button" class="pp-btn" data-cp="'+pk+'">📋 Ficha</button></div></div>';
   }).join('')+(tot>LIM?'<div style="grid-column:1/-1;text-align:center;padding:10px"><button type="button" class="pp-btn" id="ppMais">Mostrar mais '+Math.min(120,tot-LIM)+' de '+(tot-LIM)+' restantes</button></div>':'');
   var bm=el.querySelector('#ppMais');if(bm)bm.onclick=function(){PP.lim=LIM+120;ppDrawGrid();};
@@ -13762,6 +13785,25 @@ function ppExRow(k,v){return '<div class="ppExR" style="display:flex;gap:6px;mar
 function ppSelItens(){
   return Object.keys(PP.sel).map(function(k){var p=ppByKey(k);return p?{T:p._T,p:p}:null;}).filter(Boolean);
 }
+function ppDataBR(iso){try{return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return '';}}
+function ppFiltroSemFotoSite(){
+  var s=ppSk('site'),on=s[PP_SITE_LBL.sem]&&s[PP_SITE_LBL.fora]&&!s[PP_SITE_LBL.com];
+  PP.S.site={};if(!on){PP.S.site[PP_SITE_LBL.sem]=1;PP.S.site[PP_SITE_LBL.fora]=1;}
+  PP.lim=0;ppDrawSide();ppDrawAct();ppDrawGrid();
+}
+function ppDrawSiteBox(){
+  var el=ppEl('ppSiteBox');if(!el)return;
+  if(!PP.site||!ppSk('site')[PP_SITE_LBL.sem]){el.innerHTML='';return;}
+  var L=PP.site.filter(function(x){return !x.f;});
+  if(!L.length){el.innerHTML='<div class="pp-ok">✅ Todos os anúncios do site têm foto.</div>';return;}
+  el.innerHTML='<div class="pp-pend" style="margin-bottom:10px"><div style="font-size:14px;font-weight:700">🌐 Anúncios no site sem foto ('+L.length+')</div>'+
+    '<div style="font-size:12px;margin:2px 0 6px">Lido do site em '+ppDataBR(PP.siteInfo.em)+'. Inclui anúncios que não batem com nenhum código do Bling.</div>'+
+    L.map(function(x){return '<div class="pp-pi"><span class="pp-cod" style="min-width:110px;color:#92400e">'+ppEsc(x.c)+'</span><span style="flex:1;min-width:160px">'+ppEsc(x.n)+(x._bling?'':' <span style="color:#888">(sem produto igual no Bling)</span>')+'</span><a class="pp-btn" style="text-decoration:none" href="'+PP_SITE_URL+encodeURIComponent(x.sid)+'" target="_blank" rel="noopener">Abrir no site</a></div>';}).join('')+'</div>';
+}
+function ppSiteSelo(p){if(!PP.site||!p.siteSt)return '';
+  if(p.siteSt==='com')return p.siteId?'<a class="pp-src" style="color:#16a34a;text-decoration:none" href="'+PP_SITE_URL+encodeURIComponent(p.siteId)+'" target="_blank" rel="noopener">🌐 No site, com foto ↗</a>':'';
+  if(p.siteSt==='sem')return '<a class="pp-src" style="color:#b45309;text-decoration:none;font-weight:700" href="'+PP_SITE_URL+encodeURIComponent(p.siteId)+'" target="_blank" rel="noopener">🌐 No site, SEM FOTO ↗</a>';
+  return '<span class="pp-src" style="color:#888">🌐 Não está no site</span>';}
 function ppDrawSelBar(){
   var el=ppEl('ppSelBar');if(!el)return;
   var it=ppSelItens();
@@ -13844,82 +13886,208 @@ function ppModelos(lista){
     var mk={};g.itens.forEach(function(p){if(p.marca)mk[p.marca]=1;});var mks=Object.keys(mk);if(mks.length&&mks.length<=3)lin.push('Marca: '+mks.join(', '));
     return {cat:g.cat,tit:g.tit,linha:lin.join('. ')+(lin.length?'.':''),img:best?ppImg(best):'',cores:Object.keys(g.cores),n:g.itens.length,itens:g.itens,probFoto:!best};});
 }
+// ----- Catálogo digital (no estilo do catálogo impresso Mais Acessível) -----
+var PP_CAT_SECOES=[
+ ['Pisos e elementos táteis','PISOS E ELEMENTOS TÁTEIS'],
+ ['Kit instalação de piso tátil','KIT INSTALAÇÃO DE PISOS E ELEMENTOS'],
+ ['Barras de apoio','BARRAS DE APOIO'],
+ ['Corrimãos','CORRIMÃO ACESSÍVEL'],
+ ['Banheiro acessível','BANHEIRO ACESSÍVEL'],
+ ['Louças','LOUÇAS ACESSÍVEIS'],
+ ['Assentos sanitários','ASSENTOS SANITÁRIOS'],
+ ['Metais e hidráulica','ACESSÓRIOS E PRODUTOS HIDRÁULICOS PARA BANHEIRO'],
+ ['Dispensers','DISPENSER'],
+ ['Alarmes e emergência','ALARMES'],
+ ['Torneiras','TORNEIRAS'],
+ ['Sinalização','SINALIZAÇÃO'],
+ ['Placas de sinalização','PLACAS DE SINALIZAÇÃO'],
+ ['Mapas e placas em braille','MAPA E PLACAS COM BRAILLE'],
+ ['Portas e ferragens','PORTAS E FERRAGENS'],
+ ['Outros','OUTROS PRODUTOS']
+];
+var PP_CAT_FIXAS={inicio:['capa','quem-somos'],fim:['servicos','servicos-fotos','contracapa']};
+var PP_ACENTOS={ALUMINIO:'ALUMÍNIO',TATIL:'TÁTIL',TATEIS:'TÁTEIS',LAVATORIO:'LAVATÓRIO',SANITARIO:'SANITÁRIO',SANITARIOS:'SANITÁRIOS',ACRILICO:'ACRÍLICO',AUTOMATICA:'AUTOMÁTICA',AUTOMATICO:'AUTOMÁTICO',CLINICA:'CLÍNICA',CLINICO:'CLÍNICO',MOVEL:'MÓVEL',HIGIENICO:'HIGIÊNICO',ROLAO:'ROLÃO',ACESSIVEL:'ACESSÍVEL',CORRIMAO:'CORRIMÃO',BOTAO:'BOTÃO',EMERGENCIA:'EMERGÊNCIA',SINALIZACAO:'SINALIZAÇÃO',DEMARCACAO:'DEMARCAÇÃO',INICIO:'INÍCIO',TERREO:'TÉRREO',PLASTICO:'PLÁSTICO',ANATOMICO:'ANATÔMICO',VALVULA:'VÁLVULA',CERAMICA:'CERÂMICA',FISICO:'FÍSICO',MAO:'MÃO',PORTATIL:'PORTÁTIL',LOUCA:'LOUÇA',LOUCAS:'LOUÇAS',ELETRICO:'ELÉTRICO',ELETRONICO:'ELETRÔNICO',AGUA:'ÁGUA',CADEIRA:'CADEIRA',PROTECAO:'PROTEÇÃO',ELEVACAO:'ELEVAÇÃO',INSTALACAO:'INSTALAÇÃO',APLICACAO:'APLICAÇÃO',AREA:'ÁREA',GRAFICO:'GRÁFICO',PARABOLICO:'PARABÓLICO',SAIDA:'SAÍDA',PREFERENCIAL:'PREFERENCIAL',ANTIDERRAPANTE:'ANTIDERRAPANTE',TRANSITO:'TRÂNSITO',PNEUMATICO:'PNEUMÁTICO',NUMERO:'NÚMERO',NUMEROS:'NÚMEROS',ELEVADOR:'ELEVADOR'};
+function ppTitAcento(t){return String(t||'').replace(/[A-Z]+/g,function(w){return PP_ACENTOS[w]||w;});}
+function ppCatSecao(c){for(var i=0;i<PP_CAT_SECOES.length;i++)if(PP_CAT_SECOES[i][0]===c)return i;return PP_CAT_SECOES.length-1;}
+function ppCatBase(){var a=document.createElement('a');a.href='catalogo/';return a.href;}
+function ppCatSnap(L,fixas){
+  var M=ppModelos(L),sec={};
+  M.forEach(function(m){var i=ppCatSecao(m.cat);(sec[i]=sec[i]||[]).push({n:ppTitAcento(m.tit),l:m.linha,img:m.img||'',c:m.cores||[]});});
+  return {v:1,criado:new Date().toISOString(),por:(typeof STATE!=='undefined'&&STATE.usuarioLogado)||'',fixas:!!fixas,
+    secoes:Object.keys(sec).map(Number).sort(function(a,b){return a-b;}).map(function(i){return {t:PP_CAT_SECOES[i][1],cards:sec[i]};})};
+}
+// Divide as seções em páginas A4 (mesma proporção do catálogo impresso: 4 cards por linha)
+function ppCatPaginas(snap){
+  var CAP=87.5,TIT=4.8,ROW=20.4,pags=[],cur=null,used=0;
+  function nova(){cur={tipo:'prod',blocos:[]};pags.push(cur);used=0;}
+  (snap.secoes||[]).forEach(function(s){
+    var L=s.cards||[],i=0,first=true;
+    while(i<L.length){
+      if(!cur||(CAP-used-TIT)<ROW)nova();
+      var cabe=Math.floor((CAP-used-TIT)/ROW),rows=Math.ceil((L.length-i)/4),n=Math.min(rows,cabe)*4,part=L.slice(i,i+n);
+      cur.blocos.push({t:s.t+(first?'':' (CONTINUAÇÃO)'),cards:part});used+=TIT+Math.ceil(part.length/4)*ROW;i+=n;first=false;
+    }
+  });
+  var out=[];
+  if(snap.fixas)PP_CAT_FIXAS.inicio.forEach(function(f){out.push({tipo:'img',src:f});});
+  out=out.concat(pags);
+  if(snap.fixas)PP_CAT_FIXAS.fim.forEach(function(f){out.push({tipo:'img',src:f});});
+  return out;
+}
+function ppCatCss(){
+  if(document.getElementById('ppCatCss'))return;
+  var st=document.createElement('style');st.id='ppCatCss';st.textContent=ppCatCssTxt();document.head.appendChild(st);
+}
+function ppCatCssTxt(){return ''+
+  '.cat-pg{position:relative;width:100%;aspect-ratio:1100/1555;background:#fff;container-type:inline-size;overflow:hidden;font-family:Montserrat,"Segoe UI",Arial,sans-serif;color:#1a1a1a}'+
+  '.cat-pg>img.cat-fundo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}'+
+  '.cat-miolo{position:absolute;left:6.6%;right:3.6%;top:5.4%;bottom:6.4%}'+
+  '.cat-h{font-style:italic;font-weight:400;text-align:center;font-size:2.3cqw;letter-spacing:.06cqw;margin:0;height:4.8cqw;line-height:4.8cqw}'+
+  '.cat-g{display:grid;grid-template-columns:repeat(4,1fr);column-gap:2.3cqw;row-gap:1.75cqw;margin-bottom:1.75cqw}'+
+  '.cat-c{height:26.95cqw;border:.72cqw solid #1d2b3a;border-radius:1.5cqw;display:flex;flex-direction:column;overflow:hidden;background:#fff}'+
+  '.cat-i{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:1cqw 1cqw 2.6cqw}'+
+  '.cat-i img{max-width:100%;max-height:100%;object-fit:contain}'+
+  '.cat-sf{font-size:1.2cqw;color:#bbb}'+
+  '.cat-co{position:absolute;left:0;bottom:.4cqw;display:flex;align-items:center;gap:.45cqw}'+
+  '.cat-co b{background:#2e9d3a;color:#fff;font-weight:600;font-size:1.65cqw;line-height:2.3cqw;padding:0 2.2cqw 0 .6cqw;clip-path:polygon(0 0,100% 0,82% 100%,0 100%)}'+
+  '.cat-d{width:1.5cqw;height:1.5cqw;border-radius:50%;border:.12cqw solid #777;display:inline-block}'+
+  '.cat-d.inox{background:linear-gradient(90deg,#8a9097 50%,#f4f4f4 50%)}.cat-d.natural{background:linear-gradient(135deg,#e3e6e8,#8d939a)}.cat-d.branco{background:#fff}.cat-d.preto{background:#111;border-color:#111}.cat-d.amarelo{background:#f2c200}.cat-d.azul{background:#1d4ed8}.cat-d.vermelho{background:#dc2626}.cat-d.verde{background:#16a34a}.cat-d.cinza{background:#6b7280}.cat-d.caramelo{background:#b7793e}.cat-d.rose{background:#e8b4a0}'+
+  '.cat-t{border-top:.62cqw solid #1d2b3a;padding:.55cqw .75cqw .7cqw;height:7.6cqw;overflow:hidden}'+
+  '.cat-t .n{font-size:1.28cqw;font-weight:800;color:#1d2b3a;text-transform:uppercase;line-height:1.2}'+
+  '.cat-t .l{font-size:1.18cqw;color:#222;margin-top:.25cqw;line-height:1.22}'+
+  '.cat-v{position:fixed;inset:0;z-index:9999;background:#262626;display:flex;flex-direction:column}'+
+  '.cat-vb{display:flex;align-items:center;gap:8px;padding:8px 12px;color:#fff;font:13px "Segoe UI",Arial,sans-serif;flex-wrap:wrap}'+
+  '.cat-vb b{font-size:15px}.cat-vb .sp{flex:1}'+
+  '.cat-vb button,.cat-vb a{font:inherit;font-size:13px;padding:7px 12px;border-radius:7px;border:1px solid #555;background:#333;color:#fff;cursor:pointer;text-decoration:none;white-space:nowrap}'+
+  '.cat-vb .pri{background:#d97706;border-color:#d97706;font-weight:700}.cat-vb button:focus-visible,.cat-vb a:focus-visible{outline:2px solid #fbbf24;outline-offset:1px}'+
+  '.cat-trilho{flex:1;display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}.cat-trilho::-webkit-scrollbar{display:none}'+
+  '.cat-sl{flex:0 0 100%;scroll-snap-align:center;display:flex;align-items:center;justify-content:center;padding:6px 0 12px}'+
+  '.cat-sl .cat-pg{width:min(96vw,calc((100vh - 76px) * 0.7074));box-shadow:0 6px 30px rgba(0,0,0,.5)}'+
+  '.cat-nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;border:none;background:rgba(255,255,255,.88);font-size:22px;cursor:pointer;z-index:2}'+
+  '.cat-nav:disabled{opacity:.25;cursor:default}'+
+  '@media(max-width:640px){.cat-nav{display:none}.cat-vb .opc{display:none}}'+
+  '#catPrint{position:fixed;left:-10000px;top:0;width:210mm}#catPrint .cat-pg{width:210mm;height:297mm;aspect-ratio:auto}'+
+  '.cat-prep{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:10001;background:#1d2b3a;color:#fff;padding:10px 18px;border-radius:10px;font:14px "Segoe UI",Arial,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.35)}'+
+  '@media print{@page{size:A4;margin:0}body>*:not(#catPrint){display:none!important}html,body{background:#fff!important;margin:0!important}#catPrint{position:static!important;left:0!important;width:210mm}'+
+  '#catPrint .cat-pg{page-break-after:always;break-after:page}#catPrint *{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
+}
+function ppCatPgHtml(pg,base){
+  if(pg.tipo==='img')return '<div class="cat-pg"><img class="cat-fundo" src="'+base+pg.src+'.jpg" alt="" loading="lazy"></div>';
+  return '<div class="cat-pg"><img class="cat-fundo" src="'+base+'moldura.jpg" alt="" loading="lazy"><div class="cat-miolo">'+
+    pg.blocos.map(function(b){return '<h2 class="cat-h">'+ppEsc(b.t)+'</h2><div class="cat-g">'+b.cards.map(function(c){
+      return '<div class="cat-c"><div class="cat-i">'+(c.img?'<img src="'+ppEsc(c.img)+'" alt="'+ppEsc(c.n)+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML=\'<span class=&quot;cat-sf&quot;>Foto em breve</span>\'">':'<span class="cat-sf">Foto em breve</span>')+
+        (c.c&&c.c.length?'<div class="cat-co"><b>CORES:</b>'+c.c.slice(0,6).map(function(x){return '<span class="cat-d '+ppEsc(x)+'"></span>';}).join('')+'</div>':'')+
+        '</div><div class="cat-t"><div class="n">'+ppEsc(c.n)+'</div>'+(c.l?'<div class="l">'+ppEsc(c.l)+'</div>':'')+'</div></div>';}).join('')+'</div>';}).join('')+
+    '</div></div>';
+}
+// Visualizador: uma página por vez, deslizar no celular, setas no computador
+function ppCatAbrir(snap,opc){
+  opc=opc||{};ppCatCss();
+  var base=ppCatBase(),P=ppCatPaginas(snap);
+  var v=document.createElement('div');v.className='cat-v';v.setAttribute('role','dialog');v.setAttribute('aria-label','Catálogo digital Mais Acessível');
+  v.innerHTML='<div class="cat-vb"><b>📖 Catálogo Mais Acessível</b><span id="catN" style="color:#bbb">1 / '+P.length+'</span><span class="sp"></span>'+
+    (opc.acoes||'')+'<button type="button" id="catPdf">📄 Baixar PDF</button>'+(opc.publico?'':'<button type="button" id="catX" aria-label="Fechar catálogo">✕ Fechar</button>')+'</div>'+
+    '<div style="position:relative;flex:1;display:flex;min-height:0"><button type="button" class="cat-nav" id="catAnt" style="left:12px" aria-label="Página anterior">‹</button>'+
+    '<div class="cat-trilho" id="catTr" tabindex="0">'+P.map(function(pg){return '<div class="cat-sl">'+ppCatPgHtml(pg,base)+'</div>';}).join('')+'</div>'+
+    '<button type="button" class="cat-nav" id="catProx" style="right:12px" aria-label="Próxima página">›</button></div>';
+  document.body.appendChild(v);
+  var tr=v.querySelector('#catTr'),pos=0;
+  function atual(){return Math.round(tr.scrollLeft/Math.max(1,tr.clientWidth));}
+  function ir(i){i=Math.max(0,Math.min(P.length-1,i));tr.scrollTo({left:i*tr.clientWidth,behavior:'smooth'});}
+  function upd(){pos=atual();v.querySelector('#catN').textContent=(pos+1)+' / '+P.length;v.querySelector('#catAnt').disabled=pos<=0;v.querySelector('#catProx').disabled=pos>=P.length-1;}
+  tr.addEventListener('scroll',function(){clearTimeout(tr._t);tr._t=setTimeout(upd,80);});
+  v.querySelector('#catAnt').onclick=function(){ir(atual()-1);};v.querySelector('#catProx').onclick=function(){ir(atual()+1);};
+  function tecla(e){if(!document.body.contains(v)){document.removeEventListener('keydown',tecla);return;}if(e.key==='ArrowRight'){ir(atual()+1);e.preventDefault();}else if(e.key==='ArrowLeft'){ir(atual()-1);e.preventDefault();}else if(e.key==='Escape'&&!opc.publico)fechar();}
+  document.addEventListener('keydown',tecla);
+  function fechar(){document.removeEventListener('keydown',tecla);v.remove();document.body.style.overflow='';}
+  if(!opc.publico){v.querySelector('#catX').onclick=fechar;document.body.style.overflow='hidden';}
+  v.querySelector('#catPdf').onclick=function(){ppCatPdf(snap);};
+  if(opc.aoAbrir)opc.aoAbrir(v);
+  upd();tr.focus();
+  return v;
+}
+// PDF: monta as páginas em A4 dentro da própria página e chama a impressão (Salvar como PDF)
+function ppCatPdf(snap){
+  ppCatCss();
+  var base=ppCatBase(),P=ppCatPaginas(snap),old=document.getElementById('catPrint');if(old)old.remove();
+  var d=document.createElement('div');d.id='catPrint';d.setAttribute('aria-hidden','true');
+  d.innerHTML=P.map(function(pg){return ppCatPgHtml(pg,base).replace(/ loading="lazy"/g,'');}).join('');
+  document.body.appendChild(d);
+  var av=document.createElement('div');av.className='cat-prep';av.setAttribute('role','status');document.body.appendChild(av);
+  var ims=[].slice.call(d.querySelectorAll('img')),n=ims.length,k=0,feito=false;
+  function msg(){av.textContent='Preparando o PDF… '+k+' de '+n+' imagens';}
+  function imprimir(){if(feito)return;feito=true;av.remove();
+    function limpar(){window.removeEventListener('afterprint',limpar);var x=document.getElementById('catPrint');if(x)x.remove();}
+    window.addEventListener('afterprint',limpar);setTimeout(function(){window.print();},150);}
+  function ok(){k++;msg();if(k>=n)imprimir();}
+  msg();if(!n)return imprimir();
+  ims.forEach(function(i){if(i.complete)ok();else{i.addEventListener('load',ok);i.addEventListener('error',ok);}});
+  setTimeout(imprimir,15000);
+}
+function alertaCatalogo(m){var t=ppEl&&ppEl('ppToast');if(t){PP.aviso=[ppEsc(m)];ppDrawToast();}else{var d=document.createElement('div');d.textContent=m;d.style.cssText='position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#991b1b;color:#fff;padding:10px 16px;border-radius:8px;z-index:10000;font:14px Arial';document.body.appendChild(d);setTimeout(function(){d.remove();},6000);}}
 function ppCatalogo(){
-  var cats={},sel=ppSelItens().length;ppTodos().forEach(function(p){if(!p.fora)cats[p.catNome]=(cats[p.catNome]||0)+1;});
-  var ordem=PP_CAT_ORDEM.filter(function(c){return cats[c];});
-  var f=ppPanel(ppHdr('📚 Gerar catálogo')+
-    '<p style="font-size:13px;color:#666;margin:0 0 10px">No estilo do catálogo Mais Acessível: capa, páginas por categoria com foto, nome e medidas, e contracapa. Sem preços. Produtos iguais em tamanhos/cores diferentes viram um card só.</p>'+
+  var cats={},sel=ppSelItens().length;
+  ppTodos().forEach(function(p){if(!p.fora)cats[p.catNome]=(cats[p.catNome]||0)+1;});
+  var ordem=PP_CAT_SECOES.map(function(s){return s[0];}).filter(function(c){return cats[c];});
+  Object.keys(cats).forEach(function(c){if(ordem.indexOf(c)<0)ordem.push(c);});
+  var f=ppPanel(ppHdr('📖 Catálogo digital')+
+    '<p style="font-size:13px;color:#666;margin:0 0 10px">No mesmo modelo do catálogo impresso: capa, “Quem somos”, páginas por categoria com foto, nome e medidas, serviços e contracapa. Sem preços. Produtos iguais em tamanhos ou cores diferentes viram um card só.</p>'+
     '<div class="pp-sec"><span class="pp-fl">O que entra</span>'+
-    '<label class="pp-fx"><input type="radio" name="ppEsc" value="tudo" checked> Todo o catálogo</label>'+
-    '<label class="pp-fx"><input type="radio" name="ppEsc" value="cats"> Só as categorias marcadas abaixo</label>'+
+    '<label class="pp-fx"><input type="radio" name="ppEsc" value="cats" checked> As categorias marcadas abaixo</label>'+
     '<label class="pp-fx"><input type="radio" name="ppEsc" value="sel"'+(sel?'':' disabled')+'> Só os produtos selecionados ('+sel+')</label>'+
-    '<div id="ppCatL" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 12px;margin-top:6px;padding-left:22px">'+ordem.map(function(c){return '<label class="pp-fx"><input type="checkbox" class="ppCc" value="'+ppEsc(c)+'" checked> '+ppEsc(c)+'<span class="n">'+cats[c]+'</span></label>';}).join('')+'</div></div>'+
-    '<div class="pp-sec"><label class="pp-fx"><input type="checkbox" id="ppCapa" checked> Incluir capa e contracapa</label>'+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 12px;margin-top:6px;padding-left:22px">'+ordem.map(function(c){return '<label class="pp-fx"><input type="checkbox" class="ppCc" value="'+ppEsc(c)+'"'+(c==='Outros'?'':' checked')+'> '+ppEsc(c)+'<span class="n">'+cats[c]+'</span></label>';}).join('')+'</div></div>'+
+    '<div class="pp-sec"><label class="pp-fx"><input type="checkbox" id="ppCapa" checked> Incluir capa, “Quem somos”, serviços e contracapa</label>'+
+    '<label class="pp-fx"><input type="checkbox" id="ppEstq"> Só produtos com estoque</label>'+
     '<label class="pp-fx"><input type="checkbox" id="ppSemFoto"> Incluir produtos sem foto</label>'+
     '<label class="pp-fx"><input type="checkbox" id="ppRev"> Incluir itens ainda não revisados (“Revisar se é de catálogo”)</label></div>'+
-    '<div id="ppCatRes" class="pp-msg" style="font-size:13px"></div>'+
-    '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="pp-btn pp-close">Cancelar</button><button type="button" class="pp-btn pp-pri" id="ppCatGo">📄 Gerar PDF</button></div>');
+    '<div id="ppCatRes" class="pp-msg" style="font-size:13px"></div><div id="ppCatLink"></div>'+
+    '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;flex-wrap:wrap"><button type="button" class="pp-btn pp-close">Fechar</button>'+
+    '<button type="button" class="pp-btn" id="ppCatPdf">📄 Baixar PDF</button>'+
+    '<button type="button" class="pp-btn" id="ppCatOf" title="Atualiza o link fixo do catálogo, que você pode deixar no site ou na bio do WhatsApp">📌 Publicar no link fixo</button>'+
+    '<button type="button" class="pp-btn" id="ppCatLk">🔗 Gerar link para cliente</button>'+
+    '<button type="button" class="pp-btn pp-pri" id="ppCatVer">👁️ Ver catálogo</button></div>');
   function escolhe(){
     var esc=f.querySelector('[name=ppEsc]:checked').value,cs={};f.querySelectorAll('.ppCc:checked').forEach(function(c){cs[c.value]=1;});
-    var semFoto=f.querySelector('#ppSemFoto').checked,rev=f.querySelector('#ppRev').checked;
+    var semFoto=f.querySelector('#ppSemFoto').checked,rev=f.querySelector('#ppRev').checked,estq=f.querySelector('#ppEstq').checked;
     var base=esc==='sel'?ppSelItens().map(function(x){return x.p;}):ppTodos();
-    return base.filter(function(p){if(p.fora)return false;if(esc==='cats'&&!cs[p.catNome])return false;if(!rev&&esc!=='sel'&&ppReview(p))return false;
-      var u=ppImg(p),s=PP.ST[u];var temFoto=u&&ppOkUrl(u)&&!(s==='fail'||(s&&s.fail));if(!semFoto&&!temFoto)return false;return true;});
+    return base.filter(function(p){if(p.fora)return false;if(esc!=='sel'&&!cs[p.catNome])return false;if(!rev&&esc!=='sel'&&ppReview(p))return false;if(estq&&!(p.e>0))return false;
+      var u=ppImg(p),s=PP.ST[u];var tem=u&&ppOkUrl(u)&&!(s==='fail'||(s&&s.fail));return semFoto||tem;});
   }
+  function snap(){var L=escolhe();if(!L.length)return null;return ppCatSnap(L,f.querySelector('#ppCapa').checked);}
   function resumo(){
     var L=escolhe(),M=ppModelos(L),ruins=0;M.forEach(function(m){var s=PP.ST[m.img];if(s&&s.w&&(s.w<500||s.h<500))ruins++;});
-    f.querySelector('#ppCatRes').innerHTML='<b>'+L.length+'</b> produtos em <b>'+M.length+'</b> cards'+(ruins?' · <span style="color:#b45309">⚠️ '+ruins+' card'+(ruins>1?'s':'')+' com foto em baixa resolução</span>':'')+(PP.probing?' · <span class="pp-mut">ainda verificando '+PP.probing+' fotos…</span>':'');
+    var np=L.length?ppCatPaginas(ppCatSnap(L,f.querySelector('#ppCapa').checked)).length:0;
+    f.querySelector('#ppCatRes').innerHTML=L.length?'<b>'+L.length+'</b> produtos em <b>'+M.length+'</b> cards · <b>'+np+'</b> páginas'+(ruins?' · <span style="color:#b45309">⚠️ '+ruins+' card'+(ruins>1?'s':'')+' com foto em baixa resolução</span>':'')+(PP.probing?' · <span class="pp-mut">ainda verificando '+PP.probing+' fotos…</span>':''):'<span class="pp-red">Nenhum produto nessa seleção.</span>';
   }
-  f.querySelectorAll('input').forEach(function(i){i.onchange=function(){if(i.name==='ppEsc'||i.classList.contains('ppCc')){if(i.classList.contains('ppCc'))f.querySelector('[name=ppEsc][value=cats]').checked=true;}resumo();};});
+  f.querySelectorAll('input').forEach(function(i){i.addEventListener('change',function(){if(i.classList.contains('ppCc'))f.querySelector('[name=ppEsc][value=cats]').checked=true;resumo();});});
   resumo();
-  f.querySelector('#ppCatGo').onclick=function(){
-    var L=escolhe();if(!L.length){f.querySelector('#ppCatRes').innerHTML='<span class="pp-red">Nenhum produto nessa seleção.</span>';return;}
-    var w=window.open('','_blank');if(!w){f.querySelector('#ppCatRes').innerHTML='<span class="pp-red">O navegador bloqueou a nova janela. Permita pop-ups para este site e tente de novo.</span>';return;}
-    w.document.write('<p style="font-family:Segoe UI,Arial;padding:40px;color:#666">Montando o catálogo…</p>');
-    var capa=f.querySelector('#ppCapa').checked;
-    ppCarregaCapas(capa,function(cp){ppEscreveCatalogo(w,ppModelos(L),cp);});
-  };
+  f.querySelector('#ppCatVer').onclick=function(){var s=snap();if(!s){resumo();return;}ppCatAbrir(s);};
+  f.querySelector('#ppCatPdf').onclick=function(){var s=snap();if(!s){resumo();return;}ppCatPdf(s);};
+  function publicar(id,btn,rotulo){
+    var s=snap();if(!s){resumo();return;}
+    btn.disabled=true;btn.textContent='Publicando…';
+    fetch(FIREBASE_DB+'/catalogos/'+id+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(s)}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);
+      var url=location.origin+location.pathname+'#cat='+id,msg='Olá! Segue o catálogo de produtos da Mais Acessível: '+url;
+      f.querySelector('#ppCatLink').innerHTML='<div class="pp-sec" style="margin-top:10px;border-color:#bbf7d0;background:#f0fdf4"><b style="font-size:13px">✅ '+rotulo+'</b><input readonly value="'+ppEsc(url)+'" style="margin:6px 0;font-family:Consolas,monospace;font-size:12px">'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap"><a class="pp-btn pp-pri" style="text-decoration:none;background:#16a34a;border-color:#16a34a" href="https://wa.me/?text='+encodeURIComponent(msg)+'" target="_blank" rel="noopener">🟢 Enviar no WhatsApp</a><button type="button" class="pp-btn" id="ppCatCp">📋 Copiar link</button><a class="pp-btn" style="text-decoration:none" href="'+ppEsc(url)+'" target="_blank" rel="noopener">👁️ Abrir como o cliente vê</a></div></div>';
+      var cp=f.querySelector('#ppCatCp');cp.onclick=function(){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(function(){cp.textContent='✅ Copiado';});};
+    }).catch(function(e){f.querySelector('#ppCatLink').innerHTML='<div class="pp-msg pp-red" role="alert" style="font-size:13px">Não foi possível publicar o catálogo ('+ppEsc(e&&e.message||e)+'). Verifique a internet e tente de novo.</div>';})
+    .then(function(){btn.disabled=false;btn.textContent=rotulo.indexOf('fixo')>=0?'📌 Publicar no link fixo':'🔗 Gerar link para cliente';});
+  }
+  f.querySelector('#ppCatLk').onclick=function(){var a=new Uint8Array(12);crypto.getRandomValues(a);publicar(Array.prototype.map.call(a,function(b){return ('0'+b.toString(16)).slice(-2);}).join(''),this,'Link do catálogo pronto');};
+  f.querySelector('#ppCatOf').onclick=function(){publicar('oficial',this,'Link fixo atualizado (quem já tem o link vê a versão nova)');};
 }
-function ppCarregaCapas(quer,cb){
-  if(!quer)return cb(null);if(window.CATALOGO_CAPAS)return cb(window.CATALOGO_CAPAS);
-  var s=document.createElement('script');s.src='catalogo-capas.js?v=1';s.onload=function(){cb(window.CATALOGO_CAPAS||null);};s.onerror=function(){cb(null);};document.head.appendChild(s);
-}
-function ppEscreveCatalogo(w,M,cp){
-  var logo='';try{var hh=renderHeader();var im=hh.querySelector('img');if(im)logo=im.getAttribute('src');}catch(e){}
-  var css='*{box-sizing:border-box}body{margin:0;background:#e9e7e3;font-family:Segoe UI,Roboto,Arial,sans-serif;color:#1a1a1a}'+
-  '.bar{position:sticky;top:0;z-index:5;background:#2d2d2d;color:#fff;padding:10px 18px;display:flex;gap:12px;align-items:center;font-size:13px}.bar button{font:inherit;padding:7px 14px;border-radius:6px;border:none;background:#d97706;color:#fff;font-weight:700;cursor:pointer}'+
-  '.wrap{padding:20px 0;display:flex;flex-direction:column;align-items:center;gap:20px}'+
-  '.page{width:210mm;height:297mm;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.15);position:relative;padding:12mm 10mm 22mm 14mm;overflow:hidden;page-break-after:always;break-after:page}'+
-  '.full{padding:0}.full img{width:100%;height:100%;object-fit:cover;display:block}'+
-  '.dots{position:absolute;top:5mm;right:6mm;width:30mm;height:7mm;background:radial-gradient(circle,#f28c28 1.6px,transparent 1.8px) 0 0/6px 6px}'+
-  '.vb{position:absolute;left:3.5mm;top:32mm;width:6mm;height:90mm;background:repeating-linear-gradient(180deg,#d4d4d4 0 6mm,transparent 6mm 8mm)}'+
-  '.ic{position:absolute;top:4mm;left:5mm;color:#f28c28;font-size:20px}'+
-  'h2{font-style:italic;font-weight:400;font-size:19px;text-align:center;margin:6mm 0 4mm;letter-spacing:.3px}'+
-  '.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3.2mm}'+
-  '.card{border:4px solid #1d2b3a;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;break-inside:avoid;background:#fff}'+
-  '.im{height:38mm;display:flex;align-items:center;justify-content:center;padding:2mm;position:relative}.im img{max-width:100%;max-height:100%;object-fit:contain}'+
-  '.co{position:absolute;left:0;bottom:1mm;display:flex;align-items:center;gap:3px}.co .t{background:#16a34a;color:#fff;font-size:9.5px;font-weight:600;padding:1px 12px 1px 5px;clip-path:polygon(0 0,100% 0,85% 100%,0 100%)}'+
-  '.d{width:10px;height:10px;border-radius:50%;border:1px solid #888;display:inline-block}.d-inox{background:linear-gradient(90deg,#9aa0a6 50%,#fff 50%)}.d-natural{background:linear-gradient(135deg,#dde1e4,#8d939a)}.d-branco{background:#fff}.d-preto{background:#111;border-color:#111}.d-amarelo{background:#f2c200}.d-azul{background:#1d4ed8}.d-vermelho{background:#dc2626}.d-verde{background:#16a34a}.d-cinza{background:#6b7280}.d-caramelo{background:#b7793e}.d-rose{background:#e8b4a0}'+
-  '.cap{border-top:4px solid #1d2b3a;padding:1.6mm 2mm 2mm;min-height:17mm}.cap .n{font-size:8.6px;font-weight:800;color:#1d2b3a;text-transform:uppercase;line-height:1.2}.cap .l{font-size:8.2px;color:#333;margin-top:1mm;line-height:1.25}'+
-  '.sf{color:#bbb;font-size:10px}.foot{position:absolute;left:0;right:0;bottom:5mm;display:flex;align-items:center;justify-content:center;gap:5mm}.foot .ln{width:50mm;height:3.5mm;background:repeating-linear-gradient(90deg,#d4d4d4 0 5mm,transparent 5mm 6.5mm)}.foot img{height:12mm}'+
-  '@page{size:A4;margin:0}@media print{.bar{display:none}body{background:#fff}.wrap{padding:0;gap:0}.page{box-shadow:none}}';
-  function card(m){return '<div class="card"><div class="im">'+(m.img?'<img src="'+ppEsc(m.img)+'" alt="" referrerpolicy="no-referrer">':'<span class="sf">Foto em breve</span>')+(m.cores.length?'<div class="co"><span class="t">CORES:</span>'+m.cores.slice(0,6).map(function(c){return '<span class="d d-'+c+'"></span>';}).join('')+'</div>':'')+'</div><div class="cap"><div class="n">'+ppEsc(m.tit)+'</div>'+(m.linha?'<div class="l">'+ppEsc(m.linha)+'</div>':'')+'</div></div>';}
-  var porCat={};M.forEach(function(m){(porCat[m.cat]=porCat[m.cat]||[]).push(m);});
-  var cats=PP_CAT_ORDEM.filter(function(c){return porCat[c];});
-  var CAP=232,TIT=17,ROW=62,pages=[],cur=null,used=0;
-  function novaPag(){cur=[];pages.push(cur);used=0;}
-  novaPag();
-  cats.forEach(function(c){var L=porCat[c],i=0,first=true;
-    while(i<L.length){var rows=Math.ceil((L.length-i)/4);var cabe=Math.floor((CAP-used-TIT)/ROW);
-      if(cabe<1){novaPag();continue;}var n=Math.min(rows,cabe)*4;var part=L.slice(i,i+n);
-      cur.push({tit:c+(first?'':' (continuação)'),cards:part});used+=TIT+Math.ceil(part.length/4)*ROW;i+=n;first=false;}
-  });
-  var html='<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Catálogo Mais Acessível</title><style>'+css+'</style></head><body><div class="bar"><b>Catálogo Mais Acessível</b><span style="color:#ccc">'+M.length+' cards · '+pages.length+' páginas'+(cp?' + capa e contracapa':'')+'</span><span style="flex:1"></span><span style="color:#ccc">Na janela de impressão, escolha <b>Salvar como PDF</b></span><button onclick="window.print()">🖨️ Imprimir / Salvar PDF</button></div><div class="wrap">';
-  if(cp&&cp.capa)html+='<div class="page full"><img src="'+cp.capa+'" alt="Capa"></div>';
-  pages.forEach(function(pg){html+='<div class="page"><div class="ic">♿︎</div><div class="dots"></div><div class="vb"></div>'+pg.map(function(s){return '<h2>'+ppEsc(s.tit.toUpperCase())+'</h2><div class="grid">'+s.cards.map(card).join('')+'</div>';}).join('')+'<div class="foot"><div class="ln"></div>'+(logo?'<img src="'+logo+'" alt="Mais Acessível">':'')+'<div class="ln"></div></div></div>';});
-  if(cp&&cp.contra)html+='<div class="page full"><img src="'+cp.contra+'" alt="Contracapa"></div>';
-  html+='</div><script>(function(){var ims=[].slice.call(document.images);var n=ims.length,k=0;function ok(){k++;if(k>=n)setTimeout(function(){window.print();},400);}if(!n)return ok();ims.forEach(function(i){if(i.complete)ok();else{i.onload=i.onerror=ok;}});setTimeout(function(){if(k<n){k=n;window.print();}},9000);})();<\/script></body></html>';
-  w.document.open();w.document.write(html);w.document.close();
+function ppEhCatalogo(){return /^#cat=([0-9a-f]{24}|oficial)$/.test(location.hash||'');}
+function ppRenderCatalogoPublico(){
+  var id=location.hash.slice(5),w=document.createElement('div');
+  w.innerHTML='<div style="padding:60px;text-align:center;color:#888;font-family:Segoe UI,Arial">Carregando o catálogo…</div>';
+  document.title='Catálogo · Mais Acessível';
+  fetch(FIREBASE_DB+'/catalogos/'+id+'.json').then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(function(d){
+    if(!d||!Array.isArray(d.secoes)){w.innerHTML='<div style="padding:60px;text-align:center;color:#666;font-family:Segoe UI,Arial"><div style="font-size:18px;font-weight:700;margin-bottom:6px">Catálogo não encontrado</div>Confira se o link está completo ou peça um novo ao seu vendedor.</div>';return;}
+    w.innerHTML='';
+    ppCatAbrir(d,{publico:true,acoes:'<a href="https://wa.me/556235173971" target="_blank" rel="noopener" class="pri">💬 Falar no WhatsApp</a><a class="opc" href="https://www.maisacessivel.com.br" target="_blank" rel="noopener">🌐 Site</a>'});
+  }).catch(function(){w.innerHTML='<div style="padding:60px;text-align:center;color:#666;font-family:Segoe UI,Arial"><div style="font-size:18px;font-weight:700;margin-bottom:6px">Não foi possível carregar o catálogo</div>Verifique sua internet e atualize a página.</div>';});
+  return w;
 }
 function ppEhApresentacao(){return /^#ap=[0-9a-f]{24}(;pdf)?$/.test(location.hash||'');}
 function ppRenderApresentacao(){
@@ -22384,7 +22552,7 @@ window.addEventListener('hashchange', function(){
 });
 
 render();
-if(!ppEhApresentacao()){ fbInitAdmin(); fbInit(); }
+if(!ppEhApresentacao()&&!ppEhCatalogo()){ fbInitAdmin(); fbInit(); }
 
 
 function renderAceIA(){

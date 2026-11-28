@@ -6,6 +6,9 @@
       ".write": "auth != null && root.child('acl/' + auth.uid).exists()"
     },
 
+    "catalogos": { ".read": true },
+    "apresentacoes": { ".read": true },
+
     "acl": {
       ".write": "auth != null && root.child('acl/' + auth.uid).val() === 'admin'"
     },
