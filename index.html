@@ -13078,7 +13078,7 @@ function renderCotacaoAvulsa(){
   // url → abre o app externo num iframe; modo → usa o módulo de cotação (o mesmo de Compras › Cotação compra), puxando a cotação do Bling
   var FORNECEDORES=[
     {id:'baruc', label:'Baruc', url:'https://rauldneto.github.io/mais-acessivel-cotacao-avulsa/'},
-    {id:'outros', label:'Outros', modo:'proposta'}
+    {id:'outros', label:'Cotação avulsa', modo:'proposta'}
   ];
   if(!FORNECEDORES.some(function(f){return f.id===CAV_SUB;}))CAV_SUB=FORNECEDORES[0].id;
 
@@ -16890,7 +16890,7 @@ var CC_MODOS={
   compra:{modulo:'mod20',col:'cotacoesCompra',rota:'/pedido-compra?numero=',doc:'pedido de compra',docC:'Pedido de compra',docCurto:'Pedido',
     titulo:'⚖️ Cotação compra',sub:'Compare o fornecedor do pedido de compra com outros fornecedores e defina a melhor condição.',btn:'🔎 Puxar pedido',ex:'Ex.: 1542'},
   proposta:{modulo:'mod4',col:'cotacoesAvulsas',rota:'/proposta?numero=',doc:'cotação',docC:'Cotação',docCurto:'Cotação',
-    titulo:'🧾 Cotação avulsa · Outros',sub:'Puxe a cotação do Bling e monte o preço de venda de cada produto (custo do fornecedor + impostos + frete + markup).',btn:'🔎 Puxar cotação',ex:'Ex.: 7227'}
+    titulo:'🧾 Cotação avulsa',sub:'Puxe a cotação do Bling e monte o preço de venda de cada produto (custo do fornecedor + impostos + frete + markup).',btn:'🔎 Puxar cotação',ex:'Ex.: 7227'}
 };
 var CC_ESTADOS={compra:CC};
 function ccUsar(modo){
