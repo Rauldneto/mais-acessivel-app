@@ -13223,6 +13223,117 @@ var PP_MARCAS=[['FAUZI','Fauzi'],['METALFLEX','Metalflex'],['DOCOL','Docol'],['D
 var PP_FORA_RE=/(CONECTOR|KEYSTONE|RJ45|PILHA|PAINEL LED|PAQUIMETRO|FILME STRETCH|LIZ CJ|ESGUICHO|ESPUMA EXPANSIVA|FITA CREPE|FITA D FACE|EXPOSITOR|MAO FRANCESA)/;
 function ppN(s){return String(s||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();}
 function ppClassifica(n){var N=ppN(n);for(var i=0;i<PP_CATS.length;i++){if(PP_CATS[i][1].test(N))return PP_CATS[i][0];}return PP_CAT_OUTROS;}
+// ----- Categorias do catálogo (editáveis em Produtos › 🗂️ Categorias) -----
+// p: o nome do produto COMEÇA com um destes termos (vale o termo mais comprido entre todas as categorias)
+// s: subcategorias [nome, termos que o nome CONTÉM]; "A+B" exige os dois; termos vazios = recebe o que sobrar
+var PP_CAT_PADRAO=[
+ {n:'Pisos e elementos táteis',t:'PISOS E ELEMENTOS TÁTEIS',p:'ELEMENTO TATIL, PISO TATIL, GABARITO',s:[['Elementos táteis','ELEMENTO'],['Pisos táteis','PISO'],['Gabaritos de instalação','GABARITO']]},
+ {n:'Kit instalação de pisos e elementos',t:'KIT INSTALAÇÃO DE PISOS E ELEMENTOS',p:'COLA, ESTOPA, SOLVENTE, TRINCHA, VEDA BORDA, VEDADOR, FIXADOR BICOMPONENTE, 3M PRIMER, PRIMER, THINNER, REMOVEDOR, TUBO DE COLA, SELANTE',s:[['Colas e primers','COLA, PRIMER, FIXADOR, SELANTE'],['Limpeza','THINNER, REMOVEDOR, ESTOPA, SOLVENTE'],['Aplicação e acabamento','TRINCHA, VEDA, VEDADOR']]},
+ {n:'Barras de apoio',t:'BARRAS DE APOIO',p:'BARRA DE APOIO, BARRA SUPORTE, BARRA LATERAL, BARRA ARTICULADA, BARRA FIXA, BANCO ARTICULADO',s:[['Barras para lavatório','LAVATORIO'],['Barras articuladas','ARTICULADA'],['Barras em "L" e piso/parede','EM "L", PISO/PAREDE, PISO PAREDE'],['Barras fixas','FIXA'],['Barras retas','RETA'],['Bancos articulados','BANCO'],['Outras barras','']]},
+ {n:'Corrimão acessível',t:'CORRIMÃO ACESSÍVEL',p:'CORRIMAO, GUARDA CORPO',s:[]},
+ {n:'Banheiro acessível',t:'BANHEIRO ACESSÍVEL',p:'BANCO, BANQUETA, CADEIRA, TROCADOR, FRALDARIO, CABIDE, PORTA OBJETO, PORTA PAPEL, PORTA TOALHA, SABONETEIRA, PLACA DE IMPACTO, BOTAO ELEVADO, ACIONADOR, PAPELEIRA, CESTO, LIXEIRA, DOSADOR, ESPELHO RECLIN',s:[['Placas de impacto','PLACA DE IMPACTO'],['Acionadores e botões elevados','BOTAO, ACIONADOR'],['Trocadores e fraldários','TROCADOR, FRALDARIO'],['Bancos, banquetas e cadeiras','BANCO, BANQUETA, CADEIRA'],['Lixeiras e cestos','LIXEIRA, CESTO'],['Cabides, papeleiras e porta-objetos','']]},
+ {n:'Louças',t:'LOUÇAS',p:'BACIA, CAIXA ACOPLADA, CX ACOPLADA, COLUNA, CUBA, LAVAT, MICTORIO, TANQUE',s:[['Louças acessíveis','BACIA+LUNA SPECIALE'],['Bacias comuns','BACIA'],['Demais louças','']]},
+ {n:'Assentos sanitários',t:'ASSENTOS SANITÁRIOS',p:'ASSENTO',s:[['Assentos elevados (PCD)','ELEVADO, PNE, PCD'],['Assentos para modelos específicos','LUNA, ETNA, SABATINI, VOGUE, MISTI, CALYPSO, THEMA, ICASA, TUPAN'],['Assentos universais','']]},
+ {n:'Acessórios e produtos hidráulicos',t:'ACESSÓRIOS E PRODUTOS HIDRÁULICOS PARA BANHEIRO',p:'ACABAMENTO, BASE, CHUVEIRO, DUCHA, REGISTRO, VALVULA, ENGATE, MECANISMO, ANEL DE VEDACAO, PARAFUSO P, KIT INSTALACAO, BRACO P, GRELHA, SIFAO, RALO',s:[['Acabamentos e válvulas de descarga','ACABAMENTO, DESCARGA, BASE, MECANISMO, REGISTRO'],['Válvulas de lavatório e pia','VALVULA'],['Duchas e chuveiros','DUCHA, CHUVEIRO, BRACO'],['Engates e sifões','ENGATE, SIFAO'],['Grelhas e ralos','GRELHA, RALO'],['Kits de instalação de louças','']]},
+ {n:'Torneiras',t:'TORNEIRAS',p:'TORNEIRA, TORNIERA, MISTURADOR',s:[['Misturadores','MISTURADOR'],['Torneiras automáticas','AUTOMATIC, MATIC'],['Torneiras clínicas','CLINIC'],['Torneiras para cozinha','COZ, PIA'],['Torneiras para jardim e tanque','JARDIM, TANQUE, MAQUINA'],['Torneiras para lavatório','']]},
+ {n:'Dispensers',t:'DISPENSER',p:'DISPENSER, RESERVATORIO',s:[['Papel higiênico','HIGIENICO'],['Papel toalha','TOALHA, TOALHEIRO'],['Saboneteiras e reservatórios','SABONETEIRA, RESERVATORIO, SABAO'],['Outros dispensers','']]},
+ {n:'Alarmes e emergência',t:'ALARMES',p:'ALARME, LUMINARIA',s:[]},
+ {n:'Sinalização de piso e fitas',t:'SINALIZAÇÃO',p:'FITA, ADESIVO, SINALIZADOR, MOLDE, BATE RODAS, MEIO FIO, PISO EMBORRACHADO, PISO MOEDA, TAPETE, CAPA PARA ASSENTO',s:[['Fitas de demarcação','DEMARCACAO, ZEBRADA'],['Fitas antiderrapantes','ANTDERRAPANTE, ANTIDERRAPANTE'],['Moldes de pintura','MOLDE'],['Adesivos','ADESIVO'],['Bate-rodas, meio-fio e pisos','BATE, MEIO FIO, PISO, TAPETE, SINALIZADOR'],['Outros','']]},
+ {n:'Placas de sinalização',t:'PLACAS DE SINALIZAÇÃO',p:'PLACA',s:[['Placas visuais','VISUAL'],['Sanitários e WC','WC, SANITARIO, BANHEIRO'],['Vagas reservadas','RESERVADO, RESERVADA, VAGA, ESTACIONAMENTO'],['Placas de identificação','']]},
+ {n:'Mapas e placas em braille',t:'MAPA E PLACAS COM BRAILLE',p:'MAPA TATIL, PEDESTAL MAPA, PLACA BRAILLE, PLACA EM BRAILLE, PLACA CORRIMAO, PLACA PAVIMENTO',s:[['Mapas táteis e pedestais','MAPA'],['Placas de corrimão','CORRIMAO'],['Placas de pavimento e elevador','PAVIMENTO, ELEVADOR'],['Placas em braille','']]},
+ {n:'Portas e ferragens',t:'PORTAS E FERRAGENS',p:'MOLA, FECHADURA, BARRA ANTI, ESPELHO INOX DORMA, ESPELHO P, EIXO, FECHO',s:[['Molas','MOLA'],['Fechaduras e barras antipânico','FECHADURA, ANTI'],['Acessórios','']]}
+];
+function ppTermos(t){return String(t||'').split(',').map(function(x){return ppN(x);}).filter(Boolean);}
+function ppCatDefPrep(def){
+  return (def||[]).map(function(c){return {n:String(c.n||'').trim(),t:String(c.t||c.n||'').trim(),p:ppTermos(c.p),
+    s:(c.s||[]).map(function(x){return {n:String(x[0]||'').trim(),q:ppTermos(x[1]).map(function(q){return q.split('+').map(function(z){return z.trim();}).filter(Boolean);})};}).filter(function(x){return x.n;})};}).filter(function(c){return c.n;});
+}
+function ppCatDef(){return PP.catPrep||(PP.catPrep=ppCatDefPrep(PP.catDef||PP_CAT_PADRAO));}
+// Classifica pelo nome: categoria = termo inicial mais comprido; subcategoria = primeira cujo termo aparece no nome
+function ppCatDe(nome,prep){
+  prep=prep||ppCatDef();var N=ppN(nome),best=null,bl=0;
+  prep.forEach(function(c){c.p.forEach(function(t){if(t.length>bl&&N.indexOf(t)===0&&(N.length===t.length||/[^A-Z0-9]/.test(N.charAt(t.length))||t.length>=4)){best=c;bl=t.length;}});});
+  if(!best)return {cat:PP_CAT_OUTROS,sub:''};
+  return {cat:best.n,sub:ppSubDe(N,best)};
+}
+function ppSubDe(nome,c){
+  if(typeof c==='string')c=ppCatDef().filter(function(x){return x.n===c;})[0];if(!c)return '';
+  var N=ppN(nome);
+  for(var i=0;i<c.s.length;i++){var s=c.s[i];if(!s.q.length)return s.n;
+    if(s.q.some(function(and){return and.every(function(z){return N.indexOf(z)>=0;});}))return s.n;}
+  return '';
+}
+function ppCatNomes(){return ppCatDef().map(function(c){return c.n;}).concat([PP_CAT_OUTROS]);}
+function ppCatTitulo(nome){var c=ppCatDef().filter(function(x){return x.n===nome;})[0];return c?c.t:(nome===PP_CAT_OUTROS?'OUTROS PRODUTOS':String(nome||'').toUpperCase());}
+function ppSubsDe(nome){var c=ppCatDef().filter(function(x){return x.n===nome;})[0];return c?c.s.map(function(s){return s.n;}):[];}
+function ppReclassifica(){
+  ppTodos().forEach(function(p){var r=ppCatDe(p.n);p.catAuto=r.cat;p.subAuto=r.sub;
+    var e=(PP.edits[p._T]||{})[ppKey(p.c)]||{},nomes=ppCatNomes();
+    p.catNome=(e.catMan&&nomes.indexOf(e.catMan)>=0)?e.catMan:r.cat;
+    var subs=ppSubsDe(p.catNome);
+    p.subNome=(e.subMan&&subs.indexOf(e.subMan)>=0)?e.subMan:(p.catNome===r.cat?r.sub:ppSubDe(p.n,p.catNome));
+  });
+}
+// Tela de edição das categorias
+function ppCategorias(){
+  var def=JSON.parse(JSON.stringify(PP.catDef||PP_CAT_PADRAO));
+  var f=ppPanel(ppHdr('🗂️ Categorias do catálogo')+'<div id="ppCtBody"></div>');
+  function contar(){
+    var prep=ppCatDefPrep(def),cnt={},sc={},ov=0;
+    ppTodos().forEach(function(p){if(p.fora)return;var e=(PP.edits[p._T]||{})[ppKey(p.c)]||{};if(e.catMan)ov++;var r=ppCatDe(p.n,prep);cnt[r.cat]=(cnt[r.cat]||0)+1;sc[r.cat+'|'+r.sub]=(sc[r.cat+'|'+r.sub]||0)+1;});
+    return {cnt:cnt,sc:sc,ov:ov};
+  }
+  function inp(attr,val,ph,extra){return '<input '+attr+' value="'+ppEsc(val)+'" placeholder="'+ppEsc(ph)+'"'+(extra||'')+'>';}
+  function desenha(){
+    var k=contar(),out=k.cnt[PP_CAT_OUTROS]||0;
+    var h='<p style="font-size:13px;color:#666;margin:0 0 10px">A ordem aqui é a ordem das seções no catálogo. Cada produto vai para a categoria cujo <b>início do nome</b> combina (vale o termo mais comprido) e para a primeira subcategoria cujo termo <b>aparece no nome</b>. Use vírgula para separar termos e <b>+</b> para exigir dois termos juntos (ex.: <code>BACIA+LUNA SPECIALE</code>). Subcategoria sem termos recebe o que sobrar. Para um produto específico, troque a categoria no <b>Editar</b> dele.</p>'+
+      (out?'<div class="pp-msg" style="color:#b45309;margin-bottom:8px">⚠️ '+out+' produto'+(out>1?'s':'')+' sem categoria (vão para “'+PP_CAT_OUTROS+'”).</div>':'')+
+      def.map(function(c,i){var n=k.cnt[c.n]||0;return '<div class="pp-sec" style="background:#fff">'+
+        '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="color:#b45309;min-width:22px">'+(i+1)+'.</b>'+
+        '<button type="button" class="pp-btn" data-up="'+i+'" aria-label="Subir categoria"'+(i?'':' disabled')+'>↑</button><button type="button" class="pp-btn" data-dn="'+i+'" aria-label="Descer categoria"'+(i<def.length-1?'':' disabled')+'>↓</button>'+
+        '<label style="flex:1;min-width:180px"><span class="pp-fl">Nome</span>'+inp('data-cn="'+i+'"',c.n,'Nome da categoria')+'</label>'+
+        '<label style="flex:1;min-width:180px"><span class="pp-fl">Título no catálogo</span>'+inp('data-ct="'+i+'"',c.t,'Ex.: BARRAS DE APOIO')+'</label>'+
+        '<span class="pp-pill" style="align-self:flex-end;margin-bottom:6px">'+n+' produto'+(n===1?'':'s')+'</span>'+
+        '<button type="button" class="pp-btn" data-del="'+i+'" style="align-self:flex-end;margin-bottom:4px;color:#991b1b" aria-label="Excluir categoria">🗑</button></div>'+
+        '<label style="display:block;margin-top:6px"><span class="pp-fl">Nome do produto começa com</span>'+inp('data-cp="'+i+'"',c.p,'Ex.: BARRA DE APOIO, BARRA SUPORTE')+'</label>'+
+        '<div style="margin-top:8px;padding-left:14px;border-left:3px solid #fde68a"><span class="pp-fl">Subcategorias (subtítulos dentro da seção)</span>'+
+        (c.s||[]).map(function(s,j){var sn=k.sc[c.n+'|'+s[0]]||0;return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">'+
+          '<button type="button" class="pp-btn" data-sup="'+i+'_'+j+'" aria-label="Subir subcategoria"'+(j?'':' disabled')+'>↑</button><button type="button" class="pp-btn" data-sdn="'+i+'_'+j+'" aria-label="Descer subcategoria"'+(j<c.s.length-1?'':' disabled')+'>↓</button>'+
+          inp('data-sn="'+i+'_'+j+'"',s[0],'Nome da subcategoria',' style="flex:1;min-width:160px;width:auto"')+inp('data-sq="'+i+'_'+j+'"',s[1],'Nome contém… (vazio = o que sobrar)',' style="flex:1.4;min-width:180px;width:auto"')+
+          '<span class="pp-mut" style="font-size:12px;min-width:34px;text-align:right">'+sn+'</span><button type="button" class="pp-btn" data-sdel="'+i+'_'+j+'" style="color:#991b1b" aria-label="Excluir subcategoria">🗑</button></div>';}).join('')+
+        ((k.sc[c.n+'|']||0)&&(c.s||[]).length?'<div class="pp-msg" style="color:#b45309">'+k.sc[c.n+'|']+' produto(s) desta categoria sem subcategoria. Crie uma subcategoria sem termos para recebê-los.</div>':'')+
+        '<button type="button" class="pp-btn" data-sadd="'+i+'">＋ Subcategoria</button></div></div>';}).join('')+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button type="button" class="pp-btn" id="ppCtAdd">＋ Nova categoria</button><button type="button" class="pp-btn" id="ppCtPad">↺ Voltar ao padrão</button><span style="flex:1"></span>'+
+      '<button type="button" class="pp-btn pp-close">Cancelar</button><button type="button" class="pp-btn pp-pri" id="ppCtSave">Salvar categorias</button></div><div id="ppCtErr" class="pp-msg pp-red" role="alert" style="font-size:13px"></div>';
+    var b=f.querySelector('#ppCtBody');b.innerHTML=h;
+    b.querySelectorAll('.pp-close').forEach(function(x){x.onclick=function(){ppEl('ppForm').innerHTML='';};});
+    function lig(sel,fn){b.querySelectorAll(sel).forEach(function(x){x.addEventListener(x.tagName==='INPUT'?'change':'click',function(){fn(x);});});}
+    function ij(x,a){return x.getAttribute(a).split('_').map(Number);}
+    lig('[data-cn]',function(x){def[+x.dataset.cn].n=x.value.trim();desenha();});
+    lig('[data-ct]',function(x){def[+x.dataset.ct].t=x.value.trim();});
+    lig('[data-cp]',function(x){def[+x.dataset.cp].p=x.value;desenha();});
+    lig('[data-sn]',function(x){var q=ij(x,'data-sn');def[q[0]].s[q[1]][0]=x.value.trim();desenha();});
+    lig('[data-sq]',function(x){var q=ij(x,'data-sq');def[q[0]].s[q[1]][1]=x.value;desenha();});
+    lig('[data-up]',function(x){var i=+x.dataset.up;def.splice(i-1,0,def.splice(i,1)[0]);desenha();});
+    lig('[data-dn]',function(x){var i=+x.dataset.dn;def.splice(i+1,0,def.splice(i,1)[0]);desenha();});
+    lig('[data-del]',function(x){def.splice(+x.dataset.del,1);desenha();});
+    lig('[data-sup]',function(x){var q=ij(x,'data-sup'),s=def[q[0]].s;s.splice(q[1]-1,0,s.splice(q[1],1)[0]);desenha();});
+    lig('[data-sdn]',function(x){var q=ij(x,'data-sdn'),s=def[q[0]].s;s.splice(q[1]+1,0,s.splice(q[1],1)[0]);desenha();});
+    lig('[data-sdel]',function(x){var q=ij(x,'data-sdel');def[q[0]].s.splice(q[1],1);desenha();});
+    lig('[data-sadd]',function(x){var c=def[+x.dataset.sadd];c.s=c.s||[];c.s.push(['Nova subcategoria','']);desenha();});
+    b.querySelector('#ppCtAdd').onclick=function(){def.push({n:'Nova categoria',t:'NOVA CATEGORIA',p:'',s:[]});desenha();};
+    b.querySelector('#ppCtPad').onclick=function(){def=JSON.parse(JSON.stringify(PP_CAT_PADRAO));desenha();};
+    b.querySelector('#ppCtSave').onclick=function(){
+      var err='',nm={};def.forEach(function(c){if(!c.n)err=err||'Toda categoria precisa de um nome.';var k2=c.n.toLowerCase();if(nm[k2])err=err||'Há duas categorias chamadas “'+c.n+'”.';nm[k2]=1;if(c.n===PP_CAT_OUTROS)err=err||'“'+PP_CAT_OUTROS+'” é reservado para o que não se encaixa.';});
+      if(err){b.querySelector('#ppCtErr').textContent=err;return;}
+      var btn=this;btn.disabled=true;btn.textContent='Salvando…';
+      ppSalvar('categorias',{v:1,lista:def,em:new Date().toISOString(),por:STATE.usuarioLogado||''}).then(function(){
+        PP.catDef=def;PP.catPrep=null;ppReclassifica();PP.S={};PP.erro='';PP.aviso=['Categorias salvas. Os produtos e o catálogo já usam a nova organização.'];ppEl('ppForm').innerHTML='';ppDraw();
+      }).catch(function(e){btn.disabled=false;btn.textContent='Salvar categorias';ppErroSalvar(e);});
+    };
+  }
+  desenha();
+}
 function ppMarcaDe(n){var N=' '+ppN(n)+' ';for(var i=0;i<PP_MARCAS.length;i++){var t=PP_MARCAS[i][0];if(N.indexOf(t.charAt(0)===' '?t+' ':' '+t+' ')>=0||N.indexOf(' '+t+'\n')>=0)return PP_MARCAS[i][1];}return '';}
 function ppParseO(n){var N=ppN(n),o={material:'',cor:'',medida:'',lado:'',tipo:''};
  var mats=[['INOX','Inox'],['ALUMINIO','Alumínio'],['ACRILICO','Acrílico'],[' ACM','ACM'],[' PS',' PS'],['PVC','PVC'],['CONCRETO','Concreto'],['ARGAMASSADO','Argamassado'],['EMBORRACHADO','Borracha'],['MADEIRA','Madeira'],['ABS','ABS'],['METAL','Metal']];
@@ -13251,10 +13362,10 @@ function ppParseA(n){var N=ppN(n),o={formato:'',material:'',fech:'Comum',cor:'',
  var c=ppParseO(n).cor;o.cor=c||'';var a=N.match(/(\d+([.,]\d+)?)\s*CM/);if(a)o.alt=a[1]+' cm';return o;}
 var PP_CAT={
   t:{nome:'torneira',tit:'Torneiras',icon:'🚰',F:[['bica','Tipo de bica'],['acion','Acionamento'],['inst','Instalação'],['linha','Linha'],['amb','Ambiente'],['alt','Altura da bica'],['marca','Marca'],['rec','Recursos']],req:[['marca','Marca'],['acion','Acionamento'],['inst','Instalação'],['bica','Tipo de bica'],['amb','Ambiente']],RC:['Arejador','Antivandalismo','Modelo PCD']},
-  o:{nome:'produto',tit:'Outros produtos',icon:'📦',F:[['categoria','Categoria'],['tipo','Tipo / aplicação'],['material','Material'],['cor','Cor'],['medida','Medida'],['lado','Lado'],['marca','Marca'],['rec','Recursos']],req:[['categoria','Categoria']],RC:['Modelo PCD','Fotoluminescente']},
+  o:{nome:'produto',tit:'Outros produtos',icon:'📦',F:[['tipo','Tipo / aplicação'],['material','Material'],['cor','Cor'],['medida','Medida'],['lado','Lado'],['marca','Marca'],['rec','Recursos']],req:[],RC:['Modelo PCD','Fotoluminescente']},
   a:{nome:'assento',tit:'Assentos sanitários',icon:'🚽',F:[['formato','Formato'],['material','Material'],['fech','Fechamento'],['cor','Cor'],['compat','Compatível com'],['alt','Altura elevada'],['marca','Marca'],['rec','Recursos']],req:[['marca','Marca'],['formato','Formato'],['material','Material'],['fech','Fechamento'],['cor','Cor']],RC:['Modelo PCD','Abertura frontal']}
 };
-var PP={T:'t',est:false,soP:false,openP:false,S:{},fresh:{},ST:{},q:'',ord:'c',L:{t:[],a:[],o:[]},cfg:{t:{Fauzi:{m:'site',u:'https://www.fauzimetais.com.br'}},a:{Astra:{m:'site',u:'https://www.astrasa.com.br'}},o:{}},cust:{t:{},a:{},o:{}},edits:{t:{},a:{},o:{}},bling:null,blingInfo:null,site:null,siteInfo:null,probing:0,carregado:false,carregando:false,erro:'',aviso:null,root:null,sel:{}};
+var PP={T:'t',est:false,soP:false,openP:false,S:{},fresh:{},ST:{},q:'',ord:'c',L:{t:[],a:[],o:[]},cfg:{t:{Fauzi:{m:'site',u:'https://www.fauzimetais.com.br'}},a:{Astra:{m:'site',u:'https://www.astrasa.com.br'}},o:{}},cust:{t:{},a:{},o:{}},edits:{t:{},a:{},o:{}},bling:null,blingInfo:null,site:null,siteInfo:null,catDef:null,catPrep:null,probing:0,carregado:false,carregando:false,erro:'',aviso:null,root:null,sel:{}};
 
 function ppEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function ppKey(c){return String(c).replace(/[^A-Za-z0-9-]/g,function(ch){return '_'+ch.charCodeAt(0).toString(16)+'_';});}
@@ -13267,7 +13378,7 @@ function ppMontaBase(){
   if(!PP.bling||!PP.bling.length){
     Object.keys(bt).forEach(function(k){bt[k].catNome='Torneiras';PP.L.t.push(bt[k]);});
     Object.keys(ba).forEach(function(k){ba[k].catNome='Assentos sanitários';PP.L.a.push(ba[k]);});
-    return;
+    ppReclassifica();return;
   }
   var nomes={};PP.bling.forEach(function(b){var k=ppN(b.n);nomes[k]=(nomes[k]||0)+1;});
   var usados={};
@@ -13291,6 +13402,7 @@ function ppMontaBase(){
     p.semCod=semCod;p.dup=nomes[ppN(b.n)]>1;p.catNome=p._T==='t'?'Torneiras':p._T==='a'?'Assentos sanitários':p.categoria;
     PP.L[p._T].push(p);
   });
+  ppReclassifica();
 }
 function ppAplicaEdicoes(){
   ['t','a','o'].forEach(function(T){
@@ -13303,9 +13415,9 @@ function ppAplicaEdicoes(){
       p.imgApp=e.imgApp||'';p.link=e.link||'';
       if(e.vinc){p.src='S';p.vinc=e.vinc;}
       p.man=!!e.man;p.fora=!!e.fora;p.manter=!!e.manter;
-      if(T==='o'&&p.categoria)p.catNome=p.categoria;
     });
   });
+  ppReclassifica();
 }
 function ppCarregar(){
   if(PP.carregando)return;
@@ -13314,6 +13426,7 @@ function ppCarregar(){
     d=d||{};
     ppMontaBase();
     if(d.bling&&Array.isArray(d.bling.itens)&&d.bling.itens.length){PP.bling=d.bling.itens;PP.blingInfo={em:d.bling.atualizado,por:d.bling.por,total:d.bling.itens.length};}else{PP.bling=null;PP.blingInfo=null;}
+    PP.catDef=(d.categorias&&Array.isArray(d.categorias.lista)&&d.categorias.lista.length)?d.categorias.lista:null;PP.catPrep=null;
     if(d.site&&Array.isArray(d.site.itens)){PP.site=d.site.itens;PP.siteInfo={em:d.site.atualizado,total:d.site.itens.length};}else{PP.site=null;PP.siteInfo=null;}
     ppMontaBase();
     if(d.config){['t','a','o'].forEach(function(T){if(d.config[T])PP.cfg[T]=d.config[T];});}
@@ -13419,10 +13532,10 @@ function ppSiteCalc(){
     else{p.siteId='';p.siteSt='fora';}
   });
 }
-function ppFacets(){var f=PP.site?[['site','🌐 Site maisacessivel.com.br'],['cat','Categoria'],['marca','Marca']]:[['cat','Categoria'],['marca','Marca']];['t','a','o'].forEach(function(T){PP_CAT[T].F.forEach(function(x){if(x[0]!=='marca'&&x[0]!=='rec'&&x[0]!=='categoria')f.push([T+':'+x[0],x[1]]);});});ppXKall().forEach(function(k){f.push(['x:'+k,k]);});f.push(['rec','Recursos']);return f;}
+function ppFacets(){var f=PP.site?[['site','🌐 Site maisacessivel.com.br'],['cat','Categoria'],['sub','Subcategoria'],['marca','Marca']]:[['cat','Categoria'],['sub','Subcategoria'],['marca','Marca']];['t','a','o'].forEach(function(T){PP_CAT[T].F.forEach(function(x){if(x[0]!=='marca'&&x[0]!=='rec'&&x[0]!=='categoria')f.push([T+':'+x[0],x[1]]);});});ppXKall().forEach(function(k){f.push(['x:'+k,k]);});f.push(['rec','Recursos']);return f;}
 function ppCatOk(p){var s=Object.keys(ppSk('cat'));return !s.length||s.indexOf(p.catNome)>=0;}
 function ppSk(k){return PP.S[k]||(PP.S[k]={});}
-function ppVals(p,k){if(k==='rec')return p.rec;if(k==='site')return p.siteSt?[PP_SITE_LBL[p.siteSt]]:[];if(k==='cat')return [p.catNome||PP_CAT[p._T].tit];if(k.indexOf('x:')===0){var v=p.x[k.slice(2)];return v?[v]:[];}if(k.charAt(1)===':'){if(k.charAt(0)!==p._T)return [];k=k.slice(2);}return p[k]?[p[k]]:[];}
+function ppVals(p,k){if(k==='rec')return p.rec;if(k==='site')return p.siteSt?[PP_SITE_LBL[p.siteSt]]:[];if(k==='cat')return [p.catNome||PP_CAT[p._T].tit];if(k==='sub')return p.subNome?[p.subNome]:[];if(k.indexOf('x:')===0){var v=p.x[k.slice(2)];return v?[v]:[];}if(k.charAt(1)===':'){if(k.charAt(0)!==p._T)return [];k=k.slice(2);}return p[k]?[p[k]]:[];}
 function ppMode(p){var m=PP.cfg[p._T||PP.T][p.marca];return m&&m.m==='site'?'site':'manual';}
 function ppImg(p){return p.imgApp||p.img;}
 function ppOpts(k){var s={};if(k==='categoria'&&PP.T==='o')PP_CAT_ORDEM.forEach(function(v){if(v!=='Torneiras'&&v!=='Assentos sanitários')s[v]=1;});(PP_BASEOPT[k]||[]).forEach(function(v){s[v]=1;});(PP.cust[PP.T][k]||[]).forEach(function(v){s[v]=1;});ppLista().forEach(function(p){if(p[k])s[p[k]]=1;});if(k==='marca')Object.keys(PP.cfg[PP.T]).forEach(function(v){s[v]=1;});return Object.keys(s).sort(function(a,b){return a.localeCompare(b,'pt',{numeric:true});});}
@@ -13433,7 +13546,7 @@ function ppReview(p){
   if(/^FORNECIMENTO|^SERVICO|MAO DE OBRA/.test(N))return 'É serviço, não produto';
   if(PP_FORA_RE.test(N))return 'Fora do ramo de acessibilidade';
   if(/SOB MEDIDA/.test(N)||/^[A-ZÇÃÕ]+$/.test(N))return 'Item genérico ou sob medida';
-  if(p._T==='o'&&p.catNome===PP_CAT_OUTROS)return 'Não se encaixa em nenhuma categoria';
+  if(p.catNome===PP_CAT_OUTROS)return 'Não se encaixa em nenhuma categoria';
   return '';
 }
 function ppIssuesG(p){
@@ -13531,7 +13644,7 @@ function renderPesquisaProdutos(){
   wrap.innerHTML=
     '<div class="pp-top"><div class="pp-cats" id="ppCats"></div>'+
     '<div class="pp-stat"><span class="pp-pill" id="ppBl">🔌 Bling</span><span class="pp-pill" id="ppSync">☁️ Edições: carregando…</span>'+
-    '<button type="button" class="pp-btn" id="ppReload">🔄 Recarregar</button><button type="button" class="pp-btn" id="ppCfgBtn">⚙️ Configurações</button><button type="button" class="pp-btn pp-pri" id="ppCatBtn">📖 Catálogo digital</button></div></div>'+
+    '<button type="button" class="pp-btn" id="ppReload">🔄 Recarregar</button><button type="button" class="pp-btn" id="ppCfgBtn">⚙️ Configurações</button><button type="button" class="pp-btn" id="ppCtBtn">🗂️ Categorias</button><button type="button" class="pp-btn pp-pri" id="ppCatBtn">📖 Catálogo digital</button></div></div>'+
     '<div id="ppErr"></div><div id="ppToast"></div><div id="ppPend"></div>'+
     '<div class="pp-bar"><input id="ppQ" type="search" placeholder="Buscar por código ou nome" aria-label="Buscar produto"><select id="ppOrd" aria-label="Ordenar"><option value="c">Ordenar por código</option><option value="n">Ordenar por nome</option><option value="e">Maior estoque</option></select>'+
     '<button type="button" class="pp-btn" id="ppSemSite" style="border-color:#d97706;color:#b45309">🌐 Sem foto no site</button><button type="button" class="pp-btn pp-pri" id="ppNew">＋ Cadastrar características</button></div>'+
@@ -13544,6 +13657,7 @@ function renderPesquisaProdutos(){
   wrap.querySelector('#ppCfgBtn').onclick=function(){ppConfig();};
   wrap.querySelector('#ppNew').onclick=ppPicker;
   wrap.querySelector('#ppCatBtn').onclick=ppCatalogo;
+  wrap.querySelector('#ppCtBtn').onclick=ppCategorias;
   wrap.querySelector('#ppSemSite').onclick=ppFiltroSemFotoSite;
   if(!PP.carregado){ppMontaBase();ppCarregar();}
   setTimeout(ppDraw,0);
@@ -13596,6 +13710,7 @@ function ppDrawSide(){
     ppTodos().filter(function(p){return k==='cat'||ppCatOk(p);}).forEach(function(p){ppVals(p,k).forEach(function(v){all[v]=1;});});
     ppTodos().filter(function(p){return ppPass(p,k);}).forEach(function(p){ppVals(p,k).forEach(function(v){m[v]=(m[v]||0)+1;});});
     var vs=Object.keys(all).sort(function(a,b){return a.localeCompare(b,'pt',{numeric:true});});if(!vs.length)return;
+    if(k==='cat'||k==='sub'){var ord=k==='cat'?ppCatNomes():[].concat.apply([],ppCatDef().map(function(c){return c.s.map(function(x){return x.n;});}));vs.sort(function(a,b){var ia=ord.indexOf(a),ib=ord.indexOf(b);return (ia<0?999:ia)-(ib<0?999:ib);});}
     var nk=PP.fresh[k+'|*'];
     h+='<div class="pp-gt"'+(k==='cat'?' style="margin-top:10px;font-size:13px;color:#b45309"':'')+'><span class="'+(nk?'pp-nw':'')+'">'+ppEsc(t)+'</span></div>';
     vs.forEach(function(v){var n=m[v]||0,on=!!ppSk(k)[v],nv=nk||PP.fresh[k+'|'+v];
@@ -13728,6 +13843,10 @@ function ppForm(p){
     '<label><span class="pp-fl">Endereço da imagem (vazio = usar a foto do Bling)</span><input id="ppFimg" value="'+ppEsc(p.imgApp)+'" placeholder="https://.../foto-do-produto.jpg"></label><div id="ppIe" class="pp-msg"></div>'+
     '<label style="display:block;margin-top:8px"><span class="pp-fl">Link da página do produto</span><input id="ppFlink" value="'+ppEsc(p.link)+'" placeholder="https://loja.com.br/torneira-xyz"></label><div id="ppLe" class="pp-msg pp-mut">Útil para marcas sem site: vai junto na ficha do cliente como “Mais detalhes”.</div>'+
     '</div></div></div>';
+  h+='<div class="pp-sec"><div style="font-weight:700;font-size:13px;margin-bottom:8px">🗂️ Categoria no catálogo</div><div class="pp-g2">'+
+    '<label><span class="pp-fl">Categoria</span><select id="ppFcat">'+ppCatNomes().map(function(c){return '<option'+(c===p.catNome?' selected':'')+'>'+ppEsc(c)+'</option>';}).join('')+'</select></label>'+
+    '<label><span class="pp-fl">Subcategoria</span><select id="ppFsub"></select></label></div>'+
+    '<div class="pp-msg pp-mut">Pelo nome, este produto iria para <b>'+ppEsc(p.catAuto||'')+(p.subAuto?' › '+ppEsc(p.subAuto):'')+'</b>. Mude só se estiver no lugar errado.</div></div>';
   h+='<div class="pp-g2">'+C.F.filter(function(f){return f[0]!=='rec';}).map(function(f){return ppFieldHtml(f[0],f[1],p[f[0]]||'',C.req.some(function(r){return r[0]===f[0];}));}).join('')+
     '<div style="grid-column:1/-1"><span class="pp-fl">Recursos</span><div style="display:flex;flex-wrap:wrap;gap:14px">'+C.RC.map(function(r){return '<label class="pp-fx"><input type="checkbox" class="ppRec" value="'+ppEsc(r)+'"'+(p.rec.indexOf(r)>=0?' checked':'')+'> '+ppEsc(r)+'</label>';}).join('')+'</div></div>'+
     '<div style="grid-column:1/-1;border-top:1px solid #eee;padding-top:8px"><span class="pp-fl">Outras características (viram filtro automaticamente)</span><div id="ppFex">'+exs.map(function(k){return ppExRow(k,p.x[k]);}).join('')+'</div>'+
@@ -13744,6 +13863,9 @@ function ppForm(p){
     im.onerror=function(){if(!document.body.contains(e)||q('#ppFimg').value.trim()!==u)return;pv.innerHTML='<span class="pp-red">⚠️ Não abriu</span>';e.className='pp-msg pp-red';e.textContent='Esse link não abriu nenhuma imagem. Confira o endereço.';};
     im.src=u;}
   prev(p.imgApp);
+  function subAuto(c){return c===p.catAuto?p.subAuto:ppSubDe(p.n,c);}
+  function fillSub(c,v){var ss=ppSubsDe(c),el=q('#ppFsub');el.disabled=!ss.length;el.innerHTML=ss.length?ss.map(function(x){return '<option'+(x===v?' selected':'')+'>'+ppEsc(x)+'</option>';}).join(''):'<option value="">(esta categoria não tem subcategorias)</option>';}
+  fillSub(p.catNome,p.subNome);q('#ppFcat').onchange=function(){fillSub(this.value,subAuto(this.value));};
   var tm;q('#ppSave').addEventListener('click',function(){clearTimeout(tm);});q('#ppFimg').oninput=function(){clearTimeout(tm);var v=this.value.trim();tm=setTimeout(function(){prev(v);},400);};
   f.querySelectorAll('[data-fk]').forEach(function(s){s.onchange=function(){var i=f.querySelector('[data-fn="'+s.dataset.fk+'"]');i.style.display=s.value==='__new'?'':'none';if(s.value==='__new')i.focus();q('#ppFerr').textContent='';};});
   function bindRm(){f.querySelectorAll('.ppExRm').forEach(function(b){b.onclick=function(){b.parentNode.remove();};});}
@@ -13772,12 +13894,15 @@ function ppForm(p){
     Object.keys(x).forEach(function(k){if(oldK.indexOf(k)<0){fresh['x:'+k+'|*']=1;msgs.push('Novo filtro <b>'+ppEsc(k)+'</b> criado com o valor '+ppEsc(x[k])+'.');}else if(!ppTodos().some(function(o){return o.x[k]===x[k];})){fresh['x:'+k+'|'+x[k]]=1;msgs.push('Novo valor <b>'+ppEsc(x[k])+'</b> em '+ppEsc(k)+'.');}});
     if(iu!==p.imgApp)msgs.push(iu?'Foto do produto atualizada pelo endereço informado.':'Foto voltou a ser a do Bling.');
     var ed=Object.assign({},PP.edits[T][ppKey(p.c)]||{},got,{rec:rec,x:x,imgApp:iu,link:lk,man:true,cod:p.c,em:new Date().toISOString(),por:STATE.usuarioLogado||''});
+    var nc=q('#ppFcat').value,ns=q('#ppFsub').value||'';delete ed.categoria;
+    if(nc!==p.catAuto)ed.catMan=nc;else delete ed.catMan;if(ns&&ns!==subAuto(nc))ed.subMan=ns;else delete ed.subMan;
+    if(nc!==p.catNome||ns!==(p.subNome||''))msgs.push('Categoria: <b>'+ppEsc(nc)+(ns?' › '+ppEsc(ns):'')+'</b>.');
     var btn=q('#ppSave');btn.disabled=true;btn.textContent='Salvando…';
     var ps=[ppSalvar('edicoes/'+T+'/'+ppKey(p.c),ed)];
     if(JSON.stringify(novosCust)!==JSON.stringify(PP.cust[T]||{}))ps.push(ppSalvar('custom/'+T,novosCust));
     Promise.all(ps).then(function(){
       PP.edits[T][ppKey(p.c)]=ed;PP.cust[T]=novosCust;
-      Object.assign(p,got);p.rec=rec;p.x=x;p.imgApp=iu;p.link=lk;p.man=true;if(p._T==='o'&&p.categoria)p.catNome=p.categoria;
+      Object.assign(p,got);p.rec=rec;p.x=x;p.imgApp=iu;p.link=lk;p.man=true;ppReclassifica();
       PP.erro='';PP.fresh=fresh;PP.aviso=msgs.length?msgs:['Características de '+ppEsc(p.c)+' salvas.'];
       ppEl('ppForm').innerHTML='';ppDraw();
     }).catch(function(e){btn.disabled=false;btn.textContent='Salvar';ppErroSalvar(e);});
@@ -13873,8 +13998,8 @@ function ppModelos(lista){
     N=N.replace(/\bLADO\b/g,' ').replace(/\b(DIREITO|DIREITA)\b/g,function(){lados.push('direito');return ' ';}).replace(/\b(ESQUERDO|ESQUERDA)\b/g,function(){lados.push('esquerdo');return ' ';});
     N=N.replace(/\b\d+\s*(º|O)?\s*ANDAR\b/g,function(m){suf=suf||m;return ' ';});
     N=N.replace(/\s+-\s*$/,'').replace(/\s+/g,' ').trim().replace(/\s-$/,'');
-    var key=p.catNome+'|'+N;
-    if(!G[key]){G[key]={cat:p.catNome,tit:N,itens:[],med:{},cores:{},lados:{},suf:{}};ordem.push(key);}
+    var key=p.catNome+'|'+(p.subNome||'')+'|'+N;
+    if(!G[key]){G[key]={cat:p.catNome,sub:p.subNome||'',tit:N,itens:[],med:{},cores:{},lados:{},suf:{}};ordem.push(key);}
     var g=G[key];g.itens.push(p);med.forEach(function(m){g.med[m]=1;});cs.forEach(function(c){g.cores[c]=1;});lados.forEach(function(l){g.lados[l]=1;});if(suf)g.suf[suf.trim()]=1;
     if(/INOX/.test(ppN(p.n)))g.cores.inox=1;else if(/ALUMIN/.test(ppN(p.n))&&!cs.length)g.cores.natural=1;
   });
@@ -13886,49 +14011,36 @@ function ppModelos(lista){
     var sf=Object.keys(g.suf);if(sf.length)lin.push('Opções: '+(sf.length>8?sf.slice(0,8).join(', ')+' e outras':sf.join(', ')).toLowerCase());
     if(!lin.length&&g.itens.length===1){var p0=g.itens[0];var sp=ppSpecs(p0._T,p0).filter(function(s){return !/Categoria|Marca/.test(s[0]);}).slice(0,2);if(sp.length)lin.push(sp.map(function(s){return s[0]+': '+s[1];}).join(' · '));}
     var mk={};g.itens.forEach(function(p){if(p.marca)mk[p.marca]=1;});var mks=Object.keys(mk);if(mks.length&&mks.length<=3)lin.push('Marca: '+mks.join(', '));
-    return {cat:g.cat,tit:g.tit,linha:lin.join('. ')+(lin.length?'.':''),img:best?ppImg(best):'',cores:Object.keys(g.cores),n:g.itens.length,itens:g.itens,probFoto:!best};});
+    return {cat:g.cat,sub:g.sub,tit:g.tit,linha:lin.join('. ')+(lin.length?'.':''),img:best?ppImg(best):'',cores:Object.keys(g.cores),n:g.itens.length,itens:g.itens,probFoto:!best};});
 }
 // ----- Catálogo digital (no estilo do catálogo impresso Mais Acessível) -----
-var PP_CAT_SECOES=[
- ['Pisos e elementos táteis','PISOS E ELEMENTOS TÁTEIS'],
- ['Kit instalação de piso tátil','KIT INSTALAÇÃO DE PISOS E ELEMENTOS'],
- ['Barras de apoio','BARRAS DE APOIO'],
- ['Corrimãos','CORRIMÃO ACESSÍVEL'],
- ['Banheiro acessível','BANHEIRO ACESSÍVEL'],
- ['Louças','LOUÇAS ACESSÍVEIS'],
- ['Assentos sanitários','ASSENTOS SANITÁRIOS'],
- ['Metais e hidráulica','ACESSÓRIOS E PRODUTOS HIDRÁULICOS PARA BANHEIRO'],
- ['Dispensers','DISPENSER'],
- ['Alarmes e emergência','ALARMES'],
- ['Torneiras','TORNEIRAS'],
- ['Sinalização','SINALIZAÇÃO'],
- ['Placas de sinalização','PLACAS DE SINALIZAÇÃO'],
- ['Mapas e placas em braille','MAPA E PLACAS COM BRAILLE'],
- ['Portas e ferragens','PORTAS E FERRAGENS'],
- ['Outros','OUTROS PRODUTOS']
-];
 var PP_CAT_FIXAS={inicio:['capa','quem-somos'],fim:['servicos','servicos-fotos','contracapa']};
 var PP_ACENTOS={ALUMINIO:'ALUMÍNIO',TATIL:'TÁTIL',TATEIS:'TÁTEIS',LAVATORIO:'LAVATÓRIO',SANITARIO:'SANITÁRIO',SANITARIOS:'SANITÁRIOS',ACRILICO:'ACRÍLICO',AUTOMATICA:'AUTOMÁTICA',AUTOMATICO:'AUTOMÁTICO',CLINICA:'CLÍNICA',CLINICO:'CLÍNICO',MOVEL:'MÓVEL',HIGIENICO:'HIGIÊNICO',ROLAO:'ROLÃO',ACESSIVEL:'ACESSÍVEL',CORRIMAO:'CORRIMÃO',BOTAO:'BOTÃO',EMERGENCIA:'EMERGÊNCIA',SINALIZACAO:'SINALIZAÇÃO',DEMARCACAO:'DEMARCAÇÃO',INICIO:'INÍCIO',TERREO:'TÉRREO',PLASTICO:'PLÁSTICO',ANATOMICO:'ANATÔMICO',VALVULA:'VÁLVULA',CERAMICA:'CERÂMICA',FISICO:'FÍSICO',MAO:'MÃO',PORTATIL:'PORTÁTIL',LOUCA:'LOUÇA',LOUCAS:'LOUÇAS',ELETRICO:'ELÉTRICO',ELETRONICO:'ELETRÔNICO',AGUA:'ÁGUA',CADEIRA:'CADEIRA',PROTECAO:'PROTEÇÃO',ELEVACAO:'ELEVAÇÃO',INSTALACAO:'INSTALAÇÃO',APLICACAO:'APLICAÇÃO',AREA:'ÁREA',GRAFICO:'GRÁFICO',PARABOLICO:'PARABÓLICO',SAIDA:'SAÍDA',PREFERENCIAL:'PREFERENCIAL',ANTIDERRAPANTE:'ANTIDERRAPANTE',TRANSITO:'TRÂNSITO',PNEUMATICO:'PNEUMÁTICO',NUMERO:'NÚMERO',NUMEROS:'NÚMEROS',ELEVADOR:'ELEVADOR'};
 function ppTitAcento(t){return String(t||'').replace(/[A-Z]+/g,function(w){return PP_ACENTOS[w]||w;});}
-function ppCatSecao(c){for(var i=0;i<PP_CAT_SECOES.length;i++)if(PP_CAT_SECOES[i][0]===c)return i;return PP_CAT_SECOES.length-1;}
 function ppCatBase(){var a=document.createElement('a');a.href='catalogo/';return a.href;}
 function ppCatSnap(L,fixas){
-  var M=ppModelos(L),sec={};
-  M.forEach(function(m){var i=ppCatSecao(m.cat);(sec[i]=sec[i]||[]).push({n:ppTitAcento(m.tit),l:m.linha,img:m.img||'',c:m.cores||[]});});
-  return {v:1,criado:new Date().toISOString(),por:(typeof STATE!=='undefined'&&STATE.usuarioLogado)||'',fixas:!!fixas,
-    secoes:Object.keys(sec).map(Number).sort(function(a,b){return a-b;}).map(function(i){return {t:PP_CAT_SECOES[i][1],cards:sec[i]};})};
+  var M=ppModelos(L),def=ppCatDef(),nomes=ppCatNomes(),sec={};
+  M.forEach(function(m){var i=nomes.indexOf(m.cat);if(i<0)i=nomes.length-1;var S=sec[i]=sec[i]||{};var k=m.sub||'';(S[k]=S[k]||[]).push({n:ppTitAcento(m.tit),l:m.linha,img:m.img||'',c:m.cores||[]});});
+  return {v:2,criado:new Date().toISOString(),por:(typeof STATE!=='undefined'&&STATE.usuarioLogado)||'',fixas:!!fixas,
+    secoes:Object.keys(sec).map(Number).sort(function(a,b){return a-b;}).map(function(i){var S=sec[i],subs=def[i]?def[i].s.map(function(x){return x.n;}):[];
+      var ks=Object.keys(S).sort(function(a,b){var ia=subs.indexOf(a),ib=subs.indexOf(b);return (ia<0?999:ia)-(ib<0?999:ib);});
+      return {t:ppCatTitulo(nomes[i]),grupos:ks.map(function(k){return {s:k,cards:S[k]};})};})};
 }
 // Divide as seções em páginas A4 (mesma proporção do catálogo impresso: 4 cards por linha)
 function ppCatPaginas(snap){
-  var CAP=87.5,TIT=4.8,ROW=20.4,pags=[],cur=null,used=0;
-  function nova(){cur={tipo:'prod',blocos:[]};pags.push(cur);used=0;}
+  var CAP=87.5,TIT=4.8,SUB=2.9,ROW=20.4,pags=[],cur=null,used=0,noPg=false;
+  function nova(){cur={tipo:'prod',blocos:[]};pags.push(cur);used=0;noPg=false;}
   (snap.secoes||[]).forEach(function(s){
-    var L=s.cards||[],i=0,first=true;
-    while(i<L.length){
-      if(!cur||(CAP-used-TIT)<ROW)nova();
-      var cabe=Math.floor((CAP-used-TIT)/ROW),rows=Math.ceil((L.length-i)/4),n=Math.min(rows,cabe)*4,part=L.slice(i,i+n);
-      cur.blocos.push({t:s.t+(first?'':' (CONTINUAÇÃO)'),cards:part});used+=TIT+Math.ceil(part.length/4)*ROW;i+=n;first=false;
-    }
+    var G=s.grupos||[{s:'',cards:s.cards||[]}],first=true;noPg=false;
+    G.forEach(function(g){
+      var L=g.cards||[],i=0;
+      while(i<L.length){
+        var h=(noPg?0:TIT)+(g.s?SUB:0);
+        if(!cur||(CAP-used-h)<ROW){nova();h=TIT+(g.s?SUB:0);}
+        var cabe=Math.floor((CAP-used-h)/ROW),rows=Math.ceil((L.length-i)/4),n=Math.min(rows,cabe)*4,part=L.slice(i,i+n);
+        cur.blocos.push({t:noPg?'':s.t+(first?'':' (CONTINUAÇÃO)'),s:g.s||'',cards:part});used+=h+Math.ceil(part.length/4)*ROW;i+=n;first=false;noPg=true;
+      }
+    });
   });
   var out=[];
   if(snap.fixas)PP_CAT_FIXAS.inicio.forEach(function(f){out.push({tipo:'img',src:f});});
@@ -13945,6 +14057,7 @@ function ppCatCssTxt(){return ''+
   '.cat-pg>img.cat-fundo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}'+
   '.cat-miolo{position:absolute;left:6.6%;right:3.6%;top:5.4%;bottom:6.4%}'+
   '.cat-h{font-style:italic;font-weight:400;text-align:center;font-size:2.3cqw;letter-spacing:.06cqw;margin:0;height:4.8cqw;line-height:4.8cqw}'+
+  '.cat-s{margin:0 0 .6cqw;height:3.4cqw;display:flex;align-items:center;gap:1cqw;font-size:1.55cqw;font-weight:800;color:#2e9d3a;text-transform:uppercase;letter-spacing:.05cqw}.cat-s:after{content:"";flex:1;border-top:.18cqw solid #2e9d3a}'+
   '.cat-g{display:grid;grid-template-columns:repeat(4,1fr);column-gap:2.3cqw;row-gap:1.75cqw;margin-bottom:1.75cqw}'+
   '.cat-c{height:26.95cqw;border:.72cqw solid #1d2b3a;border-radius:1.5cqw;display:flex;flex-direction:column;overflow:hidden;background:#fff}'+
   '.cat-i{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:1cqw 1cqw 2.6cqw}'+
@@ -13976,7 +14089,7 @@ function ppCatCssTxt(){return ''+
 function ppCatPgHtml(pg,base){
   if(pg.tipo==='img')return '<div class="cat-pg"><img class="cat-fundo" src="'+base+pg.src+'.jpg" alt="" loading="lazy"></div>';
   return '<div class="cat-pg"><img class="cat-fundo" src="'+base+'moldura.jpg" alt="" loading="lazy"><div class="cat-miolo">'+
-    pg.blocos.map(function(b){return '<h2 class="cat-h">'+ppEsc(b.t)+'</h2><div class="cat-g">'+b.cards.map(function(c){
+    pg.blocos.map(function(b){return (b.t?'<h2 class="cat-h">'+ppEsc(b.t)+'</h2>':'')+(b.s?'<h3 class="cat-s"><span>'+ppEsc(b.s)+'</span></h3>':'')+'<div class="cat-g">'+b.cards.map(function(c){
       return '<div class="cat-c"><div class="cat-i">'+(c.img?'<img src="'+ppEsc(c.img)+'" alt="'+ppEsc(c.n)+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML=\'<span class=&quot;cat-sf&quot;>Foto em breve</span>\'">':'<span class="cat-sf">Foto em breve</span>')+
         (c.c&&c.c.length?'<div class="cat-co"><b>CORES:</b>'+c.c.slice(0,6).map(function(x){return '<span class="cat-d '+ppEsc(x)+'"></span>';}).join('')+'</div>':'')+
         '</div><div class="cat-t"><div class="n">'+ppEsc(c.n)+'</div>'+(c.l?'<div class="l">'+ppEsc(c.l)+'</div>':'')+'</div></div>';}).join('')+'</div>';}).join('')+
@@ -14030,14 +14143,14 @@ function alertaCatalogo(m){var t=ppEl&&ppEl('ppToast');if(t){PP.aviso=[ppEsc(m)]
 function ppCatalogo(){
   var cats={},sel=ppSelItens().length;
   ppTodos().forEach(function(p){if(!p.fora)cats[p.catNome]=(cats[p.catNome]||0)+1;});
-  var ordem=PP_CAT_SECOES.map(function(s){return s[0];}).filter(function(c){return cats[c];});
+  var ordem=ppCatNomes().filter(function(c){return cats[c];});
   Object.keys(cats).forEach(function(c){if(ordem.indexOf(c)<0)ordem.push(c);});
   var f=ppPanel(ppHdr('📖 Catálogo digital')+
     '<p style="font-size:13px;color:#666;margin:0 0 10px">No mesmo modelo do catálogo impresso: capa, “Quem somos”, páginas por categoria com foto, nome e medidas, serviços e contracapa. Sem preços. Produtos iguais em tamanhos ou cores diferentes viram um card só.</p>'+
     '<div class="pp-sec"><span class="pp-fl">O que entra</span>'+
     '<label class="pp-fx"><input type="radio" name="ppEsc" value="cats" checked> As categorias marcadas abaixo</label>'+
     '<label class="pp-fx"><input type="radio" name="ppEsc" value="sel"'+(sel?'':' disabled')+'> Só os produtos selecionados ('+sel+')</label>'+
-    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 12px;margin-top:6px;padding-left:22px">'+ordem.map(function(c){return '<label class="pp-fx"><input type="checkbox" class="ppCc" value="'+ppEsc(c)+'"'+(c==='Outros'?'':' checked')+'> '+ppEsc(c)+'<span class="n">'+cats[c]+'</span></label>';}).join('')+'</div></div>'+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 12px;margin-top:6px;padding-left:22px">'+ordem.map(function(c){return '<label class="pp-fx"><input type="checkbox" class="ppCc" value="'+ppEsc(c)+'"'+(c===PP_CAT_OUTROS?'':' checked')+'> '+ppEsc(c)+'<span class="n">'+cats[c]+'</span></label>';}).join('')+'</div></div>'+
     '<div class="pp-sec"><label class="pp-fx"><input type="checkbox" id="ppCapa" checked> Incluir capa, “Quem somos”, serviços e contracapa</label>'+
     '<label class="pp-fx"><input type="checkbox" id="ppEstq"> Só produtos com estoque</label>'+
     '<label class="pp-fx"><input type="checkbox" id="ppSemFoto"> Incluir produtos sem foto</label>'+
